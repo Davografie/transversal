@@ -22,20 +22,21 @@
           <div v-else-if="targetKind(c.type)" class="ce-target ce-picker">
             <TargetPicker v-model="c.target" :kind="targetKind(c.type)" :placeholder="targetPlaceholder(c.type)" />
           </div>
-          <!-- An enum filter takes one value or several (*any of*). A native
-               multi-select hid its own state — you could not tell what was
-               picked, or whether the click landed — so the options are toggle
-               chips that show their state, and an empty pick says it never
-               passes (the backend reads no values as matching nothing). -->
+          <!-- An enum filter takes one value or several (*any of*), edited like the
+               tag field: chips are the picked values, the input opens a filtered
+               list of the vocabulary, and free text is refused (the options are
+               the set). An empty pick says it never passes — no values is a set
+               that matches nothing. -->
           <div v-else-if="targetOptions(c.type).length" class="ce-multi">
-            <button
-              v-for="o in targetOptions(c.type)" :key="o"
-              type="button" class="ce-multi-opt"
-              :class="{ 'is-on': selectedTargets(c).includes(o) }"
-              :aria-pressed="selectedTargets(c).includes(o)"
-              @click="toggleTarget(c, o)"
-            >{{ labelize(o) }}</button>
-            <span v-if="!selectedTargets(c).length" class="ce-multi-empty">pick at least one — empty never passes</span>
+            <TagInput
+              class="ce-multi-tags"
+              :model-value="selectedTargets(c)"
+              :suggestions="targetSuggestions(c.type)"
+              :allow-custom="false"
+              :placeholder="targetPlaceholder(c.type)"
+              @update:model-value="setTargets(c, $event)"
+            />
+            <span v-if="!selectedTargets(c).length" class="ce-multi-empty">empty never passes</span>
           </div>
           <input v-else v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
         </template>
@@ -83,6 +84,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import UniversePicker from './UniversePicker.vue'
 import TargetSpecBuilder from './TargetSpecBuilder.vue'
+import TagInput from '@/components/ui/TagInput.vue'
 import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
@@ -216,11 +218,18 @@ function selectedTargets(c) {
   return (c.targets && c.targets.length) ? [...c.targets] : (c.target ? [c.target] : [])
 }
 
-function toggleTarget(c, value) {
-  const picked = selectedTargets(c)
-  const next = picked.includes(value) ? picked.filter((v) => v !== value) : [...picked, value]
+// One value stays in `target` so anything already authored keeps working; the
+// list is the `targets` set every reader sees.
+function setTargets(c, values) {
+  const next = [...values]
   c.targets = next
   c.target = next.length === 1 ? next[0] : ''
+}
+
+// The vocabulary as tag suggestions: the stored value is the raw token, the
+// label is what a person reads ("give_in" → "Give In").
+function targetSuggestions(type) {
+  return targetOptions(type).map((o) => ({ value: o, label: labelize(o) }))
 }
 
 // A stored value reads as a label ("give_in" → "Give In").
@@ -262,15 +271,12 @@ function remove(i) {
 .ce-value { flex: 1 !important; }
 .ce-operator { flex: none !important; width: 58px; }
 .ce-picker { min-width: 0; }
-/* Enum targets are toggle chips: a native multi-select hid whether anything was
-   picked at all. */
-.ce-multi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: 2; }
-.ce-multi-opt {
-  font-size: 10px; padding: 3px 8px; border-radius: 10px;
-  background: var(--overlay-6); border: 1px solid var(--overlay-12);
-  color: var(--text-dim); cursor: pointer; font-family: inherit;
-}
-.ce-multi-opt.is-on { background: var(--accent-12); border-color: var(--accent-dim); color: var(--accent); }
+/* Enum targets are a tag field: chips for the picks, the input opens the
+   vocabulary (a native multi-select hid whether anything was picked at all). */
+.ce-multi { display: flex; flex-direction: column; gap: 2px; flex: 2; min-width: 0; }
+.ce-multi-tags { min-width: 0; }
+.ce-multi-tags :deep(.tag-input) { min-height: 24px; padding: 2px 4px; border-radius: 4px; }
+.ce-multi-tags :deep(.tag-text) { font-size: 11px; }
 .ce-multi-empty { font-size: 9px; color: var(--warn, #d8a13a); }
 /* "＋ Add condition" keeps its deliberate dashed accent (full width via the
    column flex parent); fill/radius/padding/hover come from ui/Button. */

@@ -67,10 +67,17 @@
             <option v-for="op in operatorsFor(i)" :key="op" :value="op">{{ op }}</option>
           </select>
           <!-- An enum filter takes one value or several; several is stored as a
-               list with `in` (the resolver reads it as *any of*). -->
-          <select v-if="fieldOptionsFor(i)" multiple :value="enumValues(i)" @change="onEnumChange(i, $event)">
-            <option v-for="o in fieldOptionsFor(i)" :key="o" :value="o">{{ o }}</option>
-          </select>
+               list with `in` (the resolver reads it as *any of*). Edited like the
+               tag field: chips for the picks, the input opens the vocabulary. -->
+          <TagInput
+            v-if="fieldOptionsFor(i)"
+            class="tsb-enum"
+            :model-value="enumValues(i)"
+            :suggestions="fieldOptionsFor(i)"
+            :allow-custom="false"
+            placeholder="value"
+            @update:model-value="onEnumPicked(i, $event)"
+          />
           <span v-else-if="isTokenValue(step.value)" class="tsb-value-token">
             <select v-if="variableChoicesFor(i).length" :value="step.value" @change="onFilterValue(i, $event)">
               <option v-for="[name, entry] in variableChoicesFor(i)" :key="name" :value="`{${name}}`">
@@ -508,10 +515,10 @@ function enumValues(i) {
   return Array.isArray(v) ? v : (v ? [v] : [])
 }
 
-function onEnumChange(i, event) {
-  const picked = Array.from(event.target.selectedOptions || []).map((o) => o.value)
-  steps.value[i].value = picked.length > 1 ? picked : (picked[0] || '')
-  if (picked.length > 1) steps.value[i].operator = 'in'
+function onEnumPicked(i, picked) {
+  const values = [...picked]
+  steps.value[i].value = values.length > 1 ? values : (values[0] || '')
+  if (values.length > 1) steps.value[i].operator = 'in'
   else if (steps.value[i].operator === 'in') steps.value[i].operator = '=='
 }
 
@@ -737,6 +744,8 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-filter select, .tsb-filter input { flex: none; width: 100%; min-width: 0; }
 .tsb-filter .tsb-value-token { flex: none; width: 100%; }
 .tsb-filter .tsb-op, .tsb-filter .tsb-field { flex: none; width: 100%; }
+.tsb-filter .tsb-enum { flex: none; width: 100%; min-width: 0; }
+.tsb-filter .tsb-enum :deep(.tag-input) { min-height: 26px; padding: 3px 5px; }
 .tsb-op { flex: none; width: 52px; }
 .tsb-field { flex: none; width: 88px; }
 .tsb-eval-lhs { flex: none; font-family: monospace; font-size: 9px; color: var(--text-dim); }
