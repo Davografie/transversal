@@ -8,6 +8,9 @@ Split out of ``effects_registry.py``."""
 EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_roll", "play_as_rating"): "play {target} as {result}",
     ("modify_roll", "double_die"): "double {target}",
+    ("modify_roll", "split_die"): "split {target}",
+    ("modify_roll", "reroll_die"): "reroll {target}",
+    ("modify_roll", "set_die"): "set {target} to {result}",
     # The step-die pair needs its target on the card: an effect that names a die
     # (usually by a path) with no card template fell back to the action's own
     # words — "step down die" — which said nothing about *which* die.
@@ -30,7 +33,9 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("transfer_razmerit", "transfer"): "transfer {result} razmerit to {target}",
     ("modify_pool", "add_dice"): "add dice to {target}",
     ("modify_pool", "add_trait_rating"): "add the trait's rating dice to {target}",
-    ("modify_roll", "remove_die"): "remove a die from the pool",
+    # No "from the pool": a die has two homes now, and the target phrase says
+    # which one ("remove the highest rating die of your trait instances").
+    ("modify_roll", "remove_die"): "remove {target}",
     ("modify_pool", "resolve"): "resolve {target}",
     ("modify_dice_limit", "increase"): "increase the dice limit by {result}",
     ("modify_dice_limit", "decrease"): "decrease the dice limit by {result}",

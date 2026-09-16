@@ -714,3 +714,53 @@ def test_a_random_sample_reads_as_an_indefinite_noun():
 
     assert "a random die" in card(1)
     assert "some random dice" in card(3)
+
+
+# ── The Change a Die family's card ─────────────────────────────
+
+RATING_DIE_PATH = [
+    {"kind": "select", "collection": "self_traitsettings"},
+    {"kind": "navigate", "edge": "rating_dice"},
+    {"kind": "aggregate", "fn": "top", "field": "rating"},
+]
+
+
+def _change(action, context=None, result=None):
+    return Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_roll", action=action,
+        target="", result=result, context=context or {},
+        target_spec=TargetSpec(steps=RATING_DIE_PATH),
+    )
+
+
+def test_a_removed_die_names_the_die_and_not_a_pool():
+    """A die has two homes now, so the card cannot say "from the pool" — the
+    target phrase is what says which home the die is in."""
+    text = effect_text(_change("remove_die"))
+    assert text.startswith("remove the rating die")
+    assert "pool" not in text
+
+
+def test_a_counted_step_says_how_many_steps():
+    assert effect_text(_change("step_up_die", {"count": "1"})) == (
+        "step up the rating die with the highest rating by one step")
+    assert effect_text(_change("step_up_die", {"count": "3"})) == (
+        "step up the rating die with the highest rating by 3 steps")
+    # A count that is itself a variable reads as a number of steps, not a literal.
+    assert "by a number of steps equal to the effect die" in effect_text(
+        _change("step_down_die", {"count": "{effect_die}"}))
+
+
+def test_double_and_split_say_how_many_dice_they_make():
+    """`double 2` on a d8 gives 3d8; `split 2` gives 3d6 — so the count is dice
+    *made*, not times doubled."""
+    assert effect_text(_change("double_die", {"count": "2"})).endswith("into 3 dice")
+    assert effect_text(_change("split_die", {"count": "2"})).endswith("into 3 dice, each a step smaller")
+    # At the default there is nothing extra to say.
+    assert effect_text(_change("double_die")) == "double the rating die with the highest rating"
+
+
+def test_set_die_says_the_size_and_reroll_names_its_die():
+    assert effect_text(_change("set_die", result="d12")) == (
+        "set the rating die with the highest rating to d12")
+    assert effect_text(_change("reroll_die")).startswith("reroll the rating die")

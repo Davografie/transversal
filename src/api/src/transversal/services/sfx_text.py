@@ -141,6 +141,11 @@ _TRAILING_TIMINGS = {
 # Actions whose magnitude is worth stating when it is the default of one step.
 _STEP_ACTIONS = {"step_up", "step_down", "gain_or_step_up"}
 
+# The change-die verbs that take a count: how many steps along the ladder, or how
+# many extra dice. One `count` key, read here the way the applier reads it.
+_CHANGE_DIE_COUNT_ACTIONS = {"step_up_die", "step_down_die", "double_die", "split_die"}
+_CHANGE_DIE_STEP_ACTIONS = {"step_up_die", "step_down_die"}
+
 # When an effect names no target (and its card template needs one), say what the
 # action defaults to rather than trailing off. Keyed by effect action.
 _TARGET_FALLBACKS = {
@@ -1045,6 +1050,23 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
             text = f"{text} by {steps} steps"
         else:
             text = f"{text} by a number of steps equal to {steps}"
+    if effect.type == "modify_roll" and effect.action in _CHANGE_DIE_COUNT_ACTIONS:
+        count = display_value(str((effect.context or {}).get("count") or "1"))
+        stepping = effect.action in _CHANGE_DIE_STEP_ACTIONS
+        if count == "1":
+            # The default already reads ("step up X", "double X").
+            if stepping:
+                text = f"{text} by one step"
+        elif count.isdigit():
+            if stepping:
+                text = f"{text} by {count} steps"
+            else:
+                # `double 2` on a d8 gives 3d8; `split 2` gives 3d6.
+                more = int(count) + 1
+                smaller = ", each a step smaller" if effect.action == "split_die" else ""
+                text = f"{text} into {more} dice{smaller}"
+        elif stepping:
+            text = f"{text} by a number of steps equal to {count}"
     if effect.type == "attune" and (effect.context or {}).get("scope") == "domain":
         # Kept for callers that set a domain scope programmatically; the editor no
         # longer exposes it — reach is meant to come from how many targets the
