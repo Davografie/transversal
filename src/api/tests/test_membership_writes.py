@@ -32,8 +32,15 @@ FACTION_B_ID = "test-mem-faction-b"
 GMC_ID = "test-mem-gmc"
 CHAR_ID = "test-mem-char"
 ASSET_ID = "test-mem-asset"
-ROLE_TRAIT = "trait-role-cd1b"
 RELATIONS_TRAITSET = "ts-relations-b114"
+
+
+def _role_trait_id(repo) -> str:
+    """The registry's own `role` trait — resolved, so the fixture cannot drift."""
+    for trait in repo.get_traits_by_traitset(RELATIONS_TRAITSET):
+        if trait.name == "role":
+            return trait.id
+    raise AssertionError("no 'role' trait in the relations trait set")
 _ALL_IDS = (FACTION_ID, FACTION_B_ID, GMC_ID, CHAR_ID, ASSET_ID)
 
 
@@ -86,10 +93,11 @@ def test_upsert_keeps_the_edge_and_its_role_trait():
     edge = repo.upsert_relationship(GMC_ID, FACTION_ID, "membership", description="sworn in")
     edge_key = edge["_key"]
 
+    role_trait = _role_trait_id(repo)
     repo.create_traitsetting(TraitSetting(
-        id=f"{edge_key}:{ROLE_TRAIT}",
+        id=f"{edge_key}:{role_trait}",
         entity_id=edge_key,
-        trait_id=ROLE_TRAIT,
+        trait_id=role_trait,
         traitset_id=RELATIONS_TRAITSET,
         from_type="relationship",
         dice=[DieType.D4],
@@ -101,7 +109,7 @@ def test_upsert_keeps_the_edge_and_its_role_trait():
     assert again["_key"] == edge_key, "the edge was replaced instead of updated"
     assert again["description"] == "renewed"
     traits = repo.get_relationship_traitsettings(edge_key)
-    assert [t.trait_id for t in traits] == [ROLE_TRAIT]
+    assert [t.trait_id for t in traits] == [role_trait]
     assert traits[0].statement == "sect disciple"
 
     _cleanup(repo)
