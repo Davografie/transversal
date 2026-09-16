@@ -41,6 +41,8 @@ def _role_trait_id(repo) -> str:
         if trait.name == "role":
             return trait.id
     raise AssertionError("no 'role' trait in the relations trait set")
+
+
 _ALL_IDS = (FACTION_ID, FACTION_B_ID, GMC_ID, CHAR_ID, ASSET_ID)
 
 
@@ -130,5 +132,51 @@ def test_upsert_creates_once_and_is_idempotent():
         bind_vars={"f": f"entities/{GMC_ID}", "t": f"entities/{FACTION_ID}"},
     ))
     assert count == [1]
+
+    _cleanup(repo)
+
+
+def test_roster_promotion_promotes_members_only_and_keeps_the_role():
+    """The convergence rule: member→faction with a role promotes; the reverse does not."""
+    from transversal import migrate_faction_membership as mig
+
+    repo = _repo
+    _seed(repo)
+
+    def _tie(frm, to, trait_name, statement):
+        trait_id = next(
+            t.id for t in repo.get_traits_by_traitset(RELATIONS_TRAITSET) if t.name == trait_name
+        )
+        edge = repo.create_relationship(frm, to, "relation")
+        repo.create_traitsetting(TraitSetting(
+            id=f"{edge['_key']}:{trait_id}",
+            entity_id=edge["_key"],
+            trait_id=trait_id,
+            traitset_id=RELATIONS_TRAITSET,
+            from_type="relationship",
+            dice=[DieType.D4],
+            statement=statement,
+        ))
+        return edge["_key"]
+
+    member_side = _tie(GMC_ID, FACTION_ID, "role", "sect disciple")
+    faction_side = _tie(FACTION_ID, CHAR_ID, "role", "outer sect disciple")
+    # A posture tie carries no roster trait, so it is not a roster entry — and an
+    # empty-statement `role` tie still is one, because the trait is the marker.
+    _tie(GMC_ID, FACTION_B_ID, "statement", "they will not touch my family")
+    empty_role_tie = _tie(CHAR_ID, FACTION_B_ID, "role", "")
+
+    candidates = mig.find_candidates(repo)
+    assert sorted(c["edge"] for c in candidates) == sorted([member_side, empty_role_tie]), candidates
+
+    assert mig.promote(repo, candidates) == 2
+    assert repo.get_relationship_by_key(member_side)["type"] == "membership"
+    assert repo.get_relationship_by_key(empty_role_tie)["type"] == "membership"
+    assert repo.get_relationship_by_key(faction_side)["type"] == "relation"
+    traits = repo.get_relationship_traitsettings(member_side)
+    assert [t.statement for t in traits] == ["sect disciple"]
+
+    # Idempotent: nothing left to promote.
+    assert mig.find_candidates(repo) == []
 
     _cleanup(repo)
