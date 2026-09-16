@@ -77,22 +77,23 @@
         </div>
       </div>
 
-      <!-- Browse: Places | Factions (both read the focus filter). -->
+      <!-- Browse: Places | Factions (both read the focus filter). The two tree
+           actions ride this pinned row, outside the scrolling tree. The
+           breadcrumb bar that used to carry them is gone (the human's call,
+           B112). -->
       <div class="browse-tabs">
         <Button variant="neutral" :active="browseTab === 'tree'" @click="browseTab = 'tree'">Places</Button>
         <Button variant="neutral" :active="browseTab === 'factions'" @click="browseTab = 'factions'">
           Factions<span v-if="filteredFactions.length" class="tab-count">{{ filteredFactions.length }}</span>
         </Button>
+        <div class="browse-tab-actions">
+          <Button variant="ghost" size="icon" title="Collapse all levels" @click="collapseTree">⌃</Button>
+          <Button variant="ghost" size="icon" title="Jump to the current location" @click="scrollToNode(props.currentLocationId)">⊙</Button>
+        </div>
       </div>
 
       <div class="browse-zone">
         <template v-if="browseTab === 'tree'">
-          <!-- The breadcrumb bar that used to live here is gone (the human's
-               call, B112); its two actions stay. -->
-          <div class="tree-actions">
-            <Button class="crumb-action" variant="ghost" size="icon" title="Collapse all levels" @click="collapseTree">⌃</Button>
-            <Button class="crumb-action" variant="ghost" size="icon" title="Jump to the current location" @click="scrollToNode(props.currentLocationId)">⊙</Button>
-          </div>
           <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @select-more="expandLevel" @move-entity="onMoveEntity" @add-entity="onAddEntity" />
           <div v-if="flatTree.length === 0" class="empty">No entities found</div>
         </template>
@@ -600,17 +601,15 @@ onUnmounted(() => {
 .gm-tools { display: flex; gap: 6px; margin-bottom: 8px; }
 .gm-tools .create-btn { flex: 1; margin-bottom: 0; }
 
-.browse-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.browse-tabs { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+/* The tree actions keep their own end of the Places|Factions row, so they stay
+   put while the tree scrolls. */
+.browse-tab-actions { margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .tab-count {
   margin-left: 5px; font-size: 9px; padding: 0 5px; border-radius: 8px;
   background: var(--overlay-12); color: var(--text-dim);
 }
 .browse-zone { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-
-/* Tree actions, right-aligned above the tree. The sticky breadcrumb bar that
-   used to carry them (a way up after scrolling) is gone by the human's call —
-   the jump-to-current-location button is what they kept. */
-.tree-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 0 0 4px; }
 
 .gm-footer { padding-top: 8px; }
 .gm-footer .canvas-btn { margin-bottom: 0; }
