@@ -150,9 +150,13 @@ function onKeydown(e) {
     case 'ArrowDown': e.preventDefault(); move(1); break
     case 'ArrowUp': e.preventDefault(); move(-1); break
     case 'Enter': {
-      e.preventDefault()
-      // Single-select with no create row, so a highlight is always an option.
-      if (highlighted.value >= 0 && highlighted.value < available.value.length) pickAt(highlighted.value)
+      // Only claim Enter when it actually commits: with nothing highlighted it
+      // is not ours to swallow, and a picker can sit inside an authoring form
+      // that wants the key for itself.
+      if (highlighted.value >= 0 && highlighted.value < available.value.length) {
+        e.preventDefault()
+        pickAt(highlighted.value)
+      }
       break
     }
     case 'Escape': closeList(); break
