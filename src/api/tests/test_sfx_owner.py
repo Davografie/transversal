@@ -121,6 +121,32 @@ def test_trait_level_grants():
     assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-flashback"]
 
 
+def test_a_disabled_instance_offers_nothing():
+    """A disabled ("landed", suppressed) instance grants nothing.
+
+    The rule it carries is a fact about the *owner*, so this is implicit — there
+    is no condition to author, and `HAS_EFFECTIVE_TRAIT` cannot stand in: it
+    matches by registry trait and returns the first match's `enabled`, so several
+    instances of one generic trait (an agenda's steps) answer arbitrarily.
+    """
+    repo = Repo()
+    repo.entity = _entity()
+    repo.trait_settings = [
+        SimpleNamespace(sfx_ids=["sfx-spent-step"], trait_id="portent", enabled=False),
+        SimpleNamespace(sfx_ids=["sfx-live-step"], trait_id="portent", enabled=True),
+    ]
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-live-step"]
+
+
+def test_an_instance_without_an_enabled_flag_still_grants():
+    """`enabled` is read as *absent means enabled*, so older data and every other
+    owner surface are unaffected."""
+    repo = Repo()
+    repo.entity = _entity()
+    repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-old"], trait_id="legacy")]
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-old"]
+
+
 def test_source_rating_filters_trait_grant():
     class R(Repo):
         def get_sfx(self, sfx_id):

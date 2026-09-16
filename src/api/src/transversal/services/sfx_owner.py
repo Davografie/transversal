@@ -778,6 +778,16 @@ def get_available_sfx_ids(
         traitset_settings = repo.get_effective_traitsetsettings(entity_id, [universe])
 
     for ts in trait_settings:
+        # A **disabled** instance grants nothing. "Landed" is a state — a spent
+        # agenda step, a suppressed technique — and the rules it carries must stop
+        # being offered with it, or the button that fired it is offered again.
+        # This is implicit for every rule whose owner is disabled, rather than
+        # something each rule authors: it is a fact about the owner, not the rule.
+        # (The nearest condition, HAS_EFFECTIVE_TRAIT, cannot stand in: it matches
+        # by *registry trait* and returns the first match's `enabled`, so several
+        # instances of one generic trait — an agenda's steps — answer arbitrarily.)
+        if not getattr(ts, "enabled", True):
+            continue
         for sid in (ts.sfx_ids or []):
             ids.add(sid)
             sfx_sources.setdefault(sid, ts)
