@@ -273,18 +273,6 @@ def _owner_entity(repo, owner_id: str):
     return getter(owner_id) if getter else None
 
 
-def targets_a_die(target: str) -> bool:
-    """True when an effect names a *die*, rather than a legacy trait target.
-
-    The two comparison actions (`reduce_by_effect` / `increase_by_effect`) were
-    authored against a trait's rating before a die had two homes. This is how
-    their handlers tell an old target from a new one, so neither breaks.
-    """
-    t = (target or "").strip()
-    return (_parse_rating_ref(t) is not None or _parse_die_ref(t) is not None
-            or t == "highest_trait_die")
-
-
 def _apply_change(entity, effect: Effect, repo, result, verb: str) -> None:
     """Dispatch a change-die effect to whichever home the target names."""
     target = (effect.target or "").strip()

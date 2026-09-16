@@ -284,15 +284,17 @@ def test_increase_by_effect_steps_up_when_it_does_not_beat():
     assert [d.value for d in ts.dice] == ["d8"]
 
 
-def test_a_trait_target_still_takes_the_old_route():
-    """Backwards compatibility: an effect that names a *trait* still means that
-    trait's rating. That path is untouched — it is how these were authored before
-    a die had two homes, and nothing already written is rewritten."""
-    from transversal.services.effects_applier.handlers_change_die import targets_a_die
+def test_the_comparison_reports_when_there_is_no_effect_die():
+    """Nothing to compare against is a real state — a fail has no effect die —
+    and it must change nothing rather than invent a size."""
+    from transversal.services.effects_applier.handlers_dice import _apply_reduce_by_effect
 
-    assert targets_a_die("rating:0:kael:qi") is True
-    assert targets_a_die("die:loc-1:kael:2") is True
-    assert targets_a_die("highest_trait_die") is True
-    assert targets_a_die("kael:trait-martial") is False
-    assert targets_a_die("trait-martial") is False
-    assert targets_a_die("") is False
+    ts = _ts(["d6"])
+    result = Result()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="reduce_by_effect", target=REF, context={})
+
+    _apply_reduce_by_effect(NS(id="kael"), effect, Repo(ts), result)
+
+    assert [d.value for d in ts.dice] == ["d6"]
+    assert "no effect die to compare" in result.applied[0].summary

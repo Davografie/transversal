@@ -85,10 +85,12 @@ mutation. *`step_up_die` / `step_down_die` came off it 2026-09-12.*
 pool list — so the two homes cannot drift. `_apply_step_die` is retired with them.
 
 `reduce_by_effect_die` and `increase_by_effect_die` joined the family too: the
-effect die is their reference instead of a number, and they now name a die in
-either home. They keep their trait picker, because an effect authored before a
-die had two homes names a *trait* and means its rating — their handlers dispatch
-on the target (`targets_a_die`), so neither form breaks.
+effect die is their reference instead of a number, and their target is a
+**targeting spec** naming a die in either home — there is no die picker, so the
+spec is the only way to name one. The `entity` and `relationship` fields they
+carried are gone with the trait form: the spec resolves the instance, so *whose*
+die and which membership anchor are already in the reference rather than separate
+questions.
 
 **3. Trait-instance references — landed 2026-09-15.** `split_die` was the
 blocker; it now takes a path to either locus, and the `target_kind` /

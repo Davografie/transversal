@@ -75,19 +75,17 @@ ACTIONS: list[EffectActionMeta] = [
         effect_type="modify_trait",
         effect_action="reduce_by_effect",
         valid_timings=["IMMEDIATE", "ON_ROLL", "ON_SET", "ON_RESULT", "ON_SUCCESS", "ON_FAILURE"],
+        # A targeting spec is the only way to name the die — there is no die
+        # picker. `entity` and `relationship` are gone with the trait form: the
+        # spec resolves the instance, so *whose* die and which anchor are already
+        # in the reference, not questions the author answers separately.
         fields=[
             EffectFieldDef(name="target", label="Target", field_type="text", required=True),
-            _ENTITY_FIELD,
         ],
         context_fields=[
-            _RELATIONSHIP_CONTEXT_FIELD,
             EffectFieldDef(name="effect_die", label="Effect Die", field_type="die_select", required=False, default="{effect_die}", options=["d4", "d6", "d8", "d10", "d12"]),
         ],
-        # A die is not a picker kind, so the path is what names one — either home.
-        # `target_kind` stays: an older effect that names a *trait* still resolves
-        # to that trait's rating, and the picker is how such a value is chosen.
         path_element=("die", "rating_die"),
-        target_kind="trait",
     ),
     EffectActionMeta(
         action_id="increase_by_effect_die",
@@ -104,14 +102,11 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "ON_ROLL", "ON_SET", "ON_RESULT", "ON_SUCCESS", "ON_FAILURE"],
         fields=[
             EffectFieldDef(name="target", label="Target", field_type="text", required=True),
-            _ENTITY_FIELD,
         ],
         context_fields=[
-            _RELATIONSHIP_CONTEXT_FIELD,
             EffectFieldDef(name="effect_die", label="Effect Die", field_type="die_select", required=False, default="{effect_die}", options=["d4", "d6", "d8", "d10", "d12"]),
         ],
         path_element=("die", "rating_die"),
-        target_kind="trait",
     ),
     EffectActionMeta(
         action_id="set_trait",

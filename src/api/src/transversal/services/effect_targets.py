@@ -311,7 +311,6 @@ def _traitset_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -
 # the whole registry would offer traits there is nothing to mutate.
 _MUTATE_EXISTING_TRAIT_ACTIONS = {
     "step_down", "step_up", "set", "remove",
-    "reduce_by_effect", "increase_by_effect",
 }
 
 

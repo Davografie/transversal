@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from transversal.domain import DieType
 from transversal.domain import Polarity
 from transversal.domain import RatingType
 from transversal.services.effects_applier.datatypes import (
@@ -10,7 +9,6 @@ from transversal.services.effects_applier.datatypes import (
 )
 from transversal.services.effects_applier.handlers_change_die import (
     _apply_change,
-    targets_a_die,
 )
 from transversal.services.effects_applier.handlers_traits import (
     _maybe_complete_challenge,
@@ -31,9 +29,6 @@ from transversal.services.effects_applier.trait_helpers import (
     _find_traitsetting_by_target,
     _new_traitsetting,
     _rating_type,
-    _step_down_one,
-    _step_up_trait,
-    _steps,
     _trait_owner,
 )
 
@@ -123,118 +118,25 @@ def _apply_remove_die(entity, effect, repo, result):
     _queue_trait_revert(repo, existing, effect)
 
 def _apply_reduce_by_effect(entity, effect, repo, result):
-    """Reduce by the effect-die comparison.
+    """Reduce a die by the effect-die comparison.
 
-    ``effect.context.effect_die`` is the winning effect die (``{effect_die}``
-    substituted at fire time). If it is strictly larger than the die it compares
-    against, that die is removed; otherwise it steps down one step. Shared
-    comparison via ``dice_resolver.effect_die_beats``.
-
-    **Two kinds of target.** A *die* reference (``rating:<i>:<ts>`` /
-    ``die:<loc>:<owner>:<i>``) is the newer form and names the die exactly — one
-    die of a multi-die rating, in either home. A trait id is the older form,
-    authored before a die had two homes: it means the trait's rating, and the
-    trait is removed outright when the effect die beats it.
+    The effect die is the reference: strictly larger than the targeted die
+    removes it, otherwise it steps down one step. One shared predicate
+    (``dice_resolver.effect_die_beats``) and one rule
+    (``handlers_change_die._plan_change``), aimed at the die the target names —
+    in a trait instance's rating or in the assembled pool.
     """
-    if targets_a_die(effect.target or ""):
-        _apply_change(entity, effect, repo, result, "lower_by_effect")
-        return
-    subject = _effect_subject(entity, effect, result, repo)
-    if subject is None:
-        return
-    _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
-    if target is None:
-        return
-    existing = _find_traitsetting_by_target(subject, effect, repo, target)
-    if not existing or not existing.dice:
-        result.applied.append(AppliedEffect(effect, f"no trait {target} to reduce"))
-        return
+    _apply_change(entity, effect, repo, result, "lower_by_effect")
 
-    raw_die = (effect.context or {}).get("effect_die")
-    try:
-        effect_die = DieType(str(raw_die).lower()) if raw_die else None
-    except ValueError:
-        effect_die = None
-    if effect_die is None:
-        result.applied.append(AppliedEffect(effect, "no effect die to compare"))
-        return
-
-    target_die = existing.dice[0]
-    from transversal.services.dice_resolver import effect_die_beats
-    if effect_die_beats(effect_die, target_die):
-        result.removed_trait_settings.append(existing)
-        result.applied.append(
-            AppliedEffect(effect, f"removed {target} (effect die {effect_die.value} beats {target_die.value})", existing.id)
-        )
-    else:
-        status = _step_down_one(existing)
-        if status != "stepped":
-            result.applied.append(AppliedEffect(effect, f"{target} has no dice to step down"))
-            return
-        result.updated_trait_settings.append(existing)
-        result.applied.append(
-            AppliedEffect(effect, f"stepped down {target} (effect die {effect_die.value} ≤ {target_die.value})", existing.id)
-        )
-        _queue_trait_revert(repo, existing, effect)
 
 def _apply_increase_by_effect(entity, effect, repo, result):
-    """Raise a die by the effect-die comparison.
+    """Raise a die by the effect-die comparison — the positive mirror.
 
-    The positive mirror of ``_apply_reduce_by_effect``. If the effect die is
-    strictly larger than the die it compares against, that die is *set* to it;
-    equal or smaller, it steps up one step. Shared predicate via
-    ``dice_resolver.effect_die_beats``.
-
-    Targets the same two ways: a die reference names the die exactly (in either
-    home), a trait id is the older form and means the trait's rating.
+    Strictly larger *sets* the die to the effect die; equal or smaller steps it
+    up one step.
     """
-    if targets_a_die(effect.target or ""):
-        _apply_change(entity, effect, repo, result, "raise_by_effect")
-        return
-    subject = _effect_subject(entity, effect, result, repo)
-    if subject is None:
-        return
-    _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
-    if target is None:
-        return
-    existing = _find_traitsetting_by_target(subject, effect, repo, target)
-    if not existing or not existing.dice:
-        result.applied.append(AppliedEffect(effect, f"no trait {target} to increase"))
-        return
+    _apply_change(entity, effect, repo, result, "raise_by_effect")
 
-    raw_die = (effect.context or {}).get("effect_die")
-    try:
-        effect_die = DieType(str(raw_die).lower()) if raw_die else None
-    except ValueError:
-        effect_die = None
-    if effect_die is None:
-        result.applied.append(AppliedEffect(effect, "no effect die to compare"))
-        return
-
-    target_die = existing.dice[0]
-    from transversal.services.dice_resolver import effect_die_beats
-    if effect_die_beats(effect_die, target_die):
-        prior = target_die.value
-        existing.dice = [effect_die]
-        result.updated_trait_settings.append(existing)
-        result.applied.append(
-            AppliedEffect(effect, f"set {target} to {effect_die.value} (effect die {effect_die.value} beats {target_die.value})", existing.id)
-        )
-        _queue_trait_revert(repo, existing, effect, prior_result=prior)
-        return
-
-    # Equal or smaller: one step up. ``_step_up_trait`` reports its own refusal
-    # (already at d12, a negative trait taken out) — don't double up on it.
-    if not _step_up_trait(subject, existing, target, effect, result, repo, steps=_steps(effect)):
-        return
-    result.updated_trait_settings.append(existing)
-    result.applied.append(
-        AppliedEffect(effect, f"stepped up {target} (effect die {effect_die.value} ≤ {target_die.value})", existing.id)
-    )
-    _queue_trait_revert(repo, existing, effect)
-    _maybe_complete_challenge(existing, subject)
 
 def _apply_set(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)

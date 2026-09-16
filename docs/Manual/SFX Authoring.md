@@ -863,7 +863,7 @@ Goal: *Heal* — pick an occupant, pick one of their complications, step it down
 1. **Trigger** `manual` (a button on Phaos' Medicine trait). **Source** `Trait setting`.
 2. Effect 1: `Add Trait Rating Dice` → the location's difficulty pool (so healing is a test).
 3. Effect 2: `Resolve Dice Pool` (auto-roll + set the difficulty).
-4. Effect 3: `Reduce by Effect Die`, target set to a **targeting path**: `select occupants → choose 1 → navigate traitsettings → filter traitset_id == <complications set> → choose 1`.
+4. Effect 3: `Reduce by Effect Die`, target set to a **targeting path** naming the die: `select occupants → choose 1 → navigate traitsettings → filter traitset_id == <complications set> → choose 1 → navigate rating_dice → aggregate Lowest element`.
 
 Because effects run sequentially, the resolution effect waits for the dice-adding effect, and the final reduce effect waits for the trait choice.
 

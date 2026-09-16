@@ -75,15 +75,18 @@ def test_the_change_die_family_reads_as_one_group():
         assert meta.group == "Change a Die", action_id
 
 
-def test_the_effect_die_comparisons_accept_a_die_as_well_as_a_trait():
-    """They were authored against a trait's rating before a die had two homes.
-    The trait picker stays (an old effect still names a trait), and a path to
-    either home is now offered as well."""
+def test_the_effect_die_comparisons_name_a_die_with_a_spec():
+    """They compared against a trait's *rating* before a die had two homes. Now a
+    targeting spec is the only way to name the die — there is no die picker — and
+    the questions the trait form needed are gone: `entity` (whose trait) and
+    `relationship` (the membership anchor) are answered by the reference itself."""
     for action_id in ("reduce_by_effect_die", "increase_by_effect_die"):
         meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
         assert set(meta.path_element) == {"die", "rating_die"}, action_id
-        assert meta.target_kind == "trait", action_id
+        assert meta.target_kind is None, action_id
+        assert [f.name for f in meta.fields] == ["target"], action_id
         assert next(f.label for f in meta.fields if f.name == "target") == "Target"
+        assert [f.name for f in meta.context_fields] == ["effect_die"], action_id
 
 
 def test_delete_trait_is_authorable():
@@ -143,8 +146,7 @@ def test_increase_by_effect_die_mirrors_reduce():
     step up'. Same declared shape as its negative twin, opposite direction."""
     meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "increase_by_effect_die")
     assert (meta.effect_type, meta.effect_action) == ("modify_trait", "increase_by_effect")
-    assert meta.target_kind == "trait"
-    assert [f.name for f in meta.fields] == ["target", "entity"]
+    assert [f.name for f in meta.fields] == ["target"]
     ctx = {f.name: f for f in meta.context_fields}
     assert ctx["effect_die"].default == "{effect_die}"
     assert effect_card("modify_trait", "increase_by_effect") == "increase {target} by the effect die"
@@ -154,8 +156,7 @@ def test_increase_by_effect_die_mirrors_reduce():
     assert [f.name for f in meta.fields] == [f.name for f in twin.fields]
     assert sorted(f.name for f in meta.context_fields) == sorted(f.name for f in twin.context_fields)
     # Both sit with the dice actions: the effect die is their reference, and the
-    # target they compare against is a die (with the trait picker kept for
-    # content authored before a die had two homes).
+    # target they compare against is a die named by a spec.
     assert meta.group == "Change a Die" and twin.group == "Change a Die"
     assert set(meta.path_element) == {"die", "rating_die"}
     assert set(twin.path_element) == {"die", "rating_die"}
