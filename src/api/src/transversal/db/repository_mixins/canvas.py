@@ -11,6 +11,12 @@ from transversal.db.repository_mixins.common import (
     _STRUCTURAL_TYPES_AQL,
 )
 
+# The two traits that make a tie a *roster* entry: `role` names the place in the
+# org, `rank` rates it. Matched by **name**, because the registry carries more
+# than one trait called `role`.
+ROLE_TRAIT_NAME = "role"
+RANK_TRAIT_NAME = "rank"
+
 
 class RepositoryCanvas:
     """Mixin contributing 22 member(s) to the repository."""
@@ -473,27 +479,52 @@ class RepositoryCanvas:
         if faction is None:
             return {"faction": None, "members": [], "locations": [], "ancestors": [], "location_edges": [], "relations": []}
 
-        member_query = f"""
+        # A roster entry is a `membership` edge — or a `relation` tie carrying a
+        # roster trait, which is the shape the authored sect rosters are in. Match
+        # the traits by **name**, not by key: the registry holds two traits called
+        # `role` (`trait-12795986`, which the migrated content uses, and
+        # `trait-13684952`), so a key comparison silently misses the real data.
+        trait_names = {t.id: t.name for t in self.get_all_traits()}
+        tie_query = f"""
             FOR r IN {RELATIONSHIPS}
-            FILTER r.type == 'membership' AND r._to == @faction_ref
-            LET member_key = PARSE_IDENTIFIER(r._from).key
-            FOR e IN {ENTITIES}
-            FILTER e._key == member_key AND e.type IN ['gmc', 'character']
-            RETURN {{ id: e._key, name: e.name, location_id: e.current_location, edge_key: r._key }}
+            FILTER r._to == @faction_ref AND r.type IN ['membership', 'relation']
+            RETURN {{ edge_key: r._key, type: r.type, member_key: PARSE_IDENTIFIER(r._from).key }}
         """
-        members = list(self.db.aql.execute(
-            member_query, bind_vars={"faction_ref": f"{ENTITIES}/{faction_id}"}
+        ties = list(self.db.aql.execute(
+            tie_query, bind_vars={"faction_ref": f"{ENTITIES}/{faction_id}"}
         ))
 
-        for m in members:
-            m["rank"] = None
-            m["role"] = None
-            for ts in self.get_relationship_traitsettings(m["edge_key"]):
-                if ts.trait_id == "trait-rel-rank" and ts.dice:
-                    m["rank"] = dice_list_to_rating(ts.dice)
-                elif ts.trait_id == "trait-role-cd1b":
-                    m["role"] = ts.statement or ts.trait_id
-            m.pop("edge_key", None)
+        roster: list[dict] = []
+        for tie in ties:
+            role = None
+            rank = None
+            for ts in self.get_relationship_traitsettings(tie["edge_key"]):
+                name = trait_names.get(ts.trait_id)
+                if name == ROLE_TRAIT_NAME:
+                    role = ts.statement or ts.trait_id
+                elif name == RANK_TRAIT_NAME and ts.dice:
+                    rank = dice_list_to_rating(ts.dice)
+            if tie["type"] != "membership" and role is None and rank is None:
+                continue  # a posture tie between the faction and something else
+            roster.append({"id": tie["member_key"], "role": role, "rank": rank})
+
+        members: list[dict] = []
+        if roster:
+            entity_query = f"""
+                FOR e IN {ENTITIES}
+                FILTER e._key IN @keys AND e.type IN ['gmc', 'character']
+                RETURN {{ id: e._key, name: e.name, location_id: e.current_location }}
+            """
+            by_id = {
+                doc["id"]: doc
+                for doc in self.db.aql.execute(
+                    entity_query, bind_vars={"keys": [r["id"] for r in roster]}
+                )
+            }
+            for r in roster:
+                doc = by_id.get(r["id"])
+                if doc is not None:
+                    members.append({**doc, "role": r["role"], "rank": r["rank"]})
 
         member_ids = [m["id"] for m in members]
         member_locations = [m["location_id"] for m in members if m["location_id"]]
