@@ -142,39 +142,26 @@
           </label>
         </div>
 
-        <!-- aggregate: collapse to a scalar — or sample the collection (random) -->
+        <!-- aggregate: the FIELD first, then the functions that field supports
+             (a datetime cannot be averaged, so it is not offered one) -->
         <div v-else-if="step.kind === 'aggregate'" class="tsb-config tsb-agg">
+          <select v-model="step.field" @change="onAggFieldChange(i)">
+            <option value="">— the collection —</option>
+            <option v-for="f in orderableFieldsFor(priorElement(i))" :key="f.name" :value="f.name">
+              {{ f.label || f.name }} <em>({{ f.type }})</em>
+            </option>
+          </select>
           <select v-model="step.fn">
             <option value="">— fn —</option>
-            <option v-for="a in aggregations()" :key="a.name" :value="a.name">
-              {{ a.label }} <em>({{ a.output }})</em>
+            <option v-for="a in aggregationsForField(i)" :key="a.name" :value="a.name">
+              {{ a.label }} <em>({{ aggOutputLabel(a, i) }})</em>
             </option>
           </select>
-          <select v-if="aggNeedsField(step.fn)" v-model="step.field">
-            <option value="">— field —</option>
-            <option v-for="f in fieldsFor(priorElement(i))" :key="f.name" :value="f.name">
-              {{ f.label || f.name }}
-            </option>
-          </select>
-          <label v-else-if="aggNeedsCount(step.fn)" class="tsb-check">
+          <label v-if="aggNeedsCount(step.fn)" class="tsb-check">
             <span>pick</span>
             <input type="number" min="1" :value="step.count ?? 1" @input="onCount(i, $event)" />
             <em>1 = single · N = subset</em>
           </label>
-        </div>
-
-        <!-- top: keep the extreme element by a comparable field -->
-        <div v-else-if="step.kind === 'top'" class="tsb-config tsb-top">
-          <select v-model="step.field">
-            <option value="">— field —</option>
-            <option v-for="f in orderableFieldsFor(priorElement(i))" :key="f.name" :value="f.name">
-              {{ f.label || f.name }}
-            </option>
-          </select>
-          <select v-model="step.direction">
-            <option value="desc">highest / most recent</option>
-            <option value="asc">lowest / least recent</option>
-          </select>
         </div>
 
         <!-- choose: interactive collapse of the current collection -->
@@ -384,7 +371,6 @@ const STEP_KINDS = [
   { kind: 'filter', label: 'Filter' },
   { kind: 'navigate', label: 'Navigate' },
   { kind: 'aggregate', label: 'Aggregate' },
-  { kind: 'top', label: 'Top' },
   { kind: 'choose', label: 'Choose' },
   { kind: 'evaluate', label: 'Evaluate' },
 ]
@@ -456,8 +442,37 @@ function stepIsValid(i) {
   return !errorAt(i)
 }
 
-function aggNeedsField(fn) {
-  return (aggregations().find((a) => a.name === fn) || {}).needsField
+// The functions the chosen field supports. No field → the collection-level ones
+// (`count`, `random`); a field → the functions whose declared types accept it, so
+// a `datetime` field never offers an average.
+function aggregationsForField(i) {
+  const t = aggFieldType(i)
+  return aggregations().filter((a) => (t
+    ? a.needsField && (!(a.accepts || []).length || a.accepts.includes(t))
+    : !a.needsField))
+}
+
+function aggFieldType(i) {
+  const name = steps.value[i]?.field
+  if (!name) return ''
+  return (fieldsFor(priorElement(i)).find((f) => f.name === name) || {}).type || ''
+}
+
+// What the function produces, in the chosen field's own terms: `same` is the
+// field's type, `element` is what the collection holds (so the path keeps walking).
+function aggOutputLabel(a, i) {
+  if (a.output === 'same') return aggFieldType(i) || 'value'
+  if (a.output === 'element') return priorElement(i) || 'element'
+  return a.output
+}
+
+// Changing the field can invalidate the function; keep it only while it is still
+// supported.
+function onAggFieldChange(i) {
+  const step = steps.value[i]
+  if (!step) return
+  if (!aggregationsForField(i).some((a) => a.name === step.fn)) step.fn = ''
+  if (!aggNeedsCount(step.fn)) step.count = 1
 }
 
 // `random` samples the collection instead of collapsing it, so it asks how many
