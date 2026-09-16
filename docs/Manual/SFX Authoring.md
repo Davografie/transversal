@@ -765,9 +765,13 @@ and where it lands is what the change *means*.
 - **Choosing among several dice.** `aggregate` over the `rating` field picks one:
   *Highest element* is the biggest die of the rating, *Lowest element* the
   smallest, *Random* a sample. (*Highest value* gives the number, not the die.)
-- **The strategy keyword.** The literal mode still accepts `highest_trait_die`
-  (the highest-rated die in the pool that came from a trait), kept so older
-  content keeps working; a targeting path is how a die is named now.
+- **A path is the only target.** There is no keyword to type and no picker to
+  pick from: this field *is* the path builder. The two keyword cases have path
+  spellings, and a step's **output name** lets you reuse one (`select variable`):
+  - the highest die of your roll that came from a trait —
+    `select rolled dice → filter source kind == trait → aggregate Highest element`,
+    over `rating`;
+  - the die that hitched — the same, filtered to `tier == fail`.
 - Rerolling writes a new *result*, which belongs to the resolver rather than to
   the applier, so **Reroll Die is declared but not yet applied**. `Reroll Highest`
   is retired in its favour (`Reroll Die` over *Highest element* of the rating).
@@ -877,7 +881,7 @@ Because effects run sequentially, the resolution effect waits for the dice-addin
 - **Two that surprise people.** *User role* needs no context (it falls back to the entity's controlling player), so it works anywhere including boundaries. And a *targeting path* only needs the roll when it actually reads it — a path that seeds from `rolled dice` needs a moment that has dice (a roll trigger, a roll-timed effect), while a path over the entity's own traits works anywhere.
 - **SFX duration ≠ effect duration.** The SFX duration is a *listening window* (how long the SFX stays armed); the effect duration is an *undo timer* (when a change reverts). They don't influence each other.
 - **Sequential execution.** If an effect needs a `choose`, the effects after it pause until the choice resolves.
-- **Legacy vs structured targeting.** Old effects used `target`/`entity` strings; new effects use the **Targeting path** (`target_spec`/`entity_spec`). When both exist, the spec wins. Prefer the targeting path for anything that needs drillthrough or multi-target fan-out (see [[Targeting Model]]).
+- **Targets are targeting paths.** The old spelling was a `target`/`entity` string plus a picker kind; that is gone, along with the free-text *strategy keyword*. Every action's target is a **Targeting path** (`target_spec`), and an action's subject (`entity_spec`) is a path too. A trait's target can be a *definition* (`select traits → filter …`) or an *instance* (`select self traits → …`); a die is reached through `pool → dice` or `trait instance → rating dice`; a trait that lives on a relationship is reached through `entity → relationships → trait instances`. Use a step's **output name** to bind what a path found and `select variable` to reuse it (see [[Targeting Model]]).
 
 ---
 

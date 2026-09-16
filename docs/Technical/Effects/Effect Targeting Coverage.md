@@ -44,11 +44,15 @@ reason). The card states the scope (*"for each unchosen die, …"*).
 ## Coverage today (55 registered, 51 offered)
 
 > Numerals from the regeneration recipe at the end of this note (re-run
-> 2026-09-15, after the change-die family): **55 registered, 51 offered** — the
-> other 4 are retired from authoring but kept resolvable. **34** have a
-> path-capable target (`target` **and** a declared destination, `target_kind` or
-> `path_elements`), 6 declare `refs`, **3 flat targets**, 18 with no `target`
-> field at all.
+> 2026-09-15, after the sweep to paths): **55 registered, 51 offered** — the other
+> 4 are retired from authoring but kept resolvable. Of the 51 offered, **31** have
+> a path-capable target (`target` **and** a declared destination), 6 declare
+> `refs`, **3 flat targets** (names, not references — see item 4), **17 with no
+> `target` field at all**.
+>
+> **Every offered target is a path**, and no offered action declares a picker kind
+> for its target any more (`target_kind` survives only on the three retired trait
+> steps and on runtime `{choose_*}` / `{random:*}` placeholder strings).
 
 - **Target offers a path — 34.** All the trait actions, the change-die family
   (which accepts *either* a pool die or a rating die), the location/travel ones,
@@ -110,6 +114,26 @@ outcomes, muster). Five of them (`add_trait_rating_dice`, `roll_pool`,
 `negate_complication` (Remove Trait). They are filtered out of the editor's
 `effectActions` and stay in the registry, because that is where an existing
 effect's inverse, card and dispatch come from — so stored content keeps working.
+
+**7. The trait picker and the strategy keyword — gone, 2026-09-15.** The last
+non-path targets, swept at the author's direction (*"Make path the only way …
+sweep the non-path targets"*):
+
+- The **instance-targeting** trait actions (`set_trait`, `add_rating_die`,
+  `delete_trait`, `disable_trait`, `toggle_trait`, `reveal_trait`) declare
+  `path_element=("traitsetting",)`; the **definition-targeting** ones
+  (`gain_trait` and its siblings) declare `("trait",)`, named with the new
+  `select traits` seed.
+- Their `entity` and `relationship` fields went with the picker, except on the
+  gain actions — where `entity` is a genuine **subject** and `relationship` an
+  **anchor** a subject-spec cannot yet express.
+- The **strategy keyword** is deleted from the applier too, not just hidden:
+  `highest_trait_die` and `the_hitch_die` were the last two, and both are paths
+  now (`select rolled_dice → filter source_kind == trait → aggregate Highest
+  element field=rating`, and the same filtered to `tier == fail`). A step's
+  `output` + `select variable` is how one is reused.
+- `convert_complication` (`botch_to_hitch`) is the last keyword in the registry,
+  and it is blocked on the **Invert Polarity** decision rather than on this work.
 
 
 ## Regenerating this
