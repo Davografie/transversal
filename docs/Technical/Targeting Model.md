@@ -79,8 +79,8 @@ first, then draws the life from it (`filter universe == {universe}`).
 
 `target_catalog.py` is the single source of truth both the type-checker and the wizard read, so only valid steps compose.
 
-- **Element types** (`ELEMENT_TYPES`): `die`, `traitsetting`, `traitsetsetting`, `trait`, `traitset`, `entity`, `projection`, `location`, `universe`, `pool`.
-- **Edges** (`EDGES`): named hops `(source → target, cardinality)`. Edges are union-capable (`target` is a tuple) but single-typed today — e.g. `die → traitsetting`, `traitsetting → subtraits`, `traitsetting → entity`, `entity → location`, `location → occupants`, plus the pool-assembly hops `entity → pool` and `location → difficulty_pool`, and `pool → dice` (a pool element is a handle; the dice themselves come from the scene store, which is why this one edge reads runtime state rather than the repo). A `traitsetting → subtraits` hop reaches the instances nested under a parent (elemental roots under Spiritual Power); they are deliberately absent from `entity → traitsettings`, which filters `from_type != 'traitsetting'`.
+- **Element types** (`ELEMENT_TYPES`): `die` (a die in a pool), `rating_die` (a die of a trait instance's rating), `traitsetting`, `traitsetsetting`, `trait`, `traitset`, `entity`, `projection`, `location`, `universe`, `pool`.
+- **Edges** (`EDGES`): named hops `(source → target, cardinality)`. Edges are union-capable (`target` is a tuple) but single-typed in practice — a union target is refused by the trace rather than guessed at. Two hops reach a **die**, because a die has two homes: `pool → dice` (the dice currently assembled for a roll) and `traitsetting → rating_dice` (the dice that make up that trait's rating). The rest: `die → traitsetting`, `traitsetting → subtraits`, `traitsetting → entity`, `entity → location`, `location → occupants`, plus the pool-assembly hops `entity → pool` and `location → difficulty_pool`. A `traitsetting → subtraits` hop reaches the instances nested under a parent (elemental roots under Spiritual Power); they are deliberately absent from `entity → traitsettings`, which filters `from_type != 'traitsetting'`.
 - **Scalar fields** (`SCALAR_FIELDS`): comparable/aggregatable fields per element, each with a type (`int`/`number`/`die`/`string`/`datetime`). Enum-like string fields also carry an **`options` tuple** so the wizard renders a dropdown (`die.source_kind`, `die.tier`, `die.rating`, `traitsetting.rating_type`, `traitsetting.from_type`, `entity.type`, …). Id-reference fields carry a **`references`** element hint (`traitset_id → traitset`, `trait_id → trait`, `entity_id → entity`, `projection_id → projection`, …) so the wizard renders a **TargetPicker** instead of a free-text id input. A free-form field whose values are *data* rather than schema carries a **`suggest`** value source instead (`traitsetting.tags` and `trait.tags` → `trait_tags`): the wizard autosuggests the values that exist (`<datalist>`), while typing a new one stays allowed. **`datetime`** orders by when it happened (naive and aware timestamps are normalised to UTC), which is what makes `projection.last_used_at` orderable — a field like this is what `aggregate` offers `top`/`bottom` (`Highest/Lowest element`) and `min`/`max` (`Lowest/Highest value`) for, and it is never offered `mean`/`avg_*`.
 - **Aggregations** (`AGGREGATIONS`): `count` (int), `min`/`max` (same-type), `mean`/`avg_floor`/`avg_ceil` (number).
 - **Collections** (`COLLECTIONS`): the `select` seeds — `self` (singleton entity), `rolled_dice`, `opposing_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`, `sfxs`. Two special seeds live outside `COLLECTIONS` because their type varies: `select source` (typed by the SFX's `source_kind`) and `select variable` (typed by a bound output variable). **Dice collections come from the event context**, through one rule (`target_resolver.event_collections`): an event that carries `rolls` / `opposing_rolls` exposes them as `rolled_dice` / `opposing_dice` wherever the context is threaded (conditions, immediate effects, deferred effects). A collection's card phrase carries its **party** (`you rolled` / `they rolled`), so the other side's dice never read as the actor's.
@@ -115,6 +115,26 @@ A spec that type-checks is guaranteed to have resolvable steps; the resolver pro
 
 When both a legacy string and a spec exist, the spec wins. `entity_spec` resolves in `effects_applier._effect_subject`; `target_spec` resolves per target in `roll_deferral._apply_spec_target` (the roll-deferred path), which fans the effect out once per resolved target.
 
+### Two homes for a die (the `Change a Die` family)
+
+A die lives in one of two places, and which one decides what changing it *means*:
+
+| | `die` (pool die) | `rating_die` (rating die) |
+|---|---|---|
+| What it is | a die the player assembled for a roll | part of a trait instance's definition |
+| Reached by | `pool → dice` | `traitsetting → rating_dice` |
+| Lifetime | rebuilt every roll — a change lasts the roll | a fact about the character — a change persists |
+| Undo | nothing to revert (the pool is gone) | restores the recorded prior dice; may carry a duration |
+| Reference | `die:<location>:<owner>:<index>` | `rating:<index>:<ts_id>` |
+
+The index comes **first** in the rating reference because a traitsetting id contains colons (`kael:spiritual-power`), so the tail is the only unambiguous place for it.
+
+An action declares the destinations it accepts as a **set** (`EffectActionMeta.path_element`, served as `pathElements`): the whole family accepts both, and `reroll_die` accepts only `die`, because rerolling a *result* needs a result and a rating die has none. The trace refuses a spec reaching neither, naming each type that would have worked ("not die/one or rating_die/one").
+
+A duration is offered only where it means something (`duration_elements`): the editor reads the element the path resolved to and shows the timer builder only for a rating die. A timer on a pool die would be a field that lies — the pool it changed no longer exists.
+
+`aggregate` is how a *specific* die is chosen from either home: `bottom field=rating` is the lowest die of a rating, `top field=rating` the highest, and `random` samples. That is why `Reroll Highest` is expressed as `reroll_die` over `aggregate top field=rating`, and why the two must not be confused with `min`/`max`, which give the *value* rather than the die.
+
 ### Legacy migration
 
 `target_legacy.py::from_legacy_target(target, kind)` translates the *unambiguous* legacy string forms into trivial specs:
@@ -127,7 +147,7 @@ Unmappable forms (variables like `{effect_die}`, kinds without a collection/elem
 
 ## The wizard (frontend)
 
-- `src/frontend/src/components/gm/TargetSpecBuilder.vue` — the step-by-step path builder: add/remove/reorder step rows, per-step config, catalog-driven affordances (only legal edges/fields/aggregations offered), and **live type highlighting** (each step's resolved type, green when it matches the field's declared destination).
+- `src/frontend/src/components/gm/TargetSpecBuilder.vue` — the step-by-step path builder: add/remove/reorder step rows, per-step config, catalog-driven affordances (only legal edges/fields/aggregations offered), and **live type highlighting** (each step's resolved type, green when it matches one of the field's declared destinations). It also reports the element its path currently resolves to, which is what lets an action offer a duration only where one means something.
 - `src/frontend/src/composables/useTargetCatalog.js` — module-singleton that fetches the catalog and calls `traceTargetSpec` (debounced) for highlighting.
 - Wired into `EffectForm.vue` as a **"Targeting path"** mode on both the `target` and `entity` fields (alongside Pick/Choose/Random/Named-exit).
 
@@ -136,7 +156,7 @@ The wizard is catalog-driven: it cannot compose an invalid path, and a field wit
 ## GraphQL surface
 
 - `targetCatalog` — the full catalog (elements, edges, fields + options, aggregations, collections).
-- `traceTargetSpec(input, destinationElement, destinationCardinality, sourceElement, variables)` — walks a draft spec through the shared type-checker; returns the type after each step, step errors, and `valid` (does the final type match the destination). `variables` seeds the bound-variable scope (name → element).
+- `traceTargetSpec(input, destinationElements, destinationCardinality, sourceElement, variables)` — walks a draft spec through the shared type-checker; returns the type after each step, step errors, and `valid` (does the final type match the destination). `destinationElements` is a **list**, because a field may accept more than one kind of thing. `variables` seeds the bound-variable scope (name → element).
 - `targetLabels(ids: [ID!]!)` — display names for ids, resolved through the same repository resolver the card text uses, so a picker shows a **name** for a value whose candidate is not in the loaded page. The editor never shows raw ids; a raw id is the last resort.
 - `effectVariables(effects, sourceElement, conditions, trigger, sourceKind)` — the typed names a path may `select variable` from. It seeds the scope with the **activation's own names** first (`target_catalog.scope_seed_names`: the source token and the trigger's declared variables, typed by catalog element, non-walkable ones dropped), then traces the SFX's conditions, then each effect's specs and its declared references. The engine binds the same names from the live event (`effects_engine._activation_bindings`), so what the wizard offers is what resolves — and a deferred effect carries them, snapshotted with the rest of the activation.
 
@@ -165,6 +185,7 @@ The targeting model exists to power **passive rules** like One Trick:
 | `Effect.target_spec` / `entity_spec` fields | `domain/__init__.py` |
 | `entity_spec` subject resolution | `services/effects_applier.py` (`_effect_subject`) |
 | `target_spec` roll-deferred fan-out | `services/roll_deferral.py` (`_apply_spec_target`) |
+| Change-a-die handlers, both loci | `services/effects_applier/handlers_change_die.py` |
 | Passive arming + `on_session_start` | `services/state_events.py`, `services/roll_deferral.py`, `services/menu_contexts.py` |
 | Wizard component / composable | `frontend/src/components/gm/TargetSpecBuilder.vue`, `frontend/src/composables/useTargetCatalog.js` |
 | GraphQL (`targetCatalog`, `traceTargetSpec`, `effectVariables`) | `api/graphql/schema.py`, `api/graphql/types.py` |

@@ -1,6 +1,6 @@
 ---
 title: Effect Targeting Coverage
-date: 2026-09-11
+date: 2026-09-15
 tags:
   - transversal
   - sfx
@@ -23,9 +23,11 @@ counts move as the registry grows.
 
 An effect can say three different things, and each is authored differently:
 
-- **Target** — *what it acts on*. A path is offered when the action declares
-  `target_kind` (`EffectForm.isScopedTargetField`). The field must be named
-  `target`.
+- **Target** — *what it acts on*. A path is offered when the action declares a
+  destination: `target_kind` (a picker kind, which also names the destination) or
+  `path_elements` (the catalog elements a path may reach, when there is no picker
+  — a die has no picker, and the change-die family accepts **either** a pool die
+  or a rating die). The field must be named `target`.
 - **Subject** — *who it lands on*. Available whenever the action declares a
   field named `entity`; the picker/path row is automatic
   (`EffectForm.isEntityField`). No extra declaration needed.
@@ -39,61 +41,68 @@ for. It runs the effect **once per matching die**, and inside that effect the di
 against it (the filter is checked before the spec/ref branches for exactly that
 reason). The card states the scope (*"for each unchosen die, …"*).
 
-## Coverage today (53 actions)
+## Coverage today (55 registered, 51 offered)
 
-> Numerals below are from the regeneration recipe at the end of this note
-> (re-run 2026-09-11, when `increase_by_effect_die` landed): 53 actions total, 27
-> with a path-capable target (`target` **and** `target_kind`), 6 declaring
-> `refs`, 9 flat targets, 17 with no `target` field at all.
+> Numerals from the regeneration recipe at the end of this note (re-run
+> 2026-09-15, after the change-die family): **55 registered, 51 offered** — the
+> other 4 are retired from authoring but kept resolvable. **34** have a
+> path-capable target (`target` **and** a declared destination, `target_kind` or
+> `path_elements`), 6 declare `refs`, **3 flat targets**, 18 with no `target`
+> field at all.
 
-- **Target offers a path — 27.** All the trait actions, the location/travel
-  ones, `transfer_razmerit`, `attune`, `create_relationship`,
-  `entity_targeting_ban`, `set_traitset_limit`, `discover_life_path`,
-  `draft_life_path`, `open_roll_table`, `next_step`, `add_dice`,
-  `end_active_effect`.
+- **Target offers a path — 34.** All the trait actions, the change-die family
+  (which accepts *either* a pool die or a rating die), the location/travel ones,
+  `transfer_razmerit`, `attune`, `create_relationship`, `entity_targeting_ban`,
+  `set_traitset_limit`, `discover_life_path`, `draft_life_path`,
+  `open_roll_table`, `next_step`, `add_dice`, `end_active_effect`.
 - **Subject available — 20.** The trait actions plus `earn_razmerit`,
   `spend_razmerit`, `travel`, `set_location`, `set_traitset_limit`,
-  `end_active_effect`, and the two *name* actions below (you can path who
-  receives an asset; you just cannot path what it is called).
+  `end_active_effect`, and two of the *name* actions (you can path who receives
+  an asset; you just cannot path what it is called).
 - **Own path builders (refs) — 6.** `add_trait_rating_dice` (trait + pool),
   `roll_pool` (pool), `resolve_pool` (pool), `attune` (universe + projection),
   `copy_trait` and `move_trait` (the trait instance). The last two take the
   recipient from their `entity`/subject field, so the thing being handed over is
   a path while *who gets it* is the ordinary subject target.
-- **Deletion is authorable.** `delete_trait` exposes `modify_trait`/`remove`
-  (previously only the internal inverse of `gain`), so a steal can be authored as
-  copy + delete when that reads better than `move_trait`.
+- **Removal is authorable.** `delete_trait` — now labelled **Remove Trait** —
+  exposes `modify_trait`/`remove` and names the instance, which is why
+  `negate_complication` is retired in its favour.
 
 ## Gaps, and what each actually needs
 
-**1. Strategy keywords — 2 actions left.** `reroll_die` (`the_hitch_die`) and
-`convert_complication` (`botch_to_hitch`) name a *rule* for choosing a die, not a
-thing, and nothing applies them (they are resolver-context passthroughs).
-*`step_up_die` / `step_down_die` came off this list 2026-09-12:* they now take a
-**targeting path to a die** (`path_element="die"` — the picker-kind/path-element
-split this note asked for) and are applied for real (`effects_applier`'s
-`_apply_step_die` writes the stepped rating back to the scene store). The
-keyword `highest_trait_die` is still honoured, and now has a meaning.
+**1. Strategy keywords — 1 action left.** `convert_complication`
+(`botch_to_hitch`) names a *rule* for choosing a die, not a thing, and nothing
+applies it. *`reroll_die` came off this list 2026-09-15:* it declares a
+pool-die destination (`path_element=("die",)`) and its `the_hitch_die` default is
+a named meaning rather than unexplained text. It still has no applier, because
+rerolling writes a new **result** — the resolver's business, not a state
+mutation. *`step_up_die` / `step_down_die` came off it 2026-09-12.*
 
-**2. Die references — 2 actions.** `double_die`, `remove_die` name a die in the
-pool. The vocabulary now exists — `pool → dice` (with each die carrying its
-provenance) and `path_element` — so these are a declaration plus an applier each,
-not a design question. **Needs the same treatment `step_up_die` got.**
+**2. Die references — landed 2026-09-15.** `double_die`, `split_die` and
+`remove_die` are applied for real, in either home, with a `count`
+(`double 2` on a d8 makes 3d8; `split 2` makes 3d6). One rule
+(`handlers_change_die._plan_change`) and two appliers — the rating list and the
+pool list — so the two homes cannot drift. `_apply_step_die` is retired with them.
 
-**3. Trait-instance references — 1 action.** `split_die` ("Source Trait",
-default `{source_trait}`) is genuinely a thing that could be pathed — the catalog
-has a `traitsetting` element. The blocker was that **`target_kind` served two
-purposes** (the picker kind *and* the path's destination element); that is now
-split (`path_element`), so this is a declaration plus an applier.
+**3. Trait-instance references — landed 2026-09-15.** `split_die` was the
+blocker; it now takes a path to either locus, and the `target_kind` /
+`path_element` split this note asked for is what made that writable.
 
 **4. Names, not targets — 2 actions.** `create_asset` ("Asset Name"),
 `create_projection` ("Disguise Name"). Correctly flat: these are labels, not
 references. No change wanted.
 
-**5. No target at all — 17 actions.** Mostly correct (dice limits, steps,
+**5. No target at all — 18 actions.** Mostly correct (dice limits, steps,
 outcomes, muster). Five of them (`add_trait_rating_dice`, `roll_pool`,
 `resolve_pool`, `copy_trait`, `move_trait`) resolve their real inputs through
 `refs` already, so they are path-capable in the way that matters.
+
+**6. Retired, not deleted — 4 actions.** `step_up_trait`, `step_down_trait`,
+`remove_rating_die` (the change-die family on a rating die) and
+`negate_complication` (Remove Trait). They are filtered out of the editor's
+`effectActions` and stay in the registry, because that is where an existing
+effect's inverse, card and dispatch come from — so stored content keeps working.
+
 
 ## Regenerating this
 
@@ -103,10 +112,11 @@ from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY as R
 for m in R:
     names = {f.name for f in m.fields}
     has = 'target' in names
-    kind = m.target_kind or ''
-    if has and kind: print('path  ', m.action_id, kind)
-    elif has:        print('FLAT  ', m.action_id, next(f.label for f in m.fields if f.name=='target'))
-    else:            print('none  ', m.action_id, sorted(names), [r.name for r in m.refs])
+    dest = m.target_kind or ','.join(m.path_element)
+    tag = 'RETIRED' if m.retired else ''
+    if has and dest: print('path  ', m.action_id, dest, tag)
+    elif has:        print('FLAT  ', m.action_id, next(f.label for f in m.fields if f.name=='target'), tag)
+    else:            print('none  ', m.action_id, sorted(names), [r.name for r in m.refs], tag)
 "
 ```
 

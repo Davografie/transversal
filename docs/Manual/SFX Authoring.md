@@ -741,39 +741,81 @@ boundary — is greyed out and says why.
 
 The editor shows these as labeled actions; each maps to a `type`/`action` pair behind the scenes. The sign hint (cost / benefit / either) is a UI aid, not a stored field.
 
-**Roll & dice**
+**Change a die**
+
+A die has two homes, and the same six actions work in either. The **path** picks
+the home — a die in the assembled pool, or a die of a trait instance's rating —
+and where it lands is what the change *means*.
 
 | Action | What it does | Sign |
 |--------|--------------|------|
-| Play as Rating | Use a trait's rating as the roll rating | cost |
-| Step Up Die / Step Down Die | Shift a die in the pool — clamped at d4/d12. Its target is either a **strategy keyword** (`highest_trait_die`: the highest-rated die that came from a trait) or a **targeting path** to a die, e.g. `select self → navigate pool → navigate dice → filter ts_id == {trait_setting}` for *the die from the trait this rule is attached to*. | benefit / cost |
-| Double Die | Duplicate a die | benefit |
-| Reroll Die / Reroll Highest | Re-roll a die / the highest die | benefit / either |
-| Remove Die / Split Die | Remove / split a die | cost / benefit |
+| Set Die | Set a die to a size (`d8` → `d12`) | either |
+| Step Up Die / Step Down Die | Move N steps along the ladder (default 1). Clamped at d12; a **d4 stepped down** leaves the rating | benefit / cost |
+| Double Die | Add N copies at the same size — `double 2` on a d8 makes 3d8 | benefit |
+| Split Die | Make N+1 dice one step smaller — `split 2` on a d8 makes 3d6 | benefit |
+| Remove Die | Take the die out. A rating with no dice left is still a trait | cost |
+| Reroll Die | Reroll a die — **pool only**, since a rating die has no result to reroll | benefit |
+
+- **Which home changes how long it lasts.** A path ending in a *rating die*
+  changes the character: it persists, and the form offers a duration, whose undo
+  restores whatever the rating was before. A path ending in a *pool die* lasts
+  only the current roll — no duration is offered there, because the pool is
+  rebuilt at the next roll and a timer on it would mean nothing.
+- **Choosing among several dice.** `aggregate` over the `rating` field picks one:
+  *Highest element* is the biggest die of the rating, *Lowest element* the
+  smallest, *Random* a sample. (*Highest value* gives the number, not the die.)
+- **The strategy keyword.** The literal mode still accepts `highest_trait_die`
+  (the highest-rated die in the pool that came from a trait), kept so older
+  content keeps working; a targeting path is how a die is named now.
+- Rerolling writes a new *result*, which belongs to the resolver rather than to
+  the applier, so **Reroll Die is declared but not yet applied**. `Reroll Highest`
+  is retired in its favour (`Reroll Die` over *Highest element* of the rating).
+
+**The pool itself**
+
+| Action | What it does | Sign |
+|--------|--------------|------|
+| Play as Rating | Use a trait at another size for this roll — nothing is mutated | cost |
 | Add Dice | Add explicit dice to a pool | benefit |
 | Add Trait Rating Dice | Add a trait's rating dice to a pool | either |
 | Roll Dice Pool / Resolve Dice Pool | Roll / auto-resolve a pool | either |
 | Increase / Decrease Dice Limit | Change the keep-2 total (or effect) dice limit | benefit / cost |
-| Step Up Effect / Outcome | Improve the effect die / outcome | benefit |
-| Double Die / Reroll Die / Split Die … | Still resolver-context only (a keyword target): they name a die but nothing applies them yet. | benefit / either |
-| Negate / Convert Complication | Neutralize or transform a complication | benefit |
+| Step Up Effect | Improve the effect die — the pool die chosen as the effect die | benefit |
+| Step Up Outcome | Bump the outcome tier by one | benefit |
 
 **Traits**
 
 | Action | What it does | Sign |
 |--------|--------------|------|
-| Step Up Trait / Step Down Trait | Shift a trait rating | benefit / cost |
 | Reduce by Effect Die | Step a trait down by the effect die — removed if the effect die beats its rating, else one step down | benefit |
 | Increase by Effect Die | Raise a trait by the effect die — set *to* the effect die if it beats the rating, else one step up | benefit |
-| Set Trait Rating | Set a trait to a fixed rating | either |
-| Add Die to Rating / Remove Die from Rating | Change a multi-die rating | benefit / cost |
+| Set Trait Rating | Set a trait to a fixed rating (the change-die family's *Set Die* on a rating die is the newer spelling) | either |
+| Add Die to Rating | Add a die to a rating — seeds the trait when it has none | benefit |
 | Disable Trait / Toggle Trait | Turn a trait off / flip it | cost / either |
-| Gain Trait / Gain or Step Up Trait / Cortex Gain Trait | Acquire a trait (or step it up) | either |
+| Gain Trait | Acquire a trait. **Already "if not exists"**: it does nothing when the trait is present — which is why "Gain or Step Up" is a separate action | either |
 | Copy Trait | Give another entity a copy of a trait instance — its dice, statement, notes, polarity are carried over; the recipient's trait-set rules apply | either |
 | Move Trait | Take a trait instance from another entity (a steal): the instance changes hands with its grants and spent dice | cost |
-| Delete Trait | Remove a trait instance from its owner — the trait burns away, is lost or destroyed | cost |
+| Remove Trait | Remove a trait instance from its owner — the trait burns away, is lost or destroyed. (Was *Delete Trait*; *Negate Complication* is retired in its favour.) | cost |
 | Reveal Trait (Learn) | Reveal a trait to another entity | benefit |
 | Set Trait-set Limit | Change a trait set's size limit | either |
+
+> [!note] Retired actions
+> A handful of actions are gone from the editor because another one says the same
+> thing more precisely. Rules already using them keep working and keep reverting
+> — nothing is rewritten under you — but new authoring should use the replacement:
+>
+> | Retired | Use instead |
+> |---------|-------------|
+> | Step Up Trait / Step Down Trait | **Step Up Die / Step Down Die** on a path to a rating die (`select … → navigate rating_dice → aggregate Lowest element`) |
+> | Remove Die from Rating | **Remove Die** on a rating die |
+> | Negate Complication | **Remove Trait**, which names the instance instead of implying one |
+> | Reroll Highest | **Reroll Die** over *Highest element* of the rating (pending its applier) |
+>
+> Two more are covered in principle but left authorable for now: **Gain or Step Up
+> Trait** and **Cortex Gain Trait** compose as *Gain Trait* (already if-not-exists)
+> plus *Increase by Effect Die* on the resulting rating die — but the seeded
+> complication rules in a live contest use Cortex Gain directly, so retiring it is
+> a content migration rather than a rename.
 
 **Razmerit**
 

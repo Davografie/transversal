@@ -28,7 +28,8 @@ status: canonical
 | Domain models (`SFX`, `Effect`, `EffectTiming`, `EffectDuration`, `Timer`, `TimerCombine`, `ScheduledEvent`, `ConsequenceOption`, `SfxOwner`, `Attunement`, `TargetingBan`, `Condition`) | `src/api/src/transversal/domain/__init__.py` |
 | Effect action registry (what actions exist, their fields, category, valid timings, inverse, supports-duration) | `src/api/src/transversal/services/effects_registry.py` |
 | Effects engine (trigger matching, scheduling, event → applied/pending effects) | `src/api/src/transversal/services/effects_engine.py` |
-| Effect applier (dispatch + mutation handlers, `{choose_*}` target resolution) | `src/api/src/transversal/services/effects_applier.py` |
+| Effect applier (dispatch + mutation handlers, `{choose_*}` target resolution) | `src/api/src/transversal/services/effects_applier/` (package: `entry.py` dispatches, `registry.py` registers, `handlers_*.py` mutate) |
+| Changing a die, in either home (rating or pool) | `src/api/src/transversal/services/effects_applier/handlers_change_die.py` |
 | Target-candidate resolution (scope resolvers, `resolve_candidates`, `FILTER_FIELDS`) | `src/api/src/transversal/services/effect_targets.py` |
 | Structured targeting catalog (elements, edges, fields + options, aggregations, collections) | `src/api/src/transversal/services/target_catalog.py` |
 | Target spec model + step types + type-checker | `src/api/src/transversal/services/target_spec.py` |
@@ -221,12 +222,13 @@ Conditions are authored alongside effects and evaluated against an entity's stat
 | Family (`effect_type`) | `action_id` → `effect_action` | Category |
 |------------------------|-------------------------------|----------|
 | `modify_roll` | `play_as_rating` → `play_as_rating` | cost |
-| | `step_up_die` → `step_up_die` | benefit |
-| | `step_down_die` → `step_down_die` | cost |
-| | `double_die` → `double_die` | benefit |
-| | `reroll_die` → `reroll_die` | benefit |
-| | `remove_die` → `remove_die` | cost |
-| | `split_die` → `split_die` | benefit |
+| | `set_die` → `set_die` | either (change a die) |
+| | `step_up_die` → `step_up_die` | benefit (change a die) |
+| | `step_down_die` → `step_down_die` | cost (change a die) |
+| | `double_die` → `double_die` | benefit (change a die) |
+| | `split_die` → `split_die` | benefit (change a die) |
+| | `remove_die` → `remove_die` | cost (change a die) |
+| | `reroll_die` → `reroll_die` | benefit (pool die only) |
 | `modify_outcome` | `step_up_effect` → `step_up_effect` | benefit |
 | | `step_up_outcome` → `step_up_outcome` | benefit |
 | | `negate_complication` → `negate_complication` | benefit |
@@ -262,7 +264,37 @@ Conditions are authored alongside effects and evaluated against an entity's stat
 | `relationship` | `create_relationship` → `create` | either |
 | `entity` | `entity_targeting_ban` → `targeting_ban` | cost |
 
-`gain_trait` / `gain_or_step_up_trait` / `cortex_gain_trait` all declare `supports_polarity`, so the editor shows a "Negative (complication)" toggle that sets `Effect.negative`. `cortex_gain` is the Cortex create-or-step-up rule: create at the effect die if absent; if present, jump to the effect die when higher, else step up one step.
+`gain_trait` / `gain_or_step_up_trait` / `cortex_gain_trait` all declare `supports_polarity`, so the editor shows a "Negative (complication)" toggle that sets `Effect.negative`. `cortex_gain` is the Cortex create-or-step-up rule: create at the effect die if absent; if present, jump to the effect die when higher, else step up one step. (`gain_trait` already no-ops when the trait is present, so "if not exists" is its existing behaviour.)
+
+### The `Change a Die` family
+
+Six `modify_roll` actions are one family, because they are one question: *which
+die, and what happens to it*. The targeting path answers the first half, and it
+may land on **either** of a die's two homes — a die in the assembled pool
+(`pool → dice`) or a die of a trait instance's rating
+(`traitsetting → rating_dice`). The family declares both as its
+`path_element`, so one action serves both; `reroll_die` declares only the pool,
+because a rating die has no result to reroll.
+
+Where the change lands decides what it *means*, and nothing is authored twice:
+
+- a **rating die** is part of the character, so the change persists and the form
+  offers a duration, whose undo restores the rating's whole prior dice list;
+- a **pool die** is rebuilt every roll, so the change lasts the roll and no
+  duration is offered (`duration_elements` gates the control on the element the
+  path resolved to).
+
+`effects_applier/handlers_change_die.py` holds one rule
+(`_plan_change`: the die resized, the die gone, or N copies) and two appliers —
+the rating list and the pool list — so the two homes cannot drift. The ladder
+itself is `domain.dice.step_die`: d12 saturates, a **d4 stepped down is gone**,
+and stepping up from nothing restores a d4 (an empty rating is a valid trait).
+
+`step_up_trait`, `step_down_trait`, `remove_rating_die` and
+`negate_complication` are **retired from authoring** in this family's favour —
+`EffectActionMeta.retired` keeps them in the registry (where their inverse, card
+and dispatch live) while the editor stops offering them, so stored content keeps
+working and keeps reverting.
 
 ### Internal inverse actions (not editor-authored)
 
