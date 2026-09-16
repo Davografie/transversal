@@ -15,7 +15,8 @@
             class="tsb-add-btn"
             variant="secondary"
             size="sm"
-            :disabled="!canInsertAfter(-1, k.kind)"
+            :disabled="kindBlocked(k.kind) || !canInsertAfter(-1, k.kind)"
+            :title="kindBlocked(k.kind) ? KIND_BLOCKED_REASON : ''"
             @click="insert(-1, k.kind)"
           >{{ k.label }}</Button>
         </div>
@@ -29,7 +30,9 @@
         <div class="tsb-step-head">
           <span class="tsb-step-index">{{ i + 1 }}</span>
           <select v-model="step.kind" class="tsb-kind">
-            <option v-for="k in STEP_KINDS" :key="k.kind" :value="k.kind">{{ k.label }}</option>
+            <option v-for="k in STEP_KINDS" :key="k.kind" :value="k.kind" :disabled="kindBlocked(k.kind)">
+              {{ k.label }}{{ kindBlocked(k.kind) ? ' — needs an answer' : '' }}
+            </option>
           </select>
           <span class="tsb-type">{{ typeLabel(i) }}</span>
           <span v-if="stepIsValid(i)" class="tsb-match">✓ {{ destinationLabel }}</span>
@@ -139,7 +142,7 @@
           </label>
         </div>
 
-        <!-- aggregate: collapse to a scalar -->
+        <!-- aggregate: collapse to a scalar — or sample the collection (random) -->
         <div v-else-if="step.kind === 'aggregate'" class="tsb-config tsb-agg">
           <select v-model="step.fn">
             <option value="">— fn —</option>
@@ -153,6 +156,11 @@
               {{ f.label || f.name }}
             </option>
           </select>
+          <label v-else-if="aggNeedsCount(step.fn)" class="tsb-check">
+            <span>pick</span>
+            <input type="number" min="1" :value="step.count ?? 1" @input="onCount(i, $event)" />
+            <em>1 = single · N = subset</em>
+          </label>
         </div>
 
         <!-- top: keep the extreme element by a comparable field -->
@@ -167,15 +175,6 @@
             <option value="desc">highest / most recent</option>
             <option value="asc">lowest / least recent</option>
           </select>
-        </div>
-
-        <!-- random: sample a subset of the current collection -->
-        <div v-else-if="step.kind === 'random'" class="tsb-config tsb-random">
-          <label class="tsb-check">
-            <span>pick</span>
-            <input type="number" min="1" :value="step.count ?? 1" @input="onCount(i, $event)" />
-            <em>1 = single · N = subset</em>
-          </label>
         </div>
 
         <!-- choose: interactive collapse of the current collection -->
@@ -237,7 +236,8 @@
             class="tsb-add-btn"
             variant="secondary"
             size="sm"
-            :disabled="!canInsertAfter(i, k.kind)"
+            :disabled="kindBlocked(k.kind) || !canInsertAfter(i, k.kind)"
+            :title="kindBlocked(k.kind) ? KIND_BLOCKED_REASON : ''"
             @click="insert(i, k.kind)"
           >{{ k.label }}</Button>
         </div>
@@ -385,10 +385,16 @@ const STEP_KINDS = [
   { kind: 'navigate', label: 'Navigate' },
   { kind: 'aggregate', label: 'Aggregate' },
   { kind: 'top', label: 'Top' },
-  { kind: 'random', label: 'Random' },
   { kind: 'choose', label: 'Choose' },
   { kind: 'evaluate', label: 'Evaluate' },
 ]
+
+// A condition is a filter. `choose` needs a person to answer, and a gate has
+// nobody to ask — such a step resolves to nothing and the condition silently
+// never passes. Offered *disabled with the reason* rather than hidden, per the
+// author's foolproofing rule.
+const KIND_BLOCKED_REASON = 'a condition is a filter — choose needs someone to answer'
+
 const OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'contains']
 const EVALUATE_OPERATORS = ['exists', '==', '!=', '>', '>=', '<', '<=']
 
@@ -452,6 +458,12 @@ function stepIsValid(i) {
 
 function aggNeedsField(fn) {
   return (aggregations().find((a) => a.name === fn) || {}).needsField
+}
+
+// `random` samples the collection instead of collapsing it, so it asks how many
+// rather than which field.
+function aggNeedsCount(fn) {
+  return (aggregations().find((a) => a.name === fn) || {}).needsCount
 }
 
 function fieldTypeFor(i) {
@@ -630,9 +642,16 @@ function canInsertAfter(i, kind) {
   if (!prior || !prior.element) return false
   // evaluate is terminal: a boolean result can't be followed.
   if (prior.element === 'boolean') return false
-  // random/choose collapse a *many* collection; only offer them over a set.
-  if (kind === 'random' || kind === 'choose') return prior.cardinality === 'many'
+  // choose collapses a *many* collection by asking the user; only offer it over
+  // a set. (Whether the asking is *possible* is `kindBlocked`'s question.)
+  if (kind === 'choose') return prior.cardinality === 'many'
   return true
+}
+
+// Context, not structure: what the path is *for* decides whether a step can
+// exist at all.
+function kindBlocked(kind) {
+  return props.booleanTerminal && kind === 'choose'
 }
 
 function toggleInsert(i) {

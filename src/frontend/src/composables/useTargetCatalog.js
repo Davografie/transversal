@@ -10,7 +10,7 @@ const CATALOG_QUERY = `{
     elements { name label }
     edges { name source targets cardinality label }
     fields { element name type label options operators references suggest }
-    aggregations { name label output needsField }
+    aggregations { name label output needsField needsCount }
     collections { name element label singular }
     sourceKinds { value label element variable ownerSurface }
   }
