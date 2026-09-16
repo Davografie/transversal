@@ -207,11 +207,16 @@ def _candidate_id(element: str, value: Any) -> str:
     return getattr(value, "ts_id", None) or getattr(value, "id", None) or str(value)
 
 
-def _candidate_label(element: str, value: Any, field_name: str) -> str:
-    """Extract a display label field from a resolved candidate."""
+def _candidate_label(element: str, value: Any, field_name: str, repo=None) -> str:
+    """Extract a display label field from a resolved candidate.
+
+    Read through :func:`_read_field`, not the raw attribute, so a declared field
+    whose value is *derived* (a pool die's ``rating``, a trait instance's ``tags``)
+    labels its candidate instead of rendering blank.
+    """
     if not field_name:
         return ""
-    raw = _get_field(value, field_name)
+    raw = _read_field(value, field_name, element, repo)
     if raw is None:
         return ""
     return str(raw)
@@ -252,8 +257,8 @@ def serialize_candidates(element: str, values: list[Any], repo=None) -> list[Can
             rating = getattr(rating_die, "value", rating_die) if rating_die is not None else ""
             subtitle = ""
         else:
-            name = _candidate_label(element, value, name_field)
-            subtitle = _candidate_label(element, value, subtitle_field)
+            name = _candidate_label(element, value, name_field, repo)
+            subtitle = _candidate_label(element, value, subtitle_field, repo)
             rating = ""
         out.append(CandidateDisplay(id=cid, element=element, name=name, subtitle=subtitle, rating=rating))
     return out
@@ -395,8 +400,14 @@ def resolved_id(value) -> str | None:
     **One implementation, both paths** — the immediate one (``effects_engine``)
     and the deferred one (``roll_deferral``) each carried a copy, and they drifted:
     a fix to one left the other handing a trait id to an action that wanted a die.
+
+    A **rating die** is addressed the same way but from the other locus:
+    ``rating:<ts_id>:<index>``, since a trait's rating is a list and the effect
+    has to name which die of it. Both forms are what ``_parse_die_ref`` reads.
     """
     if isinstance(value, dict):
+        if value.get("locus") == "rating":
+            return f"rating:{value.get('ts_id', '')}:{value.get('index')}"
         if value.get("pool_owner"):
             return f"die:{value.get('pool_location', '')}:{value['pool_owner']}:{value.get('pool_index')}"
         return value.get("ts_id") or value.get("id")
@@ -859,7 +870,8 @@ def _pool_dice(pool: Any, ctx: TargetContext) -> list[Any]:
     except Exception:  # no store (a bare test context) → no dice, fail closed
         return []
     return [
-        {**die, "pool_location": location_id, "pool_owner": owner_id, "pool_index": i}
+        {**die, "pool_location": location_id, "pool_owner": owner_id, "pool_index": i,
+         "locus": "pool"}
         for i, die in enumerate(dice)
     ]
 
@@ -927,8 +939,51 @@ def _traitsetting_tags(ts: Any, repo) -> list[str]:
     return own + [t for t in inherited if t not in own]
 
 
+def _die_rating(die: Any, repo) -> Any:
+    """A die's own size.
+
+    The catalog calls this field ``rating``, but a *pool* die carries its size
+    under ``die`` (that is the key the scene store and the pool handlers use),
+    so reading the attribute alone silently returned ``None`` — which made
+    ``filter rating == d8`` and ``aggregate max rating`` over dice match nothing.
+    One reader, so a rating means the same thing on either locus.
+    """
+    if isinstance(die, dict):
+        return die.get("rating") or die.get("die")
+    return getattr(die, "rating", None) or getattr(die, "die", None)
+
+
+def _traitsetting_rating_dice(ts: Any, ctx: TargetContext) -> list[dict]:
+    """The dice that make up a trait instance's *rating*.
+
+    A rating is a list (``TraitSetting.dice``): a static trait holds one die, a
+    resource trait its unspent remainder, a challenge its ledger. Each die is a
+    candidate for a ``Change a Die`` effect, addressed by its position — which is
+    what makes "step up *that* die of the rating" expressible.
+
+    The dict deliberately mirrors a pool die's shape (``die``/``ts_id``/
+    ``source_kind``) so one set of handlers reads both loci; ``locus`` is what
+    tells them apart, and :func:`resolved_id` turns it back into a reference.
+    """
+    ts_id = _get_field(ts, "id") or ""
+    out: list[dict] = []
+    for i, d in enumerate(getattr(ts, "dice", None) or []):
+        size = getattr(d, "value", d)
+        out.append({
+            "locus": "rating",
+            "die": size,
+            "rating": size,
+            "ts_id": ts_id,
+            "index": i,
+            "source_kind": "trait",
+            "source_id": ts_id,
+        })
+    return out
+
+
 def register_default_fields() -> None:
     register_derived_field("traitsetting", "tags", _traitsetting_tags)
+    register_derived_field("die", "rating", _die_rating)
 
 
 def register_default_edges() -> None:
@@ -945,6 +1000,11 @@ def register_default_edges() -> None:
     # the parent and marked `from_type == 'traitsetting'`.
     register_edge("traitsetting", "subtraits",
                   lambda ts, ctx: list(ctx.repo.get_sub_traitsettings(ts.id)))
+    # The dice of this instance's rating — the persistent locus of a change-die
+    # effect, as opposed to the assembled pool's dice below.
+    register_edge("traitsetting", "rating_dice", _traitsetting_rating_dice)
+    register_edge("rating_die", "traitsetting",
+                  lambda d, ctx: _maybe(ctx.repo.get_traitsetting(d.get("ts_id"))))
 
     register_edge("entity", "location", lambda e, ctx: _maybe(ctx.repo.get_entity(e.current_location)))
     register_edge("entity", "universe", lambda e, ctx: _maybe(ctx.repo.get_entity(e.current_universe)))

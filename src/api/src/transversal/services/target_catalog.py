@@ -27,7 +27,14 @@ class ElementType:
 
 
 ELEMENT_TYPES: dict[str, ElementType] = {
-    "die": ElementType("die", "Die"),
+    # Two kinds of *die*, because a die lives in one of two places and where it
+    # lives decides what changing it means. A pool die is a die the player has
+    # assembled for a roll — transient, rebuilt every roll. A rating die is part
+    # of a trait instance's definition — a fact about the character, so changing
+    # it persists (and can carry a duration). One action family targets either;
+    # the element it lands on is what tells them apart.
+    "die": ElementType("die", "Pool die"),
+    "rating_die": ElementType("rating_die", "Rating die"),
     "traitsetting": ElementType("traitsetting", "Trait instance"),
     "traitsetsetting": ElementType("traitsetsetting", "Trait set instance"),
     "trait": ElementType("trait", "Trait"),
@@ -142,6 +149,17 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         # A list of SFX ids stamped on the die; filtered via the `contains` operator.
         "armed_sfx_ids": ScalarField("die", "armed_sfx_ids", "string",
                                       operators=("contains", "==", "!="), label="armed SFX"),
+    },
+    "rating_die": {
+        # The die's own size. Named `rating` on both loci — a pool die reads it
+        # through the derived reader below, so an aggregate or filter over
+        # `rating` means the same thing whichever die a path landed on.
+        "rating": ScalarField("rating_die", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
+        # Which die of the rating this is: a rating is a *list* (a resource trait
+        # holds several), and an effect that changes one has to say which.
+        "index": ScalarField("rating_die", "index", "int"),
+        "ts_id": ScalarField("rating_die", "ts_id", "string",
+                             references="traitsetting", label="trait instance"),
     },
     "traitsetting": {
         "rating": ScalarField("traitsetting", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
@@ -276,6 +294,16 @@ EDGES: tuple[Edge, ...] = (
     Edge("traitsetting", "die", ("traitsetting",), "one", "Owning trait instance",
          noun="trait instance", plural="trait instances"),
     Edge("owner", "die", ("entity",), "one", "Pool owner", noun="pool owner"),
+
+    # traitsetting → the dice that make up its *rating*. A rating is a list, so
+    # this is the second way to reach a `die` element — and the other locus a
+    # `Change a Die` effect can land on. The two hops are deliberately distinct
+    # element types: a rating die has no result, role or pool position, and
+    # changing it is persistent where changing a pool die is not.
+    Edge("rating_dice", "traitsetting", ("rating_die",), "many", "Rating dice",
+         noun="rating die", plural="rating dice"),
+    Edge("traitsetting", "rating_die", ("traitsetting",), "one", "Trait instance",
+         noun="trait instance", plural="trait instances"),
 
     # traitsetting → registry trait / traitset / owners
     # (the polymorphic `_from` anchor is split into already-distinct fields)
@@ -470,6 +498,7 @@ class DisplayFields:
 
 DISPLAY_FIELDS: dict[str, DisplayFields] = {
     "die": DisplayFields("die", "rating", "role"),
+    "rating_die": DisplayFields("rating_die", "rating", "index"),
     "traitsetting": DisplayFields("traitsetting", "trait_id", "rating"),
     "traitsetsetting": DisplayFields("traitsetsetting", "traitset_id", ""),
     "trait": DisplayFields("trait", "name", "traitset_id"),
