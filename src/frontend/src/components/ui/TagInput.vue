@@ -11,12 +11,12 @@
       @click="focusInput"
     >
       <span v-for="tag in modelValue" :key="tag" class="tag">
-        <span class="tag-label">{{ displayLabel(tag) }}</span>
+        <span class="tag-label">{{ labelFor(tag) }}</span>
         <button
           v-if="!disabled"
           type="button"
           class="tag-x"
-          :aria-label="`Remove ${displayLabel(tag)}`"
+          :aria-label="`Remove ${labelFor(tag)}`"
           @mousedown.prevent
           @click.stop="removeTag(tag)"
         >×</button>
@@ -29,24 +29,25 @@
         :placeholder="modelValue.length ? '' : placeholder"
         :disabled="disabled"
         :aria-autocomplete="'list'"
-        :aria-activedescendant="highlighted >= 0 ? optionId(highlighted) : undefined"
+        :aria-activedescendant="activeDescendant"
         :aria-label="ariaLabel || placeholder"
         @keydown="onKeydown"
         @focus="onFocus"
         @blur="onBlur"
-        @input="open = true"
+        @input="openList"
         @paste="onPaste"
       />
     </div>
 
     <!-- The list also opens for the *create* row alone: a free-form field whose
          typed text matches no existing tag still has something to offer, and
-         hiding that behind `availableSuggestions.length` made "create" reachable
-         only by pressing Enter. -->
-    <ul v-if="open && (availableSuggestions.length || (allowCustom && text.trim() && !exactMatch))"
+         hiding that behind `available.length` made "create" reachable only by
+         pressing Enter. -->
+    <ul v-if="open && (available.length || createText)"
         :id="listId" class="tag-dropdown" role="listbox">
+      <li v-if="loading && !available.length" class="tag-option is-searching">Searching…</li>
       <li
-        v-for="(s, idx) in availableSuggestions"
+        v-for="(s, idx) in available"
         :id="optionId(idx)"
         :key="s.value"
         class="tag-option"
@@ -60,29 +61,35 @@
         <span v-if="s.hint" class="tag-option-hint">{{ s.hint }}</span>
       </li>
       <li
-        v-if="allowCustom && text.trim() && !exactMatch"
+        v-if="createText"
         class="tag-option is-create"
         role="option"
-        :aria-selected="highlighted === availableSuggestions.length ? 'true' : 'false'"
-        :class="{ 'is-highlighted': highlighted === availableSuggestions.length }"
+        :aria-selected="highlighted === available.length ? 'true' : 'false'"
+        :class="{ 'is-highlighted': highlighted === available.length }"
         @mousedown.prevent="addTag(text.trim())"
       >
-        Create “{{ text.trim() }}”
+        {{ createText }}
       </li>
     </ul>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch, useId } from 'vue'
+import { computed, nextTick, ref } from 'vue'
+import { useCombobox } from '@/composables/useCombobox.js'
 
 // Shared multi-tag input with autosuggest. Serves both a free-form tag field
 // (Blue Book threads: type anything, existing tags suggested) and a
-// restricted multi-select (trait universes: pick from the given list).
+// restricted multi-select (trait universes, effect enum filters: pick from the
+// given list). The list mechanics come from `useCombobox`; this owns the chips
+// and the multi-value commit.
 //
 //   <TagInput v-model="threads" :suggestions="allThreads" placeholder="Threads…" />
 //   <TagInput v-model="form.universes" :suggestions="allowedUniverses"
 //             :allow-custom="false" placeholder="Add universe…" />
+//
+// `suggestions` may also be `(query) => options | Promise<options>` for a
+// vocabulary too large to preload.
 //
 // Selected values are the model; suggestion labels are presentation. Commits
 // on Enter (highlighted suggestion, else the typed text when `allowCustom`),
@@ -90,8 +97,8 @@ import { ref, computed, nextTick, watch, useId } from 'vue'
 // empty field removes the last tag.
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
-  // string[] or { value, label, hint? }[]
-  suggestions: { type: Array, default: () => [] },
+  // string[] or { value, label, hint? }[], or a query function returning either
+  suggestions: { type: [Array, Function], default: () => [] },
   // false = only values from `suggestions` can be added
   allowCustom: { type: Boolean, default: true },
   placeholder: { type: String, default: 'Add tag…' },
@@ -103,55 +110,21 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'add', 'remove'])
 
 const text = ref('')
-const open = ref(false)
-const highlighted = ref(-1)
 const inputEl = ref(null)
-const listId = useId()
-const optionId = (idx) => `${listId}-opt-${idx}`
 
-const normalized = computed(() =>
-  props.suggestions.map((s) =>
-    typeof s === 'string' ? { value: s, label: s } : { value: s.value, label: s.label ?? s.value, hint: s.hint }
-  )
-)
-
-const availableSuggestions = computed(() => {
-  const chosen = new Set(props.modelValue)
-  const q = text.value.trim().toLowerCase()
-  return normalized.value
-    .filter((s) => !chosen.has(s.value))
-    .filter((s) => !q || s.label.toLowerCase().includes(q) || String(s.value).toLowerCase().includes(q))
+const combo = useCombobox({
+  options: computed(() => props.suggestions),
+  query: text,
+  chosen: computed(() => props.modelValue),
+  allowCustom: props.allowCustom,
+  armTopOnChange: true,
 })
-
-watch([text, availableSuggestions], () => {
-  // Keep the top option armed: Enter commits the best match (or the create
-  // row when free-form) without an explicit arrow key.
-  highlighted.value = optionCount() ? 0 : -1
-})
-
-const exactMatch = computed(() => {
-  const q = text.value.trim().toLowerCase()
-  if (!q) return false
-  return normalized.value.some((s) => s.value.toLowerCase() === q || s.label.toLowerCase() === q)
-})
+const {
+  listId, open, loading, highlighted, available, createText,
+  activeDescendant, optionId, move, resolve, labelFor, openList, closeList,
+} = combo
 
 const atMax = computed(() => props.max > 0 && props.modelValue.length >= props.max)
-
-function displayLabel(value) {
-  const opt = normalized.value.find((s) => s.value === value)
-  return opt ? opt.label : value
-}
-
-// Resolve a typed/clicked value to what should be stored, or null when it
-// isn't allowed (restricted mode) or is already present.
-function resolveValue(raw) {
-  const v = String(raw ?? '').trim()
-  if (!v) return null
-  const byLabel = normalized.value.find((s) => s.label.toLowerCase() === v.toLowerCase())
-  const byValue = normalized.value.find((s) => s.value === v)
-  if (!byLabel && !byValue && !props.allowCustom) return null
-  return byLabel?.value ?? byValue?.value ?? v
-}
 
 // Adds one or many values with a SINGLE emit — sequential addTag() calls would
 // each read the same stale modelValue and only the last would survive.
@@ -161,7 +134,7 @@ function addValues(values) {
   let added = null
   for (const raw of values) {
     if (props.max > 0 && next.length >= props.max) break
-    const v = resolveValue(raw)
+    const v = resolve(raw)
     if (!v || next.includes(v)) continue
     next.push(v)
     added = added ? `${added}, ${v}` : v
@@ -194,15 +167,19 @@ function onKeydown(e) {
     case 'Backspace': onBackspace(); break
     case 'ArrowDown': e.preventDefault(); move(1); break
     case 'ArrowUp': e.preventDefault(); move(-1); break
-    case 'Escape': close(); break
-    case 'Tab': close(); break
+    case 'Escape': closeList(); break
+    case 'Tab': closeList(); break
   }
 }
 
 function commitHighlightedOrText() {
-  const list = availableSuggestions.value
-  if (highlighted.value >= 0 && highlighted.value < list.length) addTag(list[highlighted.value].value)
-  else commitText()
+  // A highlight on the create row (index === available.length) falls through to
+  // the text path, which splits a pasted comma list as it always has.
+  if (highlighted.value >= 0 && highlighted.value < available.value.length) {
+    addTag(available.value[highlighted.value].value)
+  } else {
+    commitText()
+  }
 }
 
 // Comma typed (or a comma-pasted list): commit everything before the cursor.
@@ -212,20 +189,6 @@ function commitText() {
   addValues(parts)
   text.value = ''
   highlighted.value = -1
-}
-
-function optionCount() {
-  return availableSuggestions.value.length + (props.allowCustom && text.value.trim() && !exactMatch.value ? 1 : 0)
-}
-
-// Highlight walks -1 (nothing) → 0…count-1 → back to -1.
-function move(dir) {
-  const count = optionCount()
-  if (!count) return
-  open.value = true
-  const max = count - 1
-  if (dir > 0) highlighted.value = highlighted.value >= max ? -1 : highlighted.value + 1
-  else highlighted.value = highlighted.value <= -1 ? max : highlighted.value - 1
 }
 
 function onBackspace() {
@@ -242,14 +205,12 @@ function onPaste(e) {
   highlighted.value = -1
 }
 
-function onFocus() { if (!props.disabled) open.value = true }
+function onFocus() { if (!props.disabled) openList() }
 function onBlur() {
   // A blur with pending text commits it (typing and clicking away shouldn't lose it).
   if (props.allowCustom && text.value.trim()) commitText()
-  open.value = false
-  highlighted.value = -1
+  closeList()
 }
-function close() { open.value = false; highlighted.value = -1 }
 function focusInput() { if (!props.disabled) inputEl.value?.focus() }
 </script>
 
@@ -338,5 +299,6 @@ function focusInput() { if (!props.disabled) inputEl.value?.focus() }
 }
 .tag-option.is-highlighted { background: var(--accent-12); color: var(--accent); }
 .tag-option.is-create { color: var(--text-dim); font-style: italic; }
+.tag-option.is-searching { color: var(--text-dim); font-style: italic; }
 .tag-option-hint { font-size: 10px; color: var(--text-dim); }
 </style>

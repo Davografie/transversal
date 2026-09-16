@@ -41,10 +41,35 @@
           </span>
         </div>
         <div class="filter-input-wrap">
-          <input v-model="filterInput" class="filter-input" placeholder="Filter…" @focus="showSuggestions = true" @blur="hideSuggestions" @keyup.escape="filterInput = ''" />
+          <input
+            v-model="filterInput"
+            class="filter-input"
+            placeholder="Filter…"
+            role="combobox"
+            aria-haspopup="listbox"
+            :aria-expanded="showSuggestions ? 'true' : 'false'"
+            :aria-controls="filterListId"
+            :aria-activedescendant="filterActiveDescendant"
+            aria-autocomplete="list"
+            @focus="showSuggestions = true"
+            @input="showSuggestions = true"
+            @blur="hideSuggestions"
+            @keydown="onFilterKeydown"
+            @keyup.escape="filterInput = ''"
+          />
           <Button v-if="filterInput" class="filter-clear-inline" variant="ghost" @click="filterInput = ''">✕</Button>
-          <div v-if="showSuggestions && suggestions.length" class="filter-suggestions">
-            <div v-for="s in suggestions" :key="s.id" class="suggestion-row" @mousedown.prevent="selectSuggestion(s)">
+          <div v-if="showSuggestions && suggestions.length" :id="filterListId" class="filter-suggestions" role="listbox">
+            <div
+              v-for="(s, i) in suggestions"
+              :id="filterOptionId(i)"
+              :key="s.id"
+              class="suggestion-row"
+              :class="{ 'is-highlighted': i === filterHighlighted }"
+              role="option"
+              :aria-selected="i === filterHighlighted ? 'true' : 'false'"
+              @mousedown.prevent="selectSuggestion(s)"
+              @mousemove="filterHighlighted = i"
+            >
               <span class="entity-type-badge" :class="'type-' + (s.entityType || s.type || '')">{{ s.entityType || s.type || '' }}</span><span>{{ s.name }}</span>
               <span class="suggestion-hint">{{ s.hint }}</span>
             </div>
@@ -165,7 +190,29 @@ const {
   activeFilters, filterInput, showSuggestions,
   filteredEntities, filteredFactions,
   suggestions, selectSuggestion, hideSuggestions,
+  highlighted: filterHighlighted,
+  listId: filterListId,
+  optionId: filterOptionId,
+  activeDescendant: filterActiveDescendant,
+  moveHighlight,
 } = useEntityFilter(entities)
+
+// The filter's suggestion list is keyboard-navigable (it was mouse-only): the
+// list mechanics are the shared combobox, so arrows/Enter work as they do in
+// the tag field and the pickers.
+function onFilterKeydown(e) {
+  switch (e.key) {
+    case 'ArrowDown': e.preventDefault(); moveHighlight(1); break
+    case 'ArrowUp': e.preventDefault(); moveHighlight(-1); break
+    case 'Enter': {
+      e.preventDefault()
+      const i = filterHighlighted.value
+      if (i >= 0 && i < suggestions.value.length) selectSuggestion(suggestions.value[i])
+      break
+    }
+    case 'Escape': showSuggestions.value = false; break
+  }
+}
 
 // Default the entity filter to the acted character so the tree focuses on
 // that character's location path instead of the whole hierarchy.
@@ -593,7 +640,7 @@ onUnmounted(() => {
 .filter-input-wrap .filter-clear-inline { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); padding: 2px 6px; }
 .filter-suggestions { position: absolute; top: 100%; left: 0; right: 0; z-index: 30; background: var(--bg-panel); backdrop-filter: blur(12px); border: 1px solid var(--overlay-10); border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; }
 .suggestion-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
-.suggestion-row:hover { background: var(--overlay-6); }
+.suggestion-row:hover, .suggestion-row.is-highlighted { background: var(--overlay-6); }
 
 .gm-content .create-btn { padding: 8px; margin-bottom: 8px; }
 .gm-content .canvas-btn { border: 1px dashed var(--accent-dim); }

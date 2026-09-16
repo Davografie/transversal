@@ -4,11 +4,18 @@
       ref="inputEl"
       class="sd-input"
       :class="{ 'sd-input-clearable': clearable && hasValue }"
-      :value="open ? search : selectedLabel"
+      :value="open ? query : selectedLabel"
       :placeholder="open ? (selectedLabel || placeholder) : placeholder"
+      role="combobox"
+      aria-haspopup="listbox"
+      :aria-expanded="open ? 'true' : 'false'"
+      :aria-controls="listId"
+      :aria-activedescendant="activeDescendant"
+      aria-autocomplete="list"
       @focus="openDrop"
       @blur="scheduleClose"
       @input="onInput"
+      @keydown="onKeydown"
     />
     <button
       v-if="clearable && hasValue"
@@ -16,25 +23,37 @@
       title="Clear"
       @mousedown.prevent="clear"
     >×</button>
-    <div v-if="open" class="sd-drop" :class="{ 'sd-drop-up': dropUp }">
-      <div v-if="!filtered.length" class="sd-empty">No matches</div>
+    <div v-if="open" :id="listId" class="sd-drop" :class="{ 'sd-drop-up': dropUp }" role="listbox">
+      <div v-if="loading && !available.length" class="sd-empty">Searching…</div>
+      <div v-else-if="!available.length" class="sd-empty">No matches</div>
       <div
-        v-for="opt in filtered"
-        :key="opt[valueKey]"
+        v-for="(opt, i) in available"
+        :key="opt.value"
         class="sd-item"
-        @mousedown.prevent="pick(opt)"
+        :class="{ 'sd-item-active': i === highlighted }"
+        role="option"
+        :aria-selected="i === highlighted ? 'true' : 'false'"
+        @mousedown.prevent="pickAt(i)"
+        @mousemove="highlighted = i"
       >
-        <slot name="option" :option="opt">{{ opt[labelKey] }}</slot>
+        <slot name="option" :option="opt.raw">{{ opt.label }}</slot>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onUnmounted } from 'vue'
+import { computed, nextTick, ref, onUnmounted } from 'vue'
+import { useCombobox } from '@/composables/useCombobox.js'
 
+// Single-select typeahead. The list mechanics (filter, highlight, keyboard,
+// aria, an async source) come from `useCombobox`; this owns the input, the
+// clear affordance, the drop-up flip and the single-value commit.
 const props = defineProps({
-  options: { type: Array, default: () => [] },
+  // An array, or `(query) => options | Promise<options>` for a server-backed
+  // lookup. The function form is new: pickers whose vocabulary is too large to
+  // preload can now query as the author types.
+  options: { type: [Array, Function], default: () => [] },
   // Currently selected value (single-select mode). Excluded from the
   // dropdown and shown as the placeholder label once resolved.
   modelValue: { type: [String, Number], default: '' },
@@ -53,15 +72,43 @@ const props = defineProps({
 
 const emit = defineEmits(['select', 'clear'])
 
-const search = ref('')
-const open = ref(false)
-const dropUp = ref(false)
 const inputEl = ref(null)
-let closeTimer = null
+const query = ref('')
+const dropUp = ref(false)
+const hasValue = computed(() => props.modelValue !== '' && props.modelValue != null)
+
+const chosen = computed(() =>
+  props.modelValue === '' || props.modelValue == null ? [] : [props.modelValue])
+const exclude = computed(() => props.excludeIds)
+
+const combo = useCombobox({
+  options: computed(() => props.options),
+  query,
+  chosen,
+  exclude,
+  maxResults: computed(() => props.maxResults).value,
+  armTopOnChange: true,
+  // A picker's highlight clamps at the ends: the tag field's wrap-to-nothing
+  // convention would let one stray arrow cancel an otherwise armed commit.
+  wrapHighlight: false,
+  // Single-select compares labels only, matching the long-standing behaviour
+  // (a raw id typed into a picker should not silently match a record).
+  matchTerm: (it, q) => it.label.toLowerCase().includes(q),
+  normalize: (o) => ({
+    value: o?.[props.valueKey],
+    label: o?.[props.labelKey] ?? '',
+    raw: o,
+  }),
+})
+const { listId, open, loading, highlighted, available, activeDescendant, move, openList, closeList } = combo
 
 const selectedLabel = computed(() => {
   if (props.modelValue === '' || props.modelValue == null) return ''
-  const opt = props.options.find(o => o[props.valueKey] === props.modelValue)
+  // Only a plain array can be searched for a label; an async source has not
+  // necessarily seen the selected record, so it falls through to the caller's
+  // resolved name (and the raw value as the last resort).
+  const list = Array.isArray(props.options) ? props.options : []
+  const opt = list.find(o => o[props.valueKey] === props.modelValue)
   // A value that isn't among the options is still a value — a `{bound_name}`
   // token the author typed, or an id whose record is gone. Falling back to the
   // placeholder hides what is actually set: the field looks empty when it isn't.
@@ -70,35 +117,8 @@ const selectedLabel = computed(() => {
   return (opt && opt[props.labelKey]) || props.fallbackLabel || String(props.modelValue)
 })
 
-const hasValue = computed(() => props.modelValue !== '' && props.modelValue != null)
-
-const filtered = computed(() => {
-  const s = search.value.trim().toLowerCase()
-  const excluded = new Set(props.excludeIds)
-  if (props.modelValue !== '' && props.modelValue != null) excluded.add(props.modelValue)
-  return props.options
-    .filter(o => {
-      if (excluded.has(o[props.valueKey])) return false
-      if (s && !String(o[props.labelKey] ?? '').toLowerCase().includes(s)) return false
-      return true
-    })
-    .slice(0, props.maxResults)
-})
-
-function pick(opt) {
-  emit('select', opt)
-  search.value = ''
-  open.value = false
-}
-
-function clear() {
-  emit('clear')
-  search.value = ''
-  open.value = false
-}
-
 async function openDrop() {
-  open.value = true
+  openList()
   await nextTick()
   const rect = inputEl.value?.getBoundingClientRect()
   if (!rect) {
@@ -113,13 +133,43 @@ async function openDrop() {
 // label unless the author is actively searching — then the label becomes the
 // hint, so what is set stays visible while they replace it.
 function onInput(e) {
-  search.value = e.target.value
-  open.value = true
+  query.value = e.target.value
+  openList()
 }
 
+function pickAt(i) {
+  const opt = available.value[i]
+  if (!opt) return
+  emit('select', opt.raw)
+  query.value = ''
+  closeList()
+}
+
+function onKeydown(e) {
+  switch (e.key) {
+    case 'ArrowDown': e.preventDefault(); move(1); break
+    case 'ArrowUp': e.preventDefault(); move(-1); break
+    case 'Enter': {
+      e.preventDefault()
+      // Single-select with no create row, so a highlight is always an option.
+      if (highlighted.value >= 0 && highlighted.value < available.value.length) pickAt(highlighted.value)
+      break
+    }
+    case 'Escape': closeList(); break
+    case 'Tab': closeList(); break
+  }
+}
+
+function clear() {
+  emit('clear')
+  query.value = ''
+  closeList()
+}
+
+let closeTimer = null
 function scheduleClose() {
   clearTimeout(closeTimer)
-  closeTimer = setTimeout(() => { open.value = false }, 150)
+  closeTimer = setTimeout(() => closeList(), 150)
 }
 
 onUnmounted(() => clearTimeout(closeTimer))
@@ -147,6 +197,6 @@ onUnmounted(() => clearTimeout(closeTimer))
 .sd-item {
   font-size: 10px; padding: 4px 8px; cursor: pointer; color: var(--text);
 }
-.sd-item:hover { background: rgba(0,200,150,0.1); color: var(--accent); }
+.sd-item:hover, .sd-item-active { background: rgba(0,200,150,0.1); color: var(--accent); }
 .sd-empty { font-size: 10px; padding: 6px 8px; color: var(--text-dim); }
 </style>

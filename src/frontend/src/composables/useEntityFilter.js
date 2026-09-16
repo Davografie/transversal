@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { ENTITY_TYPES } from '@/constants/entityTypes.js'
+import { useCombobox } from '@/composables/useCombobox.js'
 
 // Entity filtering and autocomplete for the GM panel. Takes the reactive
 // entity list from useEntityCrud and exposes the filter bar state, the
@@ -7,7 +8,6 @@ import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 export function useEntityFilter(entities) {
   const activeFilters = ref([])
   const filterInput = ref('')
-  const showSuggestions = ref(false)
 
   // ⚠ Both value AND q must be lowercased. The autocomplete stores the entity's
   // original-cased name as the filter value, but users type lowercase queries.
@@ -68,36 +68,75 @@ export function useEntityFilter(entities) {
   const universes = computed(() => entities.value.filter(e => e.type === 'UNIVERSE').map(u => ({ key: u.currentUniverse, name: u.name })))
 
   // ── Autocomplete ──────────────────────────────────
-  const suggestions = computed(() => {
-    const q = filterInput.value.trim().toLowerCase()
-    if (!q) return []
-    const results = []
+  // The list mechanics (filter, highlight, keyboard, aria) come from the shared
+  // combobox; the *filter* semantics stay here — `fuzzyMatch`, the additive-OR
+  // chips and the location/universe scope match are what this filter means, not
+  // how a suggestion list behaves.
+  //
+  // Candidates are the whole entity list plus the universe keys and the entity
+  // types: chips are additive (OR), so an active chip must not narrow what can
+  // be picked — otherwise a name outside the current matches could never be
+  // added. Nothing is excluded for already being a chip, which is the long-
+  // standing behaviour.
+  const candidates = computed(() => {
+    const out = []
     const seen = new Set()
     for (const u of universes.value) {
-      if ((u.key && fuzzyMatch(u.key, q)) || (u.name && fuzzyMatch(u.name, q))) {
-        if (!seen.has('uni:' + u.key)) {
-          seen.add('uni:' + u.key)
-          results.push({ id: 'uni:' + u.key, name: u.name || u.key, entityType: 'UNIVERSE', hint: 'universe', filterType: 'universe', filterValue: u.key, filterLabel: u.name || u.key })
-        }
-      }
+      if (!u.key || seen.has('uni:' + u.key)) continue
+      seen.add('uni:' + u.key)
+      out.push({
+        id: 'uni:' + u.key,
+        name: u.name || u.key,
+        entityType: 'UNIVERSE',
+        hint: 'universe',
+        filterType: 'universe',
+        filterValue: u.key,
+        filterLabel: u.name || u.key,
+        terms: [u.key, u.name].filter(Boolean),
+      })
     }
-    const types = ENTITY_TYPES
-    for (const t of types) {
-      if (fuzzyMatch(t, q)) {
-        results.push({ id: 'type:' + t, name: t.charAt(0) + t.slice(1).toLowerCase(), entityType: t, hint: 'type', filterType: 'entityType', filterValue: t, filterLabel: t.charAt(0) + t.slice(1).toLowerCase() })
-      }
+    for (const t of ENTITY_TYPES) {
+      out.push({
+        id: 'type:' + t,
+        name: t.charAt(0) + t.slice(1).toLowerCase(),
+        entityType: t,
+        hint: 'type',
+        filterType: 'entityType',
+        filterValue: t,
+        filterLabel: t.charAt(0) + t.slice(1).toLowerCase(),
+        terms: [t],
+      })
     }
-    // Candidates are the whole entity list: chips are additive (OR), so they
-    // must not narrow what can be picked — otherwise a name outside the current
-    // matches could never be added.
     for (const e of entities.value) {
-      if ((fuzzyMatch(e.name, q) || fuzzyMatch(e.id, q)) && !seen.has('ent:' + e.id)) {
-        seen.add('ent:' + e.id)
-        results.push({ id: 'ent:' + e.id, name: e.name, entityType: e.type, hint: 'name', filterType: 'name', filterValue: e.name, filterLabel: e.name })
-      }
+      if (seen.has('ent:' + e.id)) continue
+      seen.add('ent:' + e.id)
+      out.push({
+        id: 'ent:' + e.id,
+        name: e.name,
+        entityType: e.type,
+        hint: 'name',
+        filterType: 'name',
+        filterValue: e.name,
+        filterLabel: e.name,
+        terms: [e.name, e.id].filter(Boolean),
+      })
     }
-    return results.slice(0, 10)
+    return out
   })
+
+  const combo = useCombobox({
+    options: candidates,
+    query: filterInput,
+    allowCustom: false,
+    maxResults: 10,
+    armTopOnChange: true,
+    wrapHighlight: false,        // a picker list, not a tag field
+    requireQuery: true,          // an empty box offers nothing, as it always has
+    normalize: (o) => ({ value: o.id, label: o.name, hint: o.hint, raw: o }),
+    matchTerm: (it, q) => (it.raw.terms || []).some((t) => fuzzyMatch(t, q)),
+  })
+
+  const suggestions = computed(() => combo.available.value.map((it) => it.raw))
 
   function selectSuggestion(s) {
     if (s.filterType && s.filterValue) {
@@ -107,21 +146,32 @@ export function useEntityFilter(entities) {
       }
     }
     filterInput.value = ''
+    // The list is deliberately left open: with an empty box it has nothing to
+    // show (`requireQuery`), and it must come back on the next keystroke so
+    // several chips can be added in a row — which is how this filter has always
+    // behaved.
   }
 
+  // Delayed so a click on a suggestion is not cut short by the input's blur.
   function hideSuggestions() {
-    setTimeout(() => { showSuggestions.value = false }, 150)
+    setTimeout(() => combo.closeList(), 150)
   }
 
   return {
     activeFilters,
     filterInput,
-    showSuggestions,
+    showSuggestions: combo.open,
     filteredEntities,
     filteredFactions,
     sceneEntities,
     suggestions,
     selectSuggestion,
     hideSuggestions,
+    // Keyboard/a11y surface for the filter input.
+    highlighted: combo.highlighted,
+    moveHighlight: combo.move,
+    listId: combo.listId,
+    optionId: combo.optionId,
+    activeDescendant: combo.activeDescendant,
   }
 }

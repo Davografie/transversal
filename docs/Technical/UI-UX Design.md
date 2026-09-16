@@ -38,6 +38,46 @@ The reusable UI set lives in `src/frontend/src/components/ui/`: `GmList`/
 panels, which compose these primitives.) New surfaces should compose the
 primitives instead of re-styling raw elements.
 
+### Autocomplete core
+
+Every "type and a list suggests" surface shares one headless core,
+`composables/useCombobox.js`. It is the list; the components are the rendering.
+Four surfaces had grown the same mechanics separately, and the mechanics are the
+bug-prone half — what is excluded, what Enter commits, which arrow does what,
+the aria wiring, and fetching.
+
+| Surface | Shape | Notes |
+|---|---|---|
+| `ui/SearchDropdown` | single value, input **is** the control | the base under `TargetPicker` and `UniversePicker` |
+| `ui/TagInput` | many values, chips + inline input | free-form tags or a restricted multi-select |
+| `useEntityFilter` (GM panel filter) | many values, chips | keeps its own filter semantics, borrows the list |
+| `TargetSpecBuilder`'s `<datalist>` | one free-form value | **not** on the core — the browser's native list |
+
+What the core owns: normalising options to `{ value, label, hint, raw }`,
+filtering against what is already chosen, the highlight (and the two movement
+modes below), the create row, open/close, and the aria ids. What each shell
+keeps: its markup, and what a commit *means* — one value, many chips, or a
+filter chip.
+
+- **Options may be an array *or* a query function.** The function form is called
+  with the query text (debounced) and may return a promise; that is what lets a
+  multi-select work over a vocabulary too large to preload. A function is taken
+  as **authoritative** — its results are not re-filtered client-side, because it
+  matched on fields this list never sees, and a second filter would silently
+  drop rows it deliberately returned. A superseded response can never overwrite
+  a newer one.
+- **Two highlight modes.** The tag field wraps (`-1 → 0…n-1 → -1`), which lets a
+  stray arrow cancel a commit; a picker clamps instead, because the top option
+  is armed as you type and wrapping would make one ArrowDown *deselect* it.
+- **`requireQuery`** lists nothing until something is typed — the GM panel's
+  long-standing behaviour, kept so an empty box does not open onto ten
+  arbitrary entities.
+
+Semantics worth not re-deriving: `resolve()` maps typed text to a stored value
+(by label, then value) and refuses it when `allowCustom` is false; `exactMatch`
+suppresses the create row so it never offers to create what the list holds.
+`scripts/check-combobox.mjs` pins all of it and runs without a browser.
+
 ### Button
 
 `Button.vue` is the standardized button: every visual decision (fill, border,
@@ -87,8 +127,12 @@ suggested) and a **restricted multi-select** (values must come from the list).
 ```
 
 - **Props** — `modelValue` (string[]), `suggestions` (string[] or
-  `{ value, label, hint? }[]`), `allowCustom` (default true), `placeholder`,
+  `{ value, label, hint? }[]`, or a query function — see
+  [[#Autocomplete core]]), `allowCustom` (default true), `placeholder`,
   `disabled`, `max` (0 = unlimited), `ariaLabel`.
+- **Built on** [[#Autocomplete core]], so it shares its list mechanics with the
+  pickers instead of keeping a second copy; the chips and the multi-value commit
+  are what it adds.
 - **Emits** — `update:modelValue` (batched: one emit per change), plus `add` /
   `remove` for side effects.
 - **Interaction** — type to filter; Enter commits the armed (first/arrowed)
@@ -240,7 +284,12 @@ for a raw `<select>` (that was the point of **B47**).
   `allowRandom` (🎲) and `clearable`. Nine call sites today, from the canvas and
   the effect/condition builders to the entity panel's location fields.
 - **`ui/SearchDropdown`** — the input + dropdown it is built on; use it directly
-  for a free-text search that isn't a target lookup.
+  for a free-text search that isn't a target lookup. Since it moved onto
+  [[#Autocomplete core]] it is **keyboard-navigable** (arrows, Enter, Escape,
+  combobox/listbox roles) and takes an async `options` function — so
+  `TargetPicker`'s nine call sites gained keyboard support without changing
+  them. It is controlled: listen for `@select` / `@clear`, there is no
+  `v-model`.
 - **`DiePicker`** — die faces (d4…d12), single or `multiple`. This is the
   **rating-die picker**: `TraitInstanceEditor` and the sheet's trait editor use
   it for ratings, the GM forms for effect dice.
