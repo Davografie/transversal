@@ -180,20 +180,33 @@ ok('…carrying the body id', rootAnchor(nested, 'body-child')?.projectionId, 'b
 ok('an unknown id has no anchor', rootAnchor(nested, 'nope'), null)
 
 // ── which rows can be picked up ─────────────────────────────────────────
-// Two kinds only: a root trait with somewhere to go, and a trait sitting
-// directly inside a container. The human corrected this twice; pin it.
+// Two kinds: a root trait, and a trait sitting inside a container AT ANY DEPTH.
+// What separates them from everything else is the **parent** — a sub-trait of a
+// non-container is part of it and never moves, however deep it sits. Both kinds
+// still need somewhere to go.
 ok('a root trait with a destination can be picked up',
-   canPickUp({ depth: 0, rootHasDestination: true }), true)
+   canPickUp({ depth: 0, hasDestination: true }), true)
 ok('a root trait with nowhere to go cannot',
-   canPickUp({ depth: 0, rootHasDestination: false }), false)
+   canPickUp({ depth: 0, hasDestination: false }), false)
 ok('a trait directly inside a container can',
-   canPickUp({ depth: 1, insideContainer: true }), true)
+   canPickUp({ depth: 1, insideContainer: true, hasDestination: true }), true)
+ok('…but not when nothing can receive it',
+   canPickUp({ depth: 1, insideContainer: true, hasDestination: false }), false)
 ok('a sub-trait of a NON-container cannot',
-   canPickUp({ depth: 1, insideContainer: false }), false)
-ok('a sub-trait of a sub-trait cannot, even in a container',
-   canPickUp({ depth: 2, insideContainer: true }), false)
-ok('a deep sub-trait of a non-container cannot',
-   canPickUp({ depth: 3, insideContainer: false }), false)
+   canPickUp({ depth: 1, insideContainer: false, hasDestination: true }), false)
+
+// The Iron Roots case: portents > portents > portents. The third level sits in a
+// container, so it is pickable — this used to be false, and the row had no grip.
+ok('a sub-trait of a sub-trait INSIDE a container can (Iron Roots)',
+   canPickUp({ depth: 2, insideContainer: true, hasDestination: true }), true)
+ok('…and one level deeper still can',
+   canPickUp({ depth: 3, insideContainer: true, hasDestination: true }), true)
+ok('a deep sub-trait of a non-container still cannot',
+   canPickUp({ depth: 2, insideContainer: false, hasDestination: true }), false)
+ok('depth stops mattering once the parent is a container', (() => {
+  const at = (d) => canPickUp({ depth: d, insideContainer: true, hasDestination: true })
+  return [1, 2, 3, 4, 9].every(at)
+})(), true)
 
 // ── a container is still a container when marked on the registry side ────
 ok('nested container detected via registryTags',

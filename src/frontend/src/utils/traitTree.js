@@ -149,19 +149,26 @@ export function rootAnchor(nodes, settingId) {
 /**
  * Which rows can be picked up with a grip.
  *
- * Exactly two kinds (human, 2026-09-13):
- *   - a **root** trait (`depth === 0`) — and only when some open container can
- *     receive it, i.e. `rootHasDestination`;
- *   - a trait sitting **directly inside** a container (`depth === 1`,
- *     `insideContainer`) — so it can be pulled back out.
+ * Two kinds, and the second is now **recursive**:
+ *   - a **root** trait (`depth === 0`);
+ *   - a trait sitting **inside a container**, at *any* depth, so it can be
+ *     pulled back out.
  *
- * Anything deeper is a sub-trait of a sub-trait: part of its parent, stays put.
- * So does a sub-trait of a NON-container parent — those are part of their parent
- * too, not container contents.
+ * A sub-trait of a NON-container stays put however deep it is: it is part of its
+ * parent, not a thing the container holds. So the rule is about the **parent**,
+ * not about the depth — which is the shape the human's 2026-09-13 correction was
+ * reaching for ("a sub-trait of a sub-trait is part of its parent and never
+ * moves"); the depth cap that came with it was incidental, and it is what hid
+ * the Iron Roots third level, where `portents` holds `portents` holds `portents`
+ * and only the middle one could be picked up.
+ *
+ * `hasDestination` — some open container that is neither this row nor inside it —
+ * applies at every depth, and is what keeps the cycle case (a container dropped
+ * into its own descendant) out of the UI at any level, mirroring the backend's
+ * `_would_cycle`. For a nested row it is normally its own parent.
  */
-export function canPickUp({ depth = 0, insideContainer = false, rootHasDestination = false } = {}) {
-  if (depth === 0) return rootHasDestination
-  return depth === 1 && insideContainer
+export function canPickUp({ depth = 0, insideContainer = false, hasDestination = false } = {}) {
+  return (depth === 0 || insideContainer) && hasDestination
 }
 
 /**

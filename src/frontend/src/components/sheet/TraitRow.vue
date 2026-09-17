@@ -169,10 +169,10 @@
     @drop.prevent="api.onTraitDrop($event)"
     @dragend="api.onTraitDragEnd()"
   >
-    <!-- A row directly inside a container carries a grip, so it can be pulled
-         back OUT. Dropping it on any non-container row does that (see the
-         sheet's resolveTarget). Deeper rows get none: a sub-trait of a sub-trait
-         is part of its parent and stays put. -->
+    <!-- A row inside a container carries a grip, at ANY depth, so it can be
+         pulled back OUT. Dropping it on any non-container row does that (see the
+         sheet's resolveTarget), which lands it at the top of the set. A sub-trait
+         of a NON-container gets none at any depth: it is part of its parent. -->
     <span
       v-if="api.canDrag(trait, depth, insideContainer)"
       class="trait-drag-handle sub-trait-grip"

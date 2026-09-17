@@ -890,6 +890,12 @@ function containerCount(t) {
 // Which ROOT rows carry a grip: only while some open container can receive them
 // (see isOpenContainer), so grips never clutter an ordinary sheet, and a
 // container is never draggable into itself or into its own descendants.
+// Which rows have somewhere to go: some OPEN container that is neither the row
+// itself nor anywhere inside it. Computed for **every** row, not just the roots,
+// because a row inside a container is draggable at any depth now and needs the
+// same answer — for a nested row it is normally its own parent, and the
+// subtree exclusion is what keeps a container from being offered a drop into its
+// own descendant at any level.
 const draggableRowIds = computed(() => {
   // The rows on screen, whichever way the list is scoped — a flat sheet has no
   // active set, and asking `currentSet` would find no containers to drop into.
@@ -903,16 +909,19 @@ const draggableRowIds = computed(() => {
   }
   collect(roots)
   const ids = new Set()
-  for (const t of roots) {
+  const consider = (t) => {
     if (open.some((c) => c.id !== t.id && !subtreeContains(t, c.id))) ids.add(t.id)
+    for (const child of childrenOf(t)) consider(child)
   }
+  roots.forEach(consider)
   return ids
 })
 
-// Depth decides too — see canPickUp: a nested row is pickable only when it sits
-// directly inside a container, never deeper.
+// Depth decides what counts as "part of its parent": see canPickUp. A row inside
+// a container may be picked up at any depth; a sub-trait of a non-container never
+// moves, however deep it is.
 function canDrag(t, depth = 0, insideContainer = false) {
-  return canPickUp({ depth, insideContainer, rootHasDestination: draggableRowIds.value.has(t.id) })
+  return canPickUp({ depth, insideContainer, hasDestination: draggableRowIds.value.has(t.id) })
 }
 
 function dragPayload(t) {
