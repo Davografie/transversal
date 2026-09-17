@@ -305,6 +305,17 @@ watch(() => mode.value, (m) => {
   scrollLocationIntoView(props.currentLocationId)
 })
 
+// Clearing the last focus chip drops the tree back to the whole hierarchy, which
+// leaves the GM looking at rows nowhere near where they are. Recenter on that
+// event — the same jump ⊙ performs, and only while the tree is the thing on
+// screen. (Going free-roam clears the chips too; the watcher above is already
+// scrolling there, and a second scroll to the same row costs nothing.)
+watch(() => activeFilters.value.length, (n, prev) => {
+  if (n !== 0 || !prev) return
+  if (mode.value !== 'prep' || browseTab.value !== 'tree' || !props.currentLocationId) return
+  nextTick(() => scrollToNode(props.currentLocationId))
+})
+
 // The scene's pool: every occupant type, assets included, and deliberately
 // **unfiltered** — the focus chips belong to Prep. The Play screen shows the
 // scene as it is; the GM's own acting-entity chip must not narrow it to them.
