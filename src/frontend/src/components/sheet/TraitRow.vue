@@ -163,7 +163,7 @@
     :data-ts-id="trait.id"
     :data-drop-container="api.isContainer(trait) ? trait.id : null"
     @click="onRowClick"
-    @contextmenu.prevent
+    @contextmenu.prevent="api.startEdit(trait)"
     @dragover.prevent="api.onTraitDragOver($event)"
     @dragleave="api.onTraitDragLeave()"
     @drop.prevent="api.onTraitDrop($event)"
@@ -290,15 +290,15 @@ const childrenListId = computed(() => `children-${props.trait.id}`)
 
 // The rendering rule lives in the model (utils/traitTree.js) so it can be
 // checked without a browser: a container stays collapsed until opened, while
-// everything else shows its sub-traits inline as it always has.
-// A trait inside a container renders minimally: as a chip, and without its own
-// sub-traits — those are part of it, and the container is already the thing you
-// are looking into.
+// everything else shows its sub-traits inline as it always has. A trait inside a
+// container renders without its own sub-traits — those are part of it — *except*
+// a container nested inside a container, whose disclosure would otherwise open
+// nothing (see showsChildren).
 const renderChildren = computed(() =>
-  !props.insideContainer &&
   showsChildren(props.trait, {
     rootKnown: props.depth > 0 || props.api.isKnown(props.trait),
     expanded: props.api.isExpanded(props.trait),
+    insideContainer: props.insideContainer,
   })
 )
 

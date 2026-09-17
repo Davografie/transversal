@@ -91,6 +91,38 @@ ok('opened container shows them', showsChildren(containerRow, { expanded: true }
 ok('childless container shows nothing', showsChildren(emptyContainer, { expanded: true }), false)
 ok('a hidden row reveals nothing', showsChildren(plainParent, { rootKnown: false }), false)
 
+// ── contents of a container, and a container inside a container ─────────
+// The Iron Roots bug: `portents` (container) holds `portents` (container) holds
+// `portents`. A row that is container contents hides its own sub-traits — but
+// NOT when it is itself a container, because its row renders a disclosure and a
+// chevron that opens nothing is a dead control.
+const innerContainer = { id: 'inner', tags: ['container'], subTraitSettings: [{ id: 'deep', subTraitSettings: [] }] }
+const innerPlain = { id: 'innerPlain', subTraitSettings: [{ id: 'deep2', subTraitSettings: [] }] }
+ok('container contents hide their own sub-traits', showsChildren(innerPlain, { insideContainer: true }), false)
+ok('…even when they are not containers and would otherwise show them',
+   showsChildren(innerPlain), true)
+ok('a container inside a container stays closed until opened',
+   showsChildren(innerContainer, { insideContainer: true }), false)
+ok('…and opens when it is, so its chevron is not a dead control',
+   showsChildren(innerContainer, { insideContainer: true, expanded: true }), true)
+ok('a nested container with nothing in it still shows nothing',
+   showsChildren({ id: 'e', tags: ['container'], subTraitSettings: [] },
+                 { insideContainer: true, expanded: true }), false)
+ok('fog still wins over nesting',
+   showsChildren(innerContainer, { insideContainer: true, expanded: true, rootKnown: false }), false)
+ok('the Iron Roots shape is reachable at every level', (() => {
+  const deep = { id: 'd2', tags: ['container'], subTraitSettings: [] }
+  const mid = { id: 'd1', tags: ['container'], subTraitSettings: [deep] }
+  const top = { id: 'd0', tags: ['container'], subTraitSettings: [mid] }
+  // closed at the top
+  if (showsChildren(top, {})) return 'top leaked'
+  // opened at the top: the mid container appears, but stays closed
+  if (!showsChildren(top, { expanded: true })) return 'top would not open'
+  if (showsChildren(mid, { insideContainer: true })) return 'mid leaked while closed'
+  // opened at the mid: the deepest row is finally reachable
+  return showsChildren(mid, { insideContainer: true, expanded: true }) ? 'ok' : 'deep row unreachable'
+})(), 'ok')
+
 // ── only a container with something to disclose gets a control ──────────
 ok('filled container earns a disclosure', hasContents(containerRow), true)
 ok('empty container does not', hasContents(emptyContainer), false)

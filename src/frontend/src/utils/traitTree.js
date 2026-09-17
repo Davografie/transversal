@@ -174,10 +174,20 @@ export function canPickUp({ depth = 0, insideContainer = false, rootHasDestinati
  *
  * `rootKnown` carries the fog-of-war answer for the row itself: a nested row
  * inherits its root's, since sub-traits have never been gated individually.
+ *
+ * `insideContainer` adds the rule for a row that is *itself* container contents:
+ * its sub-traits are part of it and stay hidden, because the container is the
+ * thing you are looking into. **A container nested inside a container is the
+ * exception** — it is a pick in its own right and its row renders a disclosure,
+ * so suppressing its children leaves a chevron that opens nothing. That was a
+ * live dead control on the Iron Roots faction, whose `portents` container holds
+ * another `portents` container three levels down: the deeper contents existed,
+ * were fetched, and could never be reached.
  */
-export function showsChildren(trait, { rootKnown = true, expanded = false } = {}) {
+export function showsChildren(trait, { rootKnown = true, expanded = false, insideContainer = false } = {}) {
   if (childrenOf(trait).length === 0) return false
   if (!rootKnown) return false
+  if (insideContainer && !isContainer(trait)) return false
   return !isContainer(trait) || expanded
 }
 

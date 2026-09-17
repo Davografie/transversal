@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { usePersistedRef } from './usePersistedState.js'
+import { findSetting } from '../utils/traitTree.js'
 
 /**
  * The character sheet's inline trait editor: the draft state behind the
@@ -52,15 +53,19 @@ export function useTraitEditor({
 
   const editingTrait = computed(() => {
     if (!editingTraitId.value) return null
+    // `findSetting`, not `.find` — a sub-trait's setting lives nested under its
+    // parent, so a top-level scan resolves a nested id to null and the editor
+    // silently never opens. That is the same shape as the relation-row bug: a
+    // handler that fires and a lookup that finds nothing.
     for (const ts of traitSets.value) {
-      const t = ts.traits.find(t => t.id === editingTraitId.value)
+      const t = findSetting(ts.traits, editingTraitId.value)
       if (t) return t
     }
     // Relationship traits are not in the viewed entity's settings — they arrive
     // through the relationship query (what *we* hold about this sheet), so they
     // need their own lookup or the editor can never open on one.
-    return profileTraits.value.find(t => t.id === editingTraitId.value)
-      || relationTraits.value.find(t => t.id === editingTraitId.value)
+    return findSetting(profileTraits.value, editingTraitId.value)
+      || findSetting(relationTraits.value, editingTraitId.value)
       || null
   })
 
@@ -306,12 +311,16 @@ export function useTraitEditor({
         t.projectionId = editIsEgo.value ? null : editProjectionId.value
       }
     }
+    // Same nesting rule as `editingTrait` — a nested setting patched by a
+    // top-level scan would leave the row showing the value you just replaced.
     for (const ts of traitSets.value) {
-      const t = ts.traits.find(t => t.id === editingTraitId.value)
+      const t = findSetting(ts.traits, editingTraitId.value)
       if (t) { patchTrait(t); break }
     }
-    const pt = profileTraits.value.find(t => t.id === editingTraitId.value)
+    const pt = findSetting(profileTraits.value, editingTraitId.value)
     if (pt) patchTrait(pt)
+    const rt = findSetting(relationTraits.value, editingTraitId.value)
+    if (rt) patchTrait(rt)
   }
 
   async function toggleEgo() {

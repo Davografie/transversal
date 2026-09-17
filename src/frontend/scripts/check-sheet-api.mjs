@@ -28,6 +28,7 @@ import { join } from 'node:path'
 const SHEET_DIR = 'src/components/sheet'
 const SHEET = 'src/components/CharacterSheet.vue'
 const HOST = 'src/App.vue'
+const EDITOR = 'src/composables/useTraitEditor.js'
 
 const sheetSrc = readFileSync(SHEET, 'utf8')
 
@@ -127,6 +128,38 @@ report(missingHandlers.length === 0,
 report(orphanHandlers.length === 0,
   `every ${HOST} handler matches a declared emit` +
   (orphanHandlers.length ? ` — @${orphanHandlers.join(', @')} is dead (no such emit)` : ''))
+
+// ── 4. a prevented context menu must do something ────────────────────────
+// `@contextmenu.prevent` with no handler swallows the right-click and opens
+// nothing — the row simply stops responding, which is how "RMB on a sub-trait
+// does nothing" reached the human. Every occurrence must carry a handler.
+{
+  const rowSrc = readFileSync(join(SHEET_DIR, 'TraitRow.vue'), 'utf8')
+  const bare = [...rowSrc.matchAll(/@contextmenu\.prevent(?!\s*=)/g)]
+    .map((m) => rowSrc.slice(0, m.index).split('\n').length)
+  report(bare.length === 0,
+    'TraitRow.vue: no `@contextmenu.prevent` without a handler' +
+    (bare.length ? ` — bare at line(s) ${bare.join(', ')}; right-click would do nothing` : ''))
+  const withEdit = (rowSrc.match(/@contextmenu\.prevent="api\.startEdit\(trait\)"/g) || []).length
+  report(withEdit >= 2,
+    `TraitRow.vue: both the top-level and the nested row open the editor on right-click (${withEdit} found)`)
+}
+
+// ── 5. the editor must resolve a NESTED setting ──────────────────────────
+// `editingTrait` resolves its id out of the lists the sheet renders. A
+// sub-trait's setting is nested under its parent, so a top-level scan returns
+// null and the editor never opens — the handler fires and nothing happens.
+// Ids are looked up with `findSetting` (recursive) for exactly this reason.
+{
+  const editorSrc = readFileSync(EDITOR, 'utf8')
+  const topLevelOnly = [...editorSrc.matchAll(/\.traits\.find\(|traits\.value\.find\(/g)]
+    .map((m) => editorSrc.slice(0, m.index).split('\n').length)
+  report(topLevelOnly.length === 0,
+    'useTraitEditor.js: no top-level-only trait lookups' +
+    (topLevelOnly.length ? ` — line(s) ${topLevelOnly.join(', ')}; a nested id would resolve to null` : ''))
+  report(/findSetting\(/.test(editorSrc),
+    'useTraitEditor.js: resolves trait ids with the recursive findSetting')
+}
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)
