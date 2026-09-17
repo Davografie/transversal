@@ -146,16 +146,30 @@ The human rejected the "resolution-only" shape and stated the model directly:
   this work. Precedent if it returns: `TraitSetting.enabled` ("false = disabled;
   contributes no dice until re-enabled").
 
+- **`unpublished` and `hidden`/`known_to` are separate axes — keep both.** They
+  answer different questions and are *not* to be merged:
+
+  | flag | players | GM | means |
+  |---|---|---|---|
+  | `unpublished` | invisible | normal, with a **draft badge** | authoring state — "I am still building this" |
+  | `hidden` and not `known_to` | invisible | **transparent** | in-fiction concealment — "they have not found this" |
+
+  They must **compose** rather than override: an occupant that is both is
+  invisible to players and, for the GM, a transparent ghost *carrying the draft
+  badge*. Independent axes, independent renderings, superimposed.
+- **Visibility is per-viewer, which means it belongs server-side.** `known_to` is
+  a list of player ids, so `hidden && !known_to` cannot be answered without
+  knowing who is looking. The viewer today only knows `gmMode` — it has no player
+  identity for occupants — so either the navigate query resolves visibility for
+  the requesting session, or the viewer is handed the viewer's id. Server-side is
+  the better home: the client should not be the thing deciding what a player may
+  see. (`unpublished` is currently filtered client-side in `occupantDots`; that
+  could move with it.)
+
 ### Still unresolved, needs an answer before planning
 
-- **`unpublished` vs `hidden`.** There is already a player-visibility flag:
-  `unpublished` ("GM draft: real in-world but not yet revealed to players"), which
-  `occupantDots` filters on — hidden from players, shown normally to the GM with a
-  draft badge. The new rule is the same shape but gives the GM a **transparent**
-  view. Two mechanisms, or should `unpublished` fold into `hidden`/`known_to`?
-- **Where `hidden`/`known_to` live.** Whether they move onto the projection (so
-  visibility is per-body, pairing with the position move) or stay on the entity
-  and are merely *honoured* when reading.
+- **Where `hidden`/`known_to` live** — on the projection (per-body, pairing with
+  the position move) or on the entity, merely honoured when reading.
 - **Who computes vacancy** — the reader, from
   `entity.current_projection != projection.id`.
 
@@ -171,7 +185,7 @@ spelled out.
 
 ## Open decisions
 
-1. **`unpublished` vs `hidden`** — fold together, or two mechanisms? (see above).
+1. **~~`unpublished` vs `hidden`~~** — **decided: separate axes, keep both.**
 2. **Where `hidden`/`known_to` live** — on the projection, or honoured from the
    entity (see above).
 3. **~~Do bodies get their own map position?~~** — **decided: yes** (direction 1).
