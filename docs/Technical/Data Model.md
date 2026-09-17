@@ -290,6 +290,7 @@ Per-entity trait configuration. The edge connects an anchor (entity, projection,
 | `polarity` | Polarity | ✅ | Baked sign: `positive` (benefit/asset) or `negative` (complication). Resolved from trait/traitset defaults at creation |
 | `statement` | string | | Distinction statement or flavor text |
 | `notes` | string | | Longer freeform notes |
+| `order` | int? | | Author's position among siblings — the children of one parent container. `null` means unordered: those sort after the ordered ones, by trait set, trait id, then key (a total order, so reads are stable) |
 | `tags` | string[] | | Labels set on this *instance*. Matching sees these **plus** the registry trait's own `tags` (B116) |
 | `enabled` | bool | | `false` = disabled; contributes no dice until re-enabled (default `true`) |
 | `sfx_ids` | string[] | | SFX IDs unlocked for this anchor on this trait |
@@ -729,7 +730,7 @@ Built by the repository, not stored. Assembles entity + projections + trait sett
 | Universe | `universe-{key}` | `universe-earth` |
 | TraitSet | `ts-{slug}-{hash4}` | `ts-attributes-8f3a` |
 | Trait | `trait-{slug}-{hash4}` | `trait-hacking-7f2a` |
-| TraitSetting | `{entity}:{trait}` (default) / `{entity}:{trait}:{hash8}` when `allow_duplicates` + statement | `kael-1:trait-hacking-7f2a` |
+| TraitSetting | `{entity}:{trait}` (default) / `{entity}:{trait}:{hash8}` when `allow_duplicates` + statement / `{parent}:{trait}:{hash8}` for a **nested** setting (keyed to its parent, so many settings of one generic trait can share a container) | `kael-1:trait-hacking-7f2a` |
 | SFX | `sfx-{slug}` | `sfx-hinder` |
 | Relationship | `edge:{from}:{to}:{type}` | `edge:loc-platform:loc-valley:super` |
 | Projection | `{entity}:{origin_universe}` | `kael-1:three_realms` |

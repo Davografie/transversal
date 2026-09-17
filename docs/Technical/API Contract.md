@@ -259,6 +259,7 @@ type Mutation {
 
   # Trait settings
   addTraitSetting(entityId: ID!, input: TraitSettingInput!): TraitSetting!
+  addSubTrait(parentTraitsettingId: ID!, traitId: ID!, die: DieType, statement: String, order: Int): TraitSetting!
   updateTraitSetting(id: ID!, input: TraitSettingUpdateInput!): TraitSetting!
   removeTraitSetting(id: ID!): Boolean!
   stepUpTrait(traitSettingId: ID!): TraitSetting!
