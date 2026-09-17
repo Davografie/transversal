@@ -196,6 +196,53 @@ spelled out.
    fallback (body name → entity name) is the intent.
 5. **Parked:** an `enabled` flag on projections, independent of vacancy.
 
+## Plan (draft — awaiting a ticket)
+
+Ordered so each slice is independently verifiable and nothing lands in a broken
+state. Ownership spans [[backend-platform]] (query, resolver, domain) and
+[[navigation]] (the dot); every slice needs both or neither, so the split is
+noted per slice.
+
+**S0 — settle the two remaining decisions.** Where `hidden`/`known_to` live
+(projection vs entity) and the position-migration default (proposal: seed each
+body from its entity's current `map_x`/`map_y`, so nothing moves on day one).
+Blocks S2 and S5.
+
+**S1 — the portrait follows the body present.** `get_navdot_images` resolves
+through the *present* body instead of `entity.current_projection`. Independent of
+everything else, small, and the only slice that is purely a fix: it corrects the
+**4** left-behind bodies (3 of which own their own art). *Owner: mostly
+backend-platform.* **Done when:** a body shows its own portrait, not the
+portrait of the body the consciousness went to.
+
+**S2 — bodies get their own position.** Add `map_x`/`map_y` to `Projection`,
+migrate the 152 standing bodies per S0, and let the map-position write address a
+*body*. Flagged decision here: does `Entity.map_x/map_y` remain (the active
+body's position) or become derived? *Owner: backend-platform.* **Done when:** two
+bodies of one entity can sit at different places without sharing a coordinate.
+
+**S3 — the occupant payload describes bodies.** `navigate_from` and the canvas's
+`_occupants_for_locations` return one entry per body, carrying **both** ids
+(`body_id` and `entity_id`), the body's name (entity fallback) and `is_active`.
+Landing this **without breaking the client** is the point of carrying both ids:
+the viewer keeps using `entity_id` for now. *Owner: backend-platform.* **Done
+when:** the payload names every standing body, and the client is unchanged.
+
+**S4 — the viewer draws bodies.** Key occupant dots by `body_id`; route every
+action (drag, sheet, dice, control) to `entity_id`. **Self becomes body-aware**:
+the occupant list stops hiding a body because it belongs to the acting entity, and
+the self dot only draws where the acting body is. Sizes and the dice ring key to
+`is_active`. *Owner: navigation.* **Done when:** a vacant body renders at its own
+location, normal-sized and ring-free, and no longer displaces the self dot.
+
+**S5 — visibility.** `hidden`/`known_to` resolved **server-side** in the navigate
+query, per viewer; move `unpublished`'s filtering there in the same pass so "who
+may see this occupant" is decided in one place. The client then renders a
+GM-visible hidden occupant as a **transparent ghost**, composing with the draft
+badge. Blocked by S0. *Owner: both.*
+
+**Out of scope (parked):** a projection `enabled`/`disabled` flag.
+
 ## Not decided here
 
 Ownership spans two roles: the query and the resolver are
