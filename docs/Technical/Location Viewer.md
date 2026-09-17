@@ -214,8 +214,11 @@ it; the img must not clip itself (`border-radius: 0`). `destNavCache` supplies
 and it is always draggable. With no perspective entity (`entityId == null` — the
 GM free-roam view) it becomes a **GM free-roam dot**: draggable, labelled with the
 role glyph (🏛 Architect / 🎭 Player — the same icons as the player settings
-overlay), with its position per location persisted on the device
-(`gmDotPositions` in localStorage) so a refresh restores it. Dropping it on a
+overlay). Its position is **not stored** (B96): taking over free-roam parks the
+dot on whatever sits under the centre of the view at that moment, so the camera
+does not jump to a remembered spot, and opening straight into free-roam falls back
+to the location centre. It is held per location for the session only
+(`gmDotPositions`, in memory). Dropping it on a
 zone/navdot travels the **view only** — no entity is moved: `relocate` emits a
 view-only `moved` (name/id + universe) and the dot lands at the destination's
 arrival point.
@@ -618,9 +621,17 @@ border), and the overlay/particle system below — run continuously.
   invisible and sticky: the hole keeps framing a destination at the old spot, and
   because the travel now reads the same rule both would agree on the *wrong*
   number until the page was reloaded.
-- **GM free-roam is device-local by design** (decided 2026-09-11). The GM dot's
-  position per location lives in `localStorage` only, and dropping it on a target
-  travels the **view** only — no server state, no cross-device sync.
+- **GM free-roam is device-local and unpersisted** (B96, 2026-09-15). The GM dot
+  is held in memory per location for the session; nothing is written to
+  `localStorage`, and dropping it on a target travels the **view** only — no
+  server state, no cross-device sync, no restore after a refresh. Sample the view
+  centre **while an entity is held**: the camera re-anchors the instant
+  `entityId` clears, so reading it inside the transition watcher returns the
+  post-jump framing. The spawn still shifts the view a little — the camera
+  anchors a dot at *its own image fraction*, not at the screen centre, so
+  "spawn at the view centre" is not the same as "no movement" (measured 9% of the
+  width to the location centre vs 7% to the view centre; the character's own
+  position is the only zero).
 - **Constants are author-tuned, not derived.** `EXPAND_PROXIMITY` /
   `TRAVEL_PROXIMITY_FACTOR` decouple bubble expansion from drop-to-travel, and
   `INVERSE_PAN_STRENGTH` sets the hole illusion's strength; they are hand-tuned

@@ -173,7 +173,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, watchEffect, onMounted, onUnmounted, nextTick } from 'vue'
 import SceneEffectsLayer from './location/SceneEffectsLayer.vue'
 import ArrivalRings from './location/ArrivalRings.vue'
 import TravelOverlay from './location/TravelOverlay.vue'
@@ -304,20 +304,19 @@ async function setOverlay(value) {
 }
 
 // Self position in image space. With a perspective entity it's that occupant's
-// map position; without one (GM free-roam, entityId == null) it's the GM dot's
-// position for THIS location, else centre. The GM dot is device-local and
-// persisted per location, so a refresh — or a return — restores it.
-const GM_DOT_KEY = 'gmDotPositions'
-function loadGmDots() {
-  try { return JSON.parse(localStorage.getItem(GM_DOT_KEY) || '{}') || {} } catch { return {} }
-}
-const gmDotPositions = ref(loadGmDots())  // { [locationId]: { x, y } }
+// map position; without one (GM free-roam, `entityId == null`) it's the roaming
+// GM dot.
+//
+// The roaming dot is deliberately **not persisted** (B96): it marks where the GM
+// is looking right now, not a remembered spot. It is placed on whatever sits
+// under the centre of the view at the moment free-roam begins, so taking over
+// roams from where you were already looking instead of yanking the view to a
+// stored position — and opening straight into free-roam falls back to the
+// location centre, which is where the camera anchors anyway.
+const gmDotPositions = ref({})  // { [locationId]: { x, y } } — this session only
 const gmSelfPos = computed(() => gmDotPositions.value[props.locationId] || null)
 function setGmDotPos(x, y) {
   gmDotPositions.value = { ...gmDotPositions.value, [props.locationId]: { x, y } }
-}
-function persistGmDots() {
-  try { localStorage.setItem(GM_DOT_KEY, JSON.stringify(gmDotPositions.value)) } catch { /* storage unavailable */ }
 }
 const selfPos = computed(() => {
   const o = occupants.value.find(o => o.id === props.entityId)
@@ -542,6 +541,24 @@ function toImagePos(viewX, viewY) {
     y: (((viewY / 100) * c.ch + c.panY) / c.h) * 100,
   }
 }
+
+// The image point under the centre of the view, tracked *while* a perspective
+// entity is held. It has to be sampled continuously: the camera re-anchors the
+// instant `entityId` clears, so by the time the watcher below runs the framing
+// we wanted to preserve is already gone.
+let viewCentreBeforeRoam = null
+watchEffect(() => {
+  if (props.entityId) viewCentreBeforeRoam = toImagePos(50, 50)
+})
+
+// Acting entity → free-roam: park the roaming dot on the view centre (B96), so
+// the handover leaves the camera where it was rather than jumping to the
+// location centre. Nothing is stored — see the note on `gmDotPositions`.
+watch(() => props.entityId, (id, prev) => {
+  if (id || !prev) return  // only the acting-entity → free-roam edge
+  const clamp = (v) => Math.max(2, Math.min(98, Math.round(v ?? 50)))
+  setGmDotPos(clamp(viewCentreBeforeRoam?.x), clamp(viewCentreBeforeRoam?.y))
+})
 
 function getPosFromEvent(e) {
   const el = viewerEl.value
@@ -1073,7 +1090,6 @@ function onGmDotDragEnd() {
   dragTarget = null
   if (!wasMoved) return
   armClickSuppression()  // a drag must not fire the click handler
-  persistGmDots()
   // Dropped on a location → travel the view there
   if (t && !props.editZones) travelToTarget(t)
 }
@@ -1366,7 +1382,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     // .webm had not even started playing.
     const so = occupants.value.find(o => o.id === props.entityId)
     if (so) { so.map_x = arriveX; so.map_y = arriveY }
-    else { setGmDotPos(arriveX, arriveY); persistGmDots() }  // free-roam dot lands here
+    else { setGmDotPos(arriveX, arriveY) }  // free-roam dot lands here
     currentImage.value = img
 
     // Sync background if it changed during travel (watch skips while travelAnim is active)
