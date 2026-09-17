@@ -232,9 +232,10 @@ type Query {
   playerBodies: [PlayerBody!]!
   onlinePlayers: [ID!]!
 
-  # Factions — the roster, and the bulk association read
+  # Factions — the roster, the bulk association read, and distance ranking
   factionMembers(factionId: ID!): [FactionMember!]!
   entityFactions(entityIds: [ID!]!): [EntityFactionRef!]!
+  factionDistances(locationId: ID!): [FactionDistance!]!
 
   # Effect authoring (served vocabularies + candidate resolution)
   effectActions: [EffectActionMeta!]!
@@ -262,6 +263,13 @@ type Query {
 > - **`entityFactions(entityIds)`** — the bulk association read: `EntityFactionRef { entityId factionId name outTieType inTieType }`, **one row per `(entity, faction)` pair for the whole list in one query**. Broader on purpose: *any* tie to a faction counts, either direction, so a posture is an association. `outTieType` is the `entity → faction` edge's type — the edge a **role write belongs on**, and the only direction `factionMembers` counts. It is `""` when only the faction's posture exists, which is the signal that no edge can be written and a `membership` must be created. A pair can hold both directions (measured live 2026-09-16: **333 mirrored pairs**), so the two types are reported separately rather than collapsed into one "the tie's type".
 >
 > `Entity.coMembers` is the "who else is in my sect?" view: the other members across every faction this entity is on the roster of, deduped, self excluded.
+
+> [!note] `factionDistances(locationId)` — ranking factions by distance to their ground
+> Returns **every** faction as `FactionDistance { factionId name distance nearestLocationId }`, sorted **nearest first**: a faction controlling this very location is `0`, a faction with no reachable ground is `null` and sorts last. This is the read behind a distance-sorted faction list ([[Tickets#B134]]).
+>
+> Distance is a **weighted step count along the location graph** — `super` **and** `transversal` edges, walked **undirected**. Each step costs 1, except a `transversal` that **crosses a universe boundary**, which costs `CROSS_UNIVERSE_WEIGHT` (10, a named constant in `db/repository_mixins/canvas.py` — a dial, not a finding). A `super` edge always costs 1: measured live, **0** of them cross a universe boundary, while **14** portals do.
+>
+> Values were measured before the design was fixed, and they shape what a surface should render: **195 of 410** locations are unreachable from the single authored control point (47 components), so `null` is common and must read as *"none known"*, not as a number. The read is **computed per request, not materialized** — a full recompute for all 74 factions is ~2.4 ms — with the scale trigger to revisit recorded in [[Factions and Organizations Design Log]] §6.6.
 
 ### Mutations
 
