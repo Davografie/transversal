@@ -94,3 +94,23 @@ class EntityFactionRef:
     name: str
     out_tie_type: str = ""
     in_tie_type: str = ""
+
+
+@strawberry.type
+class FactionDistance:
+    """How far a faction's nearest controlled ground is from a location.
+
+    ``distance`` is a weighted step count along the location graph (``super`` and
+    ``transversal`` edges, walked undirected); a portal that crosses a universe
+    boundary costs more than a step inside one. It is None when the faction
+    controls nothing, or nothing it controls can be reached from here — which is
+    true of roughly half the world today, since most locations sit in different
+    components from the one authored control point.
+
+    ``nearest_location_id`` is the controlled location the measurement was taken
+    to, so a surface can name it as well as count to it.
+    """
+    faction_id: strawberry.ID
+    name: str
+    distance: Optional[int] = None
+    nearest_location_id: Optional[strawberry.ID] = None

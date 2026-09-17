@@ -126,6 +126,7 @@ from transversal.api.graphql.type_defs.relationships import (  # noqa: F401
     RelatedEntity,
     FactionMember,
     EntityFactionRef,
+    FactionDistance,
 )
 from transversal.api.graphql.type_defs.lifepath import (  # noqa: F401
     DiscoveryBlock,

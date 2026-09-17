@@ -6,6 +6,7 @@ from transversal.api.graphql.types import CharacterView
 from transversal.api.graphql.types import Entity
 from transversal.api.graphql.types import EntityType
 from transversal.api.graphql.types import EntityFactionRef
+from transversal.api.graphql.types import FactionDistance
 from transversal.api.graphql.types import FactionMember
 from transversal.api.graphql.types import Projection
 from transversal.api.graphql.types import RelatedEntity
@@ -160,4 +161,25 @@ class QueriesEntities:
                 out_tie_type=r["out_tie_type"], in_tie_type=r["in_tie_type"],
             )
             for r in repo.get_factions_for_entities([str(e) for e in entity_ids])
+        ]
+
+    @strawberry.field
+    def faction_distances(
+        self, info: strawberry.Info, location_id: strawberry.ID
+    ) -> list[FactionDistance]:
+        """Every faction ranked by its distance to this location, nearest first.
+
+        The read behind a distance-sorted faction list ([[Tickets#B134]]): the
+        near ones float to the top, a faction controlling this very place is 0,
+        and a faction with no reachable ground carries a null distance and sorts
+        last — most of the world today, since only one control point is authored.
+        See :class:`~transversal.api.graphql.type_defs.relationships.FactionDistance`.
+        """
+        repo = _em(info).repo
+        return [
+            FactionDistance(
+                faction_id=r["faction_id"], name=r["name"],
+                distance=r["distance"], nearest_location_id=r["nearest_location_id"],
+            )
+            for r in repo.get_faction_distances_for_location(str(location_id))
         ]

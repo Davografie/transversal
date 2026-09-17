@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import heapq
+
 from transversal.db.arango import ENTITIES
 from transversal.db.arango import PROJECTIONS
 from transversal.db.arango import RELATIONSHIPS
@@ -18,6 +20,18 @@ from transversal.db.repository_mixins.common import (
 # than one trait called `role`.
 ROLE_TRAIT_NAME = "role"
 RANK_TRAIT_NAME = "rank"
+
+# The trait that marks a *control* tie — a faction's claim on a location. Matched
+# by exact name, like `role`/`rank`: the registry also carries `primordial
+# control`, which is a power, not a claim on ground.
+CONTROL_TRAIT_NAME = "control"
+
+# What a portal costs when it crosses a universe boundary, in the same units as
+# one `super`/same-universe step. Inside a universe a portal is just a door, so it
+# costs 1; across universes the trip is meant to read as further away, which keeps
+# same-universe factions above other-universe ones in a distance-sorted list.
+# **This is the one number the author left open** — it is a dial, not a finding.
+CROSS_UNIVERSE_WEIGHT = 10
 
 
 class RepositoryCanvas:
@@ -626,6 +640,132 @@ class RepositoryCanvas:
             if not found["in_tie_type"]:
                 found["in_tie_type"] = row["in_tie_type"]
         return sorted(merged.values(), key=lambda r: (r["entity_id"], r["name"]))
+
+    def get_faction_distances_for_location(self, location_id: str) -> list[dict]:
+        """Every faction with its weighted distance to this location, nearest first.
+
+        The read behind a distance-sorted faction list ([[Tickets#B134]]).
+        Distance runs along the **location graph** — ``super`` and
+        ``transversal`` edges, walked **undirected** — from this location to the
+        nearest location the faction *controls*; a faction controlling this very
+        place scores 0.
+
+        Four decisions, all the author's (2026-09-16):
+
+        * **Undirected.** ``super`` is stored child → parent only, so following
+          stored direction reaches **49 of 410** locations from the Iron Roots
+          seat against **215** undirected — a directed walk answers a different
+          and much smaller question. (100 of 354 ``transversal`` edges also lack
+          a stored return edge, mostly places that are plainly two-way, so they
+          only work undirected too.)
+        * **``super`` and ``transversal`` both count**, so a faction's reach can
+          cross universes.
+        * **A portal costs 1 inside its universe and ``CROSS_UNIVERSE_WEIGHT``
+          across a boundary**; a ``super`` edge always costs 1.
+        * **The control tie's die is ignored** — a d10 "sect seat" says *how
+          much*, not *how far*.
+
+        A control tie is a **faction → location** edge carrying a trait setting
+        named ``control``. Direction matters: the reverse (a location's posture
+        toward a faction) is not a claim on ground.
+
+        **Computed on read, deliberately not materialized.** Measured 2026-09-16:
+        a full recompute for all 74 factions is ~2.4 ms at 410 locations and 711
+        edges, and one location needs a single search. Materializing would add an
+        invalidation surface spanning every location, ``super``/``transversal``
+        edge and control edit, to save a fraction of a millisecond. **Revisit if
+        the graph or the faction count grows by orders of magnitude** — the
+        design log records the trigger.
+
+        Returns ``[{faction_id, name, distance, nearest_location_id}]`` for
+        **every** faction, sorted: reachable ones by distance then name, then the
+        rest by name. ``distance`` is None when the faction controls nothing, or
+        nothing it controls is reachable — those are kept so a caller can show
+        the whole faction list with the near ones at the top.
+        """
+        edge_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type IN ['super', 'transversal']
+            LET f = PARSE_IDENTIFIER(r._from)
+            LET t = PARSE_IDENTIFIER(r._to)
+            FILTER f.collection == 'entities' AND t.collection == 'entities'
+            LET fe = DOCUMENT(r._from)
+            LET te = DOCUMENT(r._to)
+            FILTER fe != null AND te != null
+            FILTER fe.type == 'location' AND te.type == 'location'
+            RETURN {{
+                type: r.type,
+                from: f.key,
+                to: t.key,
+                cross: fe.current_universe != te.current_universe,
+            }}
+        """
+        adjacency: dict[str, list[tuple[str, int]]] = {}
+        for row in self.db.aql.execute(edge_query):
+            # Only a *portal* can cross a boundary; a `super` edge is a hierarchy
+            # link and always costs one step.
+            cost = (
+                CROSS_UNIVERSE_WEIGHT
+                if row["type"] == "transversal" and row["cross"]
+                else 1
+            )
+            adjacency.setdefault(row["from"], []).append((row["to"], cost))
+            adjacency.setdefault(row["to"], []).append((row["from"], cost))
+
+        control_query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.from_type == 'relationship'
+            LET tr = DOCUMENT('{TRAITS}', ts.trait_id)
+            FILTER tr != null AND tr.name == @cname
+            LET e = DOCUMENT('{RELATIONSHIPS}', ts.entity_id)
+            FILTER e != null
+            LET f = DOCUMENT(e._from)
+            LET t = DOCUMENT(e._to)
+            FILTER f != null AND t != null
+            FILTER f.type == 'faction' AND t.type == 'location'
+            RETURN {{ faction: f._key, location: t._key }}
+        """
+        by_location: dict[str, set[str]] = {}
+        for row in self.db.aql.execute(
+            control_query, bind_vars={"cname": CONTROL_TRAIT_NAME}
+        ):
+            by_location.setdefault(row["location"], set()).add(row["faction"])
+        claiming = {f for factions_here in by_location.values() for f in factions_here}
+
+        # One Dijkstra from the requested location settles nodes nearest-first, so
+        # the first time a faction's ground is reached *is* its nearest claim —
+        # no per-faction search needed.
+        found: dict[str, tuple[int, str]] = {}
+        seen: set[str] = set()
+        heap: list[tuple[int, str]] = [(0, location_id)]
+        while heap:
+            dist, node = heapq.heappop(heap)
+            if node in seen:
+                continue
+            seen.add(node)
+            for faction_id in by_location.get(node, ()):
+                found.setdefault(faction_id, (dist, node))
+            if len(found) == len(claiming):
+                break  # every faction that holds ground has been reached
+            for neighbour, cost in adjacency.get(node, ()):
+                if neighbour not in seen:
+                    heapq.heappush(heap, (dist + cost, neighbour))
+
+        factions = list(self.db.aql.execute(
+            f"FOR e IN {ENTITIES} FILTER e.type == 'faction' "
+            "RETURN { id: e._key, name: e.name }"
+        ))
+        rows = []
+        for faction in factions:
+            hit = found.get(faction["id"])
+            rows.append({
+                "faction_id": faction["id"],
+                "name": faction["name"],
+                "distance": hit[0] if hit else None,
+                "nearest_location_id": hit[1] if hit else None,
+            })
+        rows.sort(key=lambda r: (r["distance"] is None, r["distance"] or 0, r["name"]))
+        return rows
 
     def canvas_faction(self, faction_id: str) -> dict:
         """Return conspyramid data for a faction.
