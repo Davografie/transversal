@@ -120,6 +120,50 @@ def _apply_copy_trait(entity, effect, repo, result):
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"copied {src.trait_id} to {subject.id}", ts.id))
 
+def _apply_change_trait(entity, effect, repo, result):
+    """Point a trait instance at a different registry trait.
+
+    The instance keeps everything that is *its own* — its owner, dice, rating
+    type, polarity, statement, notes and grants — and changes what it **is**. The
+    Arango registry pointer (``_to``) is not touched here: the repository derives
+    it from ``trait_id`` on every write (``trait_settings.update_traitsetting``), so
+    committing the updated instance rewrites the pointer itself.
+
+    ``traitset_id`` follows the new definition, because the instance's set is what
+    says where it renders and how a `HAS_TRAIT_IN_TRAITSET` condition reads it — an
+    instance that kept the old set would point at a trait that is not in it.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, repo)
+    if target is None:
+        return
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
+    if existing is None:
+        result.applied.append(AppliedEffect(effect, f"no trait instance {target} to change"))
+        return
+
+    ref = (effect.refs or {}).get("trait")
+    wanted_id = (getattr(ref, "value", "") or "") if ref else ""
+    wanted = repo.get_trait(wanted_id) if wanted_id else None
+    if wanted is None:
+        result.applied.append(
+            AppliedEffect(effect, f"no trait definition to change to ({wanted_id or 'unset'})"))
+        return
+    if wanted.id == existing.trait_id:
+        result.applied.append(AppliedEffect(effect, f"{target} is already {wanted.id}"))
+        return
+
+    was = existing.trait_id
+    existing.trait_id = wanted.id
+    if getattr(wanted, "traitset_id", ""):
+        existing.traitset_id = wanted.traitset_id
+    result.updated_trait_settings.append(existing)
+    result.applied.append(AppliedEffect(effect, f"changed {was} into {wanted.id}", existing.id))
+
+
 def _apply_move_trait(entity, effect, repo, result):
     """Take a trait instance from another entity and give it to this one (steal).
 

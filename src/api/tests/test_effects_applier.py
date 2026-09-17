@@ -225,6 +225,70 @@ def test_gain_creates_traitsetting():
     assert result.applied[0].summary == "gained iron-will at d6"
 
 
+def test_change_trait_points_the_instance_at_another_definition():
+    """The instance keeps everything that is its own — owner, dice, rating type,
+    polarity, statement, notes, grants — and changes what it *is*. Its trait set
+    follows the new definition, because the set is what says where it renders and
+    how a `HAS_TRAIT_IN_TRAITSET` condition reads it."""
+    repo = FakeRepo(
+        traits=[FakeTrait("trait-blade", "ts-weapons"),
+                FakeTrait("trait-fire-blade", "ts-elements")],
+        traitsettings=[_ts("trait-blade", [DieType.D8], statement="my blade",
+                           notes="gm only", polarity=Polarity.POSITIVE)],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="change",
+        target="trait-blade",
+        refs={"trait": TargetRef(value="trait-fire-blade")},
+    )
+    result = apply_effects(_entity(), [effect], repo)
+    assert len(result.updated_trait_settings) == 1
+    ts = result.updated_trait_settings[0]
+    assert ts.trait_id == "trait-fire-blade"
+    assert ts.traitset_id == "ts-elements"
+    assert ts.dice == [DieType.D8] and ts.statement == "my blade"
+    assert ts.notes == "gm only" and ts.polarity == Polarity.POSITIVE
+    assert ts.entity_id == "char-1"
+    assert "changed trait-blade into trait-fire-blade" in result.applied[0].summary
+
+
+def test_change_trait_without_an_instance_refuses():
+    repo = FakeRepo(traits=[FakeTrait("trait-fire-blade", "ts-elements")])
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="change",
+        target="trait-nothing",
+        refs={"trait": TargetRef(value="trait-fire-blade")},
+    )
+    result = apply_effects(_entity(), [effect], repo)
+    assert result.updated_trait_settings == []
+    assert "no trait instance" in result.applied[0].summary
+
+
+def test_change_trait_without_a_definition_refuses():
+    repo = FakeRepo(traitsettings=[_ts("trait-blade", [DieType.D8])])
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="change",
+        target="trait-blade",
+        refs={"trait": TargetRef(value="trait-does-not-exist")},
+    )
+    result = apply_effects(_entity(), [effect], repo)
+    assert result.updated_trait_settings == []
+    assert "no trait definition to change to" in result.applied[0].summary
+
+
+def test_change_trait_to_the_same_definition_is_a_no_op():
+    repo = FakeRepo(traits=[FakeTrait("trait-blade", "ts-weapons")],
+                    traitsettings=[_ts("trait-blade", [DieType.D8])])
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="change",
+        target="trait-blade",
+        refs={"trait": TargetRef(value="trait-blade")},
+    )
+    result = apply_effects(_entity(), [effect], repo)
+    assert result.updated_trait_settings == []
+    assert "already trait-blade" in result.applied[0].summary
+
+
 def test_gain_sets_statement_and_notes_from_context():
     repo = FakeRepo(traits=[FakeTrait("hazard", "ts-complications")])
     entity = _entity()

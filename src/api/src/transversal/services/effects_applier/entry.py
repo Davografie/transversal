@@ -47,6 +47,7 @@ from transversal.services.effects_applier.handlers_sfx import (
     _apply_grant_sfx,
 )
 from transversal.services.effects_applier.handlers_traits import (
+    _apply_change_trait,
     _apply_copy_trait,
     _apply_cortex_gain,
     _apply_discover,
@@ -107,6 +108,7 @@ _MUTATION_HANDLERS = {
     ("modify_roll", "remove_die"): _apply_change_remove,
     # The undo of a change-die effect, from the prior dice the handler recorded.
     ("modify_roll", "restore_die"): _apply_restore_die,
+    ("modify_trait", "change"): _apply_change_trait,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

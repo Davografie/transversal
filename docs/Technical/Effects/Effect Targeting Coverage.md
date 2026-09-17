@@ -51,10 +51,15 @@ reason). The card states the scope (*"for each unchosen die, …"*).
 > `target` field at all**.
 >
 > **Every offered target is a path**, and no offered action declares a picker kind
-> for its target any more (`target_kind` survives only on the three retired trait
-> steps and on runtime `{choose_*}` / `{random:*}` placeholder strings).
+> for its target any more. The `{choose_*}` / `{random:*}` placeholder strings and
+> the `target_scope` / `target_filter` fields beside them are **deleted** (2026-09-17):
+> a runtime pick is a `choose` step in the path, and a candidate filter is a
+> `filter` step.
 
-- **Target offers a path — 34.** All the trait actions, the change-die family
+- **Target offers a path — 35.** All the trait actions (including **Change Trait**,
+  whose *second* question — what the instance becomes — is a reference path of its
+  own, so one effect answers *which instance* and *what definition* separately),
+  the change-die family
   (which accepts *either* a pool die or a rating die), the location/travel ones,
   `transfer_razmerit`, `attune`, `create_relationship`, `entity_targeting_ban`,
   `set_traitset_limit`, `discover_life_path`, `draft_life_path`,
@@ -63,11 +68,13 @@ reason). The card states the scope (*"for each unchosen die, …"*).
   `spend_razmerit`, `travel`, `set_location`, `set_traitset_limit`,
   `end_active_effect`, and two of the *name* actions (you can path who receives
   an asset; you just cannot path what it is called).
-- **Own path builders (refs) — 6.** `add_trait_rating_dice` (trait + pool),
+- **Own path builders (refs) — 7.** `add_trait_rating_dice` (trait + pool),
   `roll_pool` (pool), `resolve_pool` (pool), `attune` (universe + projection),
-  `copy_trait` and `move_trait` (the trait instance). The last two take the
-  recipient from their `entity`/subject field, so the thing being handed over is
-  a path while *who gets it* is the ordinary subject target.
+  `copy_trait` and `move_trait` (the trait instance), and **`change_trait`**
+  (the *definition* the instance becomes). Copy/move take the recipient from their
+  `entity`/subject field, so the thing being handed over is a path while *who gets
+  it* is the ordinary subject target; `change_trait`'s primary target is the
+  instance, and the definition reads second.
 - **Removal is authorable.** `delete_trait` — now labelled **Remove Trait** —
   exposes `modify_trait`/`remove` and names the instance, which is why
   `negate_complication` is retired in its favour.

@@ -242,3 +242,22 @@ def test_remove_trait_is_the_name_for_taking_a_trait_off():
     assert meta.label == "Remove Trait"
     assert (meta.effect_type, meta.effect_action) == ("modify_trait", "remove")
     assert meta.retired is False
+
+
+def test_change_trait_asks_for_the_instance_and_the_definition_separately():
+    """Two different questions: *which instance* changes — the primary path, which
+    must land on a trait instance — and *what it becomes* — a reference path of its
+    own, landing on a registry *trait* (a definition, not an instance)."""
+    from transversal.services.effects_registry import output_element_for
+
+    meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "change_trait")
+    assert (meta.effect_type, meta.effect_action) == ("modify_trait", "change")
+    assert meta.retired is False
+    assert meta.path_element == ("traitsetting",)
+    assert [f.name for f in meta.fields] == ["target"]
+    assert [(r.name, r.label, r.element) for r in meta.refs] == [("trait", "Change To", "trait")]
+    # The instance is the primary input, so the definition reads after it.
+    assert meta.refs_first is False
+    # The changed instance is nameable for a later step.
+    assert output_element_for("modify_trait", "change") == "traitsetting"
+    assert effect_card("modify_trait", "change") == "change {target} into {result}"

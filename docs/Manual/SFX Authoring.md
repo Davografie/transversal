@@ -808,6 +808,7 @@ and where it lands is what the change *means*.
 | Gain Trait | Acquire a trait. **Already "if not exists"**: it does nothing when the trait is present — which is why "Gain or Step Up" is a separate action | either |
 | Copy Trait | Give another entity a copy of a trait instance — its dice, statement, notes, polarity are carried over; the recipient's trait-set rules apply | either |
 | Move Trait | Take a trait instance from another entity (a steal): the instance changes hands with its grants and spent dice | cost |
+| Change Trait | Point a trait instance at a **different registry trait** — *your blade* becomes *a blade of fire*. The instance keeps its owner, dice, rating type, polarity, statement, notes and grants, and its trait set follows the new definition. The **Target Trait** path names the instance; the **Change To** path names the definition | either |
 | Remove Trait | Remove a trait instance from its owner — the trait burns away, is lost or destroyed. (Was *Delete Trait*; *Negate Complication* is retired in its favour.) | cost |
 | Reveal Trait (Learn) | Reveal a trait to another entity | benefit |
 | Set Trait-set Limit | Change a trait set's size limit | either |

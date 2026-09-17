@@ -216,6 +216,29 @@ ACTIONS: list[EffectActionMeta] = [
         refs_first=True,
     ),
     EffectActionMeta(
+        action_id="change_trait",
+        output_element="traitsetting",
+        label="Change Trait",
+        description=(
+            "Point a trait instance at a different registry trait — the instance keeps "
+            "its owner, dice, rating type, polarity, statement and grants, but it *is* "
+            "the other trait now. 'Your blade' becomes 'a blade of fire'"
+        ),
+        category="either",
+        effect_type="modify_trait",
+        effect_action="change",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Target Trait", field_type="text",
+                          required=True, default=""),
+        ],
+        # The *definition* is a path of its own: the wizard offers one ending on a
+        # registry trait, the engine resolves it, and the card reads it as the
+        # thing the instance becomes.
+        refs=[RefDef("trait", "Change To", "trait")],
+        path_element=("traitsetting",),
+    ),
+    EffectActionMeta(
         action_id="disable_trait",
         label="Disable Trait",
         description="Disable a trait so it contributes no dice (until re-enabled or the duration ends)",

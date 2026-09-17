@@ -1002,15 +1002,20 @@ def _ref_result(effect: Effect, *, resolve: NameResolver | None = None,
     The last reference with a path is the one rendered: references are declared in
     dependency order (the universe decided first, the life drawn from it second),
     so the most-derived one is what the effect's object actually is.
+
+    A reference that names a *literal* id instead of a path renders as that
+    object's **name**. Without it a card whose point is the reference read
+    "… into." — the sentence lost the thing the effect acts on.
     """
     text = ""
     for ref in (effect.refs or {}).values():
         spec = getattr(ref, "spec", None)
-        if spec is None or not spec.steps:
-            continue
-        phrase = path_phrase(spec, source_element=source_element, variables=variables,
-                             resolve=resolve)
-        rendered = render_phrase(phrase, _determiner(phrase))
+        if spec is not None and spec.steps:
+            phrase = path_phrase(spec, source_element=source_element, variables=variables,
+                                 resolve=resolve)
+            rendered = render_phrase(phrase, _determiner(phrase))
+        else:
+            rendered = display_value(getattr(ref, "value", ""), resolve)
         if rendered:
             text = rendered
     return text

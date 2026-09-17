@@ -24,6 +24,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_trait", "remove"): "remove {target}",
     ("modify_trait", "cortex_gain"): "gain {target} as a complication at {result}",
     ("modify_trait", "add_die"): "add a {result} die to {target}",
+    ("modify_trait", "change"): "change {target} into {result}",
     ("modify_trait", "copy"): "give {target} a copy of {result}",
     ("modify_trait", "move"): "move {result} to {target}",
     ("modify_trait", "reduce_by_effect"): "reduce {target} by the effect die",
