@@ -100,7 +100,7 @@
         <template v-else>
           <GmList
             v-if="filteredFactions.length"
-            :items="filteredFactions"
+            :items="sortedFactions"
             item-key="id"
             :selected-ids="selectedId ? [selectedId] : []"
             @click="toggleEntity"
@@ -228,6 +228,48 @@ const {
   fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds,
   focusPath, setFocus, collapseAll,
 } = useLocationTree({ filteredEntities, activeFilters, currentUniverse: toRef(props, 'universe') })
+
+// ── Faction distance ranking ────────────────────────
+// The factions list is read nearest-first: how far each faction's closest
+// *controlled* ground is from where the GM is, by the weighted walk the backend
+// computes (`factionDistances`, B134). The read returns every faction already
+// ordered — reachable ones by distance, the rest by name — so its index *is* the
+// sort key, which keeps the backend's tie-break without restating it here.
+const factionRank = ref(null)   // Map factionId → rank, or null before the first read
+const rankingLocation = ref('')
+
+async function fetchFactionRank() {
+  const loc = props.currentLocationId
+  if (!loc) return
+  const data = await graphql(
+    `query($id: ID!) { factionDistances(locationId: $id) { factionId } }`,
+    { id: loc },
+  )
+  // A failed read keeps a ranking that belongs to this same place — a blip must
+  // not reshuffle the list — but drops one measured somewhere else, which would
+  // rank by a location the GM has left.
+  if (!data?.factionDistances) {
+    if (rankingLocation.value !== loc) { factionRank.value = null; rankingLocation.value = '' }
+    return
+  }
+  const rank = new Map()
+  data.factionDistances.forEach((f, i) => rank.set(f.factionId, i))
+  factionRank.value = rank
+  rankingLocation.value = loc
+}
+
+watch(() => props.currentLocationId, fetchFactionRank, { immediate: true })
+
+const sortedFactions = computed(() => {
+  const rank = factionRank.value
+  if (!rank) return filteredFactions.value
+  return [...filteredFactions.value].sort((a, b) => {
+    // A faction that appeared since the read (a new one) has no rank yet: last.
+    const ra = rank.has(a.id) ? rank.get(a.id) : Infinity
+    const rb = rank.has(b.id) ? rank.get(b.id) : Infinity
+    return ra !== rb ? ra - rb : String(a.name).localeCompare(String(b.name))
+  })
+})
 
 // ── Free-roam drill-down ────────────────────────────
 // With no acting entity there is no name filter focusing the tree, so expand
