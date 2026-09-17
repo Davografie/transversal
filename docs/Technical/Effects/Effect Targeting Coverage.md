@@ -58,7 +58,8 @@ reason). The card states the scope (*"for each unchosen die, …"*).
 
 - **Target offers a path — 35.** All the trait actions (including **Change Trait**,
   whose *second* question — what the instance becomes — is a reference path of its
-  own, so one effect answers *which instance* and *what definition* separately),
+  own, so one effect answers *which instance* and *what definition* separately; it
+  reverts through the same action carrying the prior definition),
   the change-die family
   (which accepts *either* a pool die or a rating die), the location/travel ones,
   `transfer_razmerit`, `attune`, `create_relationship`, `entity_targeting_ban`,

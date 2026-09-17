@@ -236,6 +236,12 @@ ACTIONS: list[EffectActionMeta] = [
         # registry trait, the engine resolves it, and the card reads it as the
         # thing the instance becomes.
         refs=[RefDef("trait", "Change To", "trait")],
+        supports_duration=True,
+        # The undo is *this action* pointed back at the prior definition, which the
+        # handler captures on apply (the way `set` captures the prior rating) — so a
+        # timed change is a timed revert, and an untimed one is a cancellable hold.
+        inverse=("modify_trait", "change"),
+        inverse_captures_prior=True,
         path_element=("traitsetting",),
     ),
     EffectActionMeta(

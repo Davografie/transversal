@@ -132,6 +132,12 @@ def _apply_change_trait(entity, effect, repo, result):
     ``traitset_id`` follows the new definition, because the instance's set is what
     says where it renders and how a `HAS_TRAIT_IN_TRAITSET` condition reads it — an
     instance that kept the old set would point at a trait that is not in it.
+
+    The undo is this action pointed back at the prior definition: the handler
+    captures it on apply (``prior_result``) and the revert carries it in ``result``,
+    which is why the definition is read from the reference *or* from ``result``.
+    With a duration that revert is scheduled on the timer; without one it is booked
+    as a hold inside a cancelable activation — the same two paths `set` uses.
     """
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -146,7 +152,10 @@ def _apply_change_trait(entity, effect, repo, result):
         return
 
     ref = (effect.refs or {}).get("trait")
+    # The Change To *reference* is the author's answer; a revert has no reference
+    # and carries the definition it restores in `result` instead.
     wanted_id = (getattr(ref, "value", "") or "") if ref else ""
+    wanted_id = wanted_id or (effect.result or "")
     wanted = repo.get_trait(wanted_id) if wanted_id else None
     if wanted is None:
         result.applied.append(
@@ -162,6 +171,9 @@ def _apply_change_trait(entity, effect, repo, result):
         existing.traitset_id = wanted.traitset_id
     result.updated_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"changed {was} into {wanted.id}", existing.id))
+    # Addressed to the instance: the authored target may be a registry trait id,
+    # which no longer names this instance once the pointer has moved.
+    _queue_trait_revert(repo, existing, effect, target=existing.id, prior_result=was)
 
 
 def _apply_move_trait(entity, effect, repo, result):

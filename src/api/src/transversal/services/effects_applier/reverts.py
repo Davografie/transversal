@@ -5,12 +5,19 @@ from __future__ import annotations
 
 
 
-def _queue_trait_revert(repo, ts, effect, prior_result=None, context_extra=None):
-    """Schedule the inverse of ``effect`` on a trait setting in the central store."""
+def _queue_trait_revert(repo, ts, effect, prior_result=None, context_extra=None,
+                        target=None):
+    """Schedule the inverse of ``effect`` on a trait setting in the central store.
+
+    ``target`` addresses the *instance* the undo must land on. An authored target
+    can name a registry trait rather than the instance, and for an effect that
+    changes which trait the instance *is* that name stops resolving the moment the
+    change applies — so such a revert passes the instance id explicitly.
+    """
     from transversal.services.scheduled_events import schedule_revert
 
-    schedule_revert(repo, "trait_setting", ts.id, effect, prior_result=prior_result,
-                    context_extra=context_extra)
+    schedule_revert(repo, "trait_setting", ts.id, effect, target=target,
+                    prior_result=prior_result, context_extra=context_extra)
 
 def _queue_entity_revert(repo, entity, effect, target=None, prior_result=None, context_extra=None):
     """Schedule the inverse of ``effect`` on an entity in the central store."""

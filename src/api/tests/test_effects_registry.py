@@ -261,3 +261,11 @@ def test_change_trait_asks_for_the_instance_and_the_definition_separately():
     # The changed instance is nameable for a later step.
     assert output_element_for("modify_trait", "change") == "traitsetting"
     assert effect_card("modify_trait", "change") == "change {target} into {result}"
+
+    # A change can be timed, and its undo is *this action* pointed back at the
+    # definition the instance had — so the revert must be able to carry the prior
+    # definition (the way `set` carries the prior rating).
+    from transversal.services.effects_registry import get_inverse
+
+    assert meta.supports_duration is True
+    assert get_inverse("modify_trait", "change") == (("modify_trait", "change"), True)

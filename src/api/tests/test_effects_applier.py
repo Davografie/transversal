@@ -76,6 +76,9 @@ class FakeRepo:
     def get_traitsettings_for_entity(self, entity_id):
         return [ts for ts in self.traitsettings if ts.entity_id == entity_id]
 
+    def get_traitsetting(self, ts_id):
+        return next((ts for ts in self.traitsettings if ts.id == ts_id), None)
+
     def get_traitsetsettings_for_entity(self, entity_id):
         return [tss for tss in getattr(self, "traitsetsettings", []) if tss.entity_id == entity_id]
 
@@ -250,6 +253,71 @@ def test_change_trait_points_the_instance_at_another_definition():
     assert ts.notes == "gm only" and ts.polarity == Polarity.POSITIVE
     assert ts.entity_id == "char-1"
     assert "changed trait-blade into trait-fire-blade" in result.applied[0].summary
+
+
+def test_change_trait_with_duration_queues_a_change_back_revert():
+    """A timed change is a timed revert: the same action pointed back at the
+    definition the instance had, scheduled on the timer."""
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+
+    repo = FakeRepo(
+        traits=[FakeTrait("trait-blade", "ts-weapons"),
+                FakeTrait("trait-fire-blade", "ts-elements")],
+        traitsettings=[_ts("trait-blade", [DieType.D8], statement="my blade")],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="change",
+        target="trait-blade",
+        refs={"trait": TargetRef(value="trait-fire-blade")},
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)],
+                                combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    result = apply_effects(_entity(), [effect], repo)
+    ts = result.updated_trait_settings[0]
+    assert ts.trait_id == "trait-fire-blade" and ts.traitset_id == "ts-elements"
+
+    assert len(repo.scheduled_events) == 1
+    event = repo.scheduled_events[0]
+    assert event.kind == "revert"
+    assert event.target_type == "trait_setting" and event.target_id == ts.id
+    assert event.effect.action == "change"
+    assert event.effect.result == "trait-blade", "the prior definition was not captured"
+    # Addressed to the *instance*: the authored target was a registry trait id, and
+    # that stops naming this instance the moment the pointer moves.
+    assert event.effect.target == ts.id
+
+    # Applying the queued revert puts the pointer — and the set that follows it —
+    # back.
+    apply_effects(_entity(), [event.effect], repo)
+    assert ts.trait_id == "trait-blade"
+    assert ts.traitset_id == "ts-weapons"
+    assert ts.dice == [DieType.D8] and ts.statement == "my blade"
+
+
+def test_change_trait_without_a_duration_is_cancellable():
+    """No duration: the undo is a *hold* inside a cancelable (manual) activation,
+    so the change can be taken back before it commits — the same booking a step-up
+    gets."""
+    from transversal.services.scheduled_events import activation_booking
+
+    repo = FakeRepo(
+        traits=[FakeTrait("trait-blade", "ts-weapons"),
+                FakeTrait("trait-fire-blade", "ts-elements")],
+        traitsettings=[_ts("trait-blade", [DieType.D8])],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="change",
+        target="trait-blade",
+        refs={"trait": TargetRef(value="trait-fire-blade")},
+    )
+    with activation_booking("sfx-ignite", cancelable=True):
+        apply_effects(_entity(), [effect], repo)
+
+    assert len(repo.scheduled_events) == 1
+    hold = repo.scheduled_events[0]
+    assert hold.kind == "hold"
+    assert hold.target_id == "char-1:trait-blade"
+    assert hold.effect.action == "change" and hold.effect.result == "trait-blade"
 
 
 def test_change_trait_without_an_instance_refuses():

@@ -84,3 +84,9 @@ def test_the_registry_pointer_follows_a_changed_definition(data):
     assert read_back.traitset_id == TSET_B
     assert read_back.dice == [DieType.D8]
     assert read_back.statement == "my blade"
+
+    # ...and the same write moves it back, which is what a timed revert does.
+    read_back.trait_id = TRAIT_A
+    read_back.traitset_id = TSET_A
+    repo.update_traitsetting(read_back)
+    assert repo._traitsettings.get(TS_ID)["_to"] == f"{TRAITS}/{TRAIT_A}"
