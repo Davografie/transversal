@@ -757,24 +757,39 @@ async function switchPerspective(id) {
   if (!sameLocation) await initLocation()
 }
 
+// The view moves optimistically (the location id and name are set before the
+// request), then reports back: `{ ok }` or `{ ok: false, error }`. Callers that
+// only want the move ignore the result; a panel button that waits on "arrived or
+// failed" needs it. The failure used to be swallowed entirely — a non-2xx
+// response was parsed as JSON and simply left the raw id as the name.
 async function setViewLocation(locId) {
-  if (!locId) return
+  if (!locId) return { ok: true }
   currentLocationId.value = locId
   locationName.value = locId
+  let error = ''
   try {
     const r = await fetch(`/api/v1/locations/${locId}/navigate`)
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
     const nav = await r.json()
     locationName.value = nav.location?.name || locId
-  } catch {}
+  } catch (e) {
+    error = 'Could not go to that location.'
+    console.error('[view] navigate failed', locId, e)
+  }
   fetchLocationBg()
   fetchPeers(true)
+  return error ? { ok: false, error } : { ok: true }
 }
 
 async function switchViewLocation(locId) {
-  if (!locId) return
+  if (!locId) return { ok: true }
   entityId.value = null
-  await setViewLocation(locId)
+  return setViewLocation(locId)
 }
+
+// Awaitable, unlike the fire-and-forget bus event: a panel asking to go somewhere
+// has to be able to show progress until it arrives (or fails).
+provide('goToLocation', (locId) => switchViewLocation(locId))
 
 function returnToSelf() {
   entityId.value = gmMode.value ? null : ownMainId.value

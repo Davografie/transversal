@@ -32,7 +32,14 @@
     />
     <div v-if="form.type === 'LOCATION' || form.type === 'GMC' || form.type === 'FACTION'" class="canvas-open-row">
       <Button class="section-btn" variant="neutral" @click="openCanvas">🗺 Open in Canvas</Button>
-      <Button v-if="form.type === 'LOCATION'" class="section-btn" variant="neutral" @click="emit('go-to-location')">📍 Go to this location</Button>
+      <Button
+        v-if="form.type === 'LOCATION'"
+        class="section-btn"
+        variant="neutral"
+        :loading="goingToLocation"
+        @click="goToThisLocation"
+      >📍 Go to this location</Button>
+      <span v-if="goError" class="go-error">{{ goError }}</span>
     </div>
     <div class="image-gallery">
       <div class="gallery-header">
@@ -537,6 +544,28 @@ function openCanvas() {
   }
 }
 
+// Going somewhere is a request that can fail, so it is awaited rather than fired
+// at the bus: the button spins until App reports arrival (or why it could not).
+// The emit stays as the fallback for a panel opened outside App's tree, where
+// there is nobody to await — it just cannot report progress.
+const goToLocation = inject('goToLocation', null)
+const goingToLocation = ref(false)
+const goError = ref('')
+
+async function goToThisLocation() {
+  const locId = props.entityId
+  if (!locId || goingToLocation.value) return
+  if (!goToLocation) { emit('go-to-location'); return }
+  goingToLocation.value = true
+  goError.value = ''
+  try {
+    const res = await goToLocation(locId)
+    if (res && !res.ok) goError.value = res.error || 'Could not go to that location.'
+  } finally {
+    goingToLocation.value = false
+  }
+}
+
 function assumeCharacter() {
   if (props.entityId) bus.emit('switch-perspective', props.entityId)
 }
@@ -973,7 +1002,9 @@ defineExpose({ refresh: loadImages })
 .section-buttons {
   margin-top: 12px; display: flex; gap: 6px;
 }
-.canvas-open-row { margin-top: 12px; display: flex; gap: 6px; }
+.canvas-open-row { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.go-error { font-size: 10px; color: var(--danger-soft); }
+
 .section-btn { flex: 1; }
 .section-count { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
 
