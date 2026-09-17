@@ -31,7 +31,7 @@
       </div>
     </div>
     <div v-if="mode === 'life-path'" class="canvas-hint">Roll tables linked by next_step effects · dashed orange edges loop back · click ✎ to open a table</div>
-    <div v-else class="canvas-hint">Drag → to ← to create a transversal link · click a transversal edge to toggle · ⊕/⊖ collapse subtree · hover an occupant to highlight relations</div>
+    <div v-else class="canvas-hint">Drag → to ← to create a transversal link · click a transversal edge to toggle · ⊕/⊖ collapse subtree · hover an occupant to highlight relations · ⊙ pins a member's relations</div>
 
     <div v-if="loading" class="canvas-status">Loading…</div>
     <div v-else-if="error" class="canvas-status error">{{ error }}</div>
@@ -121,7 +121,7 @@ const bus = usePanelBus()
 const panel = usePanel()
 
 const canvas = useCanvas()
-const { mode, title, loading, error, factions, layoutOrientation, toggleLayoutOrientation, setHighlightedOccupant, setFactionFilter, selectEntity, clearSelection } = canvas
+const { mode, title, loading, error, factions, layoutOrientation, toggleLayoutOrientation, setHighlightedOccupant, focusedOccupant, toggleFocusedOccupant, setFactionFilter, selectEntity, clearSelection } = canvas
 const nodes = canvas.nodes
 const edges = canvas.edges
 
@@ -190,6 +190,8 @@ const displayNodes = computed(() =>
       onToggleExpand: (id) => canvas.toggleUniverseExpand(id),
       onOccupantHover: (id) => setHighlightedOccupant(id),
       onOccupantLeave: () => setHighlightedOccupant(null),
+      isFocused: n.type === 'occupant' && n.data.entityId === focusedOccupant.value,
+      onFocusOccupant: (id) => toggleFocusedOccupant(id),
       onToggleRelations: (id) => canvas.toggleRelations(id),
       onShowFaction: (id) => canvas.showFaction(id),
       onInspect: (id) => bus.emit('canvas:inspect', id),

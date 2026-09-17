@@ -1,7 +1,7 @@
 <template>
   <div
     class="canvas-occupant-node"
-    :class="{ 'is-gmc': data.entityType === 'gmc', 'is-pc': data.entityType === 'character' }"
+    :class="{ 'is-gmc': data.entityType === 'gmc', 'is-pc': data.entityType === 'character', 'is-focused': data.isFocused }"
     @click.stop="data.onInspect?.(data.entityId)"
   >
     <div class="occ-portrait" :style="portraitStyle">
@@ -16,6 +16,12 @@
       </div>
     </div>
     <div class="occ-actions" @click.stop>
+      <button
+        class="occ-btn"
+        :class="{ active: data.isFocused }"
+        :title="data.isFocused ? 'Clear focus' : 'Focus here'"
+        @click.stop="data.onFocusOccupant?.(data.entityId)"
+      >⊙</button>
       <button class="occ-btn" title="Toggle relations" @click.stop="data.onToggleRelations?.(data.entityId)">🔗</button>
       <button class="occ-btn" title="Show faction" @click.stop="data.onShowFaction?.(data.entityId)">🏴</button>
       <button class="occ-btn" title="Inspect" @click.stop="data.onInspect?.(data.entityId)">🔍</button>
@@ -66,6 +72,10 @@ const portraitStyle = computed(() => {
 }
 .canvas-occupant-node.is-gmc { border-color: rgba(232, 136, 48, 0.5); }
 .canvas-occupant-node.is-pc { border-color: var(--map-accent); }
+.canvas-occupant-node.is-focused {
+  border-color: var(--map-accent);
+  box-shadow: 0 0 12px rgba(64, 136, 212, 0.55);
+}
 .occ-portrait {
   width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -83,4 +93,5 @@ const portraitStyle = computed(() => {
 .occ-actions { display: flex; flex-direction: column; gap: 2px; }
 .occ-btn { padding: 2px 4px; font-size: 11px; border-radius: 4px; background: rgba(255,255,255,0.06); border: none; cursor: pointer; }
 .occ-btn:hover { background: var(--map-accent); }
+.occ-btn.active { background: var(--map-accent); color: #fff; }
 </style>

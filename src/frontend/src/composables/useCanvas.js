@@ -32,6 +32,9 @@ let currentUniverse = ''
 const collapsedUniverses = new Set()
 const collapsedLocations = new Set()
 const highlightedOccupant = ref(null)
+// Pinned by the occupant node's "focus here" button. Kept apart from the hover
+// above so moving the pointer elsewhere cannot clear a deliberate focus.
+const focusedOccupant = ref(null)
 const loadedChildren = new Set()
 const knownLeaves = new Set()
 
@@ -529,13 +532,16 @@ export function useCanvas() {
   function updateEdgeEmphasis() {
     const locIds = selectedIds('location')
     const occIds = selectedIds('occupant')
-    const hoverOccId = highlightedOccupant.value
+    // The transient hover and the pinned focus both emphasise; an edge lights up
+    // if it touches any of them.
+    const focusIds = [highlightedOccupant.value, focusedOccupant.value].filter((id) => id != null)
     const locNodeIds = new Set([...locIds].map((id) => nodeId('loc', id)))
 
     edges.value = edges.value.map((e) => {
       let highlighted = false
       if (e.data?.kind === 'relation') {
-        highlighted = occIds.has(e.data.from) || occIds.has(e.data.to) || (hoverOccId != null && (e.data.from === hoverOccId || e.data.to === hoverOccId))
+        highlighted = occIds.has(e.data.from) || occIds.has(e.data.to)
+          || focusIds.some((id) => e.data.from === id || e.data.to === id)
       } else {
         highlighted = locNodeIds.has(e.source) || locNodeIds.has(e.target)
       }
@@ -588,6 +594,14 @@ export function useCanvas() {
     updateEdgeEmphasis()
   }
 
+  // Pin (or release) the occupant whose relations stay emphasised. Uses its own
+  // state rather than `selection` because selecting an occupant would clear
+  // `focusId`, which the fullscreen opener and the GMC web layout both read.
+  function toggleFocusedOccupant(occId) {
+    focusedOccupant.value = focusedOccupant.value === occId ? null : occId
+    updateEdgeEmphasis()
+  }
+
   function clear() {
     nodes.value = []
     edges.value = []
@@ -600,6 +614,7 @@ export function useCanvas() {
     collapsedUniverses.clear()
     collapsedLocations.clear()
     highlightedOccupant.value = null
+    focusedOccupant.value = null
     selection.value = []
     loadedChildren.clear()
     knownLeaves.clear()
@@ -1463,6 +1478,8 @@ export function useCanvas() {
     loadFactions,
     collapseLocation,
     setHighlightedOccupant,
+    focusedOccupant,
+    toggleFocusedOccupant,
     selectEntity,
     clearSelection,
     setFactionFilter,
