@@ -147,7 +147,7 @@ class SFX(BaseModel):
 ```
 
 - `trigger` is the event axis: an auto-fire event (`on_*`) or `manual`.
-- `source_kind` declares the owner surface — `trait_setting`/`traitset_setting`/`entity`/`projection`, plus the non-resolving bucket sources `table`/`gm` (empty element/variable; no `select source`/`source_rating`). Ownership is the concrete instances of the declared kind (see [[#Ownership & source resolution]]).
+- `source_kind` declares the owner surface**s** — a *set*, because one source can be provisioned onto more than one thing. `trait_setting` covers both the trait **instance** it fires from and the trait **definition** that provisions its instances (`Trait.possible_sfx_ids` / `default_sfx_ids`) — which is how a rule becomes available to every instance of a trait, and why `backfill_source_kinds` reads either surface as "carried by a trait". The rest are single: `traitset_setting`/`entity`/`projection`, plus the non-resolving bucket sources `table`/`gm` (empty element/variable; no `select source`/`source_rating`). Ownership is the concrete instances of the declared kind (see [[#Ownership & source resolution]]).
 - `placement` is the activation surface (`auto`/`sheet`/`menu`), derived from `trigger` when unset (`on_*` → auto, `manual` → sheet, anything else → menu). It is **no longer authored**: the menu is a trigger (`menu`), because a separate field could disagree with the trigger it sat beside. Menu rules are gated by role/outcome conditions (`USER_ROLE` / `CONTEST_OUTCOME` / `TEST_OUTCOME` / `HITCH`) rather than a legacy menu-context trigger.
 - `arming_scope` is the listener scope — who the armed SFX listens to once it fires its roll/outcome-timed effects. `None` = derive from trigger (`on_session_start` → `global`, else `self`); `listener_spec` resolves the listener set from a `TargetSpec`. See [[#Arming scope]].
 - `conditions` gate which instance of that activation applies.
@@ -513,7 +513,7 @@ The SFX ids available to an entity in a universe are the sorted union of:
 1. `Entity.sfx_ids` (direct ownership).
 2. The active projection's `Projection.sfx_ids` (`entity.current_projection`).
 3. The `table` owner bucket.
-4. Trait-level grants from effective `TraitSetting.sfx_ids` plus the trait's `Trait.default_sfx_ids`.
+4. Trait-level grants from effective `TraitSetting.sfx_ids` plus the trait's `Trait.default_sfx_ids` — **and a disabled instance grants nothing**. "Landed", "suppressed", "spent" are states of the owner, so the rule it carries stops being offered with it; this is implicit rather than authored, and no condition can stand in (`HAS_EFFECTIVE_TRAIT` matches by *registry trait* and returns the first match's `enabled`, so several instances of one generic trait — an agenda's steps — answer arbitrarily).
 5. Trait-set-as-unit grants from effective `TraitSetSetting.sfx_ids`.
 
 Then context-free conditions are evaluated (`static_conditions`) so listing matches fireability: an SFX whose `entity_type` / `in_universe` condition doesn't hold for this entity is dropped from the available list; variable-gated conditions are left to fire-time.

@@ -688,7 +688,7 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 | `on_pool_change` | Your assembled dice pool is saved | dicepool | `{dice_pool}`, `{contest_entity_opponent}` |
 | `on_pool_add` | **This trait instance** is added to your pool | dicepool | `{dice_pool}`, `{contest_entity_opponent}` (and the `added_dice` seed) |
 | `on_location_change` | Entity changes location | — | `{from_location}`, `{to_location}`, `{universe}` |
-| `on_trait_change` | A trait changes | — | `{trait}`, `{traitset}` |
+| `on_trait_change` | A trait changes | — | `{trait}`, `{traitset}`, `{trait_setting}` |
 | `on_trait_learn` / `on_trait_offered` | A trait is learned / offered | — | `{trait}`, `{trait_setting}`, `{owner}`, `{learner}` / `{opponent}` |
 | `on_relationship_create` | A relationship is created | — | `{target_entity}`, `{relationship_type}` |
 | `on_character_create` / `on_projection_create` | A character / projection is created | — | `{entity_created}` / `{projection_created}`, `{universe}` |

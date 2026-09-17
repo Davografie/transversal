@@ -14,8 +14,20 @@ aliases:
   - Trigger Variables
   - Effect Primitives
   - Typed Variables
-status: planned
+status: implemented
 ---
+
+> [!note] Delivered — the plan below is history, not a to-do
+> Every deliverable in this note has landed: each trigger's variables are declared
+> beside the trigger (`menu_contexts.TRIGGERS`), a guard test asserts the fire sites
+> populate what they declare (`test_state_fire_sites_populate_declared_variables`),
+> and `menu_context` was folded into `trigger` — the two activation axes are one.
+> **The vocabulary as shipped is canonical in [[SFX Authoring]] and [[Targeting
+> Model]]**; where this note proposes a name it did not use, the shipped name wins
+> (it proposes `{trait_id}`/`{traitset_id}`; the real tokens are `{trait}`,
+> `{traitset}` and — added 2026-09-16 — `{trait_setting}`, the *instance* that
+> changed). Trigger and menu-context counts below are from 2026-08-24; there are 29
+> triggers today.
 
 # Effect Variables and Primitives
 
@@ -138,7 +150,7 @@ Where conditions are evaluated:
    - `on_character_create` → `{entity_created}` (entity). **First.**
    - `on_location_change` → `{from_location}`, `{to_location}`, `{universe}`.
    - `on_relationship_create` → `{target_entity}`, `{relationship_type}`.
-   - `on_trait_change` → `{trait_id}`, `{traitset_id}`.
+   - `on_trait_change` → `{trait}`, `{traitset}`, `{trait_setting}`.
    - Contest triggers → add the missing declared aliases (`opponent_id`, `high_stakes`, `taken_out`).
 5. **Fold `menu_context` into `trigger`** — merge the two variable vocabularies, migrate `menu_context` → `trigger`, and collapse the editor's two activation selects into one (see [[#Trigger vs. menu context]]).
 
