@@ -432,15 +432,17 @@ export function useCanvas() {
       const fromLoc = occLoc.get(rel.from)
       const toLoc = occLoc.get(rel.to)
       if (!fromLoc || !toLoc) continue
+      const traitRows = relationTraitRows(rel)
+      const label = relationEdgeLabel(rel)
       newEdges.push({
-        id: `relation:${rel.from}:${rel.to}:${rel.description}`,
+        id: `relation:${rel.from}:${rel.to}:${label}`,
         source: nodeId('loc', fromLoc),
         target: nodeId('loc', toLoc),
         sourceHandle: `occ-${rel.from}-source`,
         targetHandle: `occ-${rel.to}-target`,
         type: 'gradient',
-        label: rel.description || '',
-        data: { kind: 'relation', from: rel.from, to: rel.to, description: rel.description },
+        label,
+        data: { kind: 'relation', from: rel.from, to: rel.to, description: rel.description, traitRows },
       })
     }
 
@@ -503,9 +505,13 @@ export function useCanvas() {
     for (const [locId, occs] of Object.entries(data.occupants || {})) {
       if (!g.occupants.has(locId)) g.occupants.set(locId, occs)
     }
-    const relSet = new Set(g.occupantRelations.map((r) => `${r.from}|${r.to}|${r.type}|${r.description}`))
+    // Traits are part of the identity: descriptions are usually empty, so a
+    // description-only key would collapse two distinct relations between the
+    // same pair and silently drop the second one's traits.
+    const relKey = (r) => `${r.from}|${r.to}|${r.type}|${r.description}|${relationTraitRows(r).join('~')}`
+    const relSet = new Set(g.occupantRelations.map(relKey))
     for (const rel of data.occupant_relations || []) {
-      const key = `${rel.from}|${rel.to}|${rel.type}|${rel.description}`
+      const key = relKey(rel)
       if (!relSet.has(key)) { relSet.add(key); g.occupantRelations.push(rel) }
     }
   }
@@ -644,7 +650,7 @@ export function useCanvas() {
 
     // Relations between members (labeled command edges).
     for (const rel of data.relations || []) {
-      newEdges.push(makeRelationEdge(nodeId('occ', rel.from), nodeId('occ', rel.to), rel.description))
+      newEdges.push(makeRelationEdge(nodeId('occ', rel.from), nodeId('occ', rel.to), rel))
     }
 
     nodes.value = newNodes
@@ -674,7 +680,7 @@ export function useCanvas() {
       newEdges.push(makeRelationEdge(
         nodeId('occ', rel.from),
         nodeId('occ', rel.to),
-        rel.description,
+        rel,
       ))
       if (rel.other_location_id) {
         const otherLocId = nodeId('loc', rel.other_location_id)
@@ -702,8 +708,33 @@ export function useCanvas() {
   function makeLocatedEdge(source, target) {
     return { id: `located:${source}:${target}`, source, target, type: 'default', data: { kind: 'located' }, sourceHandle: 'bottom-source', targetHandle: 'target-top' }
   }
-  function makeRelationEdge(source, target, label) {
-    return { id: `relation:${source}:${target}:${label}`, source, target, type: 'gradient', label: label || '', data: { kind: 'relation' } }
+  // Relationship traits annotate a relation edge: ``statement`` is the authored
+  // distinction, and the registry ``name`` ("allegiance", "grudge") is the
+  // fallback when the statement is blank. Each renders as its own row.
+  function relationTraitRows(rel) {
+    return (rel?.traits || [])
+      .map((t) => (t.statement || '').trim() || t.name || '')
+      .filter(Boolean)
+  }
+
+  // Flat string form, kept for the edge id and as the single-line fallback when
+  // a relation carries no traits but does have a description.
+  function relationEdgeLabel(rel) {
+    const rows = relationTraitRows(rel)
+    return rows.length ? rows.join(' · ') : (rel?.description || '')
+  }
+
+  function makeRelationEdge(source, target, rel) {
+    const traitRows = relationTraitRows(rel)
+    const label = relationEdgeLabel(rel)
+    return {
+      id: `relation:${source}:${target}:${label}`,
+      source,
+      target,
+      type: 'gradient',
+      label,
+      data: { kind: 'relation', from: rel?.from, to: rel?.to, description: rel?.description, traitRows },
+    }
   }
 
   // ── Layouts ─────────────────────────────────────────
@@ -1168,7 +1199,7 @@ export function useCanvas() {
           newNodes.push(makeOccupantNode({ id: rel.other_id, name: rel.other_name, type: 'gmc', location_id: rel.other_location_id }, {}))
           existingIds.add(otherId)
         }
-        newEdges.push(makeRelationEdge(nodeId('occ', rel.from), nodeId('occ', rel.to), rel.description))
+        newEdges.push(makeRelationEdge(nodeId('occ', rel.from), nodeId('occ', rel.to), rel))
         if (rel.other_location_id) {
           const locId = nodeId('loc', rel.other_location_id)
           if (!existingIds.has(locId) && !newNodes.find((n) => n.id === locId)) {
@@ -1236,7 +1267,7 @@ export function useCanvas() {
         }
         renderLocationGraph()
       } else {
-        edges.value = [...edges.value, makeRelationEdge(nodeId('occ', fromId), nodeId('occ', toId), '')]
+        edges.value = [...edges.value, makeRelationEdge(nodeId('occ', fromId), nodeId('occ', toId), null)]
         routeEdges()
       }
       return true

@@ -42,10 +42,12 @@
     />
     <EdgeLabelRenderer>
       <div
-        v-if="label"
+        v-if="rows.length"
         class="gradient-edge-label"
         :style="{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }"
-      >{{ label }}</div>
+      >
+        <span v-for="(row, i) in rows" :key="i" class="gradient-edge-label-row">{{ row }}</span>
+      </div>
     </EdgeLabelRenderer>
   </g>
 </template>
@@ -86,17 +88,31 @@ const pathData = computed(() =>
 const path = computed(() => pathData.value[0])
 const labelX = computed(() => pathData.value[1])
 const labelY = computed(() => pathData.value[2])
+
+// One row per relationship trait. `label` is the single-line form, still used
+// when a relation has a description but carries no traits.
+const rows = computed(() => {
+  const traitRows = props.data?.traitRows
+  if (traitRows?.length) return traitRows
+  return props.label ? [props.label] : []
+})
 </script>
 
 <style scoped>
 .gradient-edge-label {
   position: absolute;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
   font-size: 10px;
   color: var(--map-text);
   background: rgba(10, 10, 15, 0.85);
   padding: 1px 5px;
   border-radius: 3px;
+}
+.gradient-edge-label-row {
   white-space: nowrap;
 }
 </style>

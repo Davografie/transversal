@@ -5,6 +5,8 @@ from __future__ import annotations
 from transversal.db.arango import ENTITIES
 from transversal.db.arango import PROJECTIONS
 from transversal.db.arango import RELATIONSHIPS
+from transversal.db.arango import TRAITS
+from transversal.db.arango import TRAITSETTINGS
 from transversal.domain import Entity
 from transversal.domain import dice_list_to_rating
 from transversal.db.repository_mixins.common import (
@@ -674,7 +676,14 @@ class RepositoryCanvas:
         return result
 
     def _relations_between(self, entity_ids: list[str]) -> list[dict]:
-        """Return non-structural relationships whose endpoints are all in ``entity_ids``."""
+        """Return non-structural relationships whose endpoints are all in ``entity_ids``.
+
+        Each relation carries its relationship-anchored traits so the canvas can
+        annotate the edge. ``statement`` is the authored distinction; ``name`` is
+        the trait registry's generic name, which the canvas falls back to when the
+        statement is blank. Both are resolved inline so the whole payload still
+        costs one query rather than one per relation.
+        """
         if len(entity_ids) < 2:
             return []
         query = f"""
@@ -683,7 +692,15 @@ class RepositoryCanvas:
             LET to_key = PARSE_IDENTIFIER(r._to).key
             FILTER from_key IN @ids AND to_key IN @ids
               AND r.type NOT IN {_STRUCTURAL_TYPES_AQL}
-            RETURN {{ from: from_key, to: to_key, type: r.type, description: NOT_NULL(r.description, '') }}
+            LET traits = (
+                FOR ts IN {TRAITSETTINGS}
+                FILTER ts.entity_id == r._key AND ts.from_type == 'relationship'
+                LET t = DOCUMENT({TRAITS}, ts.trait_id)
+                RETURN {{ name: t.name, statement: NOT_NULL(ts.statement, '') }}
+            )
+            RETURN {{ from: from_key, to: to_key, type: r.type,
+                      description: NOT_NULL(r.description, ''),
+                      traits: traits }}
         """
         return list(self.db.aql.execute(query, bind_vars={"ids": entity_ids}))
 
