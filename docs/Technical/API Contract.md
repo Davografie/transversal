@@ -265,7 +265,7 @@ type Query {
 > `Entity.coMembers` is the "who else is in my sect?" view: the other members across every faction this entity is on the roster of, deduped, self excluded.
 
 > [!note] `factionDistances(locationId)` — ranking factions by distance to their ground
-> Returns **every** faction as `FactionDistance { factionId name distance nearestLocationId }`, sorted **nearest first**: a faction controlling this very location is `0`, a faction with no reachable ground is `null` and sorts last. This is the read behind a distance-sorted faction list ([[Tickets#B134]]).
+> Returns **every** faction as `FactionDistance { factionId name distance nearestLocationId }`, sorted **nearest first**: a faction controlling this very location is `0`, a faction with no reachable ground is `null` and sorts last. This is the read behind a distance-sorted faction list ([[B134]]).
 >
 > Distance is a **weighted step count along the location graph** — `super` **and** `transversal` edges, walked **undirected**. Each step costs 1, except a `transversal` that **crosses a universe boundary**, which costs `CROSS_UNIVERSE_WEIGHT` (10, a named constant in `db/repository_mixins/canvas.py` — a dial, not a finding). A `super` edge always costs 1: measured live, **0** of them cross a universe boundary, while **14** portals do.
 >

@@ -87,7 +87,7 @@ for the location-inspect path; it becomes the *only* sheet-peek mechanism.)
 - **Free-roam presence:** with `entityId = null` the GM still *exists* on the map — a
   **draggable** mapdot using the **architect icon** (the same role icon used in the player
   settings overlay), **visible to the GM only — invisible to players** (settled Q3). New
-  requirement; also feeds [[Tickets#B34]] (role icon instead of "Y").
+  requirement; also feeds [[B34]] (role icon instead of "Y").
 
 ### Deleted plumbing
 
@@ -122,7 +122,7 @@ presence services) is a **future** upgrade if multi-device consistency ever matt
 - [[Effects]] / troupe — support availability, derived from `entityId`.
 
 **Steward: [[ui-ux]]** (cross-cutting interaction conventions) owns this doc; the
-implementing roles take their consumer slices. [[Tickets#B68]] (GM assume & roaming
+implementing roles take their consumer slices. [[B68]] (GM assume & roaming
 semantics) absorbs the GM behavior.
 
 ## Resolved (2026-09-10)
@@ -133,24 +133,24 @@ semantics) absorbs the GM behavior.
 
 ## Decomposition
 
-- **[[Tickets#B95]]** — perspective collapse + persistence fix (remove the GM guard, delete
+- **[[B95]]** — perspective collapse + persistence fix (remove the GM guard, delete
   `actingEntityId`/`selfEntityId` plumbing, persist `entityId` in all modes). ui-ux primary
   + gm-panels, applied-mechanics, character-sheet as consumers.
-- **[[Tickets#B96]]** — free-roam architect mapdot (draggable, GM-only). navigation.
-- **[[Tickets#B68]]** — GM assume/roam behavior, defined against this model.
+- **[[B96]]** — free-roam architect mapdot (draggable, GM-only). navigation.
+- **[[B68]]** — GM assume/roam behavior, defined against this model.
 
 ## Related
 
 - [[SFX Activation Model Plan]] — the same convergence treatment for a tangled area.
 - [[UI-UX Design]], [[Location Viewer]], [[GM Panel Development]], [[System Architecture]].
-- [[Tickets#B68]], [[Tickets#B34]], [[Division of Labor]].
+- [[B68]], [[B34]], [[Division of Labor]].
 
 ## Implementation status
 
-- **[[Tickets#B95]] done (2026-09-10, ui-ux).** `entityId` persists in all modes;
+- **[[B95]] done (2026-09-10, ui-ux).** `entityId` persists in all modes;
   `actingEntityId`/`fallbackEntityId`/`selfEntityId` removed; `ownMainId` derived
   from `activeMains`; SSE free-roam falls back to `playerId`. The switch-undo
   bookmark was kept (transient cancel-revert UX, not a perspective variable).
   GmPanel's `currentEntityId` prop remains but is fed by `entityId` — a rename
   is open to gm-panels.
-- **[[Tickets#B96]]** (navigation) and **[[Tickets#B68]]** pending.
+- **[[B96]]** (navigation) and **[[B68]]** pending.

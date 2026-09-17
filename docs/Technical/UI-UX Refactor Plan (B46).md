@@ -13,7 +13,7 @@ aliases:
 
 # UI-UX Refactor Plan (B46)
 
-Working plan for [[Tickets#B46 — Split large Vue files]] (owner: [[ui-ux]]).
+Working plan for [[B46]] (owner: [[ui-ux]]).
 Line numbers are from the census below; **re-verify them before slicing** — the
 files move.
 

@@ -116,7 +116,7 @@ Page numbers are `pdftotext` indices; the first entry is often the table of cont
 | Recovery | 25–27 | — | — | — | — |
 
 > [!tip] For Transversal specifically
-> The two most load-bearing models are **Cortex Prime's trait sets + SFX** and **Smallville's Pathways** — Pathways is the direct ancestor of Transversal's life-path character creation ([[Tickets#B126]]). Marvel Heroic is the source of the **doom pool** idea behind [[Challenge Rating Type]].
+> The two most load-bearing models are **Cortex Prime's trait sets + SFX** and **Smallville's Pathways** — Pathways is the direct ancestor of Transversal's life-path character creation ([[B126]]). Marvel Heroic is the source of the **doom pool** idea behind [[Challenge Rating Type]].
 >
 > The project's own rules docs are the interpretation of record: [[Core Mechanics]], [[Dice Mechanics]], [[SFX and Effects]], [[Character Growth]].
 
