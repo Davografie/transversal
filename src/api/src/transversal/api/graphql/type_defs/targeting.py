@@ -12,6 +12,7 @@ class TargetCandidate:
     name: str
     universe: str = ""
     subtitle: str = ""
+    rating: str = ""  # die size ("d6") for a trait instance or die candidate
 
 @strawberry.type
 class FilterFieldOption:
@@ -182,4 +183,36 @@ class TargetTraceResult:
     """The type trace of a spec: the type after each step plus errors."""
     types: list[TargetTraceType]
     errors: list[TargetTraceError]
+    valid: bool = False
+
+@strawberry.type
+class TargetResolutionStep:
+    """What one step of a path resolved to, against live data."""
+    index: int
+    step_kind: str = ""
+    element: str = ""
+    cardinality: str = ""
+    #: Exact number of values the step produced, even when ``values`` is capped.
+    count: int = 0
+    #: True when this ``choose`` step stopped the walk (``values`` empty by
+    #: definition — the pool is in ``pendingChoices``).
+    pending: bool = False
+    error: str = ""
+    values: list[TargetCandidate] = strawberry.field(default_factory=list)
+
+@strawberry.type
+class TargetResolutionChoice:
+    """A ``choose`` step's candidate pool, awaiting a selection."""
+    step_index: int
+    element: str = ""
+    count: int = 1  # how many the user should select
+    candidates: list[TargetCandidate] = strawberry.field(default_factory=list)
+
+@strawberry.type
+class TargetResolutionResult:
+    """A spec executed against live data, step by step (read-only)."""
+    steps: list[TargetResolutionStep] = strawberry.field(default_factory=list)
+    values: list[TargetCandidate] = strawberry.field(default_factory=list)
+    pending_choices: list[TargetResolutionChoice] = strawberry.field(default_factory=list)
+    errors: list[TargetTraceError] = strawberry.field(default_factory=list)
     valid: bool = False

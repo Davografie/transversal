@@ -446,6 +446,47 @@ def _target_spec_input_to_domain(inp: TargetSpecInput):
             steps.append(ts.SelectStep(collection=""))
     return ts.TargetSpec(steps=steps)
 
+def _bindings_from_json(value) -> dict:
+    """Turn a JSON activation scope into ``name → Binding`` for the resolver.
+
+    Two shapes are accepted per name, because a caller inspecting a path may know
+    only the variable's *type* (an element name) or may have a concrete value to
+    seed it with:
+
+    * ``"traitsetting"`` — the element type, no value;
+    * ``{"element": "traitsetting", "cardinality": "many",
+       "value": "id", "values": ["id", …]}``
+
+    A name whose element cannot be determined is dropped: the resolver's
+    ``select variable`` step reports it as unbound, which is the honest answer.
+    """
+    from transversal.services.target_resolver import Binding
+
+    out: dict = {}
+    if not isinstance(value, dict):
+        return out
+    for name, spec in value.items():
+        if isinstance(spec, str):
+            if spec:
+                out[str(name)] = Binding(element=spec)
+            continue
+        if not isinstance(spec, dict):
+            continue
+        element = str(spec.get("element") or "")
+        if not element:
+            continue
+        values = [str(v) for v in (spec.get("values") or [])]
+        single = str(spec.get("value") or "")
+        cardinality = str(spec.get("cardinality") or ("many" if values else "one"))
+        if values and not single:
+            single = values[0]
+        if single and not values:
+            values = [single]
+        out[str(name)] = Binding(
+            value=single, values=values, element=element, cardinality=cardinality,
+        )
+    return out
+
 def _check_input_to_domain(c: RollTableCheckInput) -> DomainRollTableCheck:
     return DomainRollTableCheck(trait_ids=c.trait_ids, difficulty=c.difficulty, free_choice=c.free_choice)
 

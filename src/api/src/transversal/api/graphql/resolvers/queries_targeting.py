@@ -21,6 +21,9 @@ from transversal.api.graphql.types import TargetCatalogElement
 from transversal.api.graphql.types import TargetCatalogField
 from transversal.api.graphql.types import TargetLabel
 from transversal.api.graphql.types import TargetSpecInput
+from transversal.api.graphql.types import TargetResolutionChoice
+from transversal.api.graphql.types import TargetResolutionResult
+from transversal.api.graphql.types import TargetResolutionStep
 from transversal.api.graphql.types import TargetTraceError
 from transversal.api.graphql.types import TargetTraceResult
 from transversal.api.graphql.types import TargetTraceType
@@ -30,6 +33,7 @@ from transversal.domain import EntityType as DomainEntityType
 from typing import Optional
 from transversal.api.graphql.resolvers.converters import (
     _action_meta_for,
+    _bindings_from_json,
     _condition_input_to_domain,
     _consequence_option_to_gql,
     _effect_input_to_domain,
@@ -37,6 +41,24 @@ from transversal.api.graphql.resolvers.converters import (
     _gql_field_def,
     _target_spec_input_to_domain,
 )
+
+
+def _spec_values(element: str, values: list, repo) -> list[TargetCandidate]:
+    """Serialize resolved spec values for the read-only resolution surface.
+
+    Reuses the resolver's own candidate serializer, so what an inspection reports
+    and what a picker offers cannot drift. A scalar step (a ``count``, an
+    ``evaluate`` boolean) carries no display field, so its value is its own label.
+    """
+    if not element:
+        return []
+    from transversal.services.target_resolver import serialize_candidates
+
+    return [
+        TargetCandidate(id=c.id, name=(c.name or str(c.id)), subtitle=c.subtitle,
+                        rating=c.rating)
+        for c in serialize_candidates(element, values, repo)
+    ]
 
 
 @strawberry.type
@@ -277,6 +299,78 @@ class QueriesTargeting:
             ],
             errors=[TargetTraceError(step_index=e.step_index, message=e.message) for e in errors],
             valid=valid,
+        )
+
+    @strawberry.field
+    def resolve_target_spec(
+        self, info: strawberry.Info,
+        input: TargetSpecInput,
+        entity_id: Optional[strawberry.ID] = None,
+        source_kind: Optional[str] = None,
+        source_id: Optional[strawberry.ID] = None,
+        bindings: Optional[strawberry.scalars.JSON] = None,
+        values_limit: int = 50,
+    ) -> TargetResolutionResult:
+        """Execute a targeting spec against live data — read-only.
+
+        The counterpart of ``traceTargetSpec``: that one says what a draft *would*
+        be, this one says what it *does* against the live repository — every
+        step's values, the exact count each produced (even when the returned
+        ``values`` are capped at ``values_limit``), and the candidate *pool* at a
+        ``choose``/``random`` step. Nothing is applied or committed, so a path can
+        be inspected instead of guessed at; a single final list would hide a step
+        that means something other than what was assumed.
+
+        ``bindings`` seeds the activation scope (``select variable``), in either
+        shape :func:`_bindings_from_json` accepts. ``source_kind``/``source_id``
+        resolve ``select source``.
+        """
+        from transversal.services.target_resolver import (
+            TargetContext,
+            resolve,
+            resolve_source,
+        )
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id)) if entity_id else None
+        # ``resolve_source`` answers None when there is no source to resolve (no
+        # kind, or no id yet), which is a normal authoring state — not an error.
+        source, source_element = None, None
+        if source_kind:
+            resolved = resolve_source(
+                source_kind, str(source_id) if source_id else None, repo)
+            if resolved is not None:
+                source, source_element = resolved
+        spec = _target_spec_input_to_domain(input)
+        resolution = resolve(spec, TargetContext(
+            subject=entity, repo=repo, source=source, source_element=source_element,
+            bindings=_bindings_from_json(bindings),
+        ))
+
+        limit = max(0, values_limit)
+        return TargetResolutionResult(
+            steps=[
+                TargetResolutionStep(
+                    index=step.index, step_kind=step.step_kind, element=step.element,
+                    cardinality=step.cardinality, count=len(step.values),
+                    pending=step.pending, error=step.error,
+                    values=_spec_values(step.element, step.values[:limit], repo),
+                )
+                for step in resolution.trace
+            ],
+            values=_spec_values(
+                resolution.trace[-1].element if resolution.trace else "",
+                resolution.values[:limit], repo),
+            pending_choices=[
+                TargetResolutionChoice(
+                    step_index=pc.step_index, element=pc.element, count=pc.count,
+                    candidates=_spec_values(pc.element, pc.candidates[:limit], repo),
+                )
+                for pc in resolution.pending_choices
+            ],
+            errors=[TargetTraceError(step_index=e.step_index, message=e.message)
+                    for e in resolution.errors],
+            valid=not resolution.errors,
         )
 
     @strawberry.field

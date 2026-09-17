@@ -66,6 +66,30 @@ class Resolution:
     values: list[Any] = field(default_factory=list)   # resolved elements (or a scalar)
     errors: list[TraceError] = field(default_factory=list)
     pending_choices: list["PendingTargetChoice"] = field(default_factory=list)
+    #: Per-step outcome of the walk, in path order. Carried for *inspection*
+    #: (``resolveTargetSpec``): a step that means something other than what the
+    #: author assumed has to be visible as a count that collapses, which a single
+    #: final list hides. Firing paths ignore it.
+    trace: list["StepResolution"] = field(default_factory=list)
+
+
+@dataclass
+class StepResolution:
+    """What one step of a path did — its values, type, and any error.
+
+    ``values`` holds everything the step produced, uncapped; callers that
+    serialize cap their own output and read ``len(values)`` for the exact count.
+    ``pending`` marks a ``choose`` step that stopped the walk: its ``values`` are
+    empty by definition (nothing is chosen yet) and the candidate pool lives in
+    :class:`PendingTargetChoice`.
+    """
+    index: int
+    step_kind: str = ""
+    element: str = ""
+    cardinality: str = ""
+    values: list[Any] = field(default_factory=list)
+    pending: bool = False
+    error: str = ""
 
 
 @dataclass
@@ -622,6 +646,8 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
     errors: list[TraceError] = []
     values: list[Any] = []
     pending_choices: list[PendingTargetChoice] = []
+    trace: list[StepResolution] = []
+    stopped = False
     current_type: ValueType | None = None
 
     for i, step in enumerate(spec.steps):
@@ -630,6 +656,12 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 binding = context.bindings.get(step.variable) if context.bindings else None
                 if binding is None or not binding.element:
                     errors.append(TraceError(i, f"variable {step.variable!r} not bound or untyped"))
+                    values, current_type = [], None
+                elif not binding.value and not binding.values:
+                    # A declared type with nothing bound under it would resolve to
+                    # an empty path, which reads exactly like "nothing matched" —
+                    # the ambiguity this trace exists to remove. Say it instead.
+                    errors.append(TraceError(i, f"variable {step.variable!r} has no value bound"))
                     values, current_type = [], None
                 elif binding.cardinality == "many":
                     many_values: list[Any] = []
@@ -800,15 +832,34 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 ))
                 # The user's selection supplies the value; nothing resolved yet.
                 values, current_type = [], None
-                break
+                stopped = True
 
         elif isinstance(step, EvaluateStep):
             values = [_evaluate_step(values, current_type, step, context)]
             current_type = ValueType("boolean", "one")
 
         _bind_step_outputs(step, values, current_type, context)
+        element = current_type.element if current_type is not None else ""
+        cardinality = current_type.cardinality if current_type is not None else ""
+        if stopped and pending_choices:
+            # A pending ``choose`` resolved nothing yet, but what it is *about* is
+            # known — reporting "" here would read as a broken path rather than an
+            # unanswered one.
+            element = pending_choices[-1].element
+            cardinality = "one" if pending_choices[-1].count == 1 else "many"
+        trace.append(StepResolution(
+            index=i,
+            step_kind=getattr(step, "kind", ""),
+            element=element,
+            cardinality=cardinality,
+            values=list(values),
+            pending=stopped,
+            error="; ".join(e.message for e in errors if e.step_index == i),
+        ))
+        if stopped:
+            break
 
-    return Resolution(values, errors, pending_choices)
+    return Resolution(values, errors, pending_choices, trace)
 
 
 def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:
