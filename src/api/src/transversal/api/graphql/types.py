@@ -101,6 +101,7 @@ from transversal.api.graphql.type_defs.targeting import (  # noqa: F401
     TargetResolutionStep,
     TargetResolutionChoice,
     TargetResolutionResult,
+    TargetScopeOption,
 )
 from transversal.api.graphql.type_defs.rolltables import (  # noqa: F401
     RollTableCheck,

@@ -533,6 +533,12 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
         return list(getter()) if callable(getter) else []
     if name == "roll_tables":
         return list(ctx.repo.list_roll_tables())
+    if name == "die_types":
+        # A static vocabulary, not a repo read: the sizes a die can be. Each value
+        # carries its size as both id and rating so a candidate has a stable id
+        # ("d8") and a label that renders it.
+        from transversal.domain import DieType
+        return [{"id": d.value, "rating": d.value} for d in DieType]
     return None
 
 
@@ -1103,6 +1109,21 @@ def _location_subtree(l: Any, ctx: TargetContext) -> list[Any]:
         [lid] + list(ctx.repo.list_location_descendants(lid))))
 
 
+def _location_projections(l: Any, ctx: TargetContext) -> list[Any]:
+    """Every projection whose body is at this place (the place itself, not its zones).
+
+    A subtree reach is written as `navigate subtree → navigate projections`, which
+    keeps this hop honest: "here" means here.
+    """
+    if ctx.repo is None:
+        return []
+    lid = getattr(l, "id", None) or (l.get("id") if isinstance(l, dict) else None)
+    if not lid:
+        return []
+    return [p for p in ctx.repo.list_all_projections()
+            if getattr(p, "current_location", None) == lid]
+
+
 def _entity_factions(e: Any, ctx: TargetContext) -> list[Any]:
     """The orgs this entity is on the roster of (the inverse of ``members``)."""
     if ctx.repo is None:
@@ -1167,10 +1188,37 @@ def _scheduled_event_subtitle(e: Any, repo) -> str:
     return " · ".join(parts)
 
 
+def _trait_traitset_name(t: Any, repo) -> str:
+    """The name of the trait set a registry trait belongs to (its picker subtitle)."""
+    traitset_id = getattr(t, "traitset_id", "") or (t.get("traitset_id") if isinstance(t, dict) else "")
+    if repo is None or not traitset_id:
+        return traitset_id
+    getter = getattr(repo, "get_traitset_by_id", None)
+    traitset = getter(traitset_id) if callable(getter) else None
+    name = getattr(traitset, "name", "") if traitset is not None else ""
+    return name or traitset_id
+
+
+def _projection_name(p: Any, repo) -> str:
+    """A projection's own name, falling back to the entity whose body it is."""
+    name = getattr(p, "name", "") or (p.get("name") if isinstance(p, dict) else "")
+    if name or repo is None:
+        return name or ""
+    entity_id = getattr(p, "entity_id", None) or (p.get("entity_id") if isinstance(p, dict) else None)
+    entity = repo.get_entity(entity_id) if entity_id else None
+    return getattr(entity, "name", "") if entity is not None else ""
+
+
 def register_default_fields() -> None:
     register_derived_field("traitsetting", "tags", _traitsetting_tags)
     register_derived_field("die", "rating", _die_rating)
     register_derived_field("location", "universe", _location_universe)
+    # A registry trait's picker subtitle is its trait set's *name* — the raw
+    # `traitset_id` is a second id where a word belongs.
+    register_derived_field("trait", "traitset_name", _trait_traitset_name)
+    # Most projections have no name of their own, so the label falls back to the
+    # entity they are a body of.
+    register_derived_field("projection", "name", _projection_name)
     # A pending timer's label and countdown are assembled from the effect it
     # carries (action + target, and its remaining timers), not stored on it.
     register_derived_field("scheduled_event", "label", _scheduled_event_label)
@@ -1241,6 +1289,7 @@ def register_default_edges() -> None:
     # members and the inverse, and the registry things a faction owns — the reach
     # that lets a flat "which targets" scope be written as a path.
     register_edge("location", "subtree", _location_subtree)
+    register_edge("location", "projections", _location_projections)
     register_edge("entity", "members",
                   lambda e, ctx: list(ctx.repo.list_faction_members(e.id)))
     register_edge("entity", "factions", _entity_factions)

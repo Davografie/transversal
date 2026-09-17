@@ -7,7 +7,7 @@ import random
 from dataclasses import field
 from transversal.domain import Effect
 from transversal.domain import Entity
-from transversal.services.effect_targets import resolve_candidates
+from transversal.services.target_scopes import resolve_candidates
 from typing import Optional
 from transversal.services.effects_applier.datatypes import (
     AppliedEffect,
@@ -72,7 +72,7 @@ def find_choose_placeholder(effect: Effect) -> Optional[tuple[str, str, Optional
     (``"target"``, ``"entity"``, ``"target_scope"``, ``"entity_scope"``, or
     ``"context.<key>"``).
     """
-    from transversal.services.effect_targets import parse_scope
+    from transversal.services.target_scopes import parse_scope
     for field_name in ("target_scope", "entity_scope"):
         scope = getattr(effect, field_name, None) or ""
         _, value = parse_scope(scope)
@@ -94,7 +94,7 @@ def find_choose_placeholder(effect: Effect) -> Optional[tuple[str, str, Optional
 
 def _scope_choice(effect: Effect) -> Optional[PendingChoice]:
     """Return a PendingChoice for a ``{choose:*}`` in the effect's scope value."""
-    from transversal.services.effect_targets import parse_scope
+    from transversal.services.target_scopes import parse_scope
     for field_name in ("target_scope", "entity_scope"):
         scope = getattr(effect, field_name, None) or ""
         _, value = parse_scope(scope)
@@ -107,7 +107,7 @@ def _resolve_scope_choose(scope: Optional[str], target: str) -> Optional[str]:
     """Substitute the ``{choose:*}`` placeholder in a scope value with ``target``."""
     if not scope:
         return target
-    from transversal.services.effect_targets import parse_scope
+    from transversal.services.target_scopes import parse_scope
     import re
     prefix, value = parse_scope(scope)
     new_value = re.sub(r"\{choose(?:_[a-z_]+|:[a-z_]+)?\}", target, value)
@@ -121,7 +121,7 @@ def _resolve_scope(scope: Optional[str], entity: Entity, repo) -> Optional[str]:
     """
     if not scope:
         return scope
-    from transversal.services.effect_targets import parse_scope
+    from transversal.services.target_scopes import parse_scope
     prefix, value = parse_scope(scope)
     parsed = _parse_placeholder(value or "")
     if parsed is not None and parsed[0] == "random":
@@ -135,7 +135,7 @@ def _resolve_scope(scope: Optional[str], entity: Entity, repo) -> Optional[str]:
 def _random_candidate(kind: str, scope: Optional[str], entity: Entity, repo, action: Optional[str] = None, filter: Optional[dict] = None) -> Optional[str]:
     """Return a random in-scope candidate id for the given target kind.
 
-    Delegates to the shared :mod:`effect_targets` resolver so the ``random``
+    Delegates to the shared :mod:`target_scopes` resolver so the ``random``
     target mode and the frontend choose-picker see the same candidates.
     """
     scope = _resolve_scope(scope, entity, repo)

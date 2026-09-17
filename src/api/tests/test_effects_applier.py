@@ -21,11 +21,13 @@ from transversal.services.effects_applier import apply_effects, resolve_choice
 
 
 class FakeTrait:
-    def __init__(self, trait_id, traitset_id, name=None):
+    def __init__(self, trait_id, traitset_id, name=None, universes=None):
         self.id = trait_id
         self.traitset_id = traitset_id
         self.name = name or trait_id
-        self.universes = []
+        # A trait definition always belongs to at least one universe, and a path
+        # that ranges over the registry narrows by exactly that.
+        self.universes = list(universes) if universes is not None else ["earth"]
 
 
 class FakeTraitSet:
@@ -114,11 +116,13 @@ class FakeRepo:
 class RandomRepo:
     """Minimal repo for ``random`` target resolution — listing methods only."""
 
-    def __init__(self, locations=None, occupants=None, traits=None, entities=None):
+    def __init__(self, locations=None, occupants=None, traits=None, entities=None,
+                 universes=None):
         self._locations = locations or []
         self._occupants = occupants or []
         self._traits = traits or []
         self._entities = entities or []
+        self._universes = universes or []
 
     def _entity(self, id, entity_type):
         return Entity(id=id, type=entity_type, name=id, current_universe="earth")
@@ -126,7 +130,20 @@ class RandomRepo:
     def list_entities_by_type(self, entity_type, universe=None):
         if entity_type == EntityType.LOCATION:
             return [self._entity(l, EntityType.LOCATION) for l in self._locations]
+        if entity_type == EntityType.UNIVERSE:
+            return [self._entity(u, EntityType.UNIVERSE) for u in self._universes]
         return []
+
+    def get_entity(self, entity_id):
+        for kind, ids in ((EntityType.LOCATION, self._locations),
+                          (EntityType.GMC, [*self._entities, *self._occupants]),
+                          (EntityType.UNIVERSE, self._universes)):
+            if entity_id in ids:
+                return self._entity(entity_id, kind)
+        return None
+
+    def get_all_traits(self):
+        return list(self._traits)
 
     def list_entities_by_location(self, location_id):
         return [self._entity(o, EntityType.GMC) for o in self._occupants]
@@ -1371,7 +1388,7 @@ def test_random_location_no_candidates_noops():
 
 
 def test_random_occupant_resolves_in_scope():
-    repo = RandomRepo(occupants=["dmitry"])
+    repo = RandomRepo(locations=["railyard"], occupants=["dmitry"])
     entity = _entity(current_location="railyard")
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
@@ -1424,11 +1441,10 @@ def test_random_location_scoped_by_random_universe():
                     Entity(id="three_realms", type=EntityType.UNIVERSE, name="Three Realms", current_universe="three_realms"),
                 ]
             if entity_type == EntityType.LOCATION:
-                locs = {
-                    "earth": [Entity(id="l-earth", type=EntityType.LOCATION, name="Earth Loc", current_universe="earth")],
-                    "three_realms": [Entity(id="l-realm", type=EntityType.LOCATION, name="Realm Loc", current_universe="three_realms")],
-                }
-                return locs.get(universe, [])
+                return [
+                    Entity(id="l-earth", type=EntityType.LOCATION, name="Earth Loc", current_universe="earth"),
+                    Entity(id="l-realm", type=EntityType.LOCATION, name="Realm Loc", current_universe="three_realms"),
+                ]
             return []
 
     entity = _entity()
@@ -1814,6 +1830,9 @@ class TravelRepo:
 
     def list_faction_members(self, f):
         return []
+
+    def list_all_projections(self):
+        return list(self.projections.values())
 
 
 def _proj(id, entity_id, universe, origin_universe=None, location=None, transversal_type=None):

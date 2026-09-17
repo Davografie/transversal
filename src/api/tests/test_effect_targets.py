@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from transversal.domain import (
     DieType,
     Effect,
@@ -12,10 +14,10 @@ from transversal.domain import (
     TimerCombine,
     TraitSetting,
 )
-from transversal.services.effect_targets import (
-    TargetCandidate,
+from transversal.services.target_scopes import (
+    UnknownScope,
+    UnsupportedScopeKind,
     parse_scope,
-    register_scope,
     resolve_candidates,
 )
 
@@ -58,6 +60,9 @@ class TargetRepo:
         self.faction_members = {}     # faction_id -> [_e]
         self.scheduled_events = []    # [ScheduledEvent]
         self.traitsettings_by_id = {} # ts_id -> TraitSetting
+        self.traitsettings_by_entity = {}  # entity_id -> [TraitSetting]
+        self.traitsets = []               # TraitSet-ish objects
+        self.entity_factions = {}         # entity_id -> [faction ids]
 
     # ── repo surface ─────────────────────────────────
     def list_entities_by_type(self, entity_type, universe=None):
@@ -88,6 +93,17 @@ class TargetRepo:
     def get_traits_by_traitset(self, traitset_id):
         return self.traits_traitset.get(traitset_id, [])
 
+    def get_trait(self, trait_id):
+        for traits in self.traits_traitset.values():
+            for t in traits:
+                if t.id == trait_id:
+                    return t
+        for traits in self.traits_universe.values():
+            for t in traits:
+                if t.id == trait_id:
+                    return t
+        return None
+
     def get_all_traits(self):
         out = []
         for traits in self.traits_universe.values():
@@ -96,6 +112,42 @@ class TargetRepo:
 
     def get_traitsettings_by_traitset(self, entity_id, traitset_id):
         return getattr(self, "trait_settings_by_traitset", {}).get((entity_id, traitset_id), [])
+
+    def get_traitsettings_for_entity(self, entity_id):
+        return list(getattr(self, "traitsettings_by_entity", {}).get(entity_id, []))
+
+    def get_traitset_by_id(self, traitset_id):
+        for ts in self.traitsets:
+            if ts.id == traitset_id:
+                return ts
+        if traitset_id in self.traits_traitset:
+            return SimpleNamespace(id=traitset_id, name=traitset_id, universes=[])
+        return None
+
+    def get_all_traitsets(self):
+        return list(self.traitsets)
+
+    def list_all_lifepaths(self):
+        out = []
+        for paths in self.lifepaths.values():
+            out.extend(paths)
+        return out
+
+    def get_lifepath(self, lifepath_id):
+        for path in self.list_all_lifepaths():
+            if path.id == lifepath_id:
+                return path
+        known = {"lp-1", "lp-2"}
+        return SimpleNamespace(id=lifepath_id, name=lifepath_id, universe="") if lifepath_id in known else None
+
+    def get_roll_table(self, table_id):
+        return next((t for t in self.roll_tables if t.id == table_id), None)
+
+    def get_entity_factions(self, entity_id):
+        return list(self.entity_factions.get(entity_id, []))
+
+    def get_scheduled_event(self, event_id):
+        return next((e for e in self.scheduled_events if e.id == event_id), None)
 
     def list_lifepaths_by_universe(self, universe):
         return self.lifepaths.get(universe, [])
@@ -107,13 +159,21 @@ class TargetRepo:
         return self.descendants.get(location_id, [])
 
     def get_entities_by_ids(self, ids):
-        return [self.by_id[i] for i in ids if i in self.by_id]
+        return [e for e in (self.get_entity(i) for i in ids) if e is not None]
+
+    def list_all_projections(self):
+        return list(self.projections)
 
     def list_faction_members(self, faction_id):
         return self.faction_members.get(faction_id, [])
 
     def get_entity(self, entity_id):
-        return self.by_id.get(entity_id)
+        if entity_id in self.by_id:
+            return self.by_id[entity_id]
+        for e in [*self.locations, *self.universes, *self.all_entities]:
+            if getattr(e, "id", None) == entity_id:
+                return e
+        return None
 
     def list_scheduled_events(self, target_type=None, target_id=None, target_ids=None):
         events = list(self.scheduled_events)
@@ -157,6 +217,7 @@ def test_parse_scope_prefixed():
 
 def test_default_location_uses_current_universe():
     repo = TargetRepo()
+    repo.universes = [_e("earth", universe="earth")]
     repo.locations = [_e("l1", universe="earth"), _e("l2", universe="three_realms")]
     out = resolve_candidates("location", None, _entity(), repo)
     assert _ids(out) == ["l1"]
@@ -164,6 +225,7 @@ def test_default_location_uses_current_universe():
 
 def test_default_occupant_uses_current_location_and_excludes_self():
     repo = TargetRepo()
+    repo.locations = [_e("railyard", "Railyard")]
     repo.occupants = {"railyard": [_e("dmitry"), _e("char-1")]}
     out = resolve_candidates("occupant", None, _entity(current_location="railyard"), repo)
     assert _ids(out) == ["dmitry"]
@@ -178,6 +240,7 @@ def test_rating_die_is_scope_independent():
 
 def test_universe_scope_overrides_current():
     repo = TargetRepo()
+    repo.universes = [_e("three_realms", universe="three_realms")]
     repo.locations = [_e("l1", universe="earth"), _e("l2", universe="three_realms")]
     out = resolve_candidates("location", "universe:three_realms", _entity(), repo)
     assert _ids(out) == ["l2"]
@@ -185,6 +248,7 @@ def test_universe_scope_overrides_current():
 
 def test_universe_current_token_uses_current_universe():
     repo = TargetRepo()
+    repo.universes = [_e("earth", universe="earth")]
     repo.locations = [_e("l1", universe="earth"), _e("l2", universe="three_realms")]
     out = resolve_candidates("location", "universe:current", _entity(), repo)
     assert _ids(out) == ["l1"]
@@ -192,6 +256,7 @@ def test_universe_current_token_uses_current_universe():
 
 def test_location_scope_lists_occupants():
     repo = TargetRepo()
+    repo.locations = [_e("railyard", "Railyard")]
     repo.occupants = {"railyard": [_e("dmitry"), _e("char-1")]}
     out = resolve_candidates("occupant", "location:railyard", _entity(), repo)
     assert _ids(out) == ["dmitry"]
@@ -211,6 +276,7 @@ def test_subtree_scope_includes_root_and_descendants():
 
 def test_subtree_scope_occupants_across_subtree():
     repo = TargetRepo()
+    repo.locations = [_e("root", "Krasnoyarsk"), _e("a", "Railyard")]
     repo.descendants = {"root": ["a"]}
     repo.occupants = {"root": [_e("dmitry")], "a": [_e("ivan"), _e("char-1")]}
     out = resolve_candidates("occupant", "subtree:root", _entity(), repo)
@@ -219,6 +285,7 @@ def test_subtree_scope_occupants_across_subtree():
 
 def test_faction_scope_lists_members():
     repo = TargetRepo()
+    repo.by_id["mafia"] = _e("mafia", "Mafia")
     repo.faction_members = {"mafia": [_e("dmitry"), _e("ivan")]}
     out = resolve_candidates("entity", "faction:mafia", _entity(), repo)
     assert _ids(out) == ["dmitry", "ivan"]
@@ -235,7 +302,9 @@ def test_traitset_scope_lists_traits():
 def test_traitset_scope_step_down_filters_to_owned():
     repo = TargetRepo()
     repo.traits_traitset = {"ts-skills": [_t("medicine"), _t("surgery")]}
-    repo.trait_settings_by_traitset = {("char-1", "ts-skills"): [SimpleNamespace(trait_id="medicine")]}
+    repo.traitsettings_by_entity = {"char-1": [
+        SimpleNamespace(id="char-1:medicine", trait_id="medicine", traitset_id="ts-skills"),
+    ]}
     out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo, action="step_down")
     assert _ids(out) == ["medicine"]
 
@@ -243,7 +312,9 @@ def test_traitset_scope_step_down_filters_to_owned():
 def test_traitset_scope_gain_lists_all_traits():
     repo = TargetRepo()
     repo.traits_traitset = {"ts-skills": [_t("medicine"), _t("surgery")]}
-    repo.trait_settings_by_traitset = {("char-1", "ts-skills"): [SimpleNamespace(trait_id="medicine")]}
+    repo.traitsettings_by_entity = {"char-1": [
+        SimpleNamespace(id="char-1:medicine", trait_id="medicine", traitset_id="ts-skills"),
+    ]}
     out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo, action="gain_or_step_up")
     assert _ids(out) == ["medicine", "surgery"]
 
@@ -270,6 +341,7 @@ def test_universe_kind_lists_universes():
 
 def test_projection_kind_lists_entity_bodies():
     repo = TargetRepo()
+    repo.by_id["char-1"] = _entity()
     repo.projections = [
         _proj("char-1:earth", universe="earth"),
         _proj("char-1:three_realms", universe="three_realms"),
@@ -282,6 +354,7 @@ def test_projection_kind_lists_entity_bodies():
 
 def test_projection_kind_filters_by_universe_scope():
     repo = TargetRepo()
+    repo.by_id["char-1"] = _entity()
     repo.projections = [
         _proj("char-1:earth", universe="earth"),
         _proj("char-1:three_realms", universe="three_realms"),
@@ -331,6 +404,7 @@ def test_scheduled_event_kind_includes_owned_trait_setting_timers():
 
 def test_location_kind_filters_by_starter_flag():
     repo = TargetRepo()
+    repo.universes = [_e("earth", universe="earth")]
     l1 = _e("l1", universe="earth"); l1.starter_location = True
     l2 = _e("l2", universe="earth"); l2.starter_location = False
     l3 = _e("l3", universe="three_realms"); l3.starter_location = True
@@ -352,6 +426,7 @@ def test_location_kind_filter_respects_universe_scope():
 
 def test_roll_table_bare_uses_current_universe():
     repo = TargetRepo()
+    repo.universes = [_e("earth", universe="earth")]
     repo.roll_tables = [_rt("t1", universe="earth"), _rt("t2", universe="three_realms")]
     out = resolve_candidates("roll_table", None, _entity(), repo)
     assert _ids(out) == ["t1"]
@@ -390,12 +465,49 @@ def test_roll_table_faction_scope_filters_by_suitable_paths():
     assert _ids(out) == ["t1", "t2"]
 
 
-# ── extensibility ────────────────────────────────────
+# ── unsupported pairs say so ─────────────────────────
 
-def test_register_scope_adds_a_new_prefix():
-    def _always(instance_kind, value, entity, repo, filter):
-        return [TargetCandidate(id="x", name="X")]
+def test_an_unknown_scope_prefix_is_an_error():
+    """A prefix the vocabulary does not define used to fall back to the default
+    scope, so a typo silently answered a different question."""
+    with pytest.raises(UnknownScope) as err:
+        resolve_candidates("entity", "__test_custom__:anything", _entity(), TargetRepo())
+    assert "known scopes" in str(err.value)
 
-    register_scope("__test_custom__", _always)
-    out = resolve_candidates("entity", "__test_custom__:anything", _entity(), TargetRepo())
-    assert _ids(out) == ["x"]
+
+def test_an_unsupported_kind_in_a_scope_names_what_it_supports():
+    """`[]` is indistinguishable from "nothing matched", which is how a wrong
+    pair (occupants on a faction) once read as an empty roster."""
+    with pytest.raises(UnsupportedScopeKind) as err:
+        resolve_candidates("location", "faction:mafia", _entity(), TargetRepo())
+    message = str(err.value)
+    assert "cannot be selected" in message
+    assert "entity" in message and "roll_table" in message
+
+
+def test_a_kind_outside_the_vocabulary_is_an_error():
+    with pytest.raises(UnsupportedScopeKind):
+        resolve_candidates("die", None, _entity(), TargetRepo())
+
+
+# ── the declaration is readable ──────────────────────
+
+def test_the_declaration_is_readable_over_graphql():
+    """The mapping a caller used to have to extract by reading the source."""
+    from types import SimpleNamespace
+    from transversal.api.graphql.resolvers.queries_targeting import QueriesTargeting
+
+    declared = QueriesTargeting().target_scopes(SimpleNamespace(context={}))
+    by_prefix = {s.prefix: s for s in declared}
+
+    assert set(by_prefix) == {"", "location", "subtree", "faction", "actor_faction",
+                              "traitset", "life_path"}
+    # Every declared kind resolves, and every resolvable pair is declared: the
+    # read is the resolver's own table, not a copy.
+    for scope in declared:
+        for kind in scope.kinds:
+            assert resolve_candidates(kind, f"{scope.prefix}:x" if scope.prefix else None,
+                                      _entity(), TargetRepo()) is not None
+    assert "occupant" in by_prefix[""].kinds
+    assert by_prefix["faction"].kinds == ["entity", "roll_table"]
+    assert "faction" in by_prefix["faction"].description.lower()

@@ -17,7 +17,7 @@ import pytest
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import DieType, Entity, EntityType, TraitSetting
-from transversal.services.effect_targets import resolve_candidates
+from transversal.services.target_scopes import resolve_candidates
 
 try:
     _repo = EntityRepository()
@@ -145,10 +145,11 @@ def test_actor_faction_scope_resolves_the_actors_own_org():
     assert sorted(c.id for c in resolved) == sorted([FACTION_ID, FACTION_B_ID])
     assert {c.name for c in resolved} == {"Test Roster Sect", "Test Roster Family"}
 
-    # An exact id wins outright.
+    # A value narrows to one org by id. (The old flat form also accepted a
+    # case-insensitive fragment of the name; a path filters on a field, so the
+    # fragment spelling is gone — the value in a scope is an id.)
     assert [c.id for c in resolve_candidates("entity", f"actor_faction:{FACTION_ID}", member, repo)] == [FACTION_ID]
-    # Otherwise the value is a case-insensitive fragment of the name.
-    assert [c.id for c in resolve_candidates("entity", "actor_faction:FAMILY", member, repo)] == [FACTION_B_ID]
+    assert resolve_candidates("entity", "actor_faction:FAMILY", member, repo) == []
 
     # An entity with no roster has no actor faction — not an error.
     assert resolve_candidates("entity", "actor_faction:", repo.get_entity(GMC_B_ID), repo) == []

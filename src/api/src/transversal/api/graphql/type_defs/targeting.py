@@ -127,6 +127,21 @@ class TargetCatalogCollection:
     singular: bool = False
 
 @strawberry.type
+class TargetScopeOption:
+    """A declared ``target_scope`` prefix and the kinds it can select.
+
+    The scope vocabulary used to be unreadable: the prefixes existed only as
+    ``register_scope`` calls and the ``scope → kind`` compatibility only as
+    ``if kind ==`` branches, so a caller had to extract the mapping by reading
+    the source (and then freeze it somewhere it would rot). Each entry here is
+    the same declaration the resolver itself uses, so it cannot drift.
+    """
+    prefix: str          # "" is the bare, unprefixed form
+    label: str
+    description: str
+    kinds: list[str]
+
+@strawberry.type
 class SourceKindOption:
     """A declarative SFX source kind (owner type + its exposed variable)."""
     value: str

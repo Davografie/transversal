@@ -11,7 +11,7 @@ import re
 
 from transversal.domain import Effect, SFX
 from transversal.services.menu_contexts import trigger_variables
-from transversal.services.effect_targets import FILTER_FIELDS
+from transversal.services.target_scopes import FILTER_FIELDS
 from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
 
 _TOKEN = re.compile(r"\{([^{}]+)\}")

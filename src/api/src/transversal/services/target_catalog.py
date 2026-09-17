@@ -241,6 +241,11 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
     "entity": {
         "id": ScalarField("entity", "id", "string"),
         "razmerit": ScalarField("entity", "razmerit", "int"),
+        # A location flagged as a valid random-spawn destination. A *candidate*
+        # filter (the picker's "starter location" checkbox), which is why it is a
+        # field rather than a scope of its own.
+        "starter_location": ScalarField("entity", "starter_location", "boolean",
+                                        label="starter location"),
         "type": ScalarField("entity", "type", "string", ("character", "location", "faction", "asset", "gmc", "universe", "subtrait", "relation")),
         "current_location": ScalarField("entity", "current_location", "string", references="location"),
         "current_universe": ScalarField("entity", "current_universe", "string", references="universe"),
@@ -268,6 +273,10 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         # blanked the picker's subtitle and made `filter universe == earth` match
         # nothing.
         "universe": ScalarField("location", "universe", "string", references="universe"),
+        # A place is an Entity too, so the candidate filter the starter-location
+        # SFX uses ("a random starter location in Earth") reads here as well.
+        "starter_location": ScalarField("location", "starter_location", "boolean",
+                                        label="starter location"),
     },
     "relationship": {
         # The edge's own type ("membership", "agency", …) — content, not schema,
@@ -434,6 +443,11 @@ EDGES: tuple[Edge, ...] = (
     # hierarchy the canvas renders.
     Edge("subtree", "location", ("location",), "many", "Sub-locations",
          noun="sub-location", plural="sub-locations"),
+    # location → the projections whose body is currently here. The other half of
+    # "move this life", and how a *scoped* travel ("reuse the body I have in this
+    # place") is written as a path.
+    Edge("projections", "location", ("projection",), "many", "Projections here",
+         noun="projection", plural="projections"),
 
     # entity → the entities on its roster, and inversely the orgs *this* entity is
     # on the roster of. Two edges, not one, because a membership read is directed:
@@ -589,6 +603,11 @@ COLLECTIONS: tuple[Collection, ...] = (
     Collection("traitsets", "traitset", "Trait sets in the registry", noun="trait set"),
     Collection("life_paths", "life_path", "Life paths", noun="life path"),
     Collection("roll_tables", "roll_table", "Roll tables", noun="roll table"),
+    # The die *sizes* the system knows (d4…d12), as a seed a path can pick from.
+    # A rating die reached through a trait instance is a specific die; this is the
+    # vocabulary of sizes an effect that *sets* one chooses among, which is why it
+    # is a collection of its own rather than a hop.
+    Collection("die_types", "rating_die", "Die sizes", noun="die size"),
 )
 
 
@@ -612,7 +631,7 @@ DISPLAY_FIELDS: dict[str, DisplayFields] = {
     "rating_die": DisplayFields("rating_die", "rating", "index"),
     "traitsetting": DisplayFields("traitsetting", "trait_id", "rating"),
     "traitsetsetting": DisplayFields("traitsetsetting", "traitset_id", ""),
-    "trait": DisplayFields("trait", "name", "traitset_id"),
+    "trait": DisplayFields("trait", "name", "traitset_name"),
     "traitset": DisplayFields("traitset", "name", ""),
     "entity": DisplayFields("entity", "name", "type"),
     "projection": DisplayFields("projection", "name", "universe"),
@@ -829,7 +848,7 @@ def validate() -> list[str]:
         if element_name not in ELEMENT_TYPES:
             problems.append(f"scalar fields for unknown element {element_name!r}")
         for f in fields.values():
-            if f.type not in ("int", "number", "die", "string", "datetime"):
+            if f.type not in ("int", "number", "die", "string", "boolean", "datetime"):
                 problems.append(f"field {element_name}.{f.name}: bad type {f.type!r}")
 
     for a in AGGREGATIONS:

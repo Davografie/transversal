@@ -20,6 +20,7 @@ from transversal.api.graphql.types import TargetCatalogEdge
 from transversal.api.graphql.types import TargetCatalogElement
 from transversal.api.graphql.types import TargetCatalogField
 from transversal.api.graphql.types import TargetLabel
+from transversal.api.graphql.types import TargetScopeOption
 from transversal.api.graphql.types import TargetSpecInput
 from transversal.api.graphql.types import TargetResolutionChoice
 from transversal.api.graphql.types import TargetResolutionResult
@@ -189,7 +190,7 @@ class QueriesTargeting:
         ``entity_id`` may be omitted for authoring previews; the resolver then
         uses a synthetic context whose universe comes from ``scope``.
         """
-        from transversal.services.effect_targets import resolve_candidates, parse_scope
+        from transversal.services.target_scopes import resolve_candidates, parse_scope
 
         repo = _em(info).repo
         entity = repo.get_entity(str(entity_id)) if entity_id else None
@@ -208,9 +209,28 @@ class QueriesTargeting:
         ]
 
     @strawberry.field
+    def target_scopes(self, info: strawberry.Info) -> list[TargetScopeOption]:
+        """The declared ``target_scope`` vocabulary: prefix, what it means, and
+        which target kinds it can select.
+
+        Read it instead of remembering it. Each ``(prefix, kind)`` pair is a
+        catalog path (see ``services/target_scopes.py``) resolved by the same
+        resolver as any other path, so this read and the resolver cannot drift —
+        and an unsupported pair is an error naming the kinds that *are* supported
+        rather than an empty list.
+        """
+        from transversal.services.target_scopes import TARGET_SCOPES
+
+        return [
+            TargetScopeOption(prefix=s.prefix, label=s.label, description=s.description,
+                              kinds=list(s.kinds))
+            for s in TARGET_SCOPES
+        ]
+
+    @strawberry.field
     def target_filter_fields(self, info: strawberry.Info) -> list[FilterFieldOption]:
         """Candidate filter fields the SFX editor can build, sourced from the backend."""
-        from transversal.services.effect_targets import FILTER_FIELDS
+        from transversal.services.target_scopes import FILTER_FIELDS
         return [
             FilterFieldOption(field=f.field, label=f.label, value_type=f.value_type, kinds=list(f.kinds), options=list(f.options))
             for f in FILTER_FIELDS

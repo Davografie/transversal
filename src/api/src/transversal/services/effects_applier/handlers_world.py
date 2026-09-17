@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 
-from transversal.services.effect_targets import resolve_candidates
+from transversal.services.target_scopes import resolve_candidates
 from typing import Optional
 from transversal.services.effects_applier.datatypes import (
     AppliedEffect,
@@ -149,7 +149,7 @@ def _next_projection_id(entity_id: str, universe: str, repo) -> str:
 
 def _scope_universe(scope: Optional[str]) -> Optional[str]:
     """Return a literal universe from a ``universe:X`` scope, else None."""
-    from transversal.services.effect_targets import parse_scope
+    from transversal.services.target_scopes import parse_scope
     if not scope:
         return None
     prefix, value = parse_scope(scope)
