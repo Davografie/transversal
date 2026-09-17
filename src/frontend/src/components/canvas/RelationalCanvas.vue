@@ -18,7 +18,7 @@
           <option v-for="f in factions" :key="f.id" :value="f.id">{{ f.name }}</option>
         </select>
         <button
-          v-if="mode === 'location'"
+          v-if="mode === 'location' || mode === 'faction'"
           class="tool-btn"
           :title="layoutOrientation === 'horizontal' ? 'Switch to vertical layout' : 'Pivot to horizontal layout'"
           @click="toggleLayoutOrientation"

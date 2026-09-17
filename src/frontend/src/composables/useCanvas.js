@@ -608,6 +608,7 @@ export function useCanvas() {
   function toggleLayoutOrientation() {
     layoutOrientation.value = isHorizontal() ? 'vertical' : 'horizontal'
     if (mode.value === 'location') renderLocationGraph()
+    else if (mode.value === 'faction') layoutFactionNodes()
   }
 
   // ── Graph builders ─────────────────────────────────
@@ -654,7 +655,7 @@ export function useCanvas() {
 
     nodes.value = newNodes
     edges.value = newEdges
-    layoutFactionNodes(data)
+    layoutFactionNodes()
   }
 
   function buildGmcWebGraph(data) {
@@ -953,9 +954,10 @@ export function useCanvas() {
     applyPositions(positions)
   }
 
-  function layoutFactionNodes(data) {
-    // Build a forest of location trees from super edges, then lay each tree
-    // out top-to-bottom with d3.tree.
+  function layoutFactionNodes() {
+    // Build a forest of location trees from super edges, then lay each tree out
+    // with d3.tree — downward on the vertical canvas, rightward once pivoted, so
+    // the faction view honours the same orientation toggle the locations use.
     const parentOf = {}
     const childrenOf = {}
     for (const e of edges.value) {
@@ -975,97 +977,125 @@ export function useCanvas() {
     })
 
     // Members are grouped per location *before* the tree pass: a location's slot
-    // has to fit its member grid, and d3.tree only separates slot centres by
-    // nodeSize, so a slot narrower than the grid lets a large roster spill into
-    // a sibling's lane. Members previously fanned at DX/2 (120px) — narrower
-    // than the 170px minimum node width — so every multi-member location
-    // overlapped, and the row collided with the child row below it.
+    // has to fit its member block, and d3.tree only separates slot centres by
+    // nodeSize, so a slot smaller than the block lets a large roster spill into a
+    // sibling's lane. Read off the located edges rather than the payload so the
+    // pivot can re-run this without the faction data to hand. Members once fanned
+    // at DX/2 (120px) — narrower than the 170px minimum node width — so every
+    // multi-member location overlapped, and the row hit the child row below it.
     const memberByLoc = {}
-    for (const m of data.members || []) {
-      if (!m.location_id) continue
-      const locNodeId = nodeId('loc', m.location_id)
-      memberByLoc[locNodeId] = memberByLoc[locNodeId] || []
-      memberByLoc[locNodeId].push(nodeId('occ', m.id))
+    for (const e of edges.value) {
+      if (e.data?.kind !== 'located' || !locNodeIds.has(e.source)) continue
+      memberByLoc[e.source] = memberByLoc[e.source] || []
+      memberByLoc[e.source].push(e.target)
     }
 
-    // Long rosters wrap into bounded rows so one location cannot stretch its
-    // slot arbitrarily wide.
-    function memberGrid(locNodeId) {
+    const horizontal = isHorizontal()
+
+    // A location's node plus its members. The vertical canvas wraps the roster
+    // into a bounded 3-column grid *below* the node, so the grid's width claims
+    // the sibling axis; the horizontal one stacks a single column beside it, so
+    // its height does instead.
+    function blockOf(locNodeId) {
       const count = (memberByLoc[locNodeId] || []).length
-      if (!count) return { cols: 1, rows: 0, w: 0, h: 0 }
-      const cols = Math.min(count, FACTION_MEMBER_COLS)
-      const rows = Math.ceil(count / FACTION_MEMBER_COLS)
+      const cols = count ? (horizontal ? 1 : Math.min(count, FACTION_MEMBER_COLS)) : 1
+      const rows = count ? Math.ceil(count / cols) : 0
+      const gridW = count ? cols * FACTION_MEMBER_W + (cols - 1) * FACTION_MEMBER_GAP : 0
+      const gridH = count ? rows * FACTION_MEMBER_H + (rows - 1) * FACTION_MEMBER_GAP : 0
       return {
         cols,
-        rows,
-        w: cols * FACTION_MEMBER_W + (cols - 1) * FACTION_MEMBER_GAP,
-        h: rows * FACTION_MEMBER_H + (rows - 1) * FACTION_MEMBER_GAP,
+        gridW,
+        gridH,
+        w: Math.max(LOC_W, gridW),
+        h: LOC_BASE_H + (count ? FACTION_MEMBER_TOP_GAP + gridH : 0),
       }
     }
 
-    let slotW = DX
-    let slotH = DY
+    // d3.tree's axes are [sibling, depth] in that order, and which block
+    // dimension each has to clear flips when the tree is pivoted.
+    const sibExtent = (b) => (horizontal ? b.h : b.w)
+    const depExtent = (b) => (horizontal ? b.w : b.h)
+
+    let sibSlot = horizontal ? DY : DX
+    let depSlot = DY
     for (const locNodeId of locNodeIds) {
-      const g = memberGrid(locNodeId)
-      slotW = Math.max(slotW, g.w ? g.w + FACTION_MEMBER_GAP : 0)
-      slotH = Math.max(slotH, DY + (g.h ? FACTION_MEMBER_TOP_GAP + g.h : 0))
+      const b = blockOf(locNodeId)
+      sibSlot = Math.max(sibSlot, sibExtent(b) + FACTION_MEMBER_GAP)
+      depSlot = Math.max(depSlot, depExtent(b) + (DY - LOC_BASE_H))
     }
 
     const positions = {}
-    let offsetX = 0
-    const layout = tree().nodeSize([slotW, slotH])
+    let offset = 0
+    const layout = tree().nodeSize([sibSlot, depSlot])
     for (const rootId of roots) {
       const root = hierarchy(buildData(rootId))
       layout(root)
-      let minX = Infinity
-      let maxX = -Infinity
+      let minSib = Infinity
+      let maxSib = -Infinity
       root.each((d) => {
-        minX = Math.min(minX, d.x)
-        maxX = Math.max(maxX, d.x)
+        minSib = Math.min(minSib, d.x)
+        maxSib = Math.max(maxSib, d.x)
       })
-      const center = (minX + maxX) / 2
-      // d3.tree treats x as the centre of a slotW-wide slot; centre the location
-      // node on it so the node and its member grid share one axis.
+      const center = (minSib + maxSib) / 2
+      // d3.tree treats x as the slot centre and y as the start of the depth band.
+      // Centre the block on the sibling axis and start it at the depth band, so
+      // the node and its members stay inside the slot d3 reserved for them.
       root.each((d) => {
-        positions[d.data.id] = { x: d.x - center + offsetX - LOC_W / 2, y: d.y }
+        const b = blockOf(d.data.id)
+        const sibling = d.x - center + offset
+        positions[d.data.id] = horizontal
+          ? { x: d.y, y: sibling - b.h / 2 }
+          : { x: sibling - LOC_W / 2, y: d.y }
       })
-      offsetX += (maxX - minX) + slotW
+      offset += (maxSib - minSib) + sibSlot
     }
 
-    // Members in a bounded grid below their location, which slotH has already
-    // opened up enough room for that the child row stays clear.
+    // Members directly below their location — the wrapped grid on the vertical
+    // canvas, the single column on the horizontal one. The slot sizes above have
+    // already opened enough room that the child band stays clear.
     for (const locNodeId of Object.keys(memberByLoc)) {
       const base = positions[locNodeId]
       if (!base) continue
       const members = memberByLoc[locNodeId]
-      const g = memberGrid(locNodeId)
-      const left = base.x + LOC_W / 2 - g.w / 2
+      const b = blockOf(locNodeId)
+      const left = horizontal ? base.x : base.x + LOC_W / 2 - b.gridW / 2
       const top = base.y + LOC_BASE_H + FACTION_MEMBER_TOP_GAP
       members.forEach((mid, i) => {
         positions[mid] = {
-          x: left + (i % g.cols) * (FACTION_MEMBER_W + FACTION_MEMBER_GAP),
-          y: top + Math.floor(i / g.cols) * (FACTION_MEMBER_H + FACTION_MEMBER_GAP),
+          x: left + (i % b.cols) * (FACTION_MEMBER_W + FACTION_MEMBER_GAP),
+          y: top + Math.floor(i / b.cols) * (FACTION_MEMBER_H + FACTION_MEMBER_GAP),
         }
       })
     }
 
-    // Deterministic per-subtree nudge. Nodes at the same depth under different
-    // siblings share an exact Y, so an edge between them is a dead-straight
-    // horizontal line and several such edges stack up invisibly on one another.
-    // Keyed off the child index (never random) so the layout is stable across
-    // renders, and applied before applyPositions so routeEdges re-picks handles
-    // from the shifted geometry. Drift compounds down the tree but is bounded by
-    // FACTION_SUBTREE_JITTER × depth, far inside the gap between depth bands.
+    // Deterministic per-subtree nudge along the *depth* axis. Nodes at the same
+    // depth under different siblings share that coordinate exactly, so an edge
+    // between them is a dead-straight line — horizontal on the vertical canvas,
+    // vertical on the pivoted one — and several such edges stack up invisibly on
+    // one another. Keyed off the child index (never random) so the layout is
+    // stable across renders, and applied before applyPositions so routeEdges
+    // re-picks handles from the shifted geometry. Drift compounds down the tree
+    // but is bounded by FACTION_SUBTREE_JITTER × depth, far inside the gap
+    // between depth bands.
     const seenJitter = new Set()
+    function shiftSubtree(locNodeId, extra) {
+      const p = positions[locNodeId]
+      if (p) {
+        if (horizontal) p.x += extra
+        else p.y += extra
+      }
+      for (const mid of memberByLoc[locNodeId] || []) {
+        const mp = positions[mid]
+        if (mp) {
+          if (horizontal) mp.x += extra
+          else mp.y += extra
+        }
+      }
+    }
     function jitterSubtree(locNodeId, extra) {
       if (seenJitter.has(locNodeId)) return
       seenJitter.add(locNodeId)
-      const p = positions[locNodeId]
-      if (!p) return
-      p.y += extra
-      for (const mid of memberByLoc[locNodeId] || []) {
-        if (positions[mid]) positions[mid].y += extra
-      }
+      shiftSubtree(locNodeId, extra)
       ;(childrenOf[locNodeId] || []).forEach((cid, i) => {
         jitterSubtree(cid, extra + ((i % 3) - 1) * FACTION_SUBTREE_JITTER)
       })
