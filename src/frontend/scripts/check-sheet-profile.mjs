@@ -47,6 +47,7 @@ ok('LOCATION → location', loc.kind, 'location')
 ok('a location has no razmerit', loc.razmerit, false)
 ok('a location keeps its traits', hasSheetTab(loc, 'traits'), true)
 ok('a location keeps its blue book', hasSheetTab(loc, 'bluebook'), true)
+ok('a location shows incoming ties', hasSheetTab(loc, 'ties'), true)
 ok('a location has no life paths (they are faction-bound)', hasSheetTab(loc, 'lifepath'), false)
 ok('a location has no roster', hasSheetTab(loc, 'roster'), false)
 
@@ -57,6 +58,10 @@ ok('a faction keeps razmerit', fac.razmerit, true)
 ok('a faction has a roster', hasSheetTab(fac, 'roster'), true)
 ok('a faction has no life-path tab of its own', hasSheetTab(fac, 'lifepath'), false)
 ok('a faction keeps its traits', hasSheetTab(fac, 'traits'), true)
+// The roster *is* a faction's incoming ties, specialised — a general ties tab
+// beside it would be the same edges read twice.
+ok('a faction has no separate ties tab', hasSheetTab(fac, 'ties'), false)
+ok('an occupant has no ties tab', hasSheetTab(sheetProfileFor('CHARACTER'), 'ties'), false)
 
 // ── the same enum arrives in two spellings ───────────────────────────────
 ok('lowercase location matches uppercase', sheetProfileFor('location'), loc)

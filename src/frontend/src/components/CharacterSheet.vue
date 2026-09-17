@@ -126,6 +126,7 @@
                 <button v-if="hasTab('traits')" :class="['pill', { active: activeSheetView === 'traits' }]" @click="goToTraitSets">🎲</button>
                 <button v-if="gmMode" :class="['pill', { active: showAllTraits }]" :title="showAllTraits ? 'Showing all traits' : 'Show all traits'" @click="showAllTraits = !showAllTraits">🌍</button>
                 <button v-if="hasTab('roster')" :class="['pill', { active: activeSheetView === 'roster' }]" :title="`Members of ${entity.name}`" @click="activeSheetView = 'roster'">👥</button>
+                <button v-if="showTiesTab" :class="['pill', { active: activeSheetView === 'ties' }]" :title="`What others hold about ${entity.name}`" @click="activeSheetView = 'ties'">🔗</button>
                 <button v-if="hasTab('bluebook')" :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘</button>
                 <button v-if="hasTab('lifepath')" :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
               </template>
@@ -203,6 +204,45 @@
               <span class="roster-type">{{ memberTypeBadge(m.type) }}</span>
               <span class="roster-role" :class="{ unset: !m.role }">{{ m.role || 'no role' }}</span>
               <span v-if="m.rank" class="roster-rank" :title="'Rank die'">{{ m.rank }}</span>
+            </div>
+          </div>
+        </template>
+      </div>
+      <!-- Incoming ties (B134) — the mirror of the relation tab: not what we
+           hold about this entity but what everyone else does. Grouped by the
+           holder, because that is the question ("who is tied to this place"),
+           and each tie's traits render as ordinary rows so a tie's die,
+           statement and detail panel read exactly as they do anywhere else. -->
+      <div v-else-if="activeSheetView === 'ties'" class="sheet-scroll">
+        <div v-if="incomingTiesLoading" class="empty">Loading ties…</div>
+        <div v-else-if="!incomingTies.length" class="empty">Nobody holds a tie here</div>
+        <template v-else>
+          <h4 class="ties-title">{{ incomingTies.length }} tie{{ incomingTies.length === 1 ? '' : 's' }} held about {{ entity.name }}</h4>
+          <div class="ties-list">
+            <div v-for="tie in incomingTies" :key="tie.edgeId" class="tie-group">
+              <div
+                class="tie-holder"
+                role="button"
+                tabindex="0"
+                :aria-label="`View ${tie.holderName}'s sheet`"
+                :title="`View ${displayName(tie.holderName)}`"
+                @click="emit('viewEntity', tie.holderId)"
+                @keydown.enter.prevent="emit('viewEntity', tie.holderId)"
+                @keydown.space.prevent="emit('viewEntity', tie.holderId)"
+              >
+                <span class="tie-name">{{ displayName(tie.holderName) }}</span>
+                <span class="roster-type">{{ memberTypeBadge(tie.holderType) }}</span>
+                <span v-if="tie.description" class="tie-desc">{{ tie.description }}</span>
+              </div>
+              <div v-if="tie.traits.length" class="tie-traits">
+                <TraitRow
+                  v-for="t in tie.traits"
+                  :key="t.id"
+                  :trait="t"
+                  :api="traitRowApi"
+                  :phase="phase"
+                />
+              </div>
             </div>
           </div>
         </template>
@@ -629,26 +669,134 @@ watch(
   { immediate: true },
 )
 
+// The trait-setting fields a relationship query must ask for: exactly what
+// `TraitRow` and the detail read. Shared by the outgoing relation query and the
+// incoming-ties one so the two cannot drift — a field the UI reads but a query
+// omits is invisible, the family of bug this file has hit more than once.
+const RELATION_TRAIT_FIELDS = `
+  id
+  traitId
+  traitsetId
+  name
+  traitsetName
+  dieType
+  ratingType
+  rating
+  ego
+  fromType
+  projectionId
+  statement
+  notes
+  sfxIds
+  universe
+  dice
+  spentDice
+  capacity
+  polarity
+  enabled
+  traitsetOrder
+  traitsetLimit
+  traitsetTab
+  knownTo
+  possibleSfxIds
+  tags
+  registryTags
+  relationshipContactId
+  relationshipContactName
+  relationshipContactType
+  relationshipType
+  possibleSubtraitIds
+`
+
+// ── Incoming ties (B134) ────────────────────────────────────────
+// What *others* hold about this entity — the mirror of the relation tab, which
+// is our outgoing edge. There is no dedicated read for it yet: every repository
+// method filters `_from` (see the ask to [[backend-platform]] in the session
+// doc), so it is composed from two queries that do exist:
+//
+//   1. `relatedEntities(id)` — undirected, so it asks no direction question and
+//      needs no knowledge of which peers might point at us;
+//   2. one `relationship(from: peer, to: us)` per peer, which returns non-null
+//      **exactly** when that peer holds a `relation` tie about us. So the
+//      direction filter is the API's answer, not a guess — a `super` parent or
+//      child comes back null and drops out on its own.
+//
+// The fan-out is bounded and small — measured across all 410 locations: median 2
+// peers, p95 10, max 20 — so the N+1 is a single concurrent burst rather than a
+// problem. When a real incoming read lands, **this function is the only thing
+// that changes**; the view above it does not care how the ties were found.
+const incomingTies = ref([])
+const incomingTiesLoading = ref(false)
+
+async function fetchIncomingTies() {
+  const id = props.overrideEntityId || props.entityId
+  if (!id || !hasTab('ties')) { incomingTies.value = []; return }
+  incomingTiesLoading.value = true
+  const peerData = await graphql(
+    `query($id: ID!) { relatedEntities(entityId: $id) { id name type } }`,
+    { id },
+  )
+  const peers = peerData?.relatedEntities || []
+  const found = await Promise.all(peers.map(async (p) => {
+    const data = await graphql(
+      `query($from: ID!, $to: ID!) {
+        relationship(fromEntityId: $from, toEntityId: $to) {
+          id
+          description
+          relationTraits { ${RELATION_TRAIT_FIELDS} }
+        }
+      }`,
+      { from: p.id, to: id },
+    )
+    const edge = data?.relationship
+    if (!edge) return null
+    return {
+      edgeId: edge.id,
+      description: edge.description || '',
+      holderId: p.id,
+      holderName: p.name,
+      holderType: p.type,
+      traits: edge.relationTraits || [],
+    }
+  }))
+  incomingTies.value = found.filter(Boolean)
+  incomingTiesLoading.value = false
+}
+
+// Fetched on the entity rather than on the tab, because whether the tab should
+// exist at all is the fetch's answer — and a 🔗 that opens onto "nobody holds a
+// tie here" for 353 of 410 locations is chrome, not information. The relation
+// tab already follows this convention.
+const showTiesTab = computed(() => hasTab('ties') && incomingTies.value.length > 0)
+
+watch(
+  [() => props.entityId, () => props.overrideEntityId, sheetProfile],
+  () => { if (hasTab('ties')) fetchIncomingTies(); else incomingTies.value = [] },
+  { immediate: true },
+)
+
 // ── Relation tab (foreign sheets) ───────────────────────────────
 // Traits hanging off *our* outgoing edge to the sheet we're looking at — what we
 // hold about them (`_from == viewerEntityId`, `_to == overrideEntityId`). The tab
 // only exists when such an edge carries traits; a bare edge isn't worth a tab.
 const relationTraits = computed(() => relationship.value?.relationTraits || [])
 const showRelationTab = computed(() => !!isForeignSheet.value && relationTraits.value.length > 0)
+
 // `activeSheetView` is persisted, so a view can outlive the entity that
 // justified it: 'relation' when the edge goes away, 'lifepath' when the sheet
-// switches to a location, 'roster' when it switches to a character. Fall back
-// whenever the current view isn't available for this type — immediate, so a
-// stale value is caught on mount and on the entity loading too (the profile is
-// the occupant's until `entity` arrives, so the correction has to re-run when
-// it does).
-watch([showRelationTab, sheetProfile], () => {
-  const view = activeSheetView.value
-  if (view === 'relation') {
-    if (!showRelationTab.value) activeSheetView.value = 'traits'
-    return
-  }
-  if (!hasTab(view)) activeSheetView.value = DEFAULT_SHEET_TAB
+// switches to a location, 'roster' when it switches to a character, 'ties' when
+// the last tie is removed. One rule rather than three branches — the tabs the
+// profile declares, minus the two that are conditional on there being something
+// to show, plus 'relation' when there is. Immediate, because the profile is the
+// occupant's until `entity` arrives, so the correction has to re-run when it does.
+const availableViews = computed(() => {
+  const views = new Set(sheetProfile.value.tabs)
+  if (!showTiesTab.value) views.delete('ties')
+  if (showRelationTab.value) views.add('relation')
+  return views
+})
+watch(availableViews, (views) => {
+  if (!views.has(activeSheetView.value)) activeSheetView.value = DEFAULT_SHEET_TAB
 }, { immediate: true })
 
 const ownsCharacter = computed(() => {
@@ -2098,40 +2246,7 @@ async function fetchRelationship() {
       relationship(fromEntityId: $viewer, toEntityId: $target) {
         id
         description
-        relationTraits {
-          id
-          traitId
-          traitsetId
-          name
-          traitsetName
-          dieType
-          ratingType
-          rating
-          ego
-          fromType
-          projectionId
-          statement
-          notes
-          sfxIds
-          universe
-          dice
-          spentDice
-          capacity
-          polarity
-          enabled
-          traitsetOrder
-          traitsetLimit
-          traitsetTab
-          knownTo
-          possibleSfxIds
-        tags
-        registryTags
-          relationshipContactId
-          relationshipContactName
-          relationshipContactType
-          relationshipType
-          possibleSubtraitIds
-        }
+        relationTraits { ${RELATION_TRAIT_FIELDS} }
       }
     }
   `
@@ -2621,6 +2736,59 @@ watch(() => props.externalPoolSources, (sources) => {
 .roster-rank {
   font-size: 11px;
   color: var(--accent);
+}
+
+/* Incoming ties (B134) — one group per holder, so the question "who is tied to
+   this place" is answered by the group heads and the *what* hangs underneath. */
+.ties-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--overlay-6);
+}
+.ties-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tie-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tie-holder {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.tie-holder:hover .tie-name { color: var(--accent); }
+.tie-holder:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tie-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.tie-desc {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The tie's own traits sit under their holder — indented by the same amount a
+   sub-trait list is, since they are a step further from the sheet's subject. */
+.tie-traits {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 12px;
 }
 
 .loading, .error, .empty {

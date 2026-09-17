@@ -38,6 +38,7 @@ export const SHEET_TABS = Object.freeze({
   BLUEBOOK: 'bluebook',
   LIFEPATH: 'lifepath',
   ROSTER: 'roster',
+  TIES: 'ties',
 })
 
 /** The fallback view when the current one is not available for this type. */
@@ -55,7 +56,12 @@ const OCCUPANT_PROFILE = Object.freeze({
 const LOCATION_PROFILE = Object.freeze({
   kind: 'location',
   razmerit: false,
-  tabs: Object.freeze([SHEET_TABS.PROFILE, SHEET_TABS.TRAITS, SHEET_TABS.BLUEBOOK]),
+  // `ties` is the incoming half of the relation surface: what others hold about
+  // this place. It is declared here but the sheet only *shows* it when there is
+  // something in it (see `showTiesTab`), the same convention the relation tab
+  // follows — for 353 of 410 locations the tab would otherwise open onto
+  // nothing.
+  tabs: Object.freeze([SHEET_TABS.PROFILE, SHEET_TABS.TRAITS, SHEET_TABS.TIES, SHEET_TABS.BLUEBOOK]),
 })
 
 const FACTION_PROFILE = Object.freeze({
