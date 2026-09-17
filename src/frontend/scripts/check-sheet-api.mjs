@@ -1,8 +1,8 @@
 /**
- * Static contract check for the sheet's row/detail components.
+ * Static contract check for the sheet's row/detail components and its emits.
  *
- * The build cannot see either of the two failure modes below — both are runtime
- * TypeErrors in the browser — so they are checked here:
+ * The build cannot see any of the failure modes below — they are runtime
+ * TypeErrors, or a control that silently does nothing — so they are checked here:
  *
  *  1. **Scope.** These components receive their helpers through an `api` PROP.
  *     In the template a bare `api.x` is correct (props are exposed), but inside
@@ -11,6 +11,10 @@
  *  2. **Membership.** Every `api.<member>` a component uses must exist on the
  *     object the sheet hands over (`traitRowApi` / `detailApi`), or the call is
  *     `undefined is not a function`.
+ *  3. **Emit wiring.** Every emit the sheet declares must be handled by its host
+ *     as `@kebab-case`, and every handler on the host must match a declared
+ *     emit. A mismatch is a control that does nothing when clicked — no error,
+ *     no warning, just a dead button.
  *
  * Run it against the frontend image:
  *
@@ -23,6 +27,7 @@ import { join } from 'node:path'
 
 const SHEET_DIR = 'src/components/sheet'
 const SHEET = 'src/components/CharacterSheet.vue'
+const HOST = 'src/App.vue'
 
 const sheetSrc = readFileSync(SHEET, 'utf8')
 
@@ -92,6 +97,36 @@ for (const file of files) {
     `${file}: every api member exists on ${objectName} (${used.size} used)` +
     (missing.length ? ` — missing: ${missing.join(', ')}` : ''))
 }
+
+// ── 3. emit wiring: the sheet's emits ↔ the host's handlers ──────────────
+// Vue turns an unhandled emit into a no-op, so a renamed emit or a mistyped
+// handler is invisible until someone clicks the control and nothing happens.
+const kebab = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+
+const declaredEmits = (() => {
+  const m = sheetSrc.match(/defineEmits\(\[([^\]]*)\]\)/)
+  if (!m) throw new Error(`could not find defineEmits in ${SHEET}`)
+  return m[1].match(/'([^']+)'/g)?.map((s) => s.slice(1, -1)) || []
+})()
+
+const hostHandlers = (() => {
+  const hostSrc = readFileSync(HOST, 'utf8')
+  // The component's own tag: from `<CharacterSheet` to its self-closing `/>`.
+  const m = hostSrc.match(/<CharacterSheet\b([\s\S]*?)\/>/)
+  if (!m) throw new Error(`could not find a <CharacterSheet … /> tag in ${HOST}`)
+  return [...m[1].matchAll(/@([a-z][\w-]*)=/g)].map((x) => x[1])
+})()
+
+const wanted = declaredEmits.map(kebab)
+const missingHandlers = wanted.filter((w) => !hostHandlers.includes(w))
+const orphanHandlers = hostHandlers.filter((h) => !wanted.includes(h))
+
+report(missingHandlers.length === 0,
+  `every declared emit is handled in ${HOST} (${declaredEmits.length} emits)` +
+  (missingHandlers.length ? ` — no handler for @${missingHandlers.join(', @')}` : ''))
+report(orphanHandlers.length === 0,
+  `every ${HOST} handler matches a declared emit` +
+  (orphanHandlers.length ? ` — @${orphanHandlers.join(', @')} is dead (no such emit)` : ''))
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)

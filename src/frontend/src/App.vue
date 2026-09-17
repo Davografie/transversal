@@ -188,6 +188,7 @@
           @sfx-toggled="onSfxToggled"
           @stamp-sfx="(d) => diceRef?.stampArmedSfx(d.tsId, d.sfxId)"
           @sheet-view-change="onSheetViewChange"
+          @view-entity="onPeerClick"
         />
         <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @touchstart="onBandDragStart($event, 'sheet')" @click="tapBand('sheet')"></div>
       </div>

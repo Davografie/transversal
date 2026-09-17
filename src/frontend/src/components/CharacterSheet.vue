@@ -177,16 +177,28 @@
         @updated="fetchEntity"
       />
       <!-- Faction roster — a faction's members, which live on `membership`
-           edges and read through `factionMembers`. Read-only for now: opening a
-           member's own sheet from a row needs the App-level "view this entity"
-           path that B134's faction chips will introduce. -->
+           edges and read through `factionMembers`. A row is a control: it asks
+           the app to bring that member's sheet up, which is the same "view this
+           entity" action a peer chip performs — so the app's existing grammar
+           decides what a second click means, and nothing new is invented here. -->
       <div v-else-if="activeSheetView === 'roster'" class="sheet-scroll">
         <div v-if="rosterLoading" class="empty">Loading roster…</div>
         <div v-else-if="!roster.length" class="empty">No members recorded</div>
         <template v-else>
           <h4 class="roster-title">{{ roster.length }} member{{ roster.length === 1 ? '' : 's' }}</h4>
           <div class="roster-list">
-            <div v-for="m in roster" :key="m.id" class="roster-row">
+            <div
+              v-for="m in roster"
+              :key="m.id"
+              class="roster-row"
+              role="button"
+              tabindex="0"
+              :aria-label="`View ${m.name}'s sheet`"
+              :title="`View ${displayName(m.name)}`"
+              @click="emit('viewEntity', m.id)"
+              @keydown.enter.prevent="emit('viewEntity', m.id)"
+              @keydown.space.prevent="emit('viewEntity', m.id)"
+            >
               <span class="roster-name">{{ displayName(m.name) }}</span>
               <span class="roster-type">{{ memberTypeBadge(m.type) }}</span>
               <span class="roster-role" :class="{ unset: !m.role }">{{ m.role || 'no role' }}</span>
@@ -401,7 +413,7 @@ const props = defineProps({
   mainEntityId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'retractNegative', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange'])
+const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'retractNegative', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange', 'viewEntity'])
 
 function displayName(name) {
   return name
@@ -2581,7 +2593,11 @@ watch(() => props.externalPoolSources, (sources) => {
   background: var(--overlay-4);
   border: 1px solid var(--overlay-6);
   border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
+.roster-row:hover { border-color: var(--accent); }
+.roster-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .roster-name {
   flex: 1 1 auto;
   font-size: 13px;
