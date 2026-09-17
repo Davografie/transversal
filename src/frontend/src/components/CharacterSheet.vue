@@ -725,6 +725,16 @@ const RELATION_TRAIT_FIELDS = `
 // peers, p95 10, max 20 — so the N+1 is a single concurrent burst rather than a
 // problem. When a real incoming read lands, **this function is the only thing
 // that changes**; the view above it does not care how the ties were found.
+//
+// **Known blind spot, measured rather than assumed.** `relatedEntities` joins the
+// peer it finds to the `entities` collection by key, so an edge whose holder is a
+// **projection** (`projections/<id>:<universe>`, a body-level tie) resolves to no
+// entity and is dropped before this code ever sees it. Live: of **93** incoming
+// location ties, **1** is projection-held, so the composition covers **92**; no
+// location has two edges from the same holder, so nothing else is collapsed. A
+// dedicated read — which would filter `_to` and resolve `_from` without the join
+// — is the only way to close that, because nothing client-side can name an edge
+// whose holder never came back. See the ask to [[backend-platform]].
 const incomingTies = ref([])
 const incomingTiesLoading = ref(false)
 
