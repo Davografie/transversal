@@ -94,6 +94,20 @@ export function useFactionRoles() {
     return { ok: true, settingId: wrote || res?.addRelationshipTrait?.id || '' }
   }
 
+  // Drop the member → faction tie. A `false` back from the mutation means there
+  // was no membership edge to remove: the roster slot is a `relation` tie carrying
+  // roster traits, which is not this gesture's to delete (it may carry non-roster
+  // traits too).
+  async function removeMembership({ memberId, factionId }) {
+    if (!memberId || !factionId) return { ok: false, error: 'No tie to remove.' }
+    const res = await graphql(
+      `mutation($input: DeleteRelationshipInput!) { deleteRelationship(input: $input) }`,
+      { input: { fromEntityId: memberId, toEntityId: factionId, type: 'membership' } },
+    )
+    if (!res) return { ok: false, error: apiError.value || 'Could not remove the membership.' }
+    return { ok: true, nothingRemoved: res.deleteRelationship === false }
+  }
+
   // The factions this entity is on the roster of — the inverse of the roster
   // read.
   //
@@ -127,5 +141,5 @@ export function useFactionRoles() {
     return { factions, error: '' }
   }
 
-  return { roleTraitId, roleSettingsByContact, setRole, factionsFor }
+  return { roleTraitId, roleSettingsByContact, setRole, removeMembership, factionsFor }
 }

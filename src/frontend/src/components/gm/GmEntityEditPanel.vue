@@ -203,6 +203,17 @@
             @save="(next) => saveMemberRole(m, next)"
           />
           <span v-if="m.rank" class="member-rank">{{ m.rank }}</span>
+          <!-- Two-step like the danger button, sized for a row (DangerButton is
+               full-width by design). One row arms at a time. -->
+          <Button
+            class="tie-remove"
+            :variant="armedTie === m.id ? 'danger' : 'danger-ghost'"
+            :active="armedTie === m.id"
+            size="sm"
+            :loading="tieBusy === m.id"
+            :title="armedTie === m.id ? `Confirm: remove ${m.name} from this faction` : `Kick ${m.name} from this faction`"
+            @click.stop="kickMember(m)"
+          >{{ armedTie === m.id ? '✓?' : '✕' }}</Button>
         </div>
       </div>
       <!-- The tie is member → faction, and the member is whoever the GM is
@@ -233,6 +244,15 @@
             @save="(next) => saveEntityRole(f, next)"
           />
           <span v-if="f.rank" class="member-rank">{{ f.rank }}</span>
+          <Button
+            class="tie-remove"
+            :variant="armedTie === f.id ? 'danger' : 'danger-ghost'"
+            :active="armedTie === f.id"
+            size="sm"
+            :loading="tieBusy === f.id"
+            :title="armedTie === f.id ? `Confirm: leave ${f.name}` : `Leave ${f.name}`"
+            @click.stop="leaveEntityFaction(f)"
+          >{{ armedTie === f.id ? '✓?' : '✕' }}</Button>
         </div>
       </div>
       <div v-if="factionNote" class="members-note">{{ factionNote }}</div>
@@ -271,6 +291,9 @@ import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud, createEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
+// A member's panel is another instance of this component, opened as this panel's
+// child (referenced at click time, so the module cycle resolves).
+import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import { useFactionRoles } from '@/composables/useFactionRoles.js'
 import FactionRoleCell from '@/components/gm/FactionRoleCell.vue'
 import { useLifePaths } from '@/composables/useLifePaths.js'
@@ -496,7 +519,7 @@ const props = defineProps({
   currentLocationId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['switch-to-sheet', 'image-open', 'go-to-location'])
+const emit = defineEmits(['image-open', 'go-to-location'])
 
 // This panel owns its editor state (createEntityCrud): it loads its entity on
 // mount and re-loads whenever it becomes the active tab again, so it follows
@@ -744,7 +767,7 @@ const actingMembership = computed(() => members.value.find(m => m.id === actingE
 // `useFactionRoles`, which both this panel and the entity panel's faction list
 // use. Here it is the member's role in *this* faction.
 const roleBusy = ref('')
-const { setRole, factionsFor } = useFactionRoles()
+const { setRole, removeMembership, factionsFor } = useFactionRoles()
 
 // Patch the one row instead of re-reading the roster: a role edit must not blank
 // the list under the GM's cursor, and the rows have to stay put to be edited one
@@ -768,10 +791,50 @@ async function saveMemberRole(m, next) {
   }
 }
 
-// The GM panel owns entity-panel opening (its listeners wire the sheet, the image
-// viewer and navigation), so reuse its channel instead of duplicating the spec.
+// The member's own panel opens as a **child of this one**, so the two sit side by
+// side in the chain and the faction stays in view (the canvas:inspect route the
+// member rows used before made it a sibling of the faction panel, which put the
+// roster off screen). It gets the entity panel's two listeners, built for this
+// member rather than for whatever the GM panel has selected — a child panel must
+// not move the GM panel's selection.
 function openMemberPanel(m) {
-  if (m?.id) bus.emit('canvas:inspect', m.id)
+  if (!m?.id) return
+  panel.open({
+    component: GmEntityEditPanel,
+    title: m.name || 'Edit Entity',
+    id: m.id,
+    badge: String(m.type || '').toUpperCase(),
+    props: {
+      entityId: m.id,
+      currentEntityId: actingEntityId.value,
+      currentLocationId: gmLocationId.value || props.currentLocationId,
+    },
+    listeners: {
+      'image-open': (img) => openMemberImage(m, img),
+      'go-to-location': () => bus.emit('switch-view-location', m.id),
+    },
+  })
+}
+
+// The entity panel's image gallery hands the image up; the viewer is a panel of
+// its own (the same spec the GM panel builds, for this member).
+function openMemberImage(m, img) {
+  panel.open({
+    component: ImageViewer,
+    title: img.id,
+    badge: img.image_type === 'animated' ? 'ANIMATED' : 'IMAGE',
+    props: {
+      src: img.path_animated || img.path_large,
+      animatedSrc: img.path_animated,
+      alt: img.image_type + ' — ' + img.width + '×' + img.height,
+      entityId: m.id,
+      imageId: img.id,
+      imageType: img.image_type,
+      roles: img.roles || [],
+      sizeBytes: img.size_bytes,
+    },
+    listeners: {},
+  })
 }
 
 async function loadMembers() {
@@ -789,6 +852,55 @@ async function loadMembers() {
   if (!roster) { memberNote.value = apiError.value || 'Could not load the roster.'; return }
   members.value = roster.factionMembers || []
   acting.value = me?.entity || null
+}
+
+// ── Leaving / being removed ─────────────────────────
+// Both directions drop the same tie (member → faction), so both go through
+// `removeMembership`, and both confirm the same way the danger button does — arm
+// on the first click, commit on the second within the same 3s window — but sized
+// for a row, since `DangerButton` is full-width by design. One row arms at a time.
+const tieBusy = ref('')
+const armedTie = ref('')
+const RELATION_TIE_NOTE = 'That roster slot is a relation tie, not a membership — edit or remove it from the relationship editor.'
+let armedTimer = null
+
+function clearArmed() {
+  if (armedTimer) { clearTimeout(armedTimer); armedTimer = null }
+  armedTie.value = ''
+}
+
+// true when this click is the confirmation
+function armOrConfirm(id) {
+  if (armedTie.value === id) { clearArmed(); return true }
+  clearArmed()
+  armedTie.value = id
+  armedTimer = setTimeout(() => { armedTie.value = '' }, 3000)
+  return false
+}
+
+// The row goes without a re-read: the write already says what happened, and a
+// relation-tie slot stays put with the note explaining why.
+async function dropTie(memberId, factionId, removeId, list, note) {
+  tieBusy.value = memberId
+  try {
+    const res = await removeMembership({ memberId, factionId })
+    if (!res.ok) { note.value = res.error; return }
+    if (res.nothingRemoved) { note.value = RELATION_TIE_NOTE; return }
+    note.value = ''
+    list.value = list.value.filter(x => x.id !== removeId)
+  } finally {
+    tieBusy.value = ''
+  }
+}
+
+async function kickMember(m) {
+  if (!armOrConfirm(m.id)) return
+  await dropTie(m.id, props.entityId, m.id, members, memberNote)
+}
+
+async function leaveEntityFaction(f) {
+  if (!armOrConfirm(f.id)) return
+  await dropTie(props.entityId, f.id, f.id, entityFactions, factionNote)
 }
 
 async function joinFaction() {
@@ -813,18 +925,11 @@ async function leaveFaction() {
   if (memberBusy.value) return
   memberBusy.value = true
   try {
-    const res = await graphql(
-      `mutation($input: DeleteRelationshipInput!) { deleteRelationship(input: $input) }`,
-      { input: { fromEntityId: actingEntityId.value, toEntityId: props.entityId, type: 'membership' } },
-    )
-    const failure = res ? '' : (apiError.value || 'Could not remove the membership.')
-    // false = there was no membership edge to remove, yet the roster still lists
-    // them: that slot is a `relation` tie, which carries roster traits and is not
-    // this button's to delete.
-    const nothingRemoved = !!res && res.deleteRelationship === false
-    await loadMembers()
-    if (failure) memberNote.value = failure
-    else if (nothingRemoved) memberNote.value = 'That roster slot is a relation tie, not a membership — edit or remove it from the relationship editor.'
+    const res = await removeMembership({ memberId: actingEntityId.value, factionId: props.entityId })
+    if (!res.ok) { memberNote.value = res.error; return }
+    if (res.nothingRemoved) { memberNote.value = RELATION_TIE_NOTE; return }
+    memberNote.value = ''
+    members.value = members.value.filter(m => m.id !== actingEntityId.value)
   } finally {
     memberBusy.value = false
   }
@@ -1087,6 +1192,8 @@ defineExpose({ refresh: loadImages })
 .faction-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-rank { font-size: 10px; text-transform: uppercase; color: var(--text-dim); padding: 1px 6px; border-radius: 3px; background: var(--overlay-4); }
 .members-action { display: flex; gap: 6px; margin-top: 8px; }
+/* Compact stand-in for DangerButton in a row: same two-step confirm. */
+.tie-remove { flex: 0 0 auto; padding: 1px 6px; font-size: 11px; }
 .members-action .btn { flex: 1; }
 .members-note { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
 </style>
