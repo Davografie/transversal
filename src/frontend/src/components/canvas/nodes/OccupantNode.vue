@@ -95,7 +95,10 @@ const portraitStyle = computed(() => {
   background: rgba(232, 136, 48, 0.25); color: #e88830;
 }
 .occ-actions { display: flex; flex-direction: column; gap: 2px; }
-.occ-btn { padding: 2px 4px; font-size: 11px; border-radius: 4px; background: rgba(255,255,255,0.06); border: none; cursor: pointer; }
-.occ-btn:hover { background: var(--map-accent); }
+/* `color` is explicit: form controls do not inherit it, so the text-glyph
+   button (⊙) took the UA's default buttontext — black on a dark node — while
+   the emoji ones (🔗🏴🔍) looked fine because they ignore `color`. */
+.occ-btn { padding: 2px 4px; font-size: 11px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--map-text); border: none; cursor: pointer; }
+.occ-btn:hover { background: var(--map-accent); color: #fff; }
 .occ-btn.active { background: var(--map-accent); color: #fff; }
 </style>
