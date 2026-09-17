@@ -54,6 +54,14 @@ ELEMENT_TYPES: dict[str, ElementType] = {
     # the pipeline's point of view — nothing navigates *out* of an SFX yet.
     "sfx": ElementType("sfx", "SFX"),
     "pool": ElementType("pool", "Dice pool"),
+    # A life path and one of its roll tables. Both are things an effect can name
+    # ("start them on *the wandering sword*"), and neither is an entity — which is
+    # why they are elements of their own rather than a filter over something else.
+    "life_path": ElementType("life_path", "Life path"),
+    "roll_table": ElementType("roll_table", "Roll table"),
+    # A pending timer, as a targetable thing: an effect can be aimed at a
+    # countdown that is already running on someone.
+    "scheduled_event": ElementType("scheduled_event", "Pending timer"),
 }
 
 
@@ -199,10 +207,36 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "tags": ScalarField("trait", "tags", "string",
                             operators=("contains", "==", "!="), suggest="trait_tags",
                             label="tag"),
+        # A trait belongs to one or more universes; a list, so it is matched with
+        # `contains` — "every earth trait" is `universes contains earth`.
+        "universes": ScalarField("trait", "universes", "string",
+                                 operators=("contains", "==", "!="), label="universe"),
     },
     "traitset": {
         "id": ScalarField("traitset", "id", "string"),
         "name": ScalarField("traitset", "name", "string"),
+        "universes": ScalarField("traitset", "universes", "string",
+                                 operators=("contains", "==", "!="), label="universe"),
+    },
+    # A life path and a roll table: the two registry things a life-path SFX names.
+    # `universe` is a plain attribute on both, and a table also says which path it
+    # follows — which is how "that faction's table" is reachable as a path.
+    "life_path": {
+        "id": ScalarField("life_path", "id", "string"),
+        "name": ScalarField("life_path", "name", "string"),
+        "universe": ScalarField("life_path", "universe", "string", references="universe"),
+    },
+    "roll_table": {
+        "id": ScalarField("roll_table", "id", "string"),
+        "name": ScalarField("roll_table", "name", "string"),
+        "universe": ScalarField("roll_table", "universe", "string", references="universe"),
+        "life_path": ScalarField("roll_table", "life_path", "string", references="life_path"),
+    },
+    # A pending timer's only own field is its id; its label and countdown are
+    # derived (see the resolver's derived readers), because both are assembled
+    # from the effect it carries rather than stored.
+    "scheduled_event": {
+        "id": ScalarField("scheduled_event", "id", "string"),
     },
     "entity": {
         "id": ScalarField("entity", "id", "string"),
@@ -393,6 +427,33 @@ EDGES: tuple[Edge, ...] = (
     Edge("traits", "traitset", ("trait",), "many", "Traits", noun="trait"),
     Edge("traitset", "trait", ("traitset",), "one", "Trait set"),
     Edge("universes", "trait", ("universe",), "many", "Universes", noun="universe"),
+
+    # location → its sub-locations, itself included: one zone and everything
+    # under it. This is what "everyone in Iron Roots" has to mean when the sect
+    # spans several maps — one repo read (`list_location_descendants`), the same
+    # hierarchy the canvas renders.
+    Edge("subtree", "location", ("location",), "many", "Sub-locations",
+         noun="sub-location", plural="sub-locations"),
+
+    # entity → the entities on its roster, and inversely the orgs *this* entity is
+    # on the roster of. Two edges, not one, because a membership read is directed:
+    # "who is in Iron Roots" is not "what is Kael in", and an effect that steps a
+    # member's own sect needs the second.
+    Edge("members", "entity", ("entity",), "many", "Members", noun="member"),
+    Edge("factions", "entity", ("entity",), "many", "Factions", noun="faction"),
+
+    # entity → the life paths it may start someone on (a faction's own paths), and
+    # a life path → its roll tables. Together these make a faction's table
+    # reachable from the faction instead of from the table registry.
+    Edge("life_paths", "entity", ("life_path",), "many", "Suitable life paths",
+         noun="life path", plural="life paths"),
+    Edge("roll_tables", "life_path", ("roll_table",), "many", "Roll tables",
+         noun="roll table", plural="roll tables"),
+
+    # entity → the timers counting down on it (an effect's duration, whether it
+    # was scheduled on the entity or on one of its trait instances).
+    Edge("scheduled_events", "entity", ("scheduled_event",), "many", "Pending timers",
+         noun="pending timer", plural="pending timers"),
 )
 
 
@@ -523,6 +584,11 @@ COLLECTIONS: tuple[Collection, ...] = (
     Collection("self_traitsettings", "traitsetting", "The acting entity's trait instances",
                noun="trait instance", possessive=True),
     Collection("sfxs", "sfx", "Rules in the registry", noun="rule"),
+    # The registry seeds, for a path that ranges over definitions rather than over
+    # what one entity holds (`traitsets`/`life_paths`/`roll_tables`).
+    Collection("traitsets", "traitset", "Trait sets in the registry", noun="trait set"),
+    Collection("life_paths", "life_path", "Life paths", noun="life path"),
+    Collection("roll_tables", "roll_table", "Roll tables", noun="roll table"),
 )
 
 
@@ -555,6 +621,9 @@ DISPLAY_FIELDS: dict[str, DisplayFields] = {
     "universe": DisplayFields("universe", "name", ""),
     "pool": DisplayFields("pool", "kind", ""),
     "sfx": DisplayFields("sfx", "name", "trigger"),
+    "life_path": DisplayFields("life_path", "name", "universe"),
+    "roll_table": DisplayFields("roll_table", "name", "universe"),
+    "scheduled_event": DisplayFields("scheduled_event", "label", "subtitle"),
 }
 
 

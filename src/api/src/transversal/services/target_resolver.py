@@ -525,6 +525,14 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
         # the scalar fields above.
         getter = getattr(ctx.repo, "get_all_sfxs", None)
         return list(getter()) if callable(getter) else []
+    if name == "traitsets":
+        getter = getattr(ctx.repo, "get_all_traitsets", None)
+        return list(getter()) if callable(getter) else []
+    if name == "life_paths":
+        getter = getattr(ctx.repo, "list_all_lifepaths", None)
+        return list(getter()) if callable(getter) else []
+    if name == "roll_tables":
+        return list(ctx.repo.list_roll_tables())
     return None
 
 
@@ -877,6 +885,12 @@ def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:
         return _maybe(repo.get_traitset_by_id(value))
     if element == "projection":
         return _maybe(repo.get_projection(value))
+    if element == "life_path":
+        return _maybe(repo.get_lifepath(value))
+    if element == "roll_table":
+        return _maybe(repo.get_roll_table(value))
+    if element == "scheduled_event":
+        return _maybe(repo.get_scheduled_event(value))
     if element == "pool":
         return _maybe(_pool_from_id(value, repo))
     if element == "die":
@@ -1072,10 +1086,95 @@ def _universe_locations(u: Any, ctx: TargetContext) -> list[Any]:
     return list(ctx.repo.list_entities_by_type(EntityType.LOCATION, universe=handle or None))
 
 
+def _location_subtree(l: Any, ctx: TargetContext) -> list[Any]:
+    """A location plus everything under it, as entities.
+
+    ``list_location_descendants`` is the app's own hierarchy walk (the one the
+    canvas draws), so a path and the map cannot disagree about what is inside a
+    place. The location itself is included: "everyone in Iron Roots" means the
+    place *and* its zones, not only its zones.
+    """
+    if ctx.repo is None:
+        return []
+    lid = getattr(l, "id", None) or (l.get("id") if isinstance(l, dict) else None)
+    if not lid:
+        return []
+    return list(ctx.repo.get_entities_by_ids(
+        [lid] + list(ctx.repo.list_location_descendants(lid))))
+
+
+def _entity_factions(e: Any, ctx: TargetContext) -> list[Any]:
+    """The orgs this entity is on the roster of (the inverse of ``members``)."""
+    if ctx.repo is None:
+        return []
+    return [
+        f for f in (ctx.repo.get_entity(fid) for fid in ctx.repo.get_entity_factions(e.id))
+        if f is not None
+    ]
+
+
+def _entity_life_paths(e: Any, ctx: TargetContext) -> list[Any]:
+    """The life paths this entity may start someone on (a faction's own paths)."""
+    if ctx.repo is None:
+        return []
+    ids = getattr(e, "suitable_life_path_ids", None) or []
+    return [lp for lp in (ctx.repo.get_lifepath(i) for i in ids) if lp is not None]
+
+
+def _life_path_roll_tables(lp: Any, ctx: TargetContext) -> list[Any]:
+    """The roll tables that follow this life path."""
+    if ctx.repo is None:
+        return []
+    lid = getattr(lp, "id", None) or (lp.get("id") if isinstance(lp, dict) else None)
+    return [t for t in ctx.repo.list_roll_tables() if t.life_path == lid]
+
+
+def _entity_scheduled_events(e: Any, ctx: TargetContext) -> list[Any]:
+    """Every timer counting down on this entity.
+
+    Two homes, one answer: a duration can be scheduled on the entity itself or on
+    one of its trait instances (a complication that clears after a scene), so both
+    are read and the second is filtered to the settings this entity owns.
+    """
+    if ctx.repo is None:
+        return []
+    events = list(ctx.repo.list_scheduled_events(target_type="entity", target_id=e.id))
+    for event in ctx.repo.list_scheduled_events(target_type="trait_setting"):
+        ts = ctx.repo.get_traitsetting(event.target_id)
+        if ts is not None and ts.entity_id == e.id:
+            events.append(event)
+    return events
+
+
+def _scheduled_event_label(e: Any, repo) -> str:
+    """A timer's primary label: its effect's action and target."""
+    eff = e.effect
+    target = (eff.target or "").strip()
+    label = eff.action
+    if target and target != "self":
+        label = f"{eff.action} {target}"
+    if e.source_sfx_id:
+        label = f"{label} ({e.source_sfx_id})"
+    return label or e.id
+
+
+def _scheduled_event_subtitle(e: Any, repo) -> str:
+    """A timer's countdown string (e.g. ``2 scenes``)."""
+    parts = []
+    for t in (e.timers or []):
+        unit = t.event if t.remaining == 1 else f"{t.event}s"
+        parts.append(f"{t.remaining} {unit}")
+    return " · ".join(parts)
+
+
 def register_default_fields() -> None:
     register_derived_field("traitsetting", "tags", _traitsetting_tags)
     register_derived_field("die", "rating", _die_rating)
     register_derived_field("location", "universe", _location_universe)
+    # A pending timer's label and countdown are assembled from the effect it
+    # carries (action + target, and its remaining timers), not stored on it.
+    register_derived_field("scheduled_event", "label", _scheduled_event_label)
+    register_derived_field("scheduled_event", "subtitle", _scheduled_event_subtitle)
 
 
 def register_default_edges() -> None:
@@ -1137,6 +1236,17 @@ def register_default_edges() -> None:
     register_edge("trait", "traitset", lambda t, ctx: _maybe(ctx.repo.get_traitset_by_id(t.traitset_id)))
     register_edge("trait", "universes",
                   lambda t, ctx: [ctx.repo.get_entity(u) for u in (t.universes or []) if ctx.repo.get_entity(u)])
+
+    # The hierarchy and the roster hops: a place's whole subtree, a faction's
+    # members and the inverse, and the registry things a faction owns — the reach
+    # that lets a flat "which targets" scope be written as a path.
+    register_edge("location", "subtree", _location_subtree)
+    register_edge("entity", "members",
+                  lambda e, ctx: list(ctx.repo.list_faction_members(e.id)))
+    register_edge("entity", "factions", _entity_factions)
+    register_edge("entity", "life_paths", _entity_life_paths)
+    register_edge("life_path", "roll_tables", _life_path_roll_tables)
+    register_edge("entity", "scheduled_events", _entity_scheduled_events)
 
 
 register_default_edges()

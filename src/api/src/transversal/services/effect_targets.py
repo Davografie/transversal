@@ -95,24 +95,19 @@ def _traitset_name(repo, traitset_id: str) -> str:
 
 
 def _scheduled_event_name(e) -> str:
-    """A human-readable label for a pending timer (effect action + target)."""
-    eff = e.effect
-    target = (eff.target or "").strip()
-    label = eff.action
-    if target and target != "self":
-        label = f"{eff.action} {target}"
-    if e.source_sfx_id:
-        label = f"{label} ({e.source_sfx_id})"
-    return label or e.id
+    """A human-readable label for a pending timer (effect action + target).
+
+    Delegates to the resolver's derived reader, so the picker's label and a
+    path's ``scheduled_event.label`` are literally the same string.
+    """
+    from transversal.services.target_resolver import _scheduled_event_label
+    return _scheduled_event_label(e, None)
 
 
 def _scheduled_event_subtitle(e) -> str:
     """Countdown string for a pending timer (e.g. ``2 scenes``)."""
-    parts = []
-    for t in (e.timers or []):
-        unit = t.event if t.remaining == 1 else f"{t.event}s"
-        parts.append(f"{t.remaining} {unit}")
-    return " · ".join(parts)
+    from transversal.services.target_resolver import _scheduled_event_subtitle as reader
+    return reader(e, None)
 
 
 def _die_candidates() -> list[TargetCandidate]:
