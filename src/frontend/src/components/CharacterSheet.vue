@@ -60,7 +60,7 @@
               </div>
             </template>
           </div>
-          <div class="razmerit-anchor">
+          <div v-if="sheetProfile.razmerit" class="razmerit-anchor">
             <button class="razmerit-chip" :title="showRazmeritWidget ? 'Close' : 'Adjust razmerit'" @click.stop="showRazmeritWidget = !showRazmeritWidget">
               ⚡{{ entity.razmerit }}
             </button>
@@ -122,11 +122,12 @@
                 @click="activeSheetView = 'relation'"
               >🤝</button>
               <template v-if="gmMode || !overrideEntityId">
-                <button :class="['pill', { active: activeSheetView === 'profile' }]" @click="activeSheetView = 'profile'">👤</button>
-                <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="goToTraitSets">🎲</button>
+                <button v-if="hasTab('profile')" :class="['pill', { active: activeSheetView === 'profile' }]" @click="activeSheetView = 'profile'">👤</button>
+                <button v-if="hasTab('traits')" :class="['pill', { active: activeSheetView === 'traits' }]" @click="goToTraitSets">🎲</button>
                 <button v-if="gmMode" :class="['pill', { active: showAllTraits }]" :title="showAllTraits ? 'Showing all traits' : 'Show all traits'" @click="showAllTraits = !showAllTraits">🌍</button>
-                <button :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘</button>
-                <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
+                <button v-if="hasTab('roster')" :class="['pill', { active: activeSheetView === 'roster' }]" :title="`Members of ${entity.name}`" @click="activeSheetView = 'roster'">👥</button>
+                <button v-if="hasTab('bluebook')" :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘</button>
+                <button v-if="hasTab('lifepath')" :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
               </template>
             </div>
             <Button v-if="!gmMode && !isForeignSheet" variant="ghost" size="icon" title="Player settings" @click.stop="$emit('openSettings')">↩</Button>
@@ -175,6 +176,25 @@
         @close="activeSheetView = 'traits'"
         @updated="fetchEntity"
       />
+      <!-- Faction roster — a faction's members, which live on `membership`
+           edges and read through `factionMembers`. Read-only for now: opening a
+           member's own sheet from a row needs the App-level "view this entity"
+           path that B134's faction chips will introduce. -->
+      <div v-else-if="activeSheetView === 'roster'" class="sheet-scroll">
+        <div v-if="rosterLoading" class="empty">Loading roster…</div>
+        <div v-else-if="!roster.length" class="empty">No members recorded</div>
+        <template v-else>
+          <h4 class="roster-title">{{ roster.length }} member{{ roster.length === 1 ? '' : 's' }}</h4>
+          <div class="roster-list">
+            <div v-for="m in roster" :key="m.id" class="roster-row">
+              <span class="roster-name">{{ displayName(m.name) }}</span>
+              <span class="roster-type">{{ memberTypeBadge(m.type) }}</span>
+              <span class="roster-role" :class="{ unset: !m.role }">{{ m.role || 'no role' }}</span>
+              <span v-if="m.rank" class="roster-rank" :title="'Rank die'">{{ m.rank }}</span>
+            </div>
+          </div>
+        </template>
+      </div>
       <template v-else>
         <div class="sheet-scroll">
         <!-- Full-panel trait edit -->
@@ -364,6 +384,7 @@ import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
 import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
 import { splitRefunds } from '../utils/poolSpends.js'
+import { DEFAULT_SHEET_TAB, hasSheetTab, sheetProfileFor } from '../utils/sheetProfile.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -556,19 +577,66 @@ const isForeignSheet = computed(() =>
   props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId
 )
 
+// ── Which sheet this is (B108 / B134) ──────────────────────────────
+// One shell, three faces: an occupant, a location, a faction. The declaration
+// lives in `utils/sheetProfile.js` (tabs + header extras only) because the trait
+// machinery below is already type-agnostic and must stay that way.
+const sheetProfile = computed(() => sheetProfileFor(entity.value?.type))
+const isFactionSheet = computed(() => sheetProfile.value.kind === 'faction')
+function hasTab(tab) { return hasSheetTab(sheetProfile.value, tab) }
+
+// ── Faction roster (B108) ───────────────────────────────────────
+// A faction's members live on `membership` edges (plus the promoted `relation`
+// ties), which is exactly what `factionMembers` resolves. Fetched lazily on the
+// tab rather than with the entity: a faction sheet that is never opened on the
+// roster should not pay for it.
+const roster = ref([])
+const rosterLoading = ref(false)
+
+function memberTypeBadge(type) {
+  const t = String(type || '').toUpperCase()
+  if (t === 'CHARACTER') return 'PC'
+  return t || '—'
+}
+
+async function fetchRoster() {
+  const id = props.overrideEntityId || props.entityId
+  if (!id || !isFactionSheet.value) { roster.value = []; return }
+  rosterLoading.value = true
+  const data = await graphql(
+    `query($id: ID!) { factionMembers(factionId: $id) { id name type role rank } }`,
+    { id },
+  )
+  roster.value = data?.factionMembers || []
+  rosterLoading.value = false
+}
+
+watch(
+  [() => activeSheetView.value, () => props.entityId, () => props.overrideEntityId, isFactionSheet],
+  () => { if (activeSheetView.value === 'roster') fetchRoster() },
+  { immediate: true },
+)
+
 // ── Relation tab (foreign sheets) ───────────────────────────────
 // Traits hanging off *our* outgoing edge to the sheet we're looking at — what we
 // hold about them (`_from == viewerEntityId`, `_to == overrideEntityId`). The tab
 // only exists when such an edge carries traits; a bare edge isn't worth a tab.
 const relationTraits = computed(() => relationship.value?.relationTraits || [])
 const showRelationTab = computed(() => !!isForeignSheet.value && relationTraits.value.length > 0)
-// `activeSheetView` is persisted, so 'relation' can outlive the edge that
-// justified it (refresh, relationship removed, sheet switched). Fall back
-// whenever the tab isn't available — immediate, so a stale value is caught on
-// mount too. Defined after `activeSheetView`/`isForeignSheet` so the immediate
-// run has both.
-watch(showRelationTab, (has) => {
-  if (!has && activeSheetView.value === 'relation') activeSheetView.value = 'traits'
+// `activeSheetView` is persisted, so a view can outlive the entity that
+// justified it: 'relation' when the edge goes away, 'lifepath' when the sheet
+// switches to a location, 'roster' when it switches to a character. Fall back
+// whenever the current view isn't available for this type — immediate, so a
+// stale value is caught on mount and on the entity loading too (the profile is
+// the occupant's until `entity` arrives, so the correction has to re-run when
+// it does).
+watch([showRelationTab, sheetProfile], () => {
+  const view = activeSheetView.value
+  if (view === 'relation') {
+    if (!showRelationTab.value) activeSheetView.value = 'traits'
+    return
+  }
+  if (!hasTab(view)) activeSheetView.value = DEFAULT_SHEET_TAB
 }, { immediate: true })
 
 const ownsCharacter = computed(() => {
@@ -2486,6 +2554,57 @@ watch(() => props.externalPoolSources, (sources) => {
   margin-bottom: 6px;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--overlay-6);
+}
+
+/* Faction roster (B108) — a member list, not a trait list, so it gets its own
+   row shape: the name leads, the role is the payload, the type badge stays
+   quiet. Reuses `.empty` for the two empty states. */
+.roster-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--overlay-6);
+}
+.roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.roster-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--overlay-4);
+  border: 1px solid var(--overlay-6);
+  border-radius: 6px;
+}
+.roster-name {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: var(--text);
+}
+.roster-type {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  border: 1px solid var(--overlay-10);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.roster-role {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-dim);
+}
+.roster-role.unset { opacity: 0.5; }
+.roster-rank {
+  font-size: 11px;
+  color: var(--accent);
 }
 
 .loading, .error, .empty {
