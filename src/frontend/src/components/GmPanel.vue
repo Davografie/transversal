@@ -132,7 +132,6 @@ import { useLocationTree } from '@/composables/useLocationTree.js'
 import { useEntityFilter } from '@/composables/useEntityFilter.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
-import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmTroupeOverview from '@/components/gm/GmTroupeOverview.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
@@ -392,20 +391,9 @@ function openEntityEdit() {
     badge: selected.value.type,
     props: { entityId: selectedId.value, currentEntityId: props.entityId, currentLocationId: props.currentLocationId },
     listeners: {
-      'switch-to-sheet': switchToSheet,
       'image-open': onImageOpen,
       'go-to-location': () => bus.emit('switch-view-location', selectedId.value),
     },
-  })
-}
-
-function switchToSheet() {
-  if (!panel.open || !selected.value) return
-  editing.value = false
-  panel.open({
-    component: CharacterSheet,
-    title: selected.value.name || 'Character Sheet',
-    props: { entityId: selected.value.id, universe: props.universe, embedded: true, gmMode: true },
   })
 }
 

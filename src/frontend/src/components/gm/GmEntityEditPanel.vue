@@ -41,6 +41,9 @@
       >📍 Go to this location</Button>
       <span v-if="goError" class="go-error">{{ goError }}</span>
     </div>
+    <div v-if="isOccupant" class="section-buttons">
+      <Button class="section-btn" variant="neutral" @click="openSheet">📄 Character Sheet</Button>
+    </div>
     <div class="image-gallery">
       <div class="gallery-header">
         <h4>Images</h4>
@@ -267,6 +270,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject } from '
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud, createEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import CharacterSheet from '@/components/CharacterSheet.vue'
 import { useFactionRoles } from '@/composables/useFactionRoles.js'
 import FactionRoleCell from '@/components/gm/FactionRoleCell.vue'
 import { useLifePaths } from '@/composables/useLifePaths.js'
@@ -542,6 +546,25 @@ function openCanvas() {
   } else if (type === 'FACTION') {
     bus.emit('canvas:open-full', { mode: 'faction', entityId: props.entityId })
   }
+}
+
+// The sheet needs the shell's inputs — the perspective and the pool/settings/effect
+// handlers — to be fully functional, and only a panel can open one (`usePanel` is
+// per-Panel context). App provides the spec; this panel opens it in its own stack,
+// so a sheet opened here behaves exactly like the main-view one.
+const characterSheetSpec = inject('characterSheetSpec', null)
+
+function openSheet() {
+  const spec = characterSheetSpec?.(props.entityId)
+  if (!spec) return
+  panel.open({
+    component: CharacterSheet,
+    title: spec.title,
+    id: props.entityId,
+    badge: 'SHEET',
+    props: spec.props,
+    listeners: spec.listeners,
+  })
 }
 
 // Going somewhere is a request that can fail, so it is awaited rather than fired

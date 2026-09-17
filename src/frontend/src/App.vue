@@ -256,7 +256,7 @@ import ToastBar from './components/ToastBar.vue'
 import RollTableMenu from './components/gm/RollTableMenu.vue'
 
 const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools, getActivity: apiGetActivity } = useApi()
-const { fetchEntities: prefetchEntities } = useEntityCrud()
+const { fetchEntities: prefetchEntities, entities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const entityCache = useEntityCache()
 const bus = usePanelBus()
@@ -903,6 +903,52 @@ function onDiceRolled(result) {
   sheetRef.value?.fetchTimers?.()
   armedSfxRefresh.value++
 }
+
+// A character sheet is only fully functional with the shell's inputs: the
+// app-level perspective (who owns what, who is looking) and the action handlers
+// the main-view sheet is wired to (the pool, settings, effects). A panel renders
+// the sheet itself — `usePanel` is per-Panel context, so App cannot open one — so
+// it asks for this instead. One definition of "a working sheet", used by panels.
+function characterSheetSpec(viewId) {
+  if (!viewId) return null
+  const acting = entityId.value || ''
+  const foreign = !!acting && acting !== viewId
+  const subject = entities.value.find(e => e.id === viewId)
+  return {
+    title: subject?.name || 'Character Sheet',
+    props: {
+      // The main view's shape for a sheet that is not your own body: the acting
+      // entity is the viewer and the subject is `overrideEntityId` — which is also
+      // what shows the relation tab and what `gmMode` re-opens for editing.
+      entityId: foreign ? acting : viewId,
+      overrideEntityId: foreign ? viewId : null,
+      viewerEntityId: acting,
+      playerOwnedEntityIds: ownedEntityIds.value,
+      playerId: playerId.value,
+      mainEntityId: ownMainId.value,
+      // The subject's own universe: the sheet resolves traitsets from its entity
+      // anyway, but SFX availability and placement read this prop directly.
+      universe: subject?.currentUniverse || universe.value,
+      phase: phase.value,
+      embedded: true,
+      gmMode: gmMode.value,
+    },
+    listeners: {
+      // Keys are the emit names the sheet uses — a spec's listeners are bound with
+      // `v-on`, which looks handlers up by that exact name.
+      openSettings,
+      addToPool: (d) => diceRef.value?.addFromSheet(d),
+      removeFromPool: (s) => diceRef.value?.removeBySource(s),
+      removeByTsId: (id) => diceRef.value?.removeByTsId(id),
+      retractNegative: (p) => diceRef.value?.retractNegative(p),
+      splitDie: (d) => diceRef.value?.splitDie(d),
+      sfxToggled: onSfxToggled,
+      stampSfx: (d) => diceRef.value?.stampArmedSfx(d.tsId, d.sfxId),
+      sheetViewChange: onSheetViewChange,
+    },
+  }
+}
+provide('characterSheetSpec', characterSheetSpec)
 
 function onSheetViewChange(view) {
   const next = view === 'lifepath' ? 'roll_table' : 'cortex'
