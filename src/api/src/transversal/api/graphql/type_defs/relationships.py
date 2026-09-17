@@ -68,3 +68,29 @@ class FactionMember:
     type: str = ""
     role: Optional[str] = None
     rank: Optional[str] = None
+
+
+@strawberry.type
+class EntityFactionRef:
+    """One entity's association with one faction, and the edges behind it.
+
+    An association exists when *either* tie type is non-empty — the entity holds
+    a tie to the faction (``out_tie_type``, ``entity → faction``), or the faction
+    holds one toward the entity (``in_tie_type``, a posture).
+
+    The direction is not decoration: ``out_tie_type`` names the edge a role write
+    belongs on, and it is the only direction the roster read counts. Writing
+    ``membership`` blindly beside an authored ``relation`` roster tie is how a
+    member ends up with two parallel edges — so a caller that means to edit a role
+    must use ``out_tie_type`` when it is set, and only create a ``membership``
+    when it is empty.
+
+    ``tieType`` is deliberately two fields rather than one: a live pair (Azure
+    Dawn) is tied in *both* directions, so a single "the tie's type" would have to
+    silently pick one.
+    """
+    entity_id: strawberry.ID
+    faction_id: strawberry.ID
+    name: str
+    out_tie_type: str = ""
+    in_tie_type: str = ""

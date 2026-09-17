@@ -5,6 +5,7 @@ import strawberry
 from transversal.api.graphql.types import CharacterView
 from transversal.api.graphql.types import Entity
 from transversal.api.graphql.types import EntityType
+from transversal.api.graphql.types import EntityFactionRef
 from transversal.api.graphql.types import FactionMember
 from transversal.api.graphql.types import Projection
 from transversal.api.graphql.types import RelatedEntity
@@ -133,4 +134,30 @@ class QueriesEntities:
                 role=m.get("role"), rank=m.get("rank"),
             )
             for m in repo.get_faction_roster(str(faction_id))
+        ]
+
+    @strawberry.field
+    def entity_factions(
+        self, info: strawberry.Info, entity_ids: list[strawberry.ID]
+    ) -> list[EntityFactionRef]:
+        """Which factions these entities are tied to — **any** tie, either direction.
+
+        One row per ``(entity, faction)`` association for the whole list, in one
+        query. The GM focus filter needs this shape: it asks "factions associated
+        with these characters/GMCs/assets/locations", and a *type* chip ("every
+        character") cannot be answered by a per-entity read without unbounded
+        fan-out.
+
+        A posture the faction holds toward the entity counts as much as a
+        membership, so ``outTieType``/``inTieType`` are reported separately — the
+        former is the edge a role write belongs on. See
+        :class:`~transversal.api.graphql.type_defs.relationships.EntityFactionRef`.
+        """
+        repo = _em(info).repo
+        return [
+            EntityFactionRef(
+                entity_id=r["entity_id"], faction_id=r["faction_id"], name=r["name"],
+                out_tie_type=r["out_tie_type"], in_tie_type=r["in_tie_type"],
+            )
+            for r in repo.get_factions_for_entities([str(e) for e in entity_ids])
         ]

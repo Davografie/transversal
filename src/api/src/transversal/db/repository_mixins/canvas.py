@@ -557,6 +557,76 @@ class RepositoryCanvas:
                 factions.append(row["faction"])
         return factions
 
+    def get_factions_for_entities(self, entity_ids: list[str]) -> list[dict]:
+        """Bulk association read: which factions each entity is tied to, either direction.
+
+        The batched sibling of :meth:`get_entity_factions`, on the broader
+        semantics the GM filter needs: **any** tie to a faction counts, including
+        a posture the *faction* holds toward the entity (``faction → entity``).
+        The roster read is deliberately narrower — a ``relation`` tie is a roster
+        slot there only when it carries ``role``/``rank``, and only in the
+        member → faction direction — so this is a second read, not a widening of
+        the first.
+
+        Three facts shape the result, all from the edge model rather than taste:
+
+        * **Direction decides where a role can be written.** A roster slot is
+          ``entity → faction`` — also the only direction :meth:`get_faction_roster`
+          counts. A ``faction → entity`` tie is the organisation's posture toward
+          someone. Each row reports the two directions' tie types separately, so a
+          caller can tell a tie it may write a role onto from one it must not.
+        * **One pair can hold both directions** — the live Azure Dawn pair does —
+          so rows are merged per ``(entity, faction)`` rather than returned per
+          edge; a list keyed by faction would otherwise show a faction twice.
+        * **Only entity-level edges count**, matching :meth:`get_related_entities`,
+          the read this replaces. An edge anchored to one of an entity's
+          projections associates the *body*, not the entity.
+
+        Returns ``[{entity_id, faction_id, name, out_tie_type, in_tie_type}]``
+        sorted by entity then faction name — one row per association, one query
+        for the whole list (nothing here loads the trait registry, which is what
+        made the per-entity read unbatched).
+        """
+        if not entity_ids:
+            return []
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from IN @refs OR r._to IN @refs
+            LET f = PARSE_IDENTIFIER(r._from)
+            LET t = PARSE_IDENTIFIER(r._to)
+            FILTER f.collection == 'entities' AND t.collection == 'entities'
+            LET fe = DOCUMENT(r._from)
+            LET te = DOCUMENT(r._to)
+            FILTER fe != null AND te != null
+            LET out_hit = f.key IN @ids AND te.type == 'faction'
+            LET in_hit = t.key IN @ids AND fe.type == 'faction'
+            FILTER out_hit OR in_hit
+            RETURN {{
+                entity_id: out_hit ? f.key : t.key,
+                faction_id: out_hit ? t.key : f.key,
+                name: out_hit ? te.name : fe.name,
+                out_tie_type: out_hit ? r.type : '',
+                in_tie_type: in_hit ? r.type : '',
+            }}
+        """
+        refs = [f"{ENTITIES}/{eid}" for eid in entity_ids]
+        merged: dict[tuple[str, str], dict] = {}
+        for row in self.db.aql.execute(
+            query, bind_vars={"refs": refs, "ids": list(entity_ids)}
+        ):
+            key = (row["entity_id"], row["faction_id"])
+            found = merged.get(key)
+            if found is None:
+                merged[key] = dict(row)
+                continue
+            # The same pair reached from the other direction: keep whichever
+            # direction each field came from rather than letting the last write win.
+            if not found["out_tie_type"]:
+                found["out_tie_type"] = row["out_tie_type"]
+            if not found["in_tie_type"]:
+                found["in_tie_type"] = row["in_tie_type"]
+        return sorted(merged.values(), key=lambda r: (r["entity_id"], r["name"]))
+
     def canvas_faction(self, faction_id: str) -> dict:
         """Return conspyramid data for a faction.
 

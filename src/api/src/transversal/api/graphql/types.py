@@ -125,6 +125,7 @@ from transversal.api.graphql.type_defs.relationships import (  # noqa: F401
     DeleteRelationshipInput,
     RelatedEntity,
     FactionMember,
+    EntityFactionRef,
 )
 from transversal.api.graphql.type_defs.lifepath import (  # noqa: F401
     DiscoveryBlock,
