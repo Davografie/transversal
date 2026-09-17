@@ -129,18 +129,35 @@ The human rejected the "resolution-only" shape and stated the model directly:
    that nothing filters on (settable through GraphQL, read nowhere); a vacant body
    needs it honoured at read time. *Needs confirming — see below.*
 
+### Answered (human, 2026-09-15)
+
+- **Self is body-aware. Confirmed.** "Self" is the acting **body**, so the
+  occupant list stops hiding a body just because it belongs to the acting entity,
+  and the self dot only draws where that body actually is. Covers dangling items
+  2 and 4 — they were one root cause.
+- **Visibility rule (item 6), stated:** an occupant that reads as
+  **`hidden` and not `known_to`** is **invisible to players** and **transparent
+  for GMs**. Which makes `known_to` a required field on projections as well.
+  Note both flags are **inert today** — stored, exported, settable through
+  GraphQL/MCP, and read nowhere — so this is *making them work*, not adding them.
+- **An `enabled`/`disabled` flag on projections, independent of vacant/occupied**
+  (for a body that must be stored but is not physically present) — raised and
+  **explicitly parked** by the human as "a whole other discussion". Not part of
+  this work. Precedent if it returns: `TraitSetting.enabled` ("false = disabled;
+  contributes no dice until re-enabled").
+
 ### Still unresolved, needs an answer before planning
 
-- **The self-filter** (dangling item 2). `occupantDots` drops any occupant whose
-  `id` equals the acting `props.entityId`, so when the GM acts as a character
-  whose *inactive* body is in the room being viewed, that body is replaced by the
-  self dot — one dot where there are two bodies. "Only active projections become
-  big" does not cover this: it needs the acting **body** compared against the
-  occupant **body** instead of entity ids.
-- **What "read-time enabled" means for `hidden`** — whether the flag moves onto
-  the projection, or stays on the entity and is merely *honoured* when reading,
-  and who computes vacancy (the reader, from
-  `entity.current_projection != projection.id`).
+- **`unpublished` vs `hidden`.** There is already a player-visibility flag:
+  `unpublished` ("GM draft: real in-world but not yet revealed to players"), which
+  `occupantDots` filters on — hidden from players, shown normally to the GM with a
+  draft badge. The new rule is the same shape but gives the GM a **transparent**
+  view. Two mechanisms, or should `unpublished` fold into `hidden`/`known_to`?
+- **Where `hidden`/`known_to` live.** Whether they move onto the projection (so
+  visibility is per-body, pairing with the position move) or stay on the entity
+  and are merely *honoured* when reading.
+- **Who computes vacancy** — the reader, from
+  `entity.current_projection != projection.id`.
 
 ### Superseded framing (kept for the record)
 
@@ -154,14 +171,16 @@ spelled out.
 
 ## Open decisions
 
-1. **Self-filter** — compare acting body to occupant body (see above).
-2. **`hidden` at read time** — what exactly moves where (see above).
+1. **`unpublished` vs `hidden`** — fold together, or two mechanisms? (see above).
+2. **Where `hidden`/`known_to` live** — on the projection, or honoured from the
+   entity (see above).
 3. **~~Do bodies get their own map position?~~** — **decided: yes** (direction 1).
    Remaining question is migration: the 152 bodies standing somewhere today have
    no stored coordinate of their own, so they need a starting value.
 4. **Names.** Only 1 of 886 bodies is named, but the field exists and a body in
    another universe could legitimately read as a different person. Confirm the
    fallback (body name → entity name) is the intent.
+5. **Parked:** an `enabled` flag on projections, independent of vacancy.
 
 ## Not decided here
 
