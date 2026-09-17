@@ -41,8 +41,8 @@
       >📍 Go to this location</Button>
       <span v-if="goError" class="go-error">{{ goError }}</span>
     </div>
-    <div v-if="isOccupant" class="section-buttons">
-      <Button class="section-btn" variant="neutral" @click="openSheet">📄 Character Sheet</Button>
+    <div v-if="hasSheet" class="section-buttons">
+      <Button class="section-btn" variant="neutral" @click="openSheet">{{ sheetLabel }}</Button>
     </div>
     <div class="image-gallery">
       <div class="gallery-header">
@@ -576,6 +576,15 @@ function openCanvas() {
 // per-Panel context). App provides the spec; this panel opens it in its own stack,
 // so a sheet opened here behaves exactly like the main-view one.
 const characterSheetSpec = inject('characterSheetSpec', null)
+
+// The sheet shell renders per type (its own profile decides the tabs): occupants,
+// factions (roster) and locations (incoming ties). Universe and the pseudo-types
+// are left out — they would fall back to the occupant profile, and nothing asked
+// for them.
+const SHEET_TYPES = ['CHARACTER', 'GMC', 'ASSET', 'FACTION', 'LOCATION']
+const hasSheet = computed(() => SHEET_TYPES.includes(form.value?.type))
+const SHEET_LABELS = { FACTION: '📄 Faction Sheet', LOCATION: '📄 Location Sheet' }
+const sheetLabel = computed(() => SHEET_LABELS[form.value?.type] || '📄 Character Sheet')
 
 function openSheet() {
   const spec = characterSheetSpec?.(props.entityId)

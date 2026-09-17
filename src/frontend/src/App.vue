@@ -916,7 +916,7 @@ function characterSheetSpec(viewId) {
   const foreign = !!acting && acting !== viewId
   const subject = entities.value.find(e => e.id === viewId)
   return {
-    title: subject?.name || 'Character Sheet',
+    title: subject?.name || 'Sheet',
     props: {
       // The main view's shape for a sheet that is not your own body: the acting
       // entity is the viewer and the subject is `overrideEntityId` — which is also
@@ -946,6 +946,9 @@ function characterSheetSpec(viewId) {
       sfxToggled: onSfxToggled,
       stampSfx: (d) => diceRef.value?.stampArmedSfx(d.tsId, d.sfxId),
       sheetViewChange: onSheetViewChange,
+      // The faction roster's rows (and anything else naming an entity) go through
+      // the app's own peer grammar, exactly as they do in the main view.
+      viewEntity: onPeerClick,
     },
   }
 }
