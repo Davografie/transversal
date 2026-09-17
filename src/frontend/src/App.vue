@@ -422,6 +422,10 @@ function onMoved(data) {
 // GM: acting entity, null = free-roam). "Self" is derived — the player's own
 // main from troupe data, free-roam for the GM. See [[Perspective Model]].
 const entityId = ref(localStorage.getItem('entityId') || null)  // perspective entity; null = GM free-roam
+// Same reason as `gmCurrentLocationId`: a panel's spec props are frozen when it
+// opens, so "who the GM is acting as" must reach the panels as live provided
+// state — the faction panel's membership gesture follows it without a reopen.
+provide('actingEntityId', computed(() => entityId.value || ''))
 const editZones = ref(false)
 
 // The player's own main entity (perspective-neutral). GM has no main: they

@@ -30,7 +30,7 @@
       v-model="form"
       :entity-id="entityId"
     />
-    <div v-if="form.type === 'LOCATION' || form.type === 'GMC'" class="canvas-open-row">
+    <div v-if="form.type === 'LOCATION' || form.type === 'GMC' || form.type === 'FACTION'" class="canvas-open-row">
       <Button class="section-btn" variant="neutral" @click="openCanvas">🗺 Open in Canvas</Button>
       <Button v-if="form.type === 'LOCATION'" class="section-btn" variant="neutral" @click="emit('go-to-location')">📍 Go to this location</Button>
     </div>
@@ -181,10 +181,32 @@
       </div>
       <div v-if="!members.length" class="gallery-empty">No members yet.</div>
       <div v-else class="members-list">
-        <div v-for="m in members" :key="m.id" class="member-row" :class="{ self: m.id === currentEntityId }">
+        <div v-for="m in members" :key="m.id" class="member-row" :class="{ self: m.id === actingEntityId }" @click="openMemberPanel(m)">
           <span class="entity-type-badge" :class="'type-' + m.type">{{ m.type }}</span>
           <span class="member-name">{{ m.name }}</span>
-          <span v-if="m.role" class="member-role">{{ m.role }}</span>
+          <!-- The role is the tie's own statement, so it is edited where it is
+               read; an unset role needs a region of its own to click. -->
+          <input
+            v-if="editingRoleId === m.id"
+            ref="roleInput"
+            v-model="roleDraft"
+            class="member-role-input"
+            placeholder="role…"
+            @click.stop
+            @keyup.enter="commitRole(m)"
+            @keyup.esc="cancelRole()"
+            @blur="commitRole(m)"
+          />
+          <Button
+            v-else
+            class="member-role"
+            :class="{ unset: !m.role }"
+            variant="ghost"
+            size="sm"
+            :loading="roleBusy === m.id"
+            :title="`Edit ${m.name}'s role in this faction`"
+            @click.stop="startRoleEdit(m)"
+          >{{ m.role || '+ role' }}</Button>
           <span v-if="m.rank" class="member-rank">{{ m.rank }}</span>
         </div>
       </div>
@@ -229,7 +251,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, inject } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud, createEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
@@ -263,7 +285,7 @@ const { form, selected, uploadBgImage, onImagen: doImagen, onCancel: doCancel, i
 // Genuinely global: the GM panel's entity list, and the delete that clears the
 // shared selection.
 const { deleteEntity, fetchEntities } = useEntityCrud()
-const { traitNameMap } = useTraitsConfig()
+const { traitNameMap, traitsets, fetchTraitsConfig } = useTraitsConfig()
 const { fetchLifePaths } = useLifePaths()
 const { name: universeName, options: universeOptions, load: loadUniverseNames } = useUniverseNames()
 loadUniverseNames()
@@ -502,6 +524,8 @@ function openCanvas() {
     bus.emit('canvas:open-full', { mode: 'location', entityId: props.entityId, scope: 'focus' })
   } else if (type === 'GMC') {
     bus.emit('canvas:open-full', { mode: 'gmc-web', entityId: props.entityId })
+  } else if (type === 'FACTION') {
+    bus.emit('canvas:open-full', { mode: 'faction', entityId: props.entityId })
   }
 }
 
@@ -639,7 +663,7 @@ watch(() => [props.entityId, form.value?.type], ([id, type]) => {
 // The roster read and the membership tie are both backend-platform's; the panel
 // owns the gesture. A roster entry is a `membership` (or roster-trait `relation`)
 // tie pointing member → faction, and the member here is whoever the GM is acting
-// as (the panel's `currentEntityId`).
+// as.
 const members = ref([])
 const acting = ref(null)            // the acting entity: { id, name, type }
 const memberBusy = ref(false)
@@ -647,14 +671,99 @@ const memberNote = ref('')
 // Who may hold a membership — the same set the backend validates against.
 const HOLDER_TYPES = ['CHARACTER', 'GMC', 'ASSET']
 const canHoldMembership = computed(() => !!acting.value && HOLDER_TYPES.includes(acting.value.type))
-const actingMembership = computed(() => members.value.find(m => m.id === props.currentEntityId) || null)
+// Live from App (see the provide there): a panel's spec props are frozen when it
+// opens, so the acting entity has to arrive as provided state for the gesture to
+// follow a perspective switch without reopening the panel. As with
+// `gmCurrentLocationId`, the inject wins outright — an empty one means free-roam,
+// and must not resurrect the id the panel happened to open with.
+const actingEntityId = inject('actingEntityId', null) || computed(() => props.currentEntityId || '')
+const actingMembership = computed(() => members.value.find(m => m.id === actingEntityId.value) || null)
+
+// ── Roles (the tie's own statement) ─────────────────
+// The role trait is the one named `role` inside the traitset named `relations` —
+// the rule the MCP tools resolve by, deliberately by name: the registry holds two
+// traits called `role` and the authored rosters use this one.
+const editingRoleId = ref('')
+const roleDraft = ref('')
+const roleBusy = ref('')
+const roleInput = ref(null)
+
+async function roleTraitId() {
+  if (!traitsets.value.length) await fetchTraitsConfig()
+  const relations = (traitsets.value || []).find(ts => ts.name === 'relations')
+  return (relations?.traits || []).find(t => t.name === 'role')?.id || ''
+}
+
+// The tie's role setting, if it has one. A relationship-anchored trait setting
+// comes back carrying its contact, which identifies the edge without its key.
+async function findRoleSettingId(memberId, traitId) {
+  const data = await graphql(
+    `query($id: ID!) { entity(id: $id) { traitSettings { id traitId fromType relationshipType relationshipContactId } } }`,
+    { id: memberId },
+  )
+  const hit = (data?.entity?.traitSettings || []).find(ts =>
+    ts.fromType === 'relationship' && ts.relationshipType === 'membership'
+    && ts.relationshipContactId === props.entityId && ts.traitId === traitId)
+  return hit?.id || ''
+}
+
+function startRoleEdit(m) {
+  roleDraft.value = m.role || ''
+  editingRoleId.value = m.id
+  nextTick(() => roleInput.value?.focus())
+}
+
+function cancelRole() { editingRoleId.value = '' }
+
+async function commitRole(m) {
+  if (editingRoleId.value !== m.id) return   // the blur that follows enter/escape
+  const next = roleDraft.value.trim()
+  editingRoleId.value = ''
+  if (next === (m.role || '')) return
+  roleBusy.value = m.id
+  try {
+    const traitId = await roleTraitId()
+    if (!traitId) { memberNote.value = 'Could not resolve the relations “role” trait.'; return }
+    const settingId = await findRoleSettingId(m.id, traitId)
+    let res = null
+    if (!next) {
+      if (!settingId) return
+      // Clearing removes the setting: the roster read falls back to the trait id
+      // when a role setting has no statement, so a blank one would read as an id.
+      res = await graphql(`mutation($id: ID!) { removeTraitSetting(id: $id) }`, { id: settingId })
+    } else if (settingId) {
+      res = await graphql(
+        `mutation($id: ID!, $input: TraitSettingUpdateInput!) { updateTraitSetting(id: $id, input: $input) { id statement } }`,
+        { id: settingId, input: { statement: next } },
+      )
+    } else {
+      res = await graphql(
+        `mutation($from: ID!, $to: ID!, $relType: String!, $traitId: ID!, $die: DieType!, $elevated: Boolean!, $statement: String!) {
+          addRelationshipTrait(fromEntityId: $from, toEntityId: $to, relType: $relType, traitId: $traitId, die: $die, elevated: $elevated, statement: $statement) { id statement }
+        }`,
+        { from: m.id, to: props.entityId, relType: 'membership', traitId, die: 'D4', elevated: false, statement: next },
+      )
+    }
+    const failure = res ? '' : (apiError.value || 'Could not save the role.')
+    await loadMembers()
+    if (failure) memberNote.value = failure
+  } finally {
+    roleBusy.value = ''
+  }
+}
+
+// The GM panel owns entity-panel opening (its listeners wire the sheet, the image
+// viewer and navigation), so reuse its channel instead of duplicating the spec.
+function openMemberPanel(m) {
+  if (m?.id) bus.emit('canvas:inspect', m.id)
+}
 
 async function loadMembers() {
   members.value = []
   acting.value = null
   memberNote.value = ''
   if (!props.entityId) return
-  const wanted = props.currentEntityId
+  const wanted = actingEntityId.value
   const [roster, me] = await Promise.all([
     graphql(`query($id: ID!) { factionMembers(factionId: $id) { id name type role rank } }`, { id: props.entityId }),
     wanted ? graphql(`query($id: ID!) { entity(id: $id) { id name type } }`, { id: wanted }) : null,
@@ -672,7 +781,7 @@ async function joinFaction() {
   try {
     const res = await graphql(
       `mutation($input: CreateRelationshipInput!) { createRelationship(input: $input) { id } }`,
-      { input: { fromEntityId: props.currentEntityId, toEntityId: props.entityId, type: 'membership' } },
+      { input: { fromEntityId: actingEntityId.value, toEntityId: props.entityId, type: 'membership' } },
     )
     // Read the reason before the reload below: every call clears the api error
     // ref on the way in, so a stale message cannot survive it.
@@ -690,7 +799,7 @@ async function leaveFaction() {
   try {
     const res = await graphql(
       `mutation($input: DeleteRelationshipInput!) { deleteRelationship(input: $input) }`,
-      { input: { fromEntityId: props.currentEntityId, toEntityId: props.entityId, type: 'membership' } },
+      { input: { fromEntityId: actingEntityId.value, toEntityId: props.entityId, type: 'membership' } },
     )
     const failure = res ? '' : (apiError.value || 'Could not remove the membership.')
     // false = there was no membership edge to remove, yet the roster still lists
@@ -705,7 +814,7 @@ async function leaveFaction() {
   }
 }
 
-watch(() => [props.entityId, form.value?.type, props.currentEntityId], ([id, type]) => {
+watch(() => [props.entityId, form.value?.type, actingEntityId.value], ([id, type]) => {
   if (id && type === 'FACTION') loadMembers()
 }, { immediate: true })
 
@@ -904,10 +1013,14 @@ defineExpose({ refresh: loadImages })
 .section-btn.zone-add-btn { flex: 0 0 auto; padding: 6px 10px; }
 .members-section { margin-top: 12px; }
 .members-list { display: flex; flex-direction: column; gap: 4px; }
-.member-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--overlay-2); }
+.member-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--overlay-2); cursor: pointer; }
+.member-row:hover { background: var(--overlay-4); }
 .member-row.self { border-color: var(--accent); }
 .member-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.member-role { font-size: 11px; color: var(--text-dim); }
+/* A chip, not a control row: the role is short text sitting beside the name. */
+.member-role { font-size: 11px; color: var(--text-dim); padding: 1px 6px; }
+.member-role.unset { font-style: italic; opacity: 0.65; }
+.member-role-input { width: 96px; font-size: 11px; padding: 2px 6px; }
 .member-rank { font-size: 10px; text-transform: uppercase; color: var(--text-dim); padding: 1px 6px; border-radius: 3px; background: var(--overlay-4); }
 .members-action { display: flex; gap: 6px; margin-top: 8px; }
 .members-action .btn { flex: 1; }
