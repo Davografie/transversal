@@ -114,6 +114,16 @@ const LOC_BASE_H = 60
 const HX_SIBLING_GAP = 16
 const HX_DEPTH_GAP = 24
 
+// Faction-view members are standalone `.canvas-occupant-node` elements, which
+// render 170–260px wide and ~48px tall. Grid steps use the *maximum* width so a
+// long name can never widen a node into its neighbour's slot.
+const LOC_W = 240 // `.canvas-location-node` max-width
+const FACTION_MEMBER_W = 260
+const FACTION_MEMBER_H = 48
+const FACTION_MEMBER_GAP = 12
+const FACTION_MEMBER_COLS = 3
+const FACTION_MEMBER_TOP_GAP = 20
+
 // ── Orientation helpers ───────────────────────────────
 
 function isHorizontal() {
@@ -929,9 +939,46 @@ export function useCanvas() {
       children: (childrenOf[id] || []).map(buildData),
     })
 
+    // Members are grouped per location *before* the tree pass: a location's slot
+    // has to fit its member grid, and d3.tree only separates slot centres by
+    // nodeSize, so a slot narrower than the grid lets a large roster spill into
+    // a sibling's lane. Members previously fanned at DX/2 (120px) — narrower
+    // than the 170px minimum node width — so every multi-member location
+    // overlapped, and the row collided with the child row below it.
+    const memberByLoc = {}
+    for (const m of data.members || []) {
+      if (!m.location_id) continue
+      const locNodeId = nodeId('loc', m.location_id)
+      memberByLoc[locNodeId] = memberByLoc[locNodeId] || []
+      memberByLoc[locNodeId].push(nodeId('occ', m.id))
+    }
+
+    // Long rosters wrap into bounded rows so one location cannot stretch its
+    // slot arbitrarily wide.
+    function memberGrid(locNodeId) {
+      const count = (memberByLoc[locNodeId] || []).length
+      if (!count) return { cols: 1, rows: 0, w: 0, h: 0 }
+      const cols = Math.min(count, FACTION_MEMBER_COLS)
+      const rows = Math.ceil(count / FACTION_MEMBER_COLS)
+      return {
+        cols,
+        rows,
+        w: cols * FACTION_MEMBER_W + (cols - 1) * FACTION_MEMBER_GAP,
+        h: rows * FACTION_MEMBER_H + (rows - 1) * FACTION_MEMBER_GAP,
+      }
+    }
+
+    let slotW = DX
+    let slotH = DY
+    for (const locNodeId of locNodeIds) {
+      const g = memberGrid(locNodeId)
+      slotW = Math.max(slotW, g.w ? g.w + FACTION_MEMBER_GAP : 0)
+      slotH = Math.max(slotH, DY + (g.h ? FACTION_MEMBER_TOP_GAP + g.h : 0))
+    }
+
     const positions = {}
     let offsetX = 0
-    const layout = tree().nodeSize([DX, DY])
+    const layout = tree().nodeSize([slotW, slotH])
     for (const rootId of roots) {
       const root = hierarchy(buildData(rootId))
       layout(root)
@@ -942,29 +989,27 @@ export function useCanvas() {
         maxX = Math.max(maxX, d.x)
       })
       const center = (minX + maxX) / 2
+      // d3.tree treats x as the centre of a slotW-wide slot; centre the location
+      // node on it so the node and its member grid share one axis.
       root.each((d) => {
-        positions[d.data.id] = { x: d.x - center + offsetX, y: d.y }
+        positions[d.data.id] = { x: d.x - center + offsetX - LOC_W / 2, y: d.y }
       })
-      offsetX += (maxX - minX) + DX
+      offsetX += (maxX - minX) + slotW
     }
 
-    // Members directly below their location.
-    const memberByLoc = {}
-    for (const m of data.members || []) {
-      if (m.location_id) {
-        memberByLoc[m.location_id] = memberByLoc[m.location_id] || []
-        memberByLoc[m.location_id].push(nodeId('occ', m.id))
-      }
-    }
-    for (const locId of Object.keys(memberByLoc)) {
-      const locNodeId = nodeId('loc', locId)
+    // Members in a bounded grid below their location, which slotH has already
+    // opened up enough room for that the child row stays clear.
+    for (const locNodeId of Object.keys(memberByLoc)) {
       const base = positions[locNodeId]
       if (!base) continue
-      const members = memberByLoc[locId]
+      const members = memberByLoc[locNodeId]
+      const g = memberGrid(locNodeId)
+      const left = base.x + LOC_W / 2 - g.w / 2
+      const top = base.y + LOC_BASE_H + FACTION_MEMBER_TOP_GAP
       members.forEach((mid, i) => {
         positions[mid] = {
-          x: base.x + (i - (members.length - 1) / 2) * (DX / 2),
-          y: base.y + DY * 0.8,
+          x: left + (i % g.cols) * (FACTION_MEMBER_W + FACTION_MEMBER_GAP),
+          y: top + Math.floor(i / g.cols) * (FACTION_MEMBER_H + FACTION_MEMBER_GAP),
         }
       })
     }
