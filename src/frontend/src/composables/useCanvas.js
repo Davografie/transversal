@@ -123,6 +123,10 @@ const FACTION_MEMBER_H = 48
 const FACTION_MEMBER_GAP = 12
 const FACTION_MEMBER_COLS = 3
 const FACTION_MEMBER_TOP_GAP = 20
+// Sibling subtrees otherwise land on identical Y coordinates, so any two edges
+// travelling between them are drawn as collinear horizontal lines, one on top of
+// another. Nudging each subtree keeps the grid readable while separating them.
+const FACTION_SUBTREE_JITTER = 8
 
 // ── Orientation helpers ───────────────────────────────
 
@@ -1013,6 +1017,30 @@ export function useCanvas() {
         }
       })
     }
+
+    // Deterministic per-subtree nudge. Nodes at the same depth under different
+    // siblings share an exact Y, so an edge between them is a dead-straight
+    // horizontal line and several such edges stack up invisibly on one another.
+    // Keyed off the child index (never random) so the layout is stable across
+    // renders, and applied before applyPositions so routeEdges re-picks handles
+    // from the shifted geometry. Drift compounds down the tree but is bounded by
+    // FACTION_SUBTREE_JITTER × depth, far inside the gap between depth bands.
+    const seenJitter = new Set()
+    function jitterSubtree(locNodeId, extra) {
+      if (seenJitter.has(locNodeId)) return
+      seenJitter.add(locNodeId)
+      const p = positions[locNodeId]
+      if (!p) return
+      p.y += extra
+      for (const mid of memberByLoc[locNodeId] || []) {
+        if (positions[mid]) positions[mid].y += extra
+      }
+      ;(childrenOf[locNodeId] || []).forEach((cid, i) => {
+        jitterSubtree(cid, extra + ((i % 3) - 1) * FACTION_SUBTREE_JITTER)
+      })
+    }
+
+    roots.forEach((r, i) => jitterSubtree(r, ((i % 3) - 1) * FACTION_SUBTREE_JITTER))
 
     applyPositions(positions)
   }
