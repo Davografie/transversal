@@ -631,5 +631,9 @@ border), and the overlay/particle system below — run continuously.
 - [[System Architecture]] — where the viewer sits in the stack.
 - [[API Contract]] — the REST endpoints and GraphQL mutations it calls.
 - [[Projections and Transversal]] — the consciousness/inapposite travel model.
+- [[Projections as Occupants]] — **open discussion**: should an occupant dot show
+  the entity or the body standing there? The viewer resolves an occupant's name
+  and portrait through the entity's *active* body, so a body left behind by
+  consciousness travel currently wears the face of the body the character went to.
 - [[UI-UX Design]] — interaction conventions and feel constants.
 - [[Relational Canvas]] — the GM node graph built from the same nav data.
