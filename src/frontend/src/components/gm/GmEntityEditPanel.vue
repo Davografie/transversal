@@ -186,27 +186,12 @@
           <span class="member-name">{{ m.name }}</span>
           <!-- The role is the tie's own statement, so it is edited where it is
                read; an unset role needs a region of its own to click. -->
-          <input
-            v-if="editingRoleId === m.id"
-            ref="roleInput"
-            v-model="roleDraft"
-            class="member-role-input"
-            placeholder="role…"
-            @click.stop
-            @keyup.enter="commitRole(m)"
-            @keyup.esc="cancelRole()"
-            @blur="commitRole(m)"
-          />
-          <Button
-            v-else
-            class="member-role"
-            :class="{ unset: !m.role }"
-            variant="ghost"
-            size="sm"
-            :loading="roleBusy === m.id"
+          <FactionRoleCell
+            :role="m.role || ''"
+            :busy="roleBusy === m.id"
             :title="`Edit ${m.name}'s role in this faction`"
-            @click.stop="startRoleEdit(m)"
-          >{{ m.role || '+ role' }}</Button>
+            @save="(next) => saveMemberRole(m, next)"
+          />
           <span v-if="m.rank" class="member-rank">{{ m.rank }}</span>
         </div>
       </div>
@@ -221,6 +206,26 @@
         </Button>
       </div>
       <div v-if="memberNote" class="members-note">{{ memberNote }}</div>
+    </div>
+    <div v-if="isOccupant" class="factions-section">
+      <div class="gallery-header">
+        <h4>Factions</h4>
+      </div>
+      <div v-if="!entityFactions.length" class="gallery-empty">Not in a faction yet.</div>
+      <div v-else class="factions-list">
+        <div v-for="f in entityFactions" :key="f.id" class="faction-row" @click="openFactionPanel(f)">
+          <span class="entity-type-badge type-FACTION">FAC</span>
+          <span class="faction-name">{{ f.name }}</span>
+          <FactionRoleCell
+            :role="f.role || ''"
+            :busy="factionRoleBusy === f.id"
+            :title="`Edit ${form.name}'s role in ${f.name}`"
+            @save="(next) => saveEntityRole(f, next)"
+          />
+          <span v-if="f.rank" class="member-rank">{{ f.rank }}</span>
+        </div>
+      </div>
+      <div v-if="factionNote" class="members-note">{{ factionNote }}</div>
     </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
       <Button class="section-btn" variant="neutral" @click="openLoraConfig">🖼 LoRA Configuration</Button>
@@ -255,6 +260,8 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject } from '
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud, createEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { useFactionRoles } from '@/composables/useFactionRoles.js'
+import FactionRoleCell from '@/components/gm/FactionRoleCell.vue'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -490,6 +497,7 @@ watch(panelActive, (active) => {
   // A roster can move while this panel sits behind another one (a join from a
   // sibling faction panel, say), so re-read it on the way back to the front.
   if (active && form.value?.type === 'FACTION') loadMembers()
+  if (active && isOccupant.value) loadEntityFactions()
 }, { immediate: true })
 
 // ── Sub-panel openers ───────────────────────────────
@@ -680,71 +688,17 @@ const actingEntityId = inject('actingEntityId', null) || computed(() => props.cu
 const actingMembership = computed(() => members.value.find(m => m.id === actingEntityId.value) || null)
 
 // ── Roles (the tie's own statement) ─────────────────
-// The role trait is the one named `role` inside the traitset named `relations` —
-// the rule the MCP tools resolve by, deliberately by name: the registry holds two
-// traits called `role` and the authored rosters use this one.
-const editingRoleId = ref('')
-const roleDraft = ref('')
+// The role lives on the membership tie and is written through the shared
+// `useFactionRoles`, which both this panel and the entity panel's faction list
+// use. Here it is the member's role in *this* faction.
 const roleBusy = ref('')
-const roleInput = ref(null)
+const { setRole, factionsFor } = useFactionRoles()
 
-async function roleTraitId() {
-  if (!traitsets.value.length) await fetchTraitsConfig()
-  const relations = (traitsets.value || []).find(ts => ts.name === 'relations')
-  return (relations?.traits || []).find(t => t.name === 'role')?.id || ''
-}
-
-// The tie's role setting, if it has one. A relationship-anchored trait setting
-// comes back carrying its contact, which identifies the edge without its key.
-async function findRoleSettingId(memberId, traitId) {
-  const data = await graphql(
-    `query($id: ID!) { entity(id: $id) { traitSettings { id traitId fromType relationshipType relationshipContactId } } }`,
-    { id: memberId },
-  )
-  const hit = (data?.entity?.traitSettings || []).find(ts =>
-    ts.fromType === 'relationship' && ts.relationshipType === 'membership'
-    && ts.relationshipContactId === props.entityId && ts.traitId === traitId)
-  return hit?.id || ''
-}
-
-function startRoleEdit(m) {
-  roleDraft.value = m.role || ''
-  editingRoleId.value = m.id
-  nextTick(() => roleInput.value?.focus())
-}
-
-function cancelRole() { editingRoleId.value = '' }
-
-async function commitRole(m) {
-  if (editingRoleId.value !== m.id) return   // the blur that follows enter/escape
-  const next = roleDraft.value.trim()
-  editingRoleId.value = ''
-  if (next === (m.role || '')) return
+async function saveMemberRole(m, next) {
   roleBusy.value = m.id
   try {
-    const traitId = await roleTraitId()
-    if (!traitId) { memberNote.value = 'Could not resolve the relations “role” trait.'; return }
-    const settingId = await findRoleSettingId(m.id, traitId)
-    let res = null
-    if (!next) {
-      if (!settingId) return
-      // Clearing removes the setting: the roster read falls back to the trait id
-      // when a role setting has no statement, so a blank one would read as an id.
-      res = await graphql(`mutation($id: ID!) { removeTraitSetting(id: $id) }`, { id: settingId })
-    } else if (settingId) {
-      res = await graphql(
-        `mutation($id: ID!, $input: TraitSettingUpdateInput!) { updateTraitSetting(id: $id, input: $input) { id statement } }`,
-        { id: settingId, input: { statement: next } },
-      )
-    } else {
-      res = await graphql(
-        `mutation($from: ID!, $to: ID!, $relType: String!, $traitId: ID!, $die: DieType!, $elevated: Boolean!, $statement: String!) {
-          addRelationshipTrait(fromEntityId: $from, toEntityId: $to, relType: $relType, traitId: $traitId, die: $die, elevated: $elevated, statement: $statement) { id statement }
-        }`,
-        { from: m.id, to: props.entityId, relType: 'membership', traitId, die: 'D4', elevated: false, statement: next },
-      )
-    }
-    const failure = res ? '' : (apiError.value || 'Could not save the role.')
+    const res = await setRole({ memberId: m.id, factionId: props.entityId, statement: next, settingId: m.settingId || '' })
+    const failure = res.ok ? '' : res.error
     await loadMembers()
     if (failure) memberNote.value = failure
   } finally {
@@ -816,6 +770,45 @@ async function leaveFaction() {
 
 watch(() => [props.entityId, form.value?.type, actingEntityId.value], ([id, type]) => {
   if (id && type === 'FACTION') loadMembers()
+}, { immediate: true })
+
+// ── The entity's own factions ───────────────────────
+// The inverse of the Members section: which factions this entity is on the roster
+// of, with the role it holds there. `factionsFor` owns the read (and the reason it
+// costs one confirmation per tied faction — see that composable).
+const entityFactions = ref([])
+const factionNote = ref('')
+const factionRoleBusy = ref('')
+
+async function loadEntityFactions() {
+  entityFactions.value = []
+  factionNote.value = ''
+  if (!props.entityId) return
+  const { factions, error } = await factionsFor(props.entityId)
+  entityFactions.value = factions
+  if (error) factionNote.value = error
+}
+
+async function saveEntityRole(f, next) {
+  factionRoleBusy.value = f.id
+  try {
+    const res = await setRole({ memberId: props.entityId, factionId: f.id, statement: next, settingId: f.settingId || '' })
+    const failure = res.ok ? '' : res.error
+    await loadEntityFactions()
+    if (failure) factionNote.value = failure
+  } finally {
+    factionRoleBusy.value = ''
+  }
+}
+
+// The same channel the canvas uses to open an entity panel — the GM panel owns
+// that spec, and a faction's panel is where its roster (the Members section) is.
+function openFactionPanel(f) {
+  if (f?.id) bus.emit('canvas:inspect', f.id)
+}
+
+watch(() => [props.entityId, form.value?.type], ([id, type]) => {
+  if (id && isOccupant.value) loadEntityFactions()
 }, { immediate: true })
 
 // ── Imagen ──────────────────────────────────────────
@@ -1017,10 +1010,11 @@ defineExpose({ refresh: loadImages })
 .member-row:hover { background: var(--overlay-4); }
 .member-row.self { border-color: var(--accent); }
 .member-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A chip, not a control row: the role is short text sitting beside the name. */
-.member-role { font-size: 11px; color: var(--text-dim); padding: 1px 6px; }
-.member-role.unset { font-style: italic; opacity: 0.65; }
-.member-role-input { width: 96px; font-size: 11px; padding: 2px 6px; }
+.factions-section { margin-top: 12px; }
+.factions-list { display: flex; flex-direction: column; gap: 4px; }
+.faction-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--overlay-2); cursor: pointer; }
+.faction-row:hover { background: var(--overlay-4); }
+.faction-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-rank { font-size: 10px; text-transform: uppercase; color: var(--text-dim); padding: 1px 6px; border-radius: 3px; background: var(--overlay-4); }
 .members-action { display: flex; gap: 6px; margin-top: 8px; }
 .members-action .btn { flex: 1; }
