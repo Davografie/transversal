@@ -145,6 +145,59 @@ query($id: ID!) {
 }
 """
 
+# ── Targeting (the backend's own target builder) ──────
+# These wrap the declarative targeting surface the SFX wizard uses. The point of
+# exposing them is that a question like "who is at this location, including its
+# sub-locations?" already has an answer with domain semantics behind it
+# (`scope: "subtree:<location>"`), so an investigation can ask the API instead of
+# re-deriving the hierarchy from raw edges — which is a thing that has gone wrong.
+
+_QUERY_TARGET_CATALOG = """
+query {
+  targetCatalog {
+    elements { name label }
+    edges { name source targets cardinality label }
+    fields { element name type label options operators references suggest }
+    aggregations { name label output needsField needsCount accepts }
+    collections { name element label singular }
+    sourceKinds { value label element variable ownerSurfaces }
+  }
+}
+"""
+
+_QUERY_TARGET_FILTER_FIELDS = """
+query { targetFilterFields { field label valueType kinds options } }
+"""
+
+_QUERY_TARGET_LABELS = """
+query($ids: [ID!]!) { targetLabels(ids: $ids) { id name } }
+"""
+
+_QUERY_TARGET_CANDIDATES = """
+query($kind: String!, $entityId: ID, $scope: String, $action: String, $filter: JSON) {
+  targetCandidates(kind: $kind, entityId: $entityId, scope: $scope, action: $action, filter: $filter) {
+    id name universe subtitle
+  }
+}
+"""
+
+_QUERY_TRACE_TARGET_SPEC = """
+query(
+  $input: TargetSpecInput!, $destinationElements: [String!],
+  $destinationCardinality: String, $sourceElement: String, $variables: JSON
+) {
+  traceTargetSpec(
+    input: $input, destinationElements: $destinationElements,
+    destinationCardinality: $destinationCardinality, sourceElement: $sourceElement,
+    variables: $variables
+  ) {
+    types { element cardinality }
+    errors { stepIndex message }
+    valid
+  }
+}
+"""
+
 _QUERY_TRAITSETS = """
 query { traitsets { id name } }
 """
@@ -768,6 +821,75 @@ def location_tree(args: dict) -> dict:
     return _rest("/api/v1/locations/tree")
 
 
+def target_catalog(args: dict) -> dict:
+    """The targeting vocabulary: elements, navigation hops, fields, aggregations, collections, source kinds.
+
+    Read this first when building a spec or a candidate query — it is the same
+    declaration the wizard and the engine use, so it cannot drift from them.
+    """
+    return _graphql(_QUERY_TARGET_CATALOG).get("targetCatalog") or {}
+
+
+def target_filter_fields(args: dict) -> dict:
+    """Candidate filter fields — the vocabulary for ``target_candidates``' ``filter``."""
+    rows = _graphql(_QUERY_TARGET_FILTER_FIELDS).get("targetFilterFields") or []
+    return {"count": len(rows), "results": rows}
+
+
+def target_labels(args: dict) -> dict:
+    """Display names for ids, resolved the way the card text resolves them."""
+    rows = _graphql(_QUERY_TARGET_LABELS, {"ids": args["ids"]}).get("targetLabels") or []
+    return {"count": len(rows), "results": rows}
+
+
+def target_candidates(args: dict) -> dict:
+    """Resolve what a target choice actually selects — the backend's own answer.
+
+    ``scope`` prefixes narrow the kind: ``subtree:<location>`` is a location **plus
+    its sub-locations** (the hierarchy question — ask this rather than re-deriving
+    containment from raw edges), ``location:<id>`` that one place, ``faction:<id>``
+    a named org's members, ``actor_faction:<universe>`` the acting entity's own
+    orgs, plus ``traitset:``/``life_path:``/``universe:``. A bare scope keeps the
+    legacy default (universe / current location).
+
+    **Not every (kind, scope) pair is supported, and an unsupported one returns an
+    empty list, not an error** — so empty is ambiguous between "nothing matched"
+    and "wrong pair". The supported sets are: ``universe`` → entity, occupant,
+    location, projection, trait, traitset, life_path, roll_table, rating_die,
+    scheduled_event; ``location`` and ``subtree`` → occupant, entity, location,
+    projection; ``faction`` → **entity** (its members), roll_table;
+    ``actor_faction`` → entity, trait; ``traitset`` → trait; ``life_path`` →
+    roll_table. Note a faction's members are ``kind="entity"``, never "occupant".
+    """
+    data = _graphql(_QUERY_TARGET_CANDIDATES, {
+        "kind": args["kind"],
+        "entityId": args.get("entity_id"),
+        "scope": args.get("scope"),
+        "action": args.get("action"),
+        "filter": args.get("filter"),
+    })
+    rows = data.get("targetCandidates") or []
+    return {"count": len(rows), "results": rows}
+
+
+def trace_target_spec(args: dict) -> dict:
+    """Type-check a targeting spec draft: the type after each step, step errors, and whether it reaches the destination.
+
+    Pass the spec as ``input`` (``{"steps": [{"kind": "navigate", "edge": "…"}]}``).
+    ``destination_elements`` + ``destination_cardinality`` are what the effect
+    field accepts; ``source_element`` is the SFX's declared source kind;
+    ``variables`` maps a bound name to its catalog element so ``select variable``
+    can check.
+    """
+    return _graphql(_QUERY_TRACE_TARGET_SPEC, {
+        "input": args["input"],
+        "destinationElements": args.get("destination_elements"),
+        "destinationCardinality": args.get("destination_cardinality"),
+        "sourceElement": args.get("source_element"),
+        "variables": args.get("variables"),
+    }).get("traceTargetSpec") or {}
+
+
 def location_neighborhood(args: dict) -> dict:
     """A location's neighborhood: parent, children, transversal links, occupants."""
     return _rest(f"/api/v1/locations/{args['location_id']}/canvas")
@@ -1009,6 +1131,11 @@ TOOLS = {
     "query_entities": query_entities,
     "faction_canvas": faction_canvas,
     "faction_members": faction_members,
+    "target_catalog": target_catalog,
+    "target_filter_fields": target_filter_fields,
+    "target_labels": target_labels,
+    "target_candidates": target_candidates,
+    "trace_target_spec": trace_target_spec,
     "location_tree": location_tree,
     "location_neighborhood": location_neighborhood,
     "gmc_web": gmc_web,
@@ -1202,6 +1329,63 @@ TOOL_SCHEMAS = {
             "type": "object",
             "properties": {"faction_id": {"type": "string"}},
             "required": ["faction_id"],
+        },
+    },
+    "target_catalog": {
+        "name": "target_catalog",
+        "description": "The targeting vocabulary the wizard and engine share: elements, navigation hops (edges), comparable fields, aggregations, selectable collections, source kinds.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    "target_filter_fields": {
+        "name": "target_filter_fields",
+        "description": "Candidate filter fields — what a target_candidates `filter` map may contain, with the kinds and options each applies to.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    "target_labels": {
+        "name": "target_labels",
+        "description": "Display names for a list of ids, resolved the same way the SFX card text resolves them — so an investigation never has to print raw ids.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"ids": {"type": "array", "items": {"type": "string"}}},
+            "required": ["ids"],
+        },
+    },
+    "target_candidates": {
+        "name": "target_candidates",
+        "description": "Resolve what a target choice selects, from the backend's own resolver. scope: subtree:<location> (a location AND its sub-locations), location:<id>, faction:<id>, actor_faction:<universe>, traitset:<id>, life_path:<id>, universe:<key>. NOT every (kind, scope) pair is supported and an unsupported one returns [] rather than an error — universe: entity|occupant|location|projection|trait|traitset|life_path|roll_table|rating_die|scheduled_event; location & subtree: occupant|entity|location|projection; faction: entity (its members) |roll_table; actor_faction: entity|trait; traitset: trait; life_path: roll_table. A faction's members are kind 'entity', never 'occupant'.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string",
+                         "description": "location|occupant|entity|trait|traitset|life_path|roll_table|rating_die|universe|projection|scheduled_event (see the per-scope support above)"},
+                "entity_id": {"type": "string",
+                              "description": "The acting entity (context). Omit for an authoring preview; universe then comes from scope."},
+                "scope": {"type": "string",
+                          "description": "e.g. 'subtree:loc-123', 'faction:faction-123'; bare = legacy default (universe / current location)"},
+                "action": {"type": "string",
+                           "description": "Narrows trait picks to the entity's own instances for mutate-only actions (step_up|step_down|set|remove)"},
+                "filter": {"type": "object",
+                           "description": "Candidate field -> required value, AND-ed (see target_filter_fields)"},
+            },
+            "required": ["kind"],
+        },
+    },
+    "trace_target_spec": {
+        "name": "trace_target_spec",
+        "description": "Type-check a targeting spec draft: the resolved type after each step, per-step errors, and whether it reaches the destination. Pass the spec as `input` ({steps:[{kind,navigate/select/filter/aggregate/…}]}).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "input": {"type": "object", "description": "TargetSpecInput: {steps: [...]}"},
+                "destination_elements": {"type": "array", "items": {"type": "string"},
+                                         "description": "Element types the effect field accepts (a list: a field may accept more than one)"},
+                "destination_cardinality": {"type": "string", "description": "one|many"},
+                "source_element": {"type": "string",
+                                   "description": "Catalog element of the SFX's declared source_kind, so 'select source' type-checks"},
+                "variables": {"type": "object",
+                              "description": "Bound output-variable name -> catalog element type"},
+            },
+            "required": ["input"],
         },
     },
     "location_tree": {
