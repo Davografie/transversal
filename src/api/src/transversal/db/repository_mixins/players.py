@@ -161,10 +161,19 @@ class RepositoryPlayers:
         The inverse of ``get_agency_edges`` — the GM panel asks who holds
         agency over an entity, which is the persistent relation, not the
         transient "who is controlling it right now".
+
+        **One entity can have several holders** (measured live 2026-09-16: 42
+        agency edges over 33 entities; one character held by 7 player records,
+        which are one human's per-device identities). A single-answer read has
+        to pick one, so it is ordered rather than left to plan order: a ``main``
+        claim first, then player id ascending — the same determinism
+        :meth:`get_designated_main` gets by sorting. Preferring ``main`` is what
+        makes ``AgencyRef.main`` meaningful for a multi-held entity.
         """
         query = f"""
             FOR r IN {RELATIONSHIPS}
             FILTER r._to == @eref AND r.type == 'agency'
+            SORT r.main DESC, PARSE_IDENTIFIER(r._from).key ASC
             LIMIT 1
             RETURN {{ player_id: PARSE_IDENTIFIER(r._from).key, main: !!r.main }}
         """
