@@ -23,7 +23,11 @@
         @click.stop="data.onFocusOccupant?.(data.entityId)"
       >⊙</button>
       <button class="occ-btn" title="Toggle relations" @click.stop="data.onToggleRelations?.(data.entityId)">🔗</button>
-      <button class="occ-btn" title="Show faction" @click.stop="data.onShowFaction?.(data.entityId)">🏴</button>
+      <!-- Only shown when the node actually carries factions. No caller passes
+           them today, so this button used to render everywhere and do nothing
+           (showFaction bails on an empty list) — and in the faction view it is
+           circular anyway, since the member is already in the faction shown. -->
+      <button v-if="data.factions?.length" class="occ-btn" title="Show faction" @click.stop="data.onShowFaction?.(data.entityId)">🏴</button>
       <button class="occ-btn" title="Inspect" @click.stop="data.onInspect?.(data.entityId)">🔍</button>
     </div>
     <Handle id="target-top" type="target" :position="Position.Top" />
