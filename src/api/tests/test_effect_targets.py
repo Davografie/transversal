@@ -511,3 +511,41 @@ def test_the_declaration_is_readable_over_graphql():
     assert "occupant" in by_prefix[""].kinds
     assert by_prefix["faction"].kinds == ["entity", "roll_table"]
     assert "faction" in by_prefix["faction"].description.lower()
+
+
+# ── a stored path defers the actor ───────────────────
+
+def test_a_stored_path_defers_the_actor_into_the_path():
+    """A stored rule fires for whoever activates it, so its path must not bake in
+    the author's universe or id — it binds them (`select self`) and filters on the
+    binding. The picker, which *does* know the entity, resolves eagerly."""
+    from transversal.services.target_resolver import TargetContext, resolve
+    from transversal.services.target_scopes import ACTOR_AT_RUNTIME, selection_spec
+
+    repo = TargetRepo()
+    repo.universes = [_e("earth", universe="earth")]
+    repo.locations = [_e("l1", universe="earth"), _e("l2", universe="three_realms")]
+    subject = _entity()
+
+    stored = selection_spec("location", "", ACTOR_AT_RUNTIME)
+    assert "earth" not in [getattr(st, "value", None) for st in stored.steps], \
+        "a stored path hard-coded the author's universe"
+
+    eager = [c.id for c in resolve_candidates("location", None, subject, repo)]
+    deferred = [v.id for v in resolve(selection_spec(
+        "location", "", ACTOR_AT_RUNTIME), TargetContext(subject=subject, repo=repo)).values]
+    assert eager == deferred == ["l1"]
+
+
+def test_a_stored_path_excludes_whichever_actor_activates_it():
+    from transversal.services.target_resolver import TargetContext, resolve
+    from transversal.services.target_scopes import ACTOR_AT_RUNTIME, selection_spec
+
+    repo = TargetRepo()
+    repo.occupants = {"railyard": [_e("dmitry"), _e("char-1"), _e("ivan")]}
+    spec = selection_spec("occupant", "", ACTOR_AT_RUNTIME)
+
+    for actor in ("char-1", "dmitry"):
+        subject = _entity(id=actor, current_location="railyard")
+        resolved = resolve(spec, TargetContext(subject=subject, repo=repo))
+        assert actor not in [v.id for v in resolved.values]

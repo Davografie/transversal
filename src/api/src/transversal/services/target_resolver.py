@@ -46,6 +46,18 @@ class TargetContext:
     bindings: dict[str, "Binding"] = field(default_factory=dict)  # typed output variables (for `select variable`)
 
 
+@dataclass(frozen=True)
+class UniverseRef:
+    """A universe as the catalog models it: **its handle**, plus a display name.
+
+    A universe element *is* its handle — that is what an entity stores in
+    ``current_universe``, what a location's universe compares to, and what a scope
+    value carries — while the *entity* for it is keyed ``universe-earth``.
+    """
+    id: str
+    name: str = ""
+
+
 @dataclass
 class Binding:
     """A typed output variable bound in a per-activation scope.
@@ -518,7 +530,10 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
         return list(getter()) if callable(getter) else []
     if name == "universes":
         from transversal.domain import EntityType
-        return list(ctx.repo.list_entities_by_type(EntityType.UNIVERSE))
+        return [
+            UniverseRef(id=_universe_handle(u), name=getattr(u, "name", "") or _universe_handle(u))
+            for u in ctx.repo.list_entities_by_type(EntityType.UNIVERSE)
+        ]
     if name == "sfxs":
         # The rule registry, as a collection a path can walk into and filter.
         # Read-only: nothing navigates out of an SFX yet, so this is a seed plus
@@ -881,7 +896,9 @@ def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:
     repo = ctx.repo
     if repo is None or not value:
         return []
-    if element in ("entity", "location", "universe"):
+    if element == "universe":
+        return _maybe(_universe_record(value, repo))
+    if element in ("entity", "location"):
         return _maybe(repo.get_entity(value))
     if element == "trait":
         return _maybe(repo.get_trait(value))
@@ -1109,6 +1126,63 @@ def _location_subtree(l: Any, ctx: TargetContext) -> list[Any]:
         [lid] + list(ctx.repo.list_location_descendants(lid))))
 
 
+def _universe_handle(u: Any) -> str:
+    """The handle a universe entity *is* (``earth``, not its key ``universe-earth``)."""
+    if isinstance(u, dict):
+        return u.get("current_universe") or u.get("id") or ""
+    return getattr(u, "current_universe", "") or getattr(u, "id", "") or ""
+
+
+def _universe_record(handle: str, repo) -> "UniverseRef | None":
+    """A universe as the catalog models it: **its handle**, plus a display name.
+
+    A universe element *is* its handle — that is what an entity stores in
+    ``current_universe``, what a location filters on, and what a scope value
+    carries — while the *entity* for it is keyed ``universe-earth``. Returning the
+    entity made every binding and every ``universe → locations`` hop carry the key
+    instead of the handle, which quietly matched nothing.
+    """
+    universe = _universe_by_handle(handle, repo)
+    if universe is None:
+        return None
+    return UniverseRef(id=handle, name=getattr(universe, "name", "") or handle)
+
+
+def _universe_by_handle(handle: str, repo) -> Any:
+    """Resolve a universe *handle* (``earth``) to the universe entity.
+
+    An entity stores the handle in ``current_universe``, and in live content the
+    handle is **not** the universe entity's key — those are ``universe-earth``,
+    ``universe-valhalla``, … So a plain ``get_entity(handle)`` finds nothing, which
+    silently emptied every ``navigate universe`` hop (the filter or reader that
+    compared the *string* kept working, which is why the gap stayed hidden).
+
+    Tries the key first — a deployment that keys universes by handle still
+    resolves — then matches the handle the universe carries.
+    """
+    if not handle or repo is None:
+        return None
+    direct = repo.get_entity(handle)
+    if direct is not None:
+        return direct
+    from transversal.domain import EntityType
+
+    for universe in repo.list_entities_by_type(EntityType.UNIVERSE):
+        if handle in (getattr(universe, "id", ""), _universe_handle(universe)):
+            return universe
+    return None
+
+
+def _entity_to_universe(e: Any, ctx: TargetContext) -> list[Any]:
+    """The universe an entity is in, resolved from the *handle* it stores."""
+    return _maybe(_universe_record(getattr(e, "current_universe", ""), ctx.repo))
+
+
+def _location_to_universe(l: Any, ctx: TargetContext) -> list[Any]:
+    """The universe a place is in (naming apart from the `location.universe` reader)."""
+    return _maybe(_universe_record(getattr(l, "current_universe", ""), ctx.repo))
+
+
 def _location_projections(l: Any, ctx: TargetContext) -> list[Any]:
     """Every projection whose body is at this place (the place itself, not its zones).
 
@@ -1246,7 +1320,7 @@ def register_default_edges() -> None:
                   lambda d, ctx: _maybe(ctx.repo.get_traitsetting(d.get("ts_id"))))
 
     register_edge("entity", "location", lambda e, ctx: _maybe(ctx.repo.get_entity(e.current_location)))
-    register_edge("entity", "universe", lambda e, ctx: _maybe(ctx.repo.get_entity(e.current_universe)))
+    register_edge("entity", "universe", _entity_to_universe)
     register_edge("entity", "projection",
                   lambda e, ctx: _maybe(ctx.repo.get_projection(e.current_projection)) if e.current_projection else [])
     register_edge("entity", "projections", lambda e, ctx: list(ctx.repo.get_projections_for_entity(e.id)))
@@ -1267,7 +1341,7 @@ def register_default_edges() -> None:
     register_edge("projection", "entity", lambda p, ctx: _maybe(ctx.repo.get_entity(p.entity_id)))
     register_edge("projection", "location", lambda p, ctx: _maybe(ctx.repo.get_entity(p.current_location)))
 
-    register_edge("location", "universe", lambda l, ctx: _maybe(ctx.repo.get_entity(l.current_universe)))
+    register_edge("location", "universe", _location_to_universe)
     register_edge("location", "occupants", lambda l, ctx: list(ctx.repo.list_entities_by_location(l.id)))
     register_edge("location", "difficulty_pool",
                   lambda l, ctx: [_pool_handle(l.id, l.id, "difficulty")])

@@ -50,6 +50,17 @@ class FakeRepo:
     def list_location_descendants(self, lid):
         return list(self.descendants.get(lid, []))
 
+    def list_entities_by_type(self, entity_type, universe=None):
+        from transversal.domain import EntityType as ET
+        if entity_type == ET.UNIVERSE:
+            return list(getattr(self, "universes", []))
+        if entity_type == ET.LOCATION:
+            if universe is None:
+                return [e for e in self.entities.values() if getattr(e, "type", "") == "location"]
+            ids = getattr(self, "locations_by_universe", {}).get(universe, [])
+            return [self.entities[i] for i in ids if i in self.entities]
+        return []
+
     def list_faction_members(self, fid):
         return [self.entities[i] for i in self.members.get(fid, []) if i in self.entities]
 
@@ -219,3 +230,47 @@ def test_excluding_self_is_a_filter_on_a_bound_id(world):
     assert result.errors == []
     assert "kael" not in _ids(result)
     assert "disciple" in _ids(result)
+
+
+def test_a_universe_is_its_handle_not_its_entity_key():
+    """Live content keys a universe entity ``universe-earth`` while everything
+    else stores the handle ``earth``. The element the resolver hands out is the
+    handle, so a binding, a filter and a hop all agree — returning the entity made
+    every `navigate universe` carry the key and quietly match nothing."""
+    from transversal.services.target_resolver import TargetContext, resolve
+    from transversal.services.target_spec import (
+        FilterStep, NavigateStep, SelectStep, TargetSpec,
+    )
+
+    repo = FakeRepo()
+    repo.entities = {
+        "char": NS(id="char", type="character", name="Kael", current_universe="earth"),
+        "universe-earth": NS(id="universe-earth", type="universe", name="Earth",
+                             current_universe="earth"),
+    }
+    repo.universes = [repo.entities["universe-earth"]]
+    repo.locations_by_universe = {"earth": ["loc-a"]}
+    repo.entities["loc-a"] = NS(id="loc-a", type="location", name="Railyard",
+                                current_universe="earth")
+    subject = repo.entities["char"]
+
+    universe = resolve(
+        TargetSpec(steps=[SelectStep(collection="self"), NavigateStep(edge="universe")]),
+        TargetContext(subject=subject, repo=repo),
+    )
+    assert [v.id for v in universe.values] == ["earth"]
+
+    # The same handle, used as a filter value and as a hop, matches.
+    locations = resolve(
+        TargetSpec(steps=[SelectStep(collection="locations"),
+                          FilterStep(field="universe", value="earth")]),
+        TargetContext(subject=subject, repo=repo),
+    )
+    assert [v.id for v in locations.values] == ["loc-a"]
+
+    from_universe = resolve(
+        TargetSpec(steps=[SelectStep(collection="self"), NavigateStep(edge="universe"),
+                          NavigateStep(edge="locations")]),
+        TargetContext(subject=subject, repo=repo),
+    )
+    assert [v.id for v in from_universe.values] == ["loc-a"]

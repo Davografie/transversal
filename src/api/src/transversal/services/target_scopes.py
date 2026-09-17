@@ -34,6 +34,8 @@ from transversal.services.target_resolver import (
     serialize_candidates,
 )
 from transversal.services.target_spec import (
+    AggregateStep,
+    ChooseStep,
     FilterStep,
     LiteralStep,
     NavigateStep,
@@ -140,6 +142,18 @@ class TargetScope:
 
 # ── Step helpers ─────────────────────────────────────────────
 
+#: The acting entity, for a path that will be **stored**: a rule fires for
+#: whoever activates it, so a stored path must not bake in the author's universe
+#: or id. A builder given this sentinel defers the actor into the path itself
+#: (`select self` binds it; a filter compares against the binding). A preview
+#: knows the entity, resolves it eagerly, and can leave an unknown universe
+#: unnarrowed — which is what keeps the whole registry reachable while authoring.
+ACTOR_AT_RUNTIME = object()
+
+_ACTOR = "_actor"
+_UNIVERSE = "_universe"
+
+
 def _select(collection: str, output: Optional[str] = None) -> SelectStep:
     return SelectStep(collection=collection, output=output)
 
@@ -165,66 +179,101 @@ def _subject_universe(subject: Any) -> str:
     return (getattr(subject, "current_universe", "") or "") if subject is not None else ""
 
 
+def _deferred(subject: Any) -> bool:
+    """True when the actor is not known at build time (a path that will be stored)."""
+    return subject is ACTOR_AT_RUNTIME
+
+
+def _bind_actor() -> list[TargetStep]:
+    """Bind the acting entity's id, so a selection can leave it out or read from it."""
+    return [_select("self", output=_ACTOR)]
+
+
 def _not_actor(subject: Any) -> list[TargetStep]:
-    """Leave the acting entity out — a literal, because the builder knows it.
+    """Leave the acting entity out.
 
     There is no special notion of "self" in the catalog and none is needed: the
-    excluded id is a filter value like any other.
+    excluded id is a filter value — read from the entity when it is known, and
+    from a binding when the path has to work for whoever activates it.
     """
+    if _deferred(subject):
+        return [_filter("id", f"{{{_ACTOR}}}", "!=")]
     actor = _subject_id(subject)
     return [_filter("id", actor, "!=")] if actor else []
 
 
 def _only_actor(subject: Any) -> list[TargetStep]:
+    """Keep only the acting entity's own rows (used for its projections)."""
+    if _deferred(subject):
+        return [_filter("entity_id", f"{{{_ACTOR}}}")]
     actor = _subject_id(subject)
     return [_filter("entity_id", actor)] if actor else []
 
 
 def _universe_narrowing(field: str, value: str, subject: Any,
-                        operator: str = "==") -> list[TargetStep]:
-    """Steps that restrict a selection to one universe.
+                        operator: str = "==") -> tuple[list[TargetStep], list[TargetStep]]:
+    """``(leading, narrowing)`` steps that restrict a selection to one universe.
 
     A concrete value is a plain filter. ``""``/``"current"`` means the acting
-    entity's own universe — read from the entity at build time, so the path stays
-    a plain filter rather than a lookup. With no universe to narrow by (an
-    authoring preview with no entity) nothing is restricted, which is what keeps
-    the whole registry reachable while authoring.
+    entity's own universe: read from the entity when it is known (an authoring
+    preview), and otherwise *carried* as a binding — which is why that form needs
+    leading steps, the binding having to exist before the filter that reads it.
+    With no universe to narrow by at all (a preview with no entity) nothing is
+    restricted, which keeps the whole registry reachable while authoring.
     """
-    universe = value if (value and value != "current") else _subject_universe(subject)
-    return [_filter(field, universe, operator)] if universe else []
+    if value and value != "current":
+        return [], [_filter(field, value, operator)]
+    if _deferred(subject):
+        return ([_select("self", output=_ACTOR), _nav("universe", output=_UNIVERSE)],
+                [_filter(field, f"{{{_UNIVERSE}}}", operator)])
+    universe = _subject_universe(subject)
+    return [], ([_filter(field, universe, operator)] if universe else [])
+
+
+def _narrowed(collection: str, field: str, value: str, subject: Any,
+              operator: str = "==") -> list[TargetStep]:
+    """Seed a collection and narrow it to a universe (the common shape)."""
+    lead, narrow = _universe_narrowing(field, value, subject, operator)
+    return [*lead, _select(collection), *narrow]
+
+
+def _lead_actor(subject: Any) -> list[TargetStep]:
+    """The bind step a deferred path needs before it can exclude or read the actor."""
+    return _bind_actor() if _deferred(subject) else []
 
 
 # ── The default (unprefixed, and ``universe:``) selections ───
 
 def _default_location(value: str, subject: Any) -> list[TargetStep]:
-    return [_select("locations"), *_universe_narrowing("universe", value, subject)]
+    return _narrowed("locations", "universe", value, subject)
 
 
 def _default_occupant(value: str, subject: Any) -> list[TargetStep]:
     """Entities at a place (the value, else the actor's own location), less the actor."""
-    steps = ([_literal("location", value), _nav("occupants")] if value
-             else [_select("occupants")])
+    steps = _lead_actor(subject)
+    steps += ([_literal("location", value), _nav("occupants")] if value
+              else [_select("occupants")])
     return [*steps, *_not_actor(subject)]
 
 
 def _default_entity(value: str, subject: Any) -> list[TargetStep]:
-    return [_select("entities"), *_universe_narrowing("current_universe", value, subject)]
+    return _narrowed("entities", "current_universe", value, subject)
 
 
 def _default_trait(value: str, subject: Any) -> list[TargetStep]:
-    return [_select("traits"), *_universe_narrowing("universes", value, subject, "contains")]
+    return _narrowed("traits", "universes", value, subject, "contains")
 
 
 def _default_traitset(value: str, subject: Any) -> list[TargetStep]:
-    return [_select("traitsets"), *_universe_narrowing("universes", value, subject, "contains")]
+    return _narrowed("traitsets", "universes", value, subject, "contains")
 
 
 def _default_life_path(value: str, subject: Any) -> list[TargetStep]:
-    return [_select("life_paths"), *_universe_narrowing("universe", value, subject)]
+    return _narrowed("life_paths", "universe", value, subject)
 
 
 def _default_roll_table(value: str, subject: Any) -> list[TargetStep]:
-    return [_select("roll_tables"), *_universe_narrowing("universe", value, subject)]
+    return _narrowed("roll_tables", "universe", value, subject)
 
 
 def _default_universe(value: str, subject: Any) -> list[TargetStep]:
@@ -252,7 +301,8 @@ def _default_rating_die(value: str, subject: Any) -> list[TargetStep]:
 # ── Place-scoped selections ──────────────────────────────────
 
 def _location_occupant(value: str, subject: Any) -> list[TargetStep]:
-    return [_literal("location", value), _nav("occupants"), *_not_actor(subject)]
+    return [*_lead_actor(subject), _literal("location", value), _nav("occupants"),
+            *_not_actor(subject)]
 
 
 def _location_entity(value: str, subject: Any) -> list[TargetStep]:
@@ -265,8 +315,8 @@ def _place_subtree(value: str, subject: Any) -> list[TargetStep]:
 
 
 def _subtree_occupant(value: str, subject: Any) -> list[TargetStep]:
-    return [_literal("location", value), _nav("subtree"), _nav("occupants"),
-            *_not_actor(subject)]
+    return [*_lead_actor(subject), _literal("location", value), _nav("subtree"),
+            _nav("occupants"), *_not_actor(subject)]
 
 
 def _subtree_entity(value: str, subject: Any) -> list[TargetStep]:
@@ -279,14 +329,15 @@ def _place_projection(value: str, subject: Any) -> list[TargetStep]:
     Owner-first, then the place: a travel effect reuses *my* body, so the
     narrowing to mine comes before the walk into the subtree.
     """
-    return [_literal("location", value), _nav("subtree"), _nav("projections"),
-            *_only_actor(subject)]
+    return [*_lead_actor(subject), _literal("location", value), _nav("subtree"),
+            _nav("projections"), *_only_actor(subject)]
 
 
 # ── Roster-scoped selections ─────────────────────────────────
 
 def _faction_entity(value: str, subject: Any) -> list[TargetStep]:
-    return [_literal("entity", value), _nav("members"), *_not_actor(subject)]
+    return [*_lead_actor(subject), _literal("entity", value), _nav("members"),
+            *_not_actor(subject)]
 
 
 def _faction_roll_table(value: str, subject: Any) -> list[TargetStep]:
@@ -326,6 +377,7 @@ def _traitset_owned_trait(value: str, subject: Any) -> list[TargetStep]:
 
 def _life_path_roll_table(value: str, subject: Any) -> list[TargetStep]:
     return [_literal("life_path", value), _nav("roll_tables")]
+
 
 
 # ── The table ────────────────────────────────────────────────
@@ -459,6 +511,28 @@ def selection_spec(kind: str, value: str, subject: Any, prefix: Optional[str] = 
     for field_name, wanted in (filter or {}).items():
         steps.append(_filter(field_name, wanted))
     return TargetSpec(steps=steps)
+
+
+def choice_spec(kind: str, scope: Optional[str], mode: str = "choose", count: int = 1,
+                filter: Optional[dict] = None) -> TargetSpec:
+    """The spec a legacy choice target stands for.
+
+    ``{choose_kind}`` / ``{random:kind}`` plus a ``target_scope`` and a
+    ``target_filter`` were a compact spelling of *pick from this path* — so that is
+    exactly what they compile to: the declared scope path with a terminal
+    ``choose``/``random`` step. The actor is deferred (``ACTOR_AT_RUNTIME``),
+    because the effect is stored and fires for whoever activates it.
+
+    This is how stored content moves off the flat form without changing what it
+    selects: the compiled path *is* the one the picker's scope resolves to.
+    """
+    prefix, value = parse_scope(scope)
+    spec = selection_spec(kind, value, ACTOR_AT_RUNTIME, prefix, None, filter)
+    if mode == "random":
+        spec.steps.append(AggregateStep(fn="random", count=max(1, count)))
+    else:
+        spec.steps.append(ChooseStep(count=max(1, count)))
+    return spec
 
 
 def _universe_of(value: Any) -> str:

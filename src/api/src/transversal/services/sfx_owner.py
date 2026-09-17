@@ -23,6 +23,18 @@ from typing import Any
 
 from transversal.domain import SfxOwner
 
+from transversal.services.target_scopes import choice_spec
+
+
+def _choice(kind: str, scope: str | None = None, mode: str = "choose",
+            filter: dict | None = None):
+    """The spec a built-in's ``{choose_kind}``/``{random:kind}`` target stands for.
+
+    Built-ins compose the declared scope path rather than the flat spelling, so a
+    seeded rule and a migrated one are the same shape.
+    """
+    return choice_spec(kind, scope, mode, filter=filter)
+
 
 def ensure_sfx_owners(repo) -> None:
     """Create/refresh the default SFX owner buckets. Idempotent.
@@ -96,7 +108,7 @@ def ensure_base_move_sfxs(repo) -> None:
         ("proceed", "Proceed the narrative", "Move the scene forward without applying a consequence.", "player", []),
         ("create_scene_trait", "Create a scene trait", "Introduce a new scene trait at your effect die.", "player", [
             Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
-                   target="{choose_trait}", result="{effect_die}"),
+                   target_spec=_choice("trait"), result="{effect_die}"),
         ]),
         ("decrease_doom", "Decrease the doom pool", "Step down a doom pool die.", "player", [
             Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
@@ -112,7 +124,7 @@ def ensure_base_move_sfxs(repo) -> None:
         ]),
         ("give_asset", "Give a GMC an asset", "Grant a GMC an asset at your effect die.", "architect", [
             Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
-                   target="{choose_trait}", result="{effect_die}"),
+                   target_spec=_choice("trait"), result="{effect_die}"),
         ]),
     ]
 
@@ -147,9 +159,8 @@ def ensure_starter_location_sfx(repo) -> None:
         timing=EffectTiming.IMMEDIATE,
         type="location",
         action="set",
-        target="{random:location}",
-        target_scope="universe:earth",
-        target_filter={"starter_location": True},
+        target_spec=_choice("location", "universe:earth", mode="random",
+                            filter={"starter_location": True}),
     )
 
     existing = repo.get_sfx("sfx-starter-location")
@@ -176,8 +187,9 @@ def ensure_starter_location_sfx(repo) -> None:
             existing.effects[i] = desired
             changed = True
         elif eff.type == "location" and eff.action == "set" and eff.target == "{random_starter_location}":
-            eff.target = desired.target
-            eff.target_filter = desired.target_filter
+            eff.target = ""
+            eff.target_spec = desired.target_spec
+            eff.target_filter = {}
             changed = True
     if changed:
         repo.update_sfx(existing)
@@ -286,8 +298,7 @@ def ensure_contest_complication_sfx(repo) -> None:
             timing=EffectTiming.IMMEDIATE,
             type="modify_trait",
             action="cortex_gain",
-            target="{choose_trait}",
-            target_scope="traitset:ts-complications-a190",
+            target_spec=_choice("trait", "traitset:ts-complications-a190"),
             result="{effect_die}",
             negative=True,
         )
@@ -448,9 +459,8 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
             timing=EffectTiming.IMMEDIATE,
             type="modify_trait",
             action="gain_or_step_up",
-            target="{choose_trait}",
+            target_spec=_choice("trait", "traitset:ts-complications-a190"),
             entity="{hitch_entity}",
-            target_scope="traitset:ts-complications-a190",
             result="d4",
             negative=True,
             context={"steps": "{number_of_hitches}"},
@@ -512,9 +522,8 @@ def ensure_opportunity_sfx(repo) -> None:
             timing=EffectTiming.IMMEDIATE,
             type="modify_trait",
             action="step_down",
-            target="{choose_trait}",
+            target_spec=_choice("trait", "traitset:ts-complications-a190"),
             entity="{buying_entity}",
-            target_scope="traitset:ts-complications-a190",
         ),
     ]
 
@@ -1084,6 +1093,20 @@ def owned_surfaces(repo, sfx_id: str) -> set[str]:
                 surfaces.add(owner_type)
                 break  # one matching ref is enough per surface type
     return surfaces
+
+
+def migrate_legacy_targets(repo) -> int:
+    """Move every stored effect off the flat target form. Idempotent.
+
+    A legacy ``{choose_kind}``/``{random:kind}`` target plus a ``target_scope`` and
+    ``target_filter`` compiles to the *declared* scope path plus a terminal
+    ``choose``/``random`` step (``target_legacy``), so a migrated rule selects
+    exactly what it selected before. Returns the number of SFX changed; a second
+    boot changes none.
+    """
+    from transversal.services.target_legacy import migrate_all_sfxs
+
+    return migrate_all_sfxs(repo)
 
 
 def backfill_source_kinds(repo) -> int:

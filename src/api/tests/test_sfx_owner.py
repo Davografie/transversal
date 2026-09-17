@@ -377,6 +377,22 @@ def test_ensure_sfx_owners_table_defaults():
     }
 
 
+def _path(effect):
+    """The effect's target, as the compact path it is.
+
+    The built-ins compose a spec (the declared scope path plus a terminal
+    choose/random step) rather than the flat ``{choose_kind}`` spelling, so what a
+    seeded rule and a migrated one look like is the same thing.
+    """
+    return [
+        (step.kind,
+         getattr(step, "collection", None) or getattr(step, "field", None)
+         or getattr(step, "edge", None) or getattr(step, "fn", None)
+         or getattr(step, "value", None))
+        for step in (effect.target_spec.steps if effect.target_spec else [])
+    ]
+
+
 def test_ensure_starter_location_sfx_creates_once():
     from transversal.services.sfx_owner import ensure_starter_location_sfx
 
@@ -389,9 +405,12 @@ def test_ensure_starter_location_sfx_creates_once():
     assert in_universe.target == "earth"
     assert sfx.effects[0].type == "location"
     assert sfx.effects[0].action == "set"
-    assert sfx.effects[0].target == "{random:location}"
-    assert sfx.effects[0].target_scope == "universe:earth"
-    assert sfx.effects[0].target_filter == {"starter_location": True}
+    effect = sfx.effects[0]
+    assert effect.target == "" and effect.target_scope is None
+    assert _path(effect) == [("select", "locations"), ("filter", "universe"),
+                             ("filter", "starter_location"), ("aggregate", "random")]
+    assert effect.target_spec.steps[1].value == "earth"
+    assert effect.target_spec.steps[2].value is True
     ensure_starter_location_sfx(repo)
     assert len(repo.sfxs) == 1
 
@@ -416,8 +435,8 @@ def test_ensure_starter_location_sfx_migrates_travel_shape():
     eff = repo.sfxs["sfx-starter-location"].effects[0]
     assert eff.type == "location"
     assert eff.action == "set"
-    assert eff.target == "{random:location}"
-    assert eff.target_filter == {"starter_location": True}
+    assert _path(eff) == [("select", "locations"), ("filter", "universe"),
+                          ("filter", "starter_location"), ("aggregate", "random")]
     assert eff.context == {}  # inapposite context dropped
 
 
@@ -456,8 +475,9 @@ def test_ensure_contest_complication_sfx_creates_once():
     assert take_sfx.effects[0].action == "cortex_gain"
     assert apply_sfx.effects[0].negative is True
     assert take_sfx.effects[0].negative is True
-    assert apply_sfx.effects[0].target == "{choose_trait}"
-    assert take_sfx.effects[0].target_scope == "traitset:ts-complications-a190"
+    assert _path(apply_sfx.effects[0]) == [("literal", "ts-complications-a190"),
+                                          ("navigate", "traits"), ("choose", None)]
+    assert _path(take_sfx.effects[0]) == _path(apply_sfx.effects[0])
     ensure_contest_complication_sfx(repo)
     assert len(repo.sfxs) == 2
 
@@ -482,7 +502,10 @@ def test_ensure_contest_complication_sfx_migrates_stale_effect():
     apply_sfx = repo.sfxs["apply-complication"]
     assert apply_sfx.effects[0].action == "cortex_gain"
     assert apply_sfx.effects[0].negative is True
-    assert apply_sfx.effects[0].target_scope == "traitset:ts-complications-a190"
+    # The stale flat shape is replaced by the path it meant.
+    assert _path(apply_sfx.effects[0]) == [("literal", "ts-complications-a190"),
+                                          ("navigate", "traits"), ("choose", None)]
+    assert apply_sfx.effects[0].target == ""
     assert apply_sfx.trigger == "menu"
     assert apply_sfx.placement is None
     assert [c.target for c in apply_sfx.conditions if c.type.value == "contest_outcome"] == ["player"]
@@ -519,7 +542,8 @@ def test_ensure_hitch_gain_complication_sfx_creates_once():
     assert sfx.effects[0].negative is True
     assert sfx.effects[0].result == "d4"
     assert sfx.effects[0].context == {"steps": "{number_of_hitches}"}
-    assert sfx.effects[0].target_scope == "traitset:ts-complications-a190"
+    assert _path(sfx.effects[0]) == [("literal", "ts-complications-a190"),
+                                     ("navigate", "traits"), ("choose", None)]
     assert sfx.effects[1].type == "transfer_razmerit"
     assert sfx.effects[1].action == "earn"
     assert sfx.effects[1].entity == "{hitch_entity}"
@@ -545,8 +569,8 @@ def test_ensure_opportunity_sfx_creates_once():
     assert sfx.effects[1].type == "modify_trait"
     assert sfx.effects[1].action == "step_down"
     assert sfx.effects[1].entity == "{buying_entity}"
-    assert sfx.effects[1].target == "{choose_trait}"
-    assert sfx.effects[1].target_scope == "traitset:ts-complications-a190"
+    assert _path(sfx.effects[1]) == [("literal", "ts-complications-a190"),
+                                     ("navigate", "traits"), ("choose", None)]
     ensure_opportunity_sfx(repo)
     assert len(repo.sfxs) == 1
 
