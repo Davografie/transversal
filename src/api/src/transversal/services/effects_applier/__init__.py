@@ -47,16 +47,7 @@ from transversal.services.effects_applier.trait_helpers import (  # noqa: F401
 
 # Re-exported for backwards compatibility (previously defined here).
 from transversal.services.effects_applier.targeting import (  # noqa: F401
-    _TARGET_KINDS,
-    _PLACEHOLDER_MODES,
-    _parse_placeholder,
-    is_choose_target,
-    choose_kind,
-    find_choose_placeholder,
-    _scope_choice,
-    _resolve_scope_choose,
-    _resolve_scope,
-    _random_candidate,
+    context_choice,
     _SELF_FIELDS,
     _parse_self_field,
     _resolve_target,
@@ -125,7 +116,6 @@ from transversal.services.effects_applier.handlers_pools import (  # noqa: F401
 from transversal.services.effects_applier.handlers_world import (  # noqa: F401
     _apply_attune_universe,
     _next_projection_id,
-    _scope_universe,
     _apply_create_projection,
     _apply_restore_projection,
     _apply_set_location,

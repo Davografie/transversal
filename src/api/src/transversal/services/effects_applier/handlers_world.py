@@ -48,7 +48,7 @@ def _apply_cancel_scheduled_event(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "scheduled_event", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return  # pending choice (or no candidate)
     getter = getattr(repo, "get_scheduled_event", None)
@@ -123,7 +123,7 @@ def _apply_restore_projection(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"restored body {prior.id}"))
 
 def _apply_relationship_create(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "entity", repo)
+    target = _resolve_target(entity, effect, result, repo)
     if target is None:
         return
     rel_type = effect.result or ""
@@ -147,16 +147,6 @@ def _next_projection_id(entity_id: str, universe: str, repo) -> str:
         n += 1
     return f"{base}:{n}"
 
-def _scope_universe(scope: Optional[str]) -> Optional[str]:
-    """Return a literal universe from a ``universe:X`` scope, else None."""
-    from transversal.services.target_scopes import parse_scope
-    if not scope:
-        return None
-    prefix, value = parse_scope(scope)
-    if prefix == "universe" and value and not value.startswith("{"):
-        return value
-    return None
-
 def _apply_set_location(entity, effect, repo, result):
     """Place an entity at a location without crossing a universal boundary.
 
@@ -176,7 +166,7 @@ def _apply_set_location(entity, effect, repo, result):
         return
     _track_subject(result, entity, subject)
 
-    location_id = _resolve_target(subject, effect, result, "location", repo)
+    location_id = _resolve_target(subject, effect, result, repo)
     if location_id is None:
         return  # pending choice recorded
 
@@ -207,13 +197,33 @@ def _apply_set_location(entity, effect, repo, result):
 
     result.applied.append(AppliedEffect(effect, f"placed at {location_id}"))
 
+def _body_pool(effect, subject, dest_universe: str, repo) -> list:
+    """The bodies a travel effect may reuse, in scope order.
+
+    The author narrows the pool with the ``projection`` **reference's path** — the
+    same declarations the old ``target_scope`` spelled (``location:X → its subtree
+    → the actor's projections``), so "reuse the body I have *here*" is a path like
+    any other. With no path the pool is the actor's bodies in the destination
+    universe, which is what a transversal means by "a body I already have there".
+    """
+    from transversal.services.target_resolver import TargetContext, resolved_id, resolve
+
+    ref = (effect.refs or {}).get("projection")
+    if ref is not None and ref.spec is not None and ref.spec.steps:
+        resolution = resolve(ref.spec, TargetContext(subject=subject, repo=repo))
+        return [rid for value in resolution.values if (rid := resolved_id(value))]
+    scope = f"universe:{dest_universe}" if dest_universe else None
+    return [c.id for c in resolve_candidates("projection", scope, subject, repo)]
+
+
 def _apply_travel(entity, effect, repo, result):
     """Cross a universal boundary, honoring subject/location/mechanism/body/universe.
 
-    Subject = ``effect.entity``. Destination location = ``effect.target`` (literal,
-    ``{choose_location}``, or ``{random:location}``). Universe = ``effect.target_scope``
-    (``universe:X``) or, for a location scope, the target location's universe.
-    Mechanism = ``context.transversal_type``. Body policy = ``context.projection``.
+    Subject = ``effect.entity``. Destination location = ``effect.target`` (a spec
+    resolves it to a concrete id before this runs). Universe = the destination
+    location's universe. Mechanism = ``context.transversal_type``. Body policy =
+    ``context.projection``, whose pool is the ``projection`` reference's **path**
+    (or the destination universe when the reference names no path).
 
     Inapposite always uses the active body (it travels). Consciousness picks a
     body via ``{last_projection}`` / ``{random_projection}`` / ``{choose_projection}``
@@ -249,9 +259,6 @@ def _apply_travel(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"spawned body {proj.id}"))
 
     def _dest_universe() -> str:
-        uni = _scope_universe(effect.target_scope)
-        if uni:
-            return uni
         target = (effect.target or "").strip()
         if target and not target.startswith("{"):
             loc = repo.get_entity(target)
@@ -261,7 +268,7 @@ def _apply_travel(entity, effect, repo, result):
 
     # ── Inapposite — the active body itself travels. ──
     if travel_type != "consciousness":
-        location_id = _resolve_target(subject, effect, result, "location", repo)
+        location_id = _resolve_target(subject, effect, result, repo)
         if location_id is None:
             return  # pending choice recorded
         dest_universe = _dest_universe()
@@ -297,7 +304,7 @@ def _apply_travel(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"arrived in body {proj.id}"))
 
     def _spawn_new() -> None:
-        location_id = _resolve_target(subject, effect, result, "location", repo)
+        location_id = _resolve_target(subject, effect, result, repo)
         if location_id is None:
             return
         _spawn_body(dest_universe, location_id, TransversalType.CONSCIOUSNESS)
@@ -311,23 +318,23 @@ def _apply_travel(entity, effect, repo, result):
         projection_policy = "{new_projection}"
 
     if projection_policy in ("{last_projection}", "{random_projection}", "{choose_projection}"):
-        scope = effect.target_scope or (f"universe:{dest_universe}" if dest_universe else None)
-        candidates = resolve_candidates("projection", scope, subject, repo)
-        if candidates:
+        body_ids = _body_pool(effect, subject, dest_universe, repo)
+        if body_ids:
             if projection_policy == "{choose_projection}":
+                # The destination universe stays as the picker's narrowing hint: a
+                # body outside it would be a transversal in its own right.
                 result.pending_choices.append(PendingChoice(
                     effect=effect, kind="projection",
-                    scope=scope,
+                    scope=f"universe:{dest_universe}" if dest_universe else None,
                     field="context.projection",
                 ))
                 return
             if projection_policy == "{last_projection}":
-                projs = [repo.get_projection(c.id) for c in candidates]
-                projs = [p for p in projs if p is not None]
+                projs = [p for p in (repo.get_projection(pid) for pid in body_ids) if p is not None]
                 projs.sort(key=lambda p: p.last_used_at or "", reverse=True)
                 proj = projs[0] if projs else None
             else:
-                proj = repo.get_projection(random.choice([c.id for c in candidates]))
+                proj = repo.get_projection(random.choice(body_ids))
             if proj is not None:
                 _arrive_in_body(proj)
                 return

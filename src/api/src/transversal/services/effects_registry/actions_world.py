@@ -138,6 +138,10 @@ ACTIONS: list[EffectActionMeta] = [
                           required=False, default="{last_projection}",
                           options=["{last_projection}", "{new_projection}", "{random_projection}", "{choose_projection}"]),
         ],
+        # Which bodies may be reused. A path here is the narrowing the old
+        # `target_scope` spelled ("the body I have in this place"); with no path,
+        # the pool is the actor's bodies in the destination universe.
+        refs=[RefDef(name="projection", label="Body", element="projection")],
     ),
 
     # ── Set Location ───────────────────────────────────

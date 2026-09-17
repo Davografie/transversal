@@ -227,7 +227,7 @@ export function useCanvas() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query { rollTables { id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } effects { timing type action target result targetScope negative context } } } lifePaths { id name factionIds } }`,
+          query: `query { rollTables { id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } effects { timing type action target result negative context } } } lifePaths { id name factionIds } }`,
         }),
       })
       const data = await r.json()
@@ -1329,7 +1329,7 @@ export function useCanvas() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } entries { label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } effects { timing type action target result targetScope negative context } } } }`,
+          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } entries { label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } effects { timing type action target result negative context } } } }`,
           variables: { id: sourceTableId },
         }),
       })
@@ -1340,7 +1340,7 @@ export function useCanvas() {
       const entry = table?.entries?.[rowIndex]
       if (!table || !entry) return false
 
-      const nextEffect = { timing: 'IMMEDIATE', type: 'life_path', action: 'next_step', target: targetTableId, result: null, targetScope: null, context: {} }
+      const nextEffect = { timing: 'IMMEDIATE', type: 'life_path', action: 'next_step', target: targetTableId, result: null, context: {} }
       const entries = table.entries.map((e, i) => (
         i === rowIndex ? { ...e, effects: [...(e.effects || []), nextEffect] } : e
       ))

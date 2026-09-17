@@ -44,7 +44,7 @@ def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | N
         return out
 
     updates: dict = {}
-    for field in ("result", "target", "entity", "target_scope", "entity_scope"):
+    for field in ("result", "target", "entity"):
         old = getattr(effect, field)
         new = _sub(old)
         if new != old:

@@ -23,10 +23,16 @@ class GameEvent:
 
 @dataclass
 class PendingSfxEffect:
-    """A pending ``{choose_*}`` effect plus its source SFX for display."""
+    """A pending context-policy choice (``{choose_projection}``) and its SFX.
+
+    Only a *context* value can still defer this way: a target choice is a path with
+    a ``choose`` step, which travels as a structured choice instead.
+    """
     effect: Effect
     sfx_name: str
     sfx_description: str = ""
+    kind: str = ""                 # what the picker presents (``projection``, …)
+    field_name: str = "target"     # where the answer lands (``context.projection``)
     # Immediate effects that come after this blocked effect; applied in order
     # once the choice resolves (sequential execution).
     continuation: list[Effect] = field(default_factory=list)

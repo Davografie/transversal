@@ -31,9 +31,9 @@ def _entity_sfx_context(repo, entity_id: str, universe: str) -> tuple[list[str],
 def _emit_pending_choices(entity_id: str, universe: str, effects: list, structured: list | None = None) -> None:
     """Broadcast a ``sfx_choice_required`` SSE event for unresolved effects.
 
-    ``effects`` are legacy ``{choose_*}`` pending effects; ``structured`` are
-    ``StructuredChoice``s from a ``choose`` step in a spec/ref (pre-resolved
-    candidates).
+    ``effects`` are deferred **context-policy** choices (``{choose_projection}``);
+    ``structured`` are ``StructuredChoice``s from a ``choose`` step in a spec or
+    reference, which carry their own pre-resolved candidates.
     """
     if not effects and not structured:
         return
@@ -44,15 +44,9 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list, structur
 
     choices = []
     for p in effects:
-        found = effects_applier.find_choose_placeholder(p.effect)
-        kind, field, scope = (
-            found if found else (effects_applier.choose_kind(p.effect.target), "target", p.effect.target_scope)
-        )
         choices.append({
-            "kind": kind,
-            "field": field,
-            "scope": scope,
-            "filter": p.effect.target_filter or None,
+            "kind": p.kind,
+            "field": p.field_name,
             "sfx_name": p.sfx_name,
             "sfx_description": p.sfx_description,
             "effect": effect_to_wire_dict(p.effect),

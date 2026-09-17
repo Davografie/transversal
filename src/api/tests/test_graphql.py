@@ -800,8 +800,7 @@ def _make_effect_input(gql_effect):
     return EffectInput(
         timing=gql_effect.timing, type=gql_effect.type, action=gql_effect.action,
         target=gql_effect.target, entity=gql_effect.entity, result=gql_effect.result,
-        target_scope=gql_effect.target_scope, entity_scope=gql_effect.entity_scope,
-        target_filter=gql_effect.target_filter, die_filter=gql_effect.die_filter,
+        die_filter=gql_effect.die_filter,
         negative=gql_effect.negative, context=gql_effect.context,
         target_spec=gql_effect.target_spec,
     )

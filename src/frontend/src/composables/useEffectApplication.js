@@ -14,7 +14,7 @@ export function useEffectApplication() {
       const data = await graphql(
         `mutation($entityId: ID!, $effects: [EffectInput!]!) {
           applyEffects(entityId: $entityId, effects: $effects) {
-            applied pendingChoices { index kind scope field filter effect { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target targets value operator narrative spec } } } structured
+            applied pendingChoices { index kind scope field effect { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target targets value operator narrative spec } } } structured
           }
         }`,
         { entityId, effects }
@@ -31,7 +31,7 @@ export function useEffectApplication() {
       const data = await graphql(
         `mutation($entityId: ID!, $resolutions: [EffectTargetResolutionInput!]!) {
           resolveEffectTargets(entityId: $entityId, resolutions: $resolutions) {
-            applied pendingChoices { index kind scope field filter effect { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target targets value operator narrative spec } } } structured
+            applied pendingChoices { index kind scope field effect { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target targets value operator narrative spec } } } structured
           }
         }`,
         { entityId, resolutions }

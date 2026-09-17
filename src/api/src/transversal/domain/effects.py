@@ -14,16 +14,13 @@ from transversal.domain.enums import (
 class TargetRef(BaseModel):
     """One named reference an effect resolves against game state.
 
-    ``value`` is the concrete id after resolution — or, before resolution, a
-    literal id / ``self`` / ``{choose_*}`` / ``{random:*}`` token. ``spec`` is
-    the structured targeting pipeline that resolves ``value`` at fire time
-    (None = literal). ``scope`` narrows runtime choice for ``{choose_*}`` /
-    ``{random:*}``. The ref's element type is declared by the action's
+    ``value`` is the concrete id after resolution, or a literal id / ``self``
+    before it. ``spec`` is the targeting pipeline that resolves it at fire time
+    (None = literal). The ref's element type is declared by the action's
     ``EffectActionMeta.refs`` entry, not stored per effect.
     """
     value: str = ""
     spec: Optional[TargetSpec] = None
-    scope: Optional[str] = None
 
 class Effect(BaseModel):
     """A single operational effect — shared by SFX and life-path consequences.
@@ -36,9 +33,6 @@ class Effect(BaseModel):
     target: str = ""
     entity: str = ""  # explicit subject entity; "" or "self" = the applyEffects entity
     result: Optional[str] = None
-    target_scope: Optional[str] = None  # narrowing hint for runtime target choice
-    entity_scope: Optional[str] = None  # narrowing hint for runtime entity choice
-    target_filter: dict = Field(default_factory=dict)  # candidate field predicates, e.g. {"starter_location": True}
     die_filter: dict = Field(default_factory=dict)  # roll-die predicates for roll-deferred effects, e.g. {"role": None}
     conditions: list["Condition"] = Field(default_factory=list)  # per-effect gate (reuses the SFX condition model)
     negative: bool = False  # polarity of trait-grant effects: true = negative trait (opponent uses it)

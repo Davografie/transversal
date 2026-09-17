@@ -1095,20 +1095,6 @@ def owned_surfaces(repo, sfx_id: str) -> set[str]:
     return surfaces
 
 
-def migrate_legacy_targets(repo) -> int:
-    """Move every stored effect off the flat target form. Idempotent.
-
-    A legacy ``{choose_kind}``/``{random:kind}`` target plus a ``target_scope`` and
-    ``target_filter`` compiles to the *declared* scope path plus a terminal
-    ``choose``/``random`` step (``target_legacy``), so a migrated rule selects
-    exactly what it selected before. Returns the number of SFX changed; a second
-    boot changes none.
-    """
-    from transversal.services.target_legacy import migrate_all_sfxs
-
-    return migrate_all_sfxs(repo)
-
-
 def backfill_source_kinds(repo) -> int:
     """Idempotently backfill ``source_kind`` to match each SFX's owner surface.
 

@@ -15,7 +15,7 @@ export function useHitchMenu() {
         `query($rollerId: ID, $buyerId: ID) {
           hitchMenu(rollerId: $rollerId, buyerId: $buyerId) {
             id label side source
-            effects { timing type action target entity result targetScope targetFilter negative context }
+            effects { timing type action target entity result negative context }
           }
         }`,
         { rollerId: rollerId || null, buyerId: buyerId || null }
@@ -37,7 +37,7 @@ export function useHitchMenu() {
 
     return (effects || []).map((e) => {
       const out = { ...e }
-      for (const field of ['result', 'target', 'entity', 'targetScope']) {
+      for (const field of ['result', 'target', 'entity']) {
         if (out[field] != null) out[field] = sub(out[field])
       }
       if (out.context && typeof out.context === 'object') {

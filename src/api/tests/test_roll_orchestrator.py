@@ -15,7 +15,6 @@ from transversal.domain import (
     SFX,
     SimplifiedResult,
 )
-from transversal.services.effects_applier import choose_kind, is_choose_target
 from transversal.services.effects_engine import EffectsEngine, GameEvent
 from transversal.services.roll_orchestrator import fire_roll_sfx
 
@@ -115,48 +114,18 @@ def test_fire_roll_sfx_missing_entity_is_noop():
     assert fire_roll_sfx(engine, repo, "ghost", "earth", _simplified()) == []
 
 
-def test_process_event_outcome_returns_pending_for_choose_target():
-    engine = EffectsEngine()
-    engine.register(SFX(
-        id="sfx-choose", name="Choose", trigger="on_success",
-        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                        action="gain", target="{choose_trait}")],
-    ))
-    event = GameEvent(type="on_roll", entity_id="e1", universe="earth", roll_result=_simplified())
-
-    outcome = engine.process_event_outcome(event, ["sfx-choose"], 10)
-    assert outcome.applied == []
-    assert [p.effect.target for p in outcome.pending] == ["{choose_trait}"]
-
-
-def test_fire_roll_sfx_emits_choose_target_instead_of_applying(monkeypatch):
-    repo = Repo({"e1": SimpleNamespace(razmerit=10, sfx_ids=["sfx-choose"], current_projection=None)})
-    engine = EffectsEngine()
-    engine.register(SFX(
-        id="sfx-choose", name="Choose", trigger="on_success",
-        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                        action="gain", target="{choose_trait}")],
-    ))
-    emitted = []
-    monkeypatch.setattr(
-        roll_orchestrator, "_emit_pending_choices",
-        lambda entity_id, universe, effects, structured=None: emitted.extend(effects),
-    )
-
-    applied = fire_roll_sfx(engine, repo, "e1", "earth", _simplified())
-    assert applied == []
-    assert [p.effect.target for p in emitted] == ["{choose_trait}"]
-
-
-def test_emit_pending_choices_includes_target_filter(monkeypatch):
+def test_emit_pending_choices_carries_the_choice_kind_and_field(monkeypatch):
+    """A deferred context policy says what the picker presents and where the
+    answer lands — a target choice travels as a structured choice instead."""
     from transversal.services.effects_engine import PendingSfxEffect
 
     eff = Effect(
-        timing=EffectTiming.IMMEDIATE, type="location", action="set",
-        target="{choose_location}", target_scope="universe:earth",
-        target_filter={"starter_location": True},
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="loc-b",
+        context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
     )
-    pending = [PendingSfxEffect(effect=eff, sfx_name="Starter", sfx_description="")]
+    pending = [PendingSfxEffect(effect=eff, sfx_name="Portal", sfx_description="",
+                                kind="projection", field_name="context.projection")]
 
     published = []
     monkeypatch.setattr(
@@ -172,16 +141,10 @@ def test_emit_pending_choices_includes_target_filter(monkeypatch):
 
     assert len(published) == 1
     choice = published[0].data["choices"][0]
-    assert choice["filter"] == {"starter_location": True}
-    assert choice["effect"]["targetFilter"] == {"starter_location": True}
+    assert choice["kind"] == "projection"
+    assert choice["field"] == "context.projection"
 
 
-def test_is_choose_target_and_choose_kind():
-    assert is_choose_target("{choose_trait}") is True
-    assert is_choose_target("{random:location}") is False
-    assert is_choose_target("self") is False
-    assert choose_kind("{choose_trait}") == "trait"
-    assert choose_kind("self") is None
 
 
 def test_fire_roll_sfx_gated_by_condition():

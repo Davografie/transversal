@@ -292,19 +292,29 @@ When this effect fires **relative to the SFX's trigger**:
 
 ### Target
 
-What the effect points at. Five modes:
+What the effect points at. Three modes:
 
-1. **Pick specific** — a literal id (self, a named trait, a location). The `{choose:kind}` legacy form.
-2. **Choose at runtime** — `{choose:kind}`; the player picks at resolution time.
-3. **Random** — `{random:kind}`; a random in-scope candidate.
-4. **Named exit** — `{return:name}` for shared roll tables (only when the action supports it).
-5. **Targeting path** — a structured `target_spec` pipeline (see [[#Targeting path]]).
+1. **Pick specific** — a literal id (self, a named trait, a location).
+2. **Named exit** — `{return:name}` for shared roll tables (only when the action supports it).
+3. **Targeting path** — a structured `target_spec` pipeline (see [[#Targeting path]]).
 
-The **scope** (`target_scope`) narrows choose/random candidates: `traitset:…`, `universe:…`, `location:…`, `subtree:…`, `faction:…`, `actor_faction:…`, `life_path:…`. Each prefix is declared in the backend and readable over GraphQL (`targetScopes`); a pair that is not supported **says so** instead of coming back empty, so an empty picker means "nothing matched", never "wrong pair". `universe:current` is the acting entity's own universe, and an empty scope means its current context.
+**A runtime pick is a `choose` step in the path.** "Choose at runtime" and "Random" are
+no longer modes of the field: add a `choose` step where the table should decide, or an
+`aggregate → random` step for a random one. That is what makes *what* is offered and
+*how it is narrowed* one thing to read — the path — instead of a token plus a scope
+kept beside it. A condition path offers no `choose` (nobody is there to answer).
+
+The **scope vocabulary** still exists for the *picker*: when you pick a literal with
+the search box, `targetScopes` (readable over GraphQL) declares each prefix —
+`traitset:…`, `universe:…`, `location:…`, `subtree:…`, `faction:…`,
+`actor_faction:…`, `life_path:…` — and which kinds it can offer. A pair that is not
+supported **says so** instead of coming back empty, so an empty picker means
+"nothing matched", never "wrong pair".
 
 ### Entity (subject)
 
-Who the effect applies to. Default `self`. Mirror of Target: literal, choose, random, or a targeting path (`entity_spec`). For most trait effects this stays `self`.
+Who the effect applies to. Default `self`. Either a literal id or a targeting path
+(`entity_spec`). For most trait effects this stays `self`.
 
 ### Result & context fields
 

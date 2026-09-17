@@ -17,7 +17,7 @@ from transversal.domain import (
     TraitSetSetting,
     TransversalType,
 )
-from transversal.services.effects_applier import apply_effects, resolve_choice
+from transversal.services.effects_applier import PendingChoice, apply_effects, resolve_choice
 
 
 class FakeTrait:
@@ -162,6 +162,30 @@ class RandomRepo:
 
     def get_traitsettings_for_entity(self, entity_id):
         return []
+
+
+def _starter_location_spec():
+    """A random starter location in Earth — the path the built-in SFX carries.
+
+    ``{random:location}`` + ``universe:earth`` + a starter-location filter used to
+    spell this; it composes the same declared scope path with a terminal random
+    step, so the applier sees a spec instead of a placeholder.
+    """
+    from transversal.services.target_scopes import choice_spec
+
+    return choice_spec("location", "universe:earth", mode="random",
+                       filter={"starter_location": True})
+
+
+def _bodies_at(location_id: str):
+    """The actor's own bodies inside a place, as a path.
+
+    This is what a `projection` reference's spec says: the same declarations the
+    old `location:X` scope resolved (the place, its zones, my bodies there).
+    """
+    from transversal.services.target_scopes import ACTOR_AT_RUNTIME, selection_spec
+
+    return selection_spec("projection", location_id, ACTOR_AT_RUNTIME, "location")
 
 
 def _entity(**overrides):
@@ -1151,63 +1175,6 @@ def test_relationship_create():
 
 # ── Pending choices and passthrough ──────────────────
 
-def test_unresolved_target_becomes_pending():
-    entity = _entity()
-    result = apply_effects(entity, [_effect("modify_trait", "gain", "{choose_trait}", "d6")], FakeRepo())
-    assert len(result.pending_choices) == 1
-    assert result.pending_choices[0].kind == "trait"
-    assert len(result.new_trait_settings) == 0
-
-
-def test_empty_required_target_becomes_pending():
-    entity = _entity()
-    result = apply_effects(entity, [_effect("modify_trait", "gain", "", "d6")], FakeRepo())
-    assert len(result.pending_choices) == 1
-    assert result.pending_choices[0].kind == "trait"
-
-
-def test_choose_location_yields_location_kind():
-    entity = _entity()
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
-        target="{choose_location}", result="linked",
-    )
-    result = apply_effects(entity, [effect], FakeRepo())
-    assert len(result.pending_choices) == 1
-    assert result.pending_choices[0].kind == "location"
-
-
-def test_choose_occupant_yields_occupant_kind():
-    entity = _entity()
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
-        target="{choose_occupant}", result="ally",
-    )
-    result = apply_effects(entity, [effect], FakeRepo())
-    assert result.pending_choices[0].kind == "occupant"
-
-
-def test_choose_rating_die_yields_rating_die_kind():
-    entity = _entity()
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
-        target="{choose_rating_die}",
-    )
-    result = apply_effects(entity, [effect], FakeRepo())
-    assert result.pending_choices[0].kind == "rating_die"
-
-
-def test_target_scope_populates_pending_choice_scope():
-    entity = _entity()
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
-        target="{choose_trait}", result="d6", target_scope="earth",
-    )
-    result = apply_effects(entity, [effect], FakeRepo())
-    assert len(result.pending_choices) == 1
-    assert result.pending_choices[0].scope == "earth"
-
-
 def test_travel_random_starter_location_relocates():
     from transversal.domain import Projection, TransversalType
 
@@ -1232,10 +1199,12 @@ def test_travel_random_starter_location_relocates():
         def get_projection(self, pid):
             return proj if pid == proj.id else None
 
+        def get_entity(self, eid):
+            return entity if eid == entity.id else None
+
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="{random:location}", target_scope="universe:earth",
-        target_filter={"starter_location": True},
+        target_spec=_starter_location_spec(),
         context={"transversal_type": "inapposite"},
     )
     result = apply_effects(entity, [effect], Repo())
@@ -1272,8 +1241,7 @@ def test_set_location_random_starter_relocates():
 
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="location", action="set",
-        target="{random:location}", target_scope="universe:earth",
-        target_filter={"starter_location": True},
+        target_spec=_starter_location_spec(),
     )
     result = apply_effects(entity, [effect], Repo())
     assert entity.current_location == "loc-a"
@@ -1311,8 +1279,7 @@ def test_set_location_creates_native_body_when_missing():
 
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="location", action="set",
-        target="{random:location}", target_scope="universe:earth",
-        target_filter={"starter_location": True},
+        target_spec=_starter_location_spec(),
     )
     result = apply_effects(entity, [effect], Repo())
     assert entity.current_location == "loc-a"
@@ -1330,127 +1297,39 @@ def test_set_location_creates_native_body_when_missing():
 def test_resolve_choice_returns_reappliable_effect():
     entity = _entity()
     effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
-        target="{choose_location}", result="linked",
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="loc-krasnoyarsk", entity="char-1",
+        context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
     )
-    result = apply_effects(entity, [effect], FakeRepo())
-    resolved = resolve_choice(result.pending_choices[0], "loc-krasnoyarsk")
-    assert resolved.target == "loc-krasnoyarsk"
-    assert resolved.type == "relationship"
-    assert resolved.action == "create"
-    assert resolved.result == "linked"
+    choice = PendingChoice(effect=effect, kind="projection", field="context.projection")
+    resolved = resolve_choice(choice, "char-1:earth")
+    assert resolved.context["projection"] == "char-1:earth"
+    assert resolved.type == "travel" and resolved.action == "move"
 
 
 def test_resolve_choice_can_be_reapplied():
+    """The chosen body is what the re-applied effect arrives in."""
     entity = _entity()
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
-        target="{choose_location}", result="linked",
+    repo = TravelRepo(
+        entities=[entity, _loc("peak", "earth")],
+        projections=[_proj("char-1:earth", "char-1", "earth", location="peak")],
     )
-    result = apply_effects(entity, [effect], FakeRepo())
-    assert len(result.pending_choices) == 1
-    assert result.new_relationships == []
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="peak",
+        context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
+    )
+    pending = apply_effects(entity, [effect], repo)
+    assert len(pending.pending_choices) == 1
+    assert pending.pending_choices[0].field == "context.projection"
 
-    resolved = resolve_choice(result.pending_choices[0], "loc-krasnoyarsk")
-    reapplied = apply_effects(entity, [resolved], FakeRepo())
-    assert reapplied.new_relationships == [
-        {"from": "char-1", "to": "loc-krasnoyarsk", "type": "linked", "description": ""}
-    ]
+    resolved = resolve_choice(pending.pending_choices[0], "char-1:earth")
+    apply_effects(entity, [resolved], repo)
+    assert entity.current_projection == "char-1:earth"
+    assert entity.current_location == "peak"
 
 
 # ── Random target mode ───────────────────────────────
-
-def test_random_location_resolves_to_candidate():
-    repo = RandomRepo(locations=["loc-earth"])
-    entity = _entity()
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
-        target="{random:location}", result="linked",
-    )
-    result = apply_effects(entity, [effect], repo)
-    assert result.pending_choices == []
-    assert result.new_relationships == [
-        {"from": "char-1", "to": "loc-earth", "type": "linked", "description": ""}
-    ]
-
-
-def test_random_location_no_candidates_noops():
-    repo = RandomRepo(locations=[])
-    entity = _entity()
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
-        target="{random:location}", result="linked",
-    )
-    result = apply_effects(entity, [effect], repo)
-    assert result.pending_choices == []
-    assert result.new_relationships == []
-    assert result.applied == []
-
-
-def test_random_occupant_resolves_in_scope():
-    repo = RandomRepo(locations=["railyard"], occupants=["dmitry"])
-    entity = _entity(current_location="railyard")
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
-        target="{random:occupant}", result="ally", target_scope="railyard",
-    )
-    result = apply_effects(entity, [effect], repo)
-    assert result.pending_choices == []
-    assert result.new_relationships == [
-        {"from": "char-1", "to": "dmitry", "type": "ally", "description": ""}
-    ]
-
-
-def test_random_trait_resolves_to_candidate():
-    repo = RandomRepo(traits=[FakeTrait("iron-will", "ts-distinctions")])
-    entity = _entity()
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
-        target="{random:trait}", result="d6",
-    )
-    result = apply_effects(entity, [effect], repo)
-    assert result.pending_choices == []
-    assert [ts.trait_id for ts in result.new_trait_settings] == ["iron-will"]
-
-
-def test_resolve_scope_random_universe():
-    from transversal.services.effects_applier import _resolve_scope
-
-    class UniverseRepo:
-        def list_entities_by_type(self, entity_type, universe=None):
-            if entity_type == EntityType.UNIVERSE:
-                return [
-                    Entity(id="earth", type=EntityType.UNIVERSE, name="Earth", current_universe="earth"),
-                    Entity(id="three_realms", type=EntityType.UNIVERSE, name="Three Realms", current_universe="three_realms"),
-                ]
-            return []
-
-    entity = _entity()
-    out = _resolve_scope("universe:{random_universe}", entity, UniverseRepo())
-    assert out in ("universe:earth", "universe:three_realms")
-
-
-def test_random_location_scoped_by_random_universe():
-    from transversal.services.effects_applier import _random_candidate
-
-    class Repo:
-        def list_entities_by_type(self, entity_type, universe=None):
-            if entity_type == EntityType.UNIVERSE:
-                return [
-                    Entity(id="earth", type=EntityType.UNIVERSE, name="Earth", current_universe="earth"),
-                    Entity(id="three_realms", type=EntityType.UNIVERSE, name="Three Realms", current_universe="three_realms"),
-                ]
-            if entity_type == EntityType.LOCATION:
-                return [
-                    Entity(id="l-earth", type=EntityType.LOCATION, name="Earth Loc", current_universe="earth"),
-                    Entity(id="l-realm", type=EntityType.LOCATION, name="Realm Loc", current_universe="three_realms"),
-                ]
-            return []
-
-    entity = _entity()
-    out = _random_candidate("location", "universe:{random_universe}", entity, Repo())
-    assert out in ("l-earth", "l-realm")
-
 
 def test_unknown_effect_is_passthrough():
     # `reroll_die` is still resolver-context only; the step-die pair is not any
@@ -1714,26 +1593,6 @@ def test_gain_targets_explicit_entity():
     assert result.new_trait_settings[0].entity_id == "char-2"
 
 
-def test_choose_entity_pending_choice_marks_field():
-    repo = FakeRepo()
-    entity = _entity()
-    effect = Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit", action="earn",
-                    target="self", entity="{choose_entity}", result="1")
-    result = apply_effects(entity, [effect], repo)
-    assert len(result.pending_choices) == 1
-    assert result.pending_choices[0].kind == "entity"
-    assert result.pending_choices[0].field == "entity"
-
-
-def test_choose_entity_pending_choice_uses_entity_scope():
-    repo = FakeRepo()
-    entity = _entity()
-    effect = Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit", action="earn",
-                    target="self", entity="{choose_entity}", entity_scope="subtree:loc-x", result="1")
-    result = apply_effects(entity, [effect], repo)
-    assert result.pending_choices[0].scope == "subtree:loc-x"
-
-
 # ── Fog-of-war reveal ────────────────────────────────
 
 def test_reveal_adds_learner_to_known_to():
@@ -1961,7 +1820,7 @@ def test_travel_last_projection_reuses_body():
     )
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="", target_scope="universe:earth",
+        target="",
         context={"transversal_type": "consciousness", "projection": "{last_projection}"},
     )
     result = apply_effects(entity, [effect], repo)
@@ -2004,11 +1863,12 @@ def test_travel_reuse_scoped_to_location():
     repo.get_projection("char-1:earth:2").last_used_at = "2026-08-22T10:00:00+00:00"  # more recent, but outside scope
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="yinling", target_scope="location:valley",
+        target="yinling",
+        refs={"projection": TargetRef(spec=_bodies_at("valley"))},
         context={"transversal_type": "consciousness", "projection": "{last_projection}"},
     )
     result = apply_effects(entity, [effect], repo)
-    # only char-1:earth is in the Valley scope, even though :2 is more recent
+    # only char-1:earth is in the Valley path, even though :2 is more recent
     assert entity.current_projection == "char-1:earth"
     assert entity.current_location == "valley"
 
@@ -2021,7 +1881,8 @@ def test_travel_reuse_fallback_spawns_at_specific_target():
     )
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="yinling", target_scope="location:valley",
+        target="yinling",
+        refs={"projection": TargetRef(spec=_bodies_at("valley"))},
         context={"transversal_type": "consciousness", "projection": "{last_projection}"},
     )
     result = apply_effects(entity, [effect], repo)
@@ -2039,7 +1900,7 @@ def test_travel_last_projection_falls_back_to_new():
     )
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="peak", target_scope="universe:three_realms",
+        target="peak",
         context={"transversal_type": "consciousness", "projection": "{last_projection}"},
     )
     result = apply_effects(entity, [effect], repo)
@@ -2086,99 +1947,7 @@ def test_travel_resolved_choose_projection_arrives_in_body():
 
 # ── choose-placeholder discovery ───────────────────
 
-def test_find_choose_placeholder_target():
-    from transversal.services.effects_applier import find_choose_placeholder
-    eff = Effect(
-        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="{choose_location}", target_scope="universe:earth",
-    )
-    assert find_choose_placeholder(eff) == ("location", "target", "universe:earth")
-
-
-def test_find_choose_placeholder_context_projection():
-    from transversal.services.effects_applier import find_choose_placeholder
-    eff = Effect(
-        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="krasnoyarsk", target_scope="universe:earth",
-        context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
-    )
-    assert find_choose_placeholder(eff) == ("projection", "context.projection", "universe:earth")
-
-
-def test_find_choose_placeholder_none():
-    from transversal.services.effects_applier import find_choose_placeholder
-    eff = Effect(
-        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="krasnoyarsk", context={"projection": "active"},
-    )
-    assert find_choose_placeholder(eff) is None
-
-
 # ── {choose:*} in scope ─────────────────────────────
-
-def test_scope_choice_detected_for_choose_universe():
-    from transversal.services.effects_applier import _scope_choice
-    eff = Effect(
-        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="{choose_location}", target_scope="universe:{choose_universe}",
-    )
-    choice = _scope_choice(eff)
-    assert choice is not None
-    assert choice.kind == "universe"
-    assert choice.field == "target_scope"
-
-
-def test_find_choose_placeholder_scope_first():
-    from transversal.services.effects_applier import find_choose_placeholder
-    eff = Effect(
-        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="{choose_location}", target_scope="universe:{choose_universe}",
-    )
-    assert find_choose_placeholder(eff) == ("universe", "target_scope", None)
-
-
-def test_resolve_scope_choose_substitutes():
-    from transversal.services.effects_applier import _resolve_scope_choose
-    assert _resolve_scope_choose("universe:{choose_universe}", "earth") == "universe:earth"
-    assert _resolve_scope_choose("{choose_universe}", "earth") == "earth"
-
-
-def test_apply_effects_defers_scope_choice():
-    eff = Effect(
-        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="{choose_location}", target_scope="universe:{choose_universe}",
-    )
-    entity = _entity()
-    result = apply_effects(entity, [eff], TravelRepo(entities=[entity]))
-    assert len(result.pending_choices) == 1
-    assert result.pending_choices[0].kind == "universe"
-    assert result.pending_choices[0].field == "target_scope"
-    assert result.applied == []
-
-
-def test_two_step_scope_then_location():
-    from transversal.services.effects_applier import resolve_choice
-    eff = Effect(
-        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="{choose_location}", target_scope="universe:{choose_universe}",
-        context={"transversal_type": "inapposite"},
-    )
-    entity = _entity()
-    repo = TravelRepo(entities=[entity])
-
-    r1 = apply_effects(entity, [eff], repo)
-    assert len(r1.pending_choices) == 1
-    assert r1.pending_choices[0].field == "target_scope"
-
-    eff2 = resolve_choice(r1.pending_choices[0], "earth")
-    assert eff2.target_scope == "universe:earth"
-
-    r2 = apply_effects(entity, [eff2], repo)
-    assert len(r2.pending_choices) == 1
-    assert r2.pending_choices[0].field == "target"
-    assert r2.pending_choices[0].kind == "location"
-    assert r2.pending_choices[0].scope == "universe:earth"
-
 
 def test_entity_spec_resolves_subject_to_location():
     from transversal.services.target_spec import NavigateStep, SelectStep, TargetSpec

@@ -46,7 +46,7 @@ def _run(repo, query, variables=None):
 QUERY = """
 mutation($input: SfxInput!) {
   createSfx(input: $input) {
-    id effects { type action target entity result targetScope entityScope negative }
+    id effects { type action target entity result negative }
   }
 }
 """
@@ -59,11 +59,9 @@ def test_create_sfx_round_trips_entity_fields():
         "effects": [{
             "timing": "IMMEDIATE", "type": "modify_trait", "action": "gain_or_step_up",
             "target": "{choose_trait}", "entity": "{hitch_entity}",
-            "result": "d4", "targetScope": "traitset:ts-complications-a190",
-            "entityScope": "subtree:loc-x", "negative": True,
+            "result": "d4", "negative": True,
             "context": {"steps": "{number_of_hitches}"},
         }],
     }})
     eff = data["createSfx"]["effects"][0]
     assert eff["entity"] == "{hitch_entity}"
-    assert eff["entityScope"] == "subtree:loc-x"

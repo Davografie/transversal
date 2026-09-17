@@ -313,45 +313,10 @@ def _effect_from_wire(d: dict):
         target=d.get("target", ""),
         entity=d.get("entity", ""),
         result=d.get("result"),
-        target_scope=d.get("targetScope"),
-        entity_scope=d.get("entityScope"),
         negative=bool(d.get("negative", False)),
         context=d.get("context") or {},
         duration=duration,
     )
-
-
-def _substitute_token(value, token: str, replacement: str):
-    if isinstance(value, str) and token in value:
-        return value.replace(token, replacement)
-    return value
-
-
-def _substitute_portal_variables(effect, to_id: str, repo) -> None:
-    """Resolve the portal's scoped variable against the edge's ``_to``.
-
-    A transversal edge's ``_to`` points at a single entity — either a location
-    or a universe. Exactly one portal-scoped variable is available, matching
-    that target's type, and it represents a **scope** (not a destination):
-
-    * location ``_to`` → ``{location:transversal_target}`` → ``location:<id>``
-    * universe ``_to`` → ``{universe:transversal_target}`` → ``universe:<key>``
-
-    The variable lives in ``target_scope``; ``target`` is a location picked
-    within that scope (a location, or a sub-location for a location ``_to``).
-    """
-    from transversal.domain import EntityType
-
-    to_entity = repo.get_entity(to_id)
-    if to_entity is None:
-        return
-    if to_entity.type == EntityType.LOCATION:
-        token, replacement = "{location:transversal_target}", f"location:{to_id}"
-    elif to_entity.type == EntityType.UNIVERSE:
-        token, replacement = "{universe:transversal_target}", f"universe:{to_entity.current_universe or to_id}"
-    else:
-        return
-    effect.target_scope = _substitute_token(effect.target_scope, token, replacement)
 
 
 class PortalFireRequest(BaseModel):
@@ -378,8 +343,6 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
         raise HTTPException(status_code=404, detail=f"Entity '{body.entity_id}' not found")
 
     effects = [_effect_from_wire(e) for e in (edge.get("effects") or [])]
-    for effect in effects:
-        _substitute_portal_variables(effect, to_id, repo)
 
     if not effects:
         travel_type = edge.get("transversal_type") or "inapposite"

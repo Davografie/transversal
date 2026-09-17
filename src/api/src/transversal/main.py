@@ -188,7 +188,6 @@ async def _startup():
         remove_legacy_buy_hitch_sfx,
         backfill_trait_default_sfx,
         backfill_source_kinds,
-        migrate_legacy_targets,
     )
 
     _register_core_handlers(_get_em(), _get_raz())
@@ -212,9 +211,6 @@ async def _startup():
     remove_legacy_buy_hitch_sfx(repo)
     backfill_trait_default_sfx(repo)
     backfill_source_kinds(repo)
-    # Move every stored effect off the flat target form (an idempotent pass, so a
-    # second boot changes nothing).
-    migrate_legacy_targets(repo)
     repo.collapse_legacy_personal_relationship_types()
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:

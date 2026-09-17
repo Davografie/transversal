@@ -5,7 +5,7 @@ import { useEffectApplication } from '@/composables/useEffectApplication.js'
 // Roll-table-as-menu (B58): open a roll table, list its entries as a pickable
 // menu, then apply the chosen entry (pay cost effects, gain effects).
 const EFFECT_FIELDS = `
-  timing type action target entity result targetScope entityScope targetFilter dieFilter negative
+  timing type action target entity result dieFilter negative
   context duration { timers { event remaining } combine } targetSpec entitySpec refs
   conditions { type subject target targets value operator narrative spec }
 `
@@ -40,7 +40,7 @@ export function useRollTableMenu() {
         `mutation($entityId: ID!, $tableId: ID!, $index: Int!) {
           applyRollTableEntry(entityId: $entityId, tableId: $tableId, index: $index) {
             applied
-            pendingChoices { index kind scope field filter effect { ${EFFECT_FIELDS} } }
+            pendingChoices { index kind scope field effect { ${EFFECT_FIELDS} } }
             structured
           }
         }`,

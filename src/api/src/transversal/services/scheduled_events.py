@@ -89,7 +89,6 @@ def build_revert(
         target=effect.target,
         entity=subject,
         result=result,
-        target_scope=effect.target_scope,
         context={**(effect.context or {}), **(context_extra or {})},
     )
 

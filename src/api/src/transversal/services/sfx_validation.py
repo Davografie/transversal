@@ -11,15 +11,12 @@ import re
 
 from transversal.domain import Effect, SFX
 from transversal.services.menu_contexts import trigger_variables
-from transversal.services.target_scopes import FILTER_FIELDS
 from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
 
 _TOKEN = re.compile(r"\{([^{}]+)\}")
 
 # A runtime picker placeholder — `{choose:trait}` or `{choose_trait}`. The kind
 # is what a filter over the candidates has to apply to.
-_PICKER_KIND = re.compile(r"^\{(?:choose|random)[:_]([a-z_]+)\}$")
-
 # Placeholders the effect system resolves itself, not trigger variables.
 # choose/random/return are target/exit mechanisms; the rest are applier-internal
 # context keys that happen to appear in authored fields.
@@ -34,7 +31,6 @@ _ROLL_CONTEXT_VARIABLES = {
     "triggered_die_tier", "triggered_die_effect_die", "triggered_die_result", "triggered_die_die",
 }
 
-_FILTER_KINDS = {f.field: f.kinds for f in FILTER_FIELDS}
 
 
 def _tokens(*values) -> list[str]:
@@ -56,7 +52,7 @@ def _reserved(token: str) -> bool:
 
 def _effect_tokens(effect: Effect) -> list[str]:
     """Tokens in the effect fields that are meant to hold references/variables."""
-    return _tokens(effect.target, effect.entity, effect.result, effect.target_scope, effect.entity_scope)
+    return _tokens(effect.target, effect.entity, effect.result)
 
 
 def _action_meta(effect: Effect):
@@ -65,22 +61,6 @@ def _action_meta(effect: Effect):
         if meta.effect_type == effect.type and meta.effect_action == effect.action:
             return meta
     return None
-
-
-def _target_kind(effect: Effect):
-    """The kind of thing this effect's target picks.
-
-    From the action's declared picker kind if it still has one, else from the
-    placeholder itself: `{choose_trait}` picks a trait whether or not the action
-    offers a picker in the editor. An action whose target must be a *path*
-    declares no kind, and a filter over a path narrows nothing — so the
-    placeholder is the only place left that can say what is being picked.
-    """
-    meta = _action_meta(effect)
-    if meta is not None and meta.target_kind:
-        return meta.target_kind
-    match = _PICKER_KIND.match((effect.target or "").strip())
-    return match.group(1) if match else None
 
 
 def _missing_required(effect: Effect) -> list[str]:
@@ -218,12 +198,6 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
         name = (getattr(effect, "output", "") or "").strip()
         if name and _output_element_for(effect.type, effect.action):
             named_outputs.add(name)
-
-        target_kind = _target_kind(effect)
-        for field in (effect.target_filter or {}):
-            kinds = _FILTER_KINDS.get(field)
-            if kinds and target_kind and target_kind not in kinds:
-                warnings.append(f"Effect {i + 1}: filter '{field}' does not apply to {target_kind} targets")
 
         for name in _missing_required(effect):
             warnings.append(f"Effect {i + 1}: missing required field '{name}'")

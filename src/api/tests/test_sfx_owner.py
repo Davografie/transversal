@@ -406,7 +406,7 @@ def test_ensure_starter_location_sfx_creates_once():
     assert sfx.effects[0].type == "location"
     assert sfx.effects[0].action == "set"
     effect = sfx.effects[0]
-    assert effect.target == "" and effect.target_scope is None
+    assert effect.target == ""
     assert _path(effect) == [("select", "locations"), ("filter", "universe"),
                              ("filter", "starter_location"), ("aggregate", "random")]
     assert effect.target_spec.steps[1].value == "earth"

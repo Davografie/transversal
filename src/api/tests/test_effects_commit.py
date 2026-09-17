@@ -1,5 +1,7 @@
 """Tests for commit_effects — persistence + broadcast of applied effects."""
 
+from types import SimpleNamespace
+
 from transversal.domain import (
     DieType,
     Effect,
@@ -38,6 +40,15 @@ class RecordingRepo:
 
     def get_entity(self, entity_id):
         return self.entities.get(entity_id)
+
+    def get_projections_for_entity(self, entity_id):
+        # A travel effect's body pool falls back to the actor's bodies in the
+        # destination universe — one body here, so the picker has something to
+        # offer.
+        if entity_id != "char-1":
+            return []
+        return [SimpleNamespace(id="char-1:earth", entity_id="char-1", universe="earth",
+                                current_location=None, last_used_at="")]
 
     def update_entity(self, entity):
         self.updated_entities.append(entity.id)
@@ -94,27 +105,31 @@ def test_commit_persists_relationship():
 
 
 def test_commit_apply_then_resolve_roundtrip():
-    """The two-step flow the effect wizard uses: apply → pending → resolve → re-apply."""
+    """The two-step flow the effect wizard uses: apply → pending → resolve → re-apply.
+
+    A *target* choice is a path with a ``choose`` step and travels as a structured
+    choice (see ``test_effects_engine``); what still defers through a pending
+    choice is a context-policy pick like a travel effect's body.
+    """
     from transversal.services.effects_applier import resolve_choice
 
     repo = RecordingRepo()
     entity = _entity()
     effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
-        target="{choose_location}", result="linked",
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="loc-x",
+        context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
     )
 
-    # First pass: the choose-target is recorded, nothing applied/persisted.
+    # First pass: the body choice is recorded, nothing applied/persisted.
     result = commit_effects(entity, [effect], repo)
     assert len(result.pending_choices) == 1
-    assert result.pending_choices[0].kind == "location"
-    assert repo.created_relationships == []
+    assert result.pending_choices[0].kind == "projection"
+    assert result.pending_choices[0].field == "context.projection"
 
-    # Second pass: resolve the choice to a concrete id and re-apply.
-    resolved = resolve_choice(result.pending_choices[0], "loc-x")
-    result2 = commit_effects(entity, [resolved], repo)
-    assert repo.created_relationships == [("char-1", "loc-x", "linked", "")]
-    assert len(result2.applied) == 1
+    # Second pass: resolve the choice to a concrete body and re-apply.
+    resolved = resolve_choice(result.pending_choices[0], "char-1:earth")
+    assert resolved.context["projection"] == "char-1:earth"
 
 
 def test_trait_updated_context_names_the_instance_that_changed(monkeypatch):

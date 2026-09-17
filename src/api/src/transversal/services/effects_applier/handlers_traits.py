@@ -18,7 +18,6 @@ from transversal.services.effects_applier.reverts import (
 )
 from transversal.services.effects_applier.targeting import (
     _effect_subject,
-    _parse_placeholder,
     _resolve_target,
     _track_subject,
 )
@@ -41,7 +40,7 @@ def _apply_gain(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
@@ -161,7 +160,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
@@ -196,7 +195,7 @@ def _apply_cortex_gain(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
@@ -230,7 +229,7 @@ def _apply_step_up(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     existing = _find_traitsetting_by_target(subject, effect, repo, target)
@@ -248,7 +247,7 @@ def _apply_step_down(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     existing = _find_traitsetting_by_target(subject, effect, repo, target)
@@ -272,7 +271,7 @@ def _maybe_complete_challenge(ts: TraitSetting, subject: Entity) -> None:
     fire_challenge_completed(ts, universe)
 
 def _apply_discover(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "life_path", repo)
+    target = _resolve_target(entity, effect, result, repo)
     if target is None:
         return
     if entity.discovered_life_paths is None:
@@ -288,7 +287,7 @@ def _apply_remove(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     existing = _find_traitsetting_by_target(subject, effect, repo, target)
@@ -302,16 +301,17 @@ def _resolve_learner(entity: Entity, effect: Effect, result: EffectsResult) -> O
     """Resolve who learns a revealed trait.
 
     ``effect.context.learner`` defaults to ``"self"`` (the entity the effect
-    is applied to — the activating entity for a manual SFX).  A literal entity
-    id passes through.  ``{choose_*}` / ``{random:*}` placeholders are not yet
-    supported here (the owner entity is the intended dynamic piece for spying).
+    is applied to — the activating entity for a manual SFX). A literal entity id
+    passes through; a ``{token}`` does not, because a learner chosen at fire time
+    would have to be a targeting path (the owner entity is the intended dynamic
+    piece for spying).
     """
     learner = (effect.context or {}).get("learner") or "self"
     learner = (learner or "").strip()
     if learner in ("", "self"):
         return entity.id
-    if _parse_placeholder(learner) is not None:
-        result.applied.append(AppliedEffect(effect, f"learner placeholder not supported: {learner}"))
+    if learner.startswith("{") and learner.endswith("}"):
+        result.applied.append(AppliedEffect(effect, f"learner token not supported: {learner}"))
         return None
     return learner
 
@@ -321,7 +321,7 @@ def _apply_reveal(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     ts = _find_traitsetting_by_target(subject, effect, repo, target)

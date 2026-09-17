@@ -515,16 +515,13 @@ def selection_spec(kind: str, value: str, subject: Any, prefix: Optional[str] = 
 
 def choice_spec(kind: str, scope: Optional[str], mode: str = "choose", count: int = 1,
                 filter: Optional[dict] = None) -> TargetSpec:
-    """The spec a legacy choice target stands for.
+    """A choice target as the path it stands for.
 
-    ``{choose_kind}`` / ``{random:kind}`` plus a ``target_scope`` and a
-    ``target_filter`` were a compact spelling of *pick from this path* — so that is
-    exactly what they compile to: the declared scope path with a terminal
-    ``choose``/``random`` step. The actor is deferred (``ACTOR_AT_RUNTIME``),
-    because the effect is stored and fires for whoever activates it.
-
-    This is how stored content moves off the flat form without changing what it
-    selects: the compiled path *is* the one the picker's scope resolves to.
+    "Pick from *this scope*" — the thing ``{choose_kind}`` / ``{random:kind}``
+    plus a ``target_scope`` used to spell — composes the declared scope path with
+    a terminal ``choose`` / ``random`` step. The actor is deferred
+    (:data:`ACTOR_AT_RUNTIME`), because the effect is stored and fires for
+    whoever activates it.
     """
     prefix, value = parse_scope(scope)
     spec = selection_spec(kind, value, ACTOR_AT_RUNTIME, prefix, None, filter)

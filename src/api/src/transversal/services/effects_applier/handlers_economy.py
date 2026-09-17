@@ -37,7 +37,7 @@ def _apply_spend(entity, effect, repo, result):
     book_undo(repo, subject.id, effect)
 
 def _apply_transfer(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "entity", repo)
+    target = _resolve_target(entity, effect, result, repo)
     if target is None:
         return
     amount = int(effect.result or "0")

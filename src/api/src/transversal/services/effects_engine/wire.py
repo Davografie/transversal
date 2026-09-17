@@ -6,9 +6,6 @@ from transversal.domain import Effect
 
 
 _EFFECT_CAMEL_FIELDS = {
-    "target_scope": "targetScope",
-    "entity_scope": "entityScope",
-    "target_filter": "targetFilter",
     "die_filter": "dieFilter",
     "target_spec": "targetSpec",
     "entity_spec": "entitySpec",

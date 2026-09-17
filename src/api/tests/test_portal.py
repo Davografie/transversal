@@ -19,8 +19,6 @@ def test_effect_from_wire_maps_camelcase_and_enum_names():
         "target": "{random:location}",
         "entity": "self",
         "result": None,
-        "targetScope": "universe:earth",
-        "entityScope": None,
         "negative": False,
         "context": {"transversal_type": "inapposite"},
         "duration": None,
@@ -30,8 +28,6 @@ def test_effect_from_wire_maps_camelcase_and_enum_names():
     assert eff.action == "move"
     assert eff.target == "{random:location}"
     assert eff.entity == "self"
-    assert eff.target_scope == "universe:earth"
-    assert eff.entity_scope is None
     assert eff.context == {"transversal_type": "inapposite"}
     assert eff.duration is None
 
@@ -110,76 +106,3 @@ def test_fire_portal_applies_edge_effects(monkeypatch):
     assert captured["effects"][0].target == "loc-b"
     assert captured["effects"][0].context == {"transversal_type": "inapposite"}
 
-
-def test_fire_portal_substitutes_location_transversal_target(monkeypatch):
-    # A location ``_to`` exposes ``{location:transversal_target}`` → ``location:<id>``.
-    entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
-    to_loc = Entity(id="loc-b", type=EntityType.LOCATION, name="Aviary Peak", current_universe="earth")
-    edge = {
-        "_key": "edge:loc-a:loc-b:transversal",
-        "effects": [
-            {"timing": "IMMEDIATE", "type": "travel", "action": "move",
-             "target": "loc-b-zone-1", "targetScope": "{location:transversal_target}",
-             "context": {"transversal_type": "inapposite"}},
-        ],
-    }
-    repo = _FakeRepo(entity, edge, extra_entities=[to_loc])
-    monkeypatch.setattr(locations_module, "_repo", lambda: repo)
-
-    captured = {}
-
-    def fake_commit_effects(e, effects, r, **kwargs):
-        captured["effects"] = effects
-        captured["arrival_kind"] = kwargs.get("arrival_kind")
-        class _R:
-            applied = []
-            pending_choices = []
-        return _R()
-
-    monkeypatch.setattr("transversal.services.effects_commit.commit_effects", fake_commit_effects)
-
-    app = FastAPI()
-    app.include_router(locations_router)
-    client = TestClient(app)
-
-    r = client.post("/api/v1/locations/loc-a/portal/loc-b/fire", json={"entity_id": "char-1"})
-    assert r.status_code == 200, r.text
-    assert captured["effects"][0].target_scope == "location:loc-b"
-    assert captured["effects"][0].target == "loc-b-zone-1"
-
-
-def test_fire_portal_substitutes_universe_transversal_target(monkeypatch):
-    # A universe ``_to`` exposes ``{universe:transversal_target}``, resolved to the key.
-    entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
-    to_uni = Entity(id="universe-three_realms", type=EntityType.UNIVERSE, name="Three Realms", current_universe="three_realms")
-    edge = {
-        "_key": "edge:loc-a:universe-three_realms:transversal",
-        "effects": [
-            {"timing": "IMMEDIATE", "type": "travel", "action": "move",
-             "target": "loc-b", "targetScope": "{universe:transversal_target}",
-             "context": {"transversal_type": "inapposite"}},
-        ],
-    }
-    repo = _FakeRepo(entity, edge, extra_entities=[to_uni])
-    monkeypatch.setattr(locations_module, "_repo", lambda: repo)
-
-    captured = {}
-
-    def fake_commit_effects(e, effects, r, **kwargs):
-        captured["effects"] = effects
-        captured["arrival_kind"] = kwargs.get("arrival_kind")
-        class _R:
-            applied = []
-            pending_choices = []
-        return _R()
-
-    monkeypatch.setattr("transversal.services.effects_commit.commit_effects", fake_commit_effects)
-
-    app = FastAPI()
-    app.include_router(locations_router)
-    client = TestClient(app)
-
-    r = client.post("/api/v1/locations/loc-a/portal/universe-three_realms/fire", json={"entity_id": "char-1"})
-    assert r.status_code == 200, r.text
-    assert captured["effects"][0].target_scope == "universe:three_realms"
-    assert captured["effects"][0].target == "loc-b"

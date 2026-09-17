@@ -109,10 +109,7 @@ class MutationsEffects:
                             binding.element or "", values=binding.values, cardinality=binding.cardinality,
                         )
                 continue
-            if field in ("target_scope", "entity_scope"):
-                from transversal.services.effects_applier import _resolve_scope_choose
-                eff = eff.model_copy(update={field: _resolve_scope_choose(getattr(eff, field), r.target)})
-            elif field.startswith("refs."):
+            if field.startswith("refs."):
                 name = field[len("refs."):]
                 refs = dict(eff.refs or {})
                 ref = refs.get(name)

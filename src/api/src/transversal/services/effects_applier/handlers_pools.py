@@ -34,7 +34,7 @@ def _apply_set_traitset_limit(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "traitset", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     raw = (effect.result or "").strip()

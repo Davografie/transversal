@@ -28,7 +28,7 @@ status: canonical
 | Domain models (`SFX`, `Effect`, `EffectTiming`, `EffectDuration`, `Timer`, `TimerCombine`, `ScheduledEvent`, `ConsequenceOption`, `SfxOwner`, `Attunement`, `TargetingBan`, `Condition`) | `src/api/src/transversal/domain/__init__.py` |
 | Effect action registry (what actions exist, their fields, category, valid timings, inverse, supports-duration) | `src/api/src/transversal/services/effects_registry.py` |
 | Effects engine (trigger matching, scheduling, event → applied/pending effects) | `src/api/src/transversal/services/effects_engine.py` |
-| Effect applier (dispatch + mutation handlers, `{choose_*}` target resolution) | `src/api/src/transversal/services/effects_applier/` (package: `entry.py` dispatches, `registry.py` registers, `handlers_*.py` mutate) |
+| Effect applier (dispatch + mutation handlers; a target arrives already resolved) | `src/api/src/transversal/services/effects_applier/` (package: `entry.py` dispatches, `registry.py` registers, `handlers_*.py` mutate) |
 | Changing a die, in either home (rating or pool) | `src/api/src/transversal/services/effects_applier/handlers_change_die.py` |
 | Target-candidate resolution (declared scopes, `resolve_candidates`, `FILTER_FIELDS`) | `src/api/src/transversal/services/target_scopes.py` |
 | Structured targeting catalog (elements, edges, fields + options, aggregations, collections) | `src/api/src/transversal/services/target_catalog.py` |
@@ -78,12 +78,12 @@ One canonical, operational effect record shared by SFX and life-path consequence
 | `timing` | `EffectTiming` | When the effect fires (default `IMMEDIATE`) |
 | `type` | `str` | Effect family: `modify_roll`, `modify_outcome`, `modify_trait`, `transfer_razmerit`, `create_entity`, `attune`, `travel`, `location`, `life_path`, `relationship`, `entity` |
 | `action` | `str` | Operation within the family (see registry below) |
-| `target` | `str` | Literal id, `"self"`, or a `{choose_*}` / `{random:*}` placeholder |
+| `target` | `str` | Literal id, `"self"`, or a `{variable}` token — a runtime pick is a `choose` step in `target_spec` |
 | `entity` | `str` | Explicit subject entity; `""` or `"self"` = the entity the effect is applied to |
 | `result` | `Optional[str]` | Die rating, integer amount, relationship type, or `{context_key}` placeholder |
-| `target_scope` | `Optional[str]` | Narrowing hint for runtime target choice (e.g. `traitset:ts-complications-a190`) — a declared alias onto a catalog path, see [[Targeting Model]] |
+| ~~`target_scope`~~ | — | **Deleted.** A narrowing is a step in `target_spec`; the scope vocabulary survives as the *picker's* declaration (`targetScopes`), see [[Targeting Model]] |
 | `entity_scope` | `Optional[str]` | Narrowing hint for runtime entity choice |
-| `target_filter` | `dict` | Candidate field predicates for the target (e.g. `{"starter_location": true}`), AND-ed and applied across every scope |
+| ~~`target_filter`~~ | — | **Deleted.** A candidate filter is an ordinary `filter` step in the path |
 | `target_spec` | `Optional[TargetSpec]` | Structured targeting pipeline (the new model); wins over `target` when set. See [[Targeting Model]] |
 | `entity_spec` | `Optional[TargetSpec]` | Structured subject pipeline; wins over `entity` when set. See [[Targeting Model]] |
 | `refs` | `dict[str, TargetRef]` | Named references (multi-target model); each key is a declared ref name → `{value, spec, scope}` |
@@ -313,7 +313,7 @@ These are registered directly on the effect registry (`effects_applier._register
 ### Event and outcome types
 
 - `GameEvent` (line 33): `type`, `entity_id`, `universe`, `context`, plus optional `dice_request` / `roll_result`.
-- `EventOutcome`: splits results into `applied` (immediate effects that were executed) and `pending` (`PendingSfxEffect` — immediate effects with a `{choose_*}` target that were skipped and need user resolution).
+- `EventOutcome`: splits results into `applied` (immediate effects that were executed), `pending` (`PendingSfxEffect` — a **context-policy** pick like a travel effect's `{choose_projection}` that needs user resolution), and `structured` (a `choose` step in a path, carrying its candidate pool).
 
 ### Processing (`EffectsEngine.process_event_outcome`, line 127)
 
@@ -324,7 +324,7 @@ For each available SFX id:
 3. If `conditions` exist and a repo is provided, `evaluate_conditions` gates on current entity state.
 4. A razmerit cost check sums `transfer_razmerit`/`spend` effect results and skips the SFX if it exceeds the balance.
 5. `_substitute_effect_context` replaces `{context_key}` placeholders in each effect's `result` from the event context (this is how `{effect_die}` becomes a concrete die rating).
-6. `IMMEDIATE` effects with a `{choose_*}` target are returned as `pending`; otherwise they are applied via `effects_applier.effect_registry.apply`. Non-`IMMEDIATE` effects are persisted as `ScheduledEvent`s in the central store (see [[#Duration / scheduled events]]).
+6. `IMMEDIATE` effects whose path stops at a `choose` step are returned as `structured` (or, for a context-policy pick, as `pending`); otherwise they are applied via `effects_applier.effect_registry.apply`. Non-`IMMEDIATE` effects are persisted as `ScheduledEvent`s in the central store (see [[#Duration / scheduled events]]).
 
 `attune`/`enable` no longer special-cases the schedule: the `_attune` handler applies the enable now and `schedule_revert` schedules the `disable` via the same duration model.
 
@@ -372,9 +372,9 @@ There is a single persisted timer store — no in-memory schedule. The old in-me
 
 - `_parse_placeholder` parses `{mode:kind}` and `{mode_kind}` targets. Recognised modes are `choose` and `random`; recognised kinds are `location`, `occupant`, `trait`, `entity`, `rating_die`, `life_path`, `roll_table`, `universe`, `projection` (the `_TARGET_KINDS` map).
 - `is_choose_target` / `choose_kind` decide whether an effect needs user resolution.
-- `_resolve_target`: `"self"` → the entity's id; `{choose_*}` / empty-when-required → a `PendingChoice`; `{random:*}` → a random in-scope candidate via `target_scopes.resolve_candidates`; anything else → a literal target id.
+- `_resolve_target`: `"self"` → the entity's id; `self.<field>` → one of its own id fields; anything else → a literal target id. (A target spec is resolved *before* the applier, so what arrives here is concrete.)
 - `resolve_choice` re-applies a `PendingChoice` with a concrete target.
-- **Candidate filters**: `Effect.target_filter` (e.g. `{"starter_location": true}`) further narrows `choose`/`random` candidates — `_random_candidate`/`_resolve_target` pass it into `resolve_candidates`, which ANDs the field predicates across every scope resolver. This replaces the retired `starter_location` target kind.
+- **Candidate filters** are filter steps in the path (`filter starter_location == true`), so a narrowing composes with everything else a path can say. The `starter_location` target kind stays retired.
 
 > [!note] Structured targeting
 > The legacy string targets above are being superseded by a structured, type-checked **[[Targeting Model]]** (`target_spec` / `entity_spec`). When a spec is present it takes precedence over the string form.

@@ -6,6 +6,7 @@ from transversal.domain import Effect
 from transversal.domain import Entity
 from transversal.services.conditions import evaluate_conditions
 from transversal.services.effects_applier.datatypes import (
+    PendingChoice,
     BINDINGS_CONTEXT_KEY,
     EffectsResult,
 )
@@ -65,11 +66,6 @@ from transversal.services.effects_applier.handlers_world import (
     _apply_set_location,
     _apply_travel,
 )
-from transversal.services.effects_applier.targeting import (
-    _scope_choice,
-)
-
-
 _MUTATION_HANDLERS = {
     ("modify_trait", "gain"): _apply_gain,
     ("modify_trait", "remove"): _apply_remove,
@@ -129,7 +125,13 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
     cross-entity mutations into the returned EffectsResult. Persistence and SSE
     broadcast are the caller's responsibility.
 
-    Unresolved targets (``{choose_*}` or empty-when-required) become PendingChoice.
+    A ``target_spec`` is resolved here too: the engine's firing paths resolve a
+    spec before they reach the applier, but this entry point is also called
+    directly (a life-path entry's effects), and an unresolved spec used to mean an
+    effect that silently never happened. A spec that resolves to several targets
+    applies once per target; one that stops at a ``choose`` step becomes a
+    ``PendingChoice`` for that element.
+
     Effects without a mutation handler (resolver-context and flow effects) become
     passthrough. An effect whose ``conditions`` fail against ``context`` is skipped.
     """
@@ -143,9 +145,8 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
         # (the engine resolves first on its own path); handlers then see a
         # concrete ``entity`` id, matching the engine's ``target_spec`` rewrite.
         effect = resolve_effect_entity(effect, entity.id, repo, context)
-        scope_choice = _scope_choice(effect)
-        if scope_choice is not None:
-            result.pending_choices.append(scope_choice)
+        if effect.target_spec is not None and effect.target_spec.steps:
+            _apply_spec_effect(effect, entity, repo, result, bindings)
             continue
         handler = _MUTATION_HANDLERS.get((effect.type, effect.action))
         if handler is None:
@@ -153,6 +154,30 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
             continue
         handler(entity, effect, repo, result)
     return result
+
+def _apply_spec_effect(effect: Effect, entity: Entity, repo, result: EffectsResult,
+                       bindings: dict) -> None:
+    """Resolve an effect's target spec and apply it once per resolved target."""
+    from transversal.services.effects_engine.refs import resolve_effect_spec_choices
+
+    resolved, pending = resolve_effect_spec_choices(
+        effect, "target", {}, entity, repo, bindings=bindings or {},
+    )
+    if pending:
+        # A path that stopped at a `choose`: the caller answers it. The element is
+        # what the picker presents; the engine's own paths carry the exact pool as
+        # a structured choice, which this low-level entry point cannot.
+        for choice in pending:
+            result.pending_choices.append(
+                PendingChoice(effect=effect, kind=choice.element, field="target"))
+        return
+    for concrete in resolved:
+        handler = _MUTATION_HANDLERS.get((concrete.type, concrete.action))
+        if handler is None:
+            result.passthrough.append(concrete)
+            continue
+        handler(entity, concrete, repo, result)
+
 
 def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | None = None,
                           collections: dict | None = None) -> Effect:

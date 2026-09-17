@@ -88,18 +88,6 @@ def test_empty_is_valid():
     assert validate_sfx(_sfx()) == []
 
 
-def test_filter_kind_mismatch_warns():
-    sfx = _sfx(
-        trigger="hitch",
-        effects=[Effect(
-            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
-            target="{choose_trait}", result="d6", target_filter={"starter_location": True},
-        )],
-    )
-    warnings = validate_sfx(sfx)
-    assert any("filter 'starter_location' does not apply to trait targets" in w for w in warnings)
-
-
 def test_missing_required_field_warns():
     sfx = _sfx(
         trigger="hitch",

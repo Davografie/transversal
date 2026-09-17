@@ -207,8 +207,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
     return GqlEffect(
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, entity=e.entity, result=e.result,
-        target_scope=e.target_scope, entity_scope=e.entity_scope,
-        target_filter=e.target_filter or None,
+
         die_filter=e.die_filter or None,
         negative=e.negative,
         context=e.context,
@@ -278,8 +277,7 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
     return DomainEffect(
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, entity=e.entity, result=e.result,
-        target_scope=e.target_scope, entity_scope=e.entity_scope,
-        target_filter=e.target_filter or {},
+
         die_filter=e.die_filter or {},
         negative=e.negative,
         context=e.context or {},
@@ -292,14 +290,13 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
     )
 
 def _refs_to_gql(refs: dict) -> dict | None:
-    """Serialize ``Effect.refs`` to a JSON-friendly {name: {value, spec, scope}}."""
+    """Serialize ``Effect.refs`` to a JSON-friendly ``{name: {value, spec}}``."""
     if not refs:
         return None
     return {
         name: {
             "value": r.value,
             "spec": r.spec.model_dump() if r.spec else None,
-            "scope": r.scope,
         }
         for name, r in refs.items()
     }
@@ -316,7 +313,6 @@ def _refs_from_input(raw) -> dict:
             out[name] = TargetRef(
                 value=data.get("value") or "",
                 spec=_target_spec_from_input(data.get("spec")),
-                scope=data.get("scope"),
             )
     return out
 
@@ -367,7 +363,7 @@ def _effects_result_to_gql(result, structured=None) -> EffectApplicationResult:
     return EffectApplicationResult(
         applied=[a.summary for a in result.applied],
         pending_choices=[
-            PendingChoiceRef(index=i, kind=c.kind, scope=c.scope, field=c.field, filter=c.effect.target_filter or None, effect=_effect_to_gql(c.effect))
+            PendingChoiceRef(index=i, kind=c.kind, scope=c.scope, field=c.field, effect=_effect_to_gql(c.effect))
             for i, c in enumerate(result.pending_choices)
         ],
         structured=[_structured_choice_to_dict(c) for c in (structured or [])],

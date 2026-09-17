@@ -54,7 +54,7 @@ def _apply_add_die(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     die = _die_opt(effect.result)
@@ -98,7 +98,7 @@ def _apply_remove_die(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     existing = _find_traitsetting_by_target(subject, effect, repo, target)
@@ -143,7 +143,7 @@ def _apply_set(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     existing = _find_traitsetting_by_target(subject, effect, repo, target)
@@ -162,7 +162,7 @@ def _apply_disable(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     ts = _find_traitsetting_by_target(subject, effect, repo, target)
@@ -182,7 +182,7 @@ def _apply_enable(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     ts = _find_traitsetting_by_target(subject, effect, repo, target)
@@ -201,7 +201,7 @@ def _apply_toggle(entity, effect, repo, result):
     if subject is None:
         return
     _track_subject(result, entity, subject)
-    target = _resolve_target(subject, effect, result, "trait", repo)
+    target = _resolve_target(subject, effect, result, repo)
     if target is None:
         return
     ts = _find_traitsetting_by_target(subject, effect, repo, target)

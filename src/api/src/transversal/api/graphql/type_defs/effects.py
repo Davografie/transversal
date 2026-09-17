@@ -42,9 +42,6 @@ class Effect:
     target: str = ""
     entity: str = ""
     result: Optional[str] = None
-    target_scope: Optional[str] = None
-    entity_scope: Optional[str] = None
-    target_filter: Optional[strawberry.scalars.JSON] = None
     die_filter: Optional[strawberry.scalars.JSON] = None
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
@@ -63,9 +60,6 @@ class EffectInput:
     target: str = ""
     entity: str = ""
     result: Optional[str] = None
-    target_scope: Optional[str] = None
-    entity_scope: Optional[str] = None
-    target_filter: Optional[strawberry.scalars.JSON] = None
     die_filter: Optional[strawberry.scalars.JSON] = None
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
@@ -141,7 +135,6 @@ class PendingChoiceRef:
     kind: str
     scope: Optional[str] = None
     field: str = "target"  # which Effect field holds this target ("target" | "entity")
-    filter: Optional[strawberry.scalars.JSON] = None  # candidate-field predicates (e.g. {"starter_location": true})
     effect: Effect
 
 @strawberry.type

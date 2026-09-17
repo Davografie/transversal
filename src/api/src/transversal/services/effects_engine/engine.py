@@ -405,11 +405,16 @@ class EffectsEngine:
                             sfx_applied = True
                         if len(outcome.structured) > before:
                             blocked = True
-                    elif _effects_applier.find_choose_placeholder(effect):
+                    elif (context_choice := _effects_applier.context_choice(effect)):
+                        # A context policy asked the user to choose (`{choose_projection}`):
+                        # defer this effect and everything after it.
+                        kind, field = context_choice
                         outcome.pending.append(PendingSfxEffect(
                             effect=effect,
                             sfx_name=sfx.name,
                             sfx_description=sfx.description,
+                            kind=kind,
+                            field_name=field,
                         ))
                         blocked = True
                     else:

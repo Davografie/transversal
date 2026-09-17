@@ -1,6 +1,7 @@
 """Tests for the effects engine."""
 
 from transversal.domain import (
+    TargetRef,
     DieType,
     Effect,
     EffectTiming,
@@ -323,31 +324,33 @@ def test_substitute_effect_context_across_fields():
     assert out.context == {"learner": "char-1"}
 
 
-def test_substitute_effect_context_covers_scopes():
+def test_substitute_effect_context_covers_every_field_that_holds_a_token():
     from transversal.services.effects_engine import _substitute_effect_context
 
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        result="{choose_location}",
-        target_scope="universe:{target_universe}",
-        entity_scope="location:{target_location}",
+        target="{destination}", entity="{traveller}", result="{outcome}",
+        refs={"body": TargetRef(value="{body}")},
     )
     out = _substitute_effect_context(
-        effect, {"target_universe": "three_realms", "target_location": "krasnoyarsk"}
+        effect, {"destination": "krasnoyarsk", "traveller": "char-9",
+                 "outcome": "d10", "body": "char-9:earth"},
     )
-    assert out.target_scope == "universe:three_realms"
-    assert out.entity_scope == "location:krasnoyarsk"
+    assert out.target == "krasnoyarsk"
+    assert out.entity == "char-9"
+    assert out.result == "d10"
+    assert out.refs["body"].value == "char-9:earth"
 
 
-def test_substitute_effect_context_leaves_choose_placeholder():
+def test_substitute_effect_context_leaves_an_unmatched_token():
     from transversal.services.effects_engine import _substitute_effect_context
 
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
-        target="{choose_trait}", result="d6",
+        target="{source_trait}", result="d6",
     )
     out = _substitute_effect_context(effect, {"trait_id": "x"})
-    assert out.target == "{choose_trait}"
+    assert out.target == "{source_trait}"
     assert out.result == "d6"
 
 
@@ -414,13 +417,17 @@ def test_resolve_effect_spec_choices_resolves_all_refs():
 
 def test_sequential_execution_defers_effects_after_choose():
     """An effect that blocks on a choose must gate every later immediate effect."""
+    from transversal.services.target_scopes import choice_spec
+
     _reset()
     engine = EffectsEngine()
+    blocking = _make_effect("either", "immediate", "modify_pool", "add_trait_rating", "")
+    blocking.target_spec = choice_spec("trait", "traitset:ts-x")
     engine.register(_make_sfx(
         "sfx-seq", "Seq", "manual",
         effects=[
             _make_effect("positive", "immediate", "modify_roll", "step_up_die", "primary"),
-            _make_effect("either", "immediate", "modify_pool", "add_trait_rating", "{choose_trait}"),
+            blocking,
             _make_effect("either", "immediate", "modify_pool", "resolve", "difficulty:loc-1"),
         ],
     ))
@@ -428,12 +435,13 @@ def test_sequential_execution_defers_effects_after_choose():
     event = GameEvent(type="manual", entity_id="e1", universe="earth")
     outcome = engine.process_event_outcome(event, available_sfx_ids=["sfx-seq"], razmerit_balance=10)
 
-    # Effect 1 applied; effect 2 blocked; effect 3 deferred to the continuation.
+    # Effect 1 applied; effect 2 stopped at its choose step (a structured choice
+    # carrying the pool); effect 3 waits for the answer.
     assert [a.action for a in outcome.applied] == ["step_up_die"]
-    assert len(outcome.pending) == 1
-    assert len(outcome.pending[0].continuation) == 1
-    assert outcome.pending[0].continuation[0].action == "resolve"
-    assert "resolve" not in [a.action for a in outcome.applied]
+    assert len(outcome.structured) == 1
+    assert outcome.structured[0].field == "target"
+    assert len(outcome.structured[0].continuation) == 1
+    assert outcome.structured[0].continuation[0].action == "resolve"
 
 
 def test_on_trait_offered_trigger_matches_trait_offered():
@@ -474,7 +482,7 @@ def test_process_event_defers_choose_projection_in_context():
     engine = EffectsEngine()
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="krasnoyarsk", target_scope="universe:earth",
+        target="krasnoyarsk",
         context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
     )
     sfx = _make_sfx("sfx-portal", "Portal", "manual", effects=[effect])

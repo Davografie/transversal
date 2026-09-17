@@ -62,30 +62,8 @@
             <select v-model="newEffect.targetMode">
               <option value="literal">{{ selectedAction.targetKind ? 'Pick specific' : 'Strategy keyword' }}</option>
               <option v-if="selectedAction.supportsReturnExit" value="return">Named exit</option>
-              <option v-if="selectedAction.targetKind" value="choose">Choose at runtime</option>
-              <option v-if="selectedAction.targetKind" value="random">Random</option>
               <option value="spec">Targeting path</option>
             </select>
-          </div>
-          <div v-if="newEffect.targetMode !== 'return' && newEffect.targetMode !== 'spec' && !isPortalTravel" class="ee-field">
-            <label>Scope</label>
-            <ScopeBuilder v-model="newEffect.scope" :universe="universe" />
-            <template v-if="relevantFilterFields.length">
-              <label>Only</label>
-              <template v-for="ff in relevantFilterFields" :key="ff.field">
-                <label v-if="ff.valueType === 'boolean'" class="ee-check">
-                  <input type="checkbox" :checked="!!newEffect.targetFilter[ff.field]" @change="toggleFilter(ff.field, $event)" />
-                  {{ ff.label }}
-                </label>
-                <label v-else class="ee-check">
-                  {{ ff.label }}
-                  <select :value="newEffect.targetFilter[ff.field] || ''" @change="setFilterValue(ff.field, $event.target.value)">
-                    <option value="">—</option>
-                    <option v-for="(o, i) in (ff.options || [])" :key="o" :value="o">{{ (ff.optionLabels || [])[i] || o }}</option>
-                  </select>
-                </label>
-              </template>
-            </template>
           </div>
           <input
             v-if="newEffect.targetMode === 'literal' && !selectedAction.targetKind && !pathOnlyTarget"
@@ -98,7 +76,6 @@
             :model-value="newEffect.fields[f.name] || ''"
             :kind="selectedAction.targetKind"
             :scope="literalTargetScope"
-            :filter="newEffect.targetFilter"
             :allow-filters="false"
             :action="selectedAction.effectAction"
             :placeholder="`Pick ${selectedAction.targetKind}…`"
@@ -116,30 +93,23 @@
             :variables="outputVariables"
             @resolve="targetLocus = $event"
           />
-          <div v-else-if="previewText" class="ee-preview">{{ previewText }}</div>
         </div>
 
         <template v-else-if="isEntityField(f)">
           <div class="ee-mode-row">
             <select v-model="newEffect.entityMode">
               <option value="literal">Pick specific</option>
-              <option value="choose">Choose at runtime</option>
-              <option value="random">Random</option>
               <option value="spec">Targeting path</option>
             </select>
           </div>
           <input v-if="newEffect.entityMode === 'literal'" v-model="newEffect.fields[f.name]" type="text" placeholder="self" />
           <TargetSpecBuilder
-            v-else-if="newEffect.entityMode === 'spec'"
+            v-else
             v-model="newEffect.entitySpec"
             :destination="{ elements: ['entity'] }"
             :source-element="sourceElement"
             :variables="scopedVariables"
           />
-          <div v-else class="ee-field">
-            <label>Entity scope</label>
-            <ScopeBuilder v-model="newEffect.entityScope" :universe="universe" />
-          </div>
         </template>
 
         <template v-else>
@@ -264,7 +234,6 @@
 import { ref, computed, reactive, watch, onMounted } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { useEffectActions } from '@/composables/useEffectActions.js'
-import { useEffectTargets } from '@/composables/useEffectTargets.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
@@ -273,7 +242,6 @@ import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
-import ScopeBuilder from './ScopeBuilder.vue'
 import ReturnMapEditor from './ReturnMapEditor.vue'
 import DiePicker from '@/components/DiePicker.vue'
 import Button from '@/components/ui/Button.vue'
@@ -298,7 +266,7 @@ const emit = defineEmits(['save', 'cancel'])
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {}, output: '', conditions: [] })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, negative: false, refs: {}, output: '', conditions: [] })
 
 // Variables the effect's *own* earlier paths expose. The engine walks an
 // effect's paths in order — target, then its references — so a name that path 1
@@ -414,9 +382,7 @@ function setDieRole(v) {
 
 onMounted(() => { load() })
 
-const { load: loadSfxMeta, targetFilterFields } = useSfxMeta()
-const { fetchTargets: fetchPreviewTargets } = useEffectTargets()
-const previewText = ref('')
+const { load: loadSfxMeta } = useSfxMeta()
 onMounted(() => { loadSfxMeta() })
 
 const { traitsets, fetchTraitsConfig } = useTraitsConfig()
@@ -508,42 +474,6 @@ const actionGroups = computed(() => {
 
 const hasExtraContext = computed(() => Object.keys(newEffect.extraContext).length > 0)
 
-function toggleFilter(field, e) {
-  const next = { ...newEffect.targetFilter }
-  if (e.target.checked) next[field] = true
-  else delete next[field]
-  newEffect.targetFilter = next
-}
-
-function setFilterValue(field, value) {
-  const next = { ...newEffect.targetFilter }
-  if (value) next[field] = value
-  else delete next[field]
-  newEffect.targetFilter = next
-}
-
-watch(
-  () => [newEffect.targetMode, newEffect.scope, newEffect.targetFilter, selectedAction.value?.targetKind, selectedAction.value?.effectAction],
-  async () => {
-    previewText.value = ''
-    const meta = selectedAction.value
-    if (!meta?.targetKind) return
-    const mode = newEffect.targetMode
-    if (mode === 'literal' || mode === 'return' || mode === 'spec') return
-    const cands = await fetchPreviewTargets(
-      meta.targetKind,
-      newEffect.scope || null,
-      null,
-      meta.effectAction || null,
-      Object.keys(newEffect.targetFilter).length ? newEffect.targetFilter : null,
-    )
-    previewText.value = cands.length
-      ? `${cands.length} match — ${cands.slice(0, 3).map(c => c.name).join(', ')}${cands.length > 3 ? ' …' : ''}`
-      : 'no candidates match'
-  },
-  { immediate: true, deep: true }
-)
-
 const isPortalTravel = computed(() => !!props.portalDestination && selectedAction.value?.effectType === 'travel')
 const isPortalLocation = computed(() => isPortalTravel.value && props.portalTargetType === 'location')
 const isPortalUniverse = computed(() => isPortalTravel.value && props.portalTargetType === 'universe')
@@ -551,16 +481,12 @@ const isPortalUniverse = computed(() => isPortalTravel.value && props.portalTarg
 const isGainAction = computed(() => ['gain', 'gain_or_step_up', 'cortex_gain'].includes(selectedAction.value?.effectAction))
 
 const literalTargetScope = computed(() => {
+  // A portal's fixed destination: the picker offers that place (and its zones),
+  // or a location in that universe.
   if (isPortalTravel.value && props.portalRootId) return `subtree:${props.portalRootId}`
   if (isPortalTravel.value && props.portalUniverse) return `universe:${props.portalUniverse}`
-  return newEffect.scope || ''
-})
-
-function defaultScopeFor(kind) {
-  if (kind === 'roll_table' && props.lifePath) return `life_path:${props.lifePath}`
-  if (props.universe) return `universe:${props.universe}`
   return ''
-}
+})
 
 const visibleFields = computed(() => {
   if (!selectedAction.value) return []
@@ -607,12 +533,6 @@ const pathOnlyTarget = computed(() => {
   return !!meta?.pathElements?.length && !meta.targetKind
 })
 
-const relevantFilterFields = computed(() => {
-  const kind = selectedAction.value?.targetKind
-  if (!kind) return []
-  return targetFilterFields.value.filter(ff => !ff.kinds?.length || ff.kinds.includes(kind))
-})
-
 function isEntityField(f) {
   return f.name === 'entity'
 }
@@ -639,13 +559,10 @@ function onActionChange() {
   newEffect.targetMode = pathOnlyTarget.value ? 'spec' : 'literal'
   newEffect.targetSpec = { steps: [] }
   targetLocus.value = ''
-  newEffect.scope = defaultScopeFor(selectedAction.value?.targetKind)
-  newEffect.targetFilter = {}
   newEffect.dieFilter = {}
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entitySpec = { steps: [] }
-  newEffect.entityScope = ''
   newEffect.negative = false
   newEffect.conditions = []
   initRefs(selectedAction.value)
@@ -724,9 +641,6 @@ function buildEffect(meta) {
   if ((context.transversal_type || 'inapposite') !== 'consciousness') {
     context.projection = 'active'
   }
-  let targetScope = kind ? (newEffect.scope || null) : null
-  if (isPortalLocation.value) targetScope = '{location:transversal_target}'
-  if (isPortalUniverse.value) targetScope = '{universe:transversal_target}'
   return {
     timing: newEffect.timing || 'IMMEDIATE',
     type: meta.effectType,
@@ -734,10 +648,7 @@ function buildEffect(meta) {
     target,
     entity,
     result: meta.implicitResult || strVal(newEffect.fields.result),
-    targetScope,
-    targetFilter: kind ? (newEffect.targetFilter || {}) : {},
     dieFilter: newEffect.dieFilter || {},
-    entityScope: (entityMode !== 'literal') ? (newEffect.entityScope || null) : null,
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
     context,
     duration: (durationOffered.value && (newEffect.duration?.timers || []).length)
@@ -775,21 +686,17 @@ function populate(eff) {
   // A path-only action reads its stored spec, or starts a fresh one — either way
   // the path is the mode, since there is no other input to show.
   if (pathOnlyTarget.value) newEffect.targetMode = 'spec'
-  newEffect.scope = eff.targetScope || ''
-  newEffect.targetFilter = eff.targetFilter || {}
   newEffect.dieFilter = eff.dieFilter || {}
   newEffect.entityMode = detectEntityMode(eff)
   newEffect.entitySpec = eff.entitySpec || { steps: [] }
   if ((eff.entitySpec?.steps || []).length) newEffect.entityMode = 'spec'
-  newEffect.entityScope = eff.entityScope || ''
   newEffect.negative = !!eff.negative
   newEffect.conditions = (eff.conditions || []).map(c => ({ ...c }))
   if (eff.refs) {
     for (const [name, ref] of Object.entries(eff.refs)) {
-      if (!newEffect.refs[name]) newEffect.refs[name] = { value: '', spec: { steps: [] }, scope: '' }
+      if (!newEffect.refs[name]) newEffect.refs[name] = { value: '', spec: { steps: [] } }
       newEffect.refs[name].value = ref?.value || ''
       newEffect.refs[name].spec = ref?.spec || { steps: [] }
-      newEffect.refs[name].scope = ref?.scope || ''
     }
   }
   newEffect.conditions = (eff.conditions || []).map(c => ({ ...c }))
@@ -836,13 +743,10 @@ function resetBlank() {
   newEffect.targetMode = pathOnlyTarget.value ? 'spec' : 'literal'
   newEffect.targetSpec = { steps: [] }
   targetLocus.value = ''
-  newEffect.scope = ''
-  newEffect.targetFilter = {}
   newEffect.dieFilter = {}
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entitySpec = { steps: [] }
-  newEffect.entityScope = ''
   newEffect.negative = false
   newEffect.refs = {}
   newEffect.conditions = []
