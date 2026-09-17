@@ -854,12 +854,18 @@ def target_candidates(args: dict) -> dict:
 
     **Not every (kind, scope) pair is supported, and an unsupported one returns an
     empty list, not an error** — so empty is ambiguous between "nothing matched"
-    and "wrong pair". The supported sets are: ``universe`` → entity, occupant,
-    location, projection, trait, traitset, life_path, roll_table, rating_die,
-    scheduled_event; ``location`` and ``subtree`` → occupant, entity, location,
-    projection; ``faction`` → **entity** (its members), roll_table;
-    ``actor_faction`` → entity, trait; ``traitset`` → trait; ``life_path`` →
-    roll_table. Note a faction's members are ``kind="entity"``, never "occupant".
+    and "wrong pair". The supported sets below are a **snapshot (2026-09-16) read
+    out of `services/effect_targets.py`, not a live read** — the scope vocabulary
+    is undeclared in the API, so treat this as a hint and **re-derive it when a
+    result looks wrong**: an unexpected `0` is more likely a wrong pair than empty
+    data (`kind="occupant"` + `scope="faction:…"` returns 0 against a 30-member
+    roster). Snapshot: ``universe`` → entity, occupant, location, projection,
+    trait, traitset, life_path, roll_table, rating_die, scheduled_event;
+    ``location`` and ``subtree`` → occupant, entity, location, projection;
+    ``faction`` → **entity** (its members), roll_table; ``actor_faction`` →
+    entity, trait; ``traitset`` → trait; ``life_path`` → roll_table. A
+    ``targetScopes`` read has been requested from [[Effects]] so this can become
+    a live lookup and the snapshot can go away.
     """
     data = _graphql(_QUERY_TARGET_CANDIDATES, {
         "kind": args["kind"],
@@ -1352,7 +1358,7 @@ TOOL_SCHEMAS = {
     },
     "target_candidates": {
         "name": "target_candidates",
-        "description": "Resolve what a target choice selects, from the backend's own resolver. scope: subtree:<location> (a location AND its sub-locations), location:<id>, faction:<id>, actor_faction:<universe>, traitset:<id>, life_path:<id>, universe:<key>. NOT every (kind, scope) pair is supported and an unsupported one returns [] rather than an error — universe: entity|occupant|location|projection|trait|traitset|life_path|roll_table|rating_die|scheduled_event; location & subtree: occupant|entity|location|projection; faction: entity (its members) |roll_table; actor_faction: entity|trait; traitset: trait; life_path: roll_table. A faction's members are kind 'entity', never 'occupant'.",
+        "description": "Resolve what a target choice selects, from the backend's own resolver. scope: subtree:<location> (a location AND its sub-locations), location:<id>, faction:<id>, actor_faction:<universe>, traitset:<id>, life_path:<id>, universe:<key>. NOT every (kind, scope) pair is supported and an unsupported one returns [] rather than an error, so an unexpected 0 usually means a wrong pair, not empty data. The pair map below is a SNAPSHOT read from effect_targets.py on 2026-09-16 (the scope vocabulary is undeclared in the API — a live `targetScopes` read is requested): universe: entity|occupant|location|projection|trait|traitset|life_path|roll_table|rating_die|scheduled_event; location & subtree: occupant|entity|location|projection; faction: entity (its members) |roll_table; actor_faction: entity|trait; traitset: trait; life_path: roll_table. A faction's members are kind 'entity', never 'occupant'.",
         "inputSchema": {
             "type": "object",
             "properties": {
