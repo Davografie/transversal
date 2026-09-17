@@ -47,6 +47,9 @@ type Entity {
   navPositions: String
   # Faction
   nodeIds: [ID!]!
+  coMembers: [FactionMember!]!  # the other roster members of this entity's factions
+  # Agency — who holds this entity (the persistent player → entity `agency` edge)
+  agency: AgencyRef
   # Asset
   ownedBy: String
   # Computed
@@ -229,6 +232,10 @@ type Query {
   playerBodies: [PlayerBody!]!
   onlinePlayers: [ID!]!
 
+  # Factions — the roster, and the bulk association read
+  factionMembers(factionId: ID!): [FactionMember!]!
+  entityFactions(entityIds: [ID!]!): [EntityFactionRef!]!
+
   # Effect authoring (served vocabularies + candidate resolution)
   effectActions: [EffectActionMeta!]!
   triggers: [TriggerOption!]!
@@ -247,6 +254,14 @@ type Query {
 
 > [!note] Effect target fields
 > `Effect` and `EffectInput` carry a `targetFilter` map (candidate field predicates, e.g. `{"starter_location": true}`) that composes with `targetScope`. `targetCandidates` accepts the same `filter` and an optional `entityId` (omitted → authoring preview against a synthetic universe context derived from `scope`).
+
+> [!note] Faction reads — roster vs association
+> Two shapes, deliberately different:
+>
+> - **`factionMembers(factionId)`** — the roster: `FactionMember { id name type role rank }`. A roster slot is a `membership` edge (member → faction) **or** a `relation` tie carrying `role`/`rank`, and only in the **member → faction** direction. The reverse (`faction → entity`) is the organisation's posture toward someone, not a slot.
+> - **`entityFactions(entityIds)`** — the bulk association read: `EntityFactionRef { entityId factionId name outTieType inTieType }`, **one row per `(entity, faction)` pair for the whole list in one query**. Broader on purpose: *any* tie to a faction counts, either direction, so a posture is an association. `outTieType` is the `entity → faction` edge's type — the edge a **role write belongs on**, and the only direction `factionMembers` counts. It is `""` when only the faction's posture exists, which is the signal that no edge can be written and a `membership` must be created. A pair can hold both directions (measured live 2026-09-16: **333 mirrored pairs**), so the two types are reported separately rather than collapsed into one "the tie's type".
+>
+> `Entity.coMembers` is the "who else is in my sect?" view: the other members across every faction this entity is on the roster of, deduped, self excluded.
 
 ### Mutations
 

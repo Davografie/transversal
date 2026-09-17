@@ -141,7 +141,7 @@ ownership, membership, travel, authority, cast) and one **personal** type
 |------|-----------|---------|
 | `super` | child → parent | Location hierarchy (sub-location of) |
 | `transversal` | bidirectional | Portal / traversal connection between locations |
-| `membership` | entity → faction | Entity is a member of a faction (rank/role hang here) |
+| `membership` | member → faction | Entity is on a faction's **roster** (rank/role hang here) |
 | `agency` | player → entity | Player ownership / control (carries the `main` flag) |
 | `commands` | GMC → GMC | Command chain within a conspiracy (conspyramid authority) |
 | `support` | SC → main | Support character belongs to a main's cast |
@@ -150,6 +150,25 @@ ownership, membership, travel, authority, cast) and one **personal** type
 Retired: `associate`, `gifted`, `suspects`, `hostile_to` collapse onto `relation`
 (their meaning lives in the trait / `description` / trait-setting `source_type`).
 See `STRUCTURAL_RELATIONSHIP_TYPES` in `domain/__init__.py` for the source of truth.
+
+> [!important] Roster vs association — the direction rule
+> Two reads ask different questions of the same edges, and the difference is
+> direction plus traits:
+>
+> - **Roster** (`get_faction_roster` → `factionMembers`): a slot is a `membership`
+>   edge **or** a `relation` tie carrying `role`/`rank` — the shape the migrated
+>   sect rosters are in, which is why the read matches those traits by **name**
+>   (the registry holds two traits called `role`). Only **member → faction**
+>   counts. The reverse tie is the organisation's *posture* toward someone
+>   (Azure Dawn's "outer sect disciple") and is never a slot.
+> - **Association** (`get_factions_for_entities` → `entityFactions`): *any* tie to
+>   a faction, **either direction** — a posture is an association. One pair can
+>   hold both (measured live 2026-09-16: **333 mirrored pairs**), so it reports the
+>   two directions' tie types separately; `outTieType` is the edge a role write
+>   belongs on.
+>
+> `membership` may be held by a character, GMC or asset
+> (`MEMBERSHIP_HOLDER_TYPES`); a location may not.
 
 ---
 
