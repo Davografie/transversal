@@ -432,7 +432,6 @@ export function useCanvas() {
       const fromLoc = occLoc.get(rel.from)
       const toLoc = occLoc.get(rel.to)
       if (!fromLoc || !toLoc) continue
-      const traitRows = relationTraitRows(rel)
       const label = relationEdgeLabel(rel)
       newEdges.push({
         id: `relation:${rel.from}:${rel.to}:${label}`,
@@ -442,7 +441,7 @@ export function useCanvas() {
         targetHandle: `occ-${rel.to}-target`,
         type: 'gradient',
         label,
-        data: { kind: 'relation', from: rel.from, to: rel.to, description: rel.description, traitRows },
+        data: { kind: 'relation', from: rel.from, to: rel.to, description: rel.description },
       })
     }
 
@@ -710,22 +709,23 @@ export function useCanvas() {
   }
   // Relationship traits annotate a relation edge: ``statement`` is the authored
   // distinction, and the registry ``name`` ("allegiance", "grudge") is the
-  // fallback when the statement is blank. Each renders as its own row.
+  // fallback when the statement is blank.
   function relationTraitRows(rel) {
     return (rel?.traits || [])
       .map((t) => (t.statement || '').trim() || t.name || '')
       .filter(Boolean)
   }
 
-  // Flat string form, kept for the edge id and as the single-line fallback when
-  // a relation carries no traits but does have a description.
+  // Single-line annotation: only the first trait is shown, with a "/N" marker
+  // when the tie carries more, so a dense graph stays readable. Falls back to the
+  // description for relations carrying no traits at all.
   function relationEdgeLabel(rel) {
     const rows = relationTraitRows(rel)
-    return rows.length ? rows.join(' · ') : (rel?.description || '')
+    if (!rows.length) return rel?.description || ''
+    return rows.length > 1 ? `${rows[0]} /${rows.length}` : rows[0]
   }
 
   function makeRelationEdge(source, target, rel) {
-    const traitRows = relationTraitRows(rel)
     const label = relationEdgeLabel(rel)
     return {
       id: `relation:${source}:${target}:${label}`,
@@ -733,7 +733,7 @@ export function useCanvas() {
       target,
       type: 'gradient',
       label,
-      data: { kind: 'relation', from: rel?.from, to: rel?.to, description: rel?.description, traitRows },
+      data: { kind: 'relation', from: rel?.from, to: rel?.to, description: rel?.description },
     }
   }
 
