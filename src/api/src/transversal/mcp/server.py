@@ -266,6 +266,25 @@ _TS_WRITE_FIELDS = (
     "notes order tags fromType projectionId parentTraitsettingId sfxIds knownTo enabled"
 )
 
+# The general form of `addRelationshipTrait` (the one `set_rank_role` uses is pinned to
+# the rank/role ids and returns only ids). `die` and `ts` are nullable here on purpose:
+# the resolver defaults the die and derives the trait set from the registry trait, so a
+# trait id alone is usually enough — and passing an explicit null to a non-null argument
+# that has a default would be an error, so the keys are omitted when not supplied.
+_MUT_ADD_RELATIONSHIP_TRAIT_FULL = """
+mutation(
+  $from: ID!, $to: ID!, $relType: String!, $traitId: ID!,
+  $die: DieType, $ts: String, $stmt: String
+) {
+  addRelationshipTrait(
+    fromEntityId: $from, toEntityId: $to, relType: $relType,
+    traitId: $traitId, die: $die, traitsetId: $ts, statement: $stmt
+  ) {
+    %s
+  }
+}
+""" % _TS_WRITE_FIELDS
+
 _MUT_ADD_TRAIT_SETTING = """
 mutation($entityId: ID!, $input: TraitSettingInput!) {
   addTraitSetting(entityId: $entityId, input: $input) {
@@ -604,6 +623,34 @@ def set_rank_role(args: dict) -> dict:
             f"role '{role}' for {from_id} in {to_id}",
         ))
     return _run_steps(steps, args.get("dry_run", True))
+
+
+def add_relationship_trait(args: dict) -> dict:
+    """Put a rated trait on a relationship edge — a roster rank/role, a posture, or a claim.
+
+    This is the general form of what ``set_rank_role`` does for its two fixed
+    traits: rank, role, loyalty, grudge, history … and the ``control`` claim a
+    faction makes on a location ([[Factions and Organizations Design Log]] §6.6 —
+    control is a trait on the faction ↔ location tie, deliberately *not* a field
+    on the location). The tie is matched on its endpoints and type, and is
+    **created if it does not exist**. ``traitset_id`` is derived from the registry
+    trait when omitted, so a trait id alone is usually enough.
+    """
+    variables = {
+        "from": args["from_id"],
+        "to": args["to_id"],
+        "relType": args.get("rel_type", "relation"),
+        "traitId": args["trait_id"],
+        "stmt": args.get("statement", ""),
+    }
+    # Omit rather than send null: both are non-null arguments with defaults, and an
+    # explicit null is an error while an omitted key lets the default apply.
+    if args.get("die") is not None:
+        variables["die"] = args["die"]
+    if args.get("traitset_id") is not None:
+        variables["ts"] = args["traitset_id"]
+    return _call_mutation("addRelationshipTrait", _MUT_ADD_RELATIONSHIP_TRAIT_FULL, variables,
+                          args.get("dry_run", True), "addRelationshipTrait")
 
 
 # ── Trait / SFX / life-path / roll-table authoring (API) ──
@@ -1133,6 +1180,7 @@ TOOLS = {
     "create_relationship": create_relationship,
     "delete_relationship": delete_relationship,
     "set_rank_role": set_rank_role,
+    "add_relationship_trait": add_relationship_trait,
     "get_entity": get_entity,
     "query_entities": query_entities,
     "faction_canvas": faction_canvas,
@@ -1297,6 +1345,24 @@ TOOL_SCHEMAS = {
                 "dry_run": _dry_run_property(),
             },
             "required": ["from_id", "to_id"],
+        },
+    },
+    "add_relationship_trait": {
+        "name": "add_relationship_trait",
+        "description": "Put a rated trait on a relationship edge — a roster rank/role, a posture, or a claim (e.g. a faction's `control` over a location). The tie is matched on its endpoints + type and is CREATED if it does not exist. The trait set is derived from the registry trait unless traitset_id is given.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "from_id": {"type": "string", "description": "Source entity id (e.g. the faction)"},
+                "to_id": {"type": "string", "description": "Target entity id (e.g. the location)"},
+                "trait_id": {"type": "string", "description": "Registry trait id to instantiate on the tie"},
+                "rel_type": {"type": "string", "description": "Edge type (default 'relation')"},
+                "die": {"type": "string", "description": "Rating die, e.g. 'D8'; defaults to the trait's own default"},
+                "traitset_id": {"type": "string", "description": "Override the trait set (defaults to the registry trait's set)"},
+                "statement": {"type": "string", "description": "The trait's statement — what the tie means"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["from_id", "to_id", "trait_id"],
         },
     },
     "get_entity": {
