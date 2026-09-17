@@ -694,15 +694,25 @@ const actingMembership = computed(() => members.value.find(m => m.id === actingE
 const roleBusy = ref('')
 const { setRole, factionsFor } = useFactionRoles()
 
+// Patch the one row instead of re-reading the roster: a role edit must not blank
+// the list under the GM's cursor, and the rows have to stay put to be edited one
+// after another. The setting's id comes back with the write, so the row's next
+// edit skips the tie lookup as well.
 async function saveMemberRole(m, next) {
   roleBusy.value = m.id
   try {
     const res = await setRole({ memberId: m.id, factionId: props.entityId, statement: next, settingId: m.settingId || '' })
-    const failure = res.ok ? '' : res.error
-    await loadMembers()
-    if (failure) memberNote.value = failure
+    if (!res.ok) { memberNote.value = res.error; return }
+    memberNote.value = ''
+    const row = members.value.find(x => x.id === m.id)
+    if (row) {
+      row.role = next || null
+      row.settingId = res.settingId
+    }
   } finally {
-    roleBusy.value = ''
+    // Only if no further edit has claimed the busy flag in the meantime — rows
+    // are edited back to back and a write may still be in flight.
+    if (roleBusy.value === m.id) roleBusy.value = ''
   }
 }
 
@@ -793,11 +803,17 @@ async function saveEntityRole(f, next) {
   factionRoleBusy.value = f.id
   try {
     const res = await setRole({ memberId: props.entityId, factionId: f.id, statement: next, settingId: f.settingId || '' })
-    const failure = res.ok ? '' : res.error
-    await loadEntityFactions()
-    if (failure) factionNote.value = failure
+    if (!res.ok) { factionNote.value = res.error; return }
+    factionNote.value = ''
+    // Same as the roster rows: the write already tells us the result, so the list
+    // must not be re-read under the GM.
+    const row = entityFactions.value.find(x => x.id === f.id)
+    if (row) {
+      row.role = next || null
+      row.settingId = res.settingId
+    }
   } finally {
-    factionRoleBusy.value = ''
+    if (factionRoleBusy.value === f.id) factionRoleBusy.value = ''
   }
 }
 

@@ -66,16 +66,18 @@ export function useFactionRoles() {
     if (!id) id = (await roleSettingsByContact(memberId))[factionId] || ''
 
     let res = null
+    let wrote = ''          // the setting the tie now has ('' once cleared)
     if (!next) {
       // Clearing removes the setting: the roster read falls back to the trait id
       // when a role setting has no statement, so a blank one would read as an id.
-      if (!id) return { ok: true }
+      if (!id) return { ok: true, settingId: '' }
       res = await graphql(`mutation($id: ID!) { removeTraitSetting(id: $id) }`, { id })
     } else if (id) {
       res = await graphql(
         `mutation($id: ID!, $input: TraitSettingUpdateInput!) { updateTraitSetting(id: $id, input: $input) { id statement } }`,
         { id, input: { statement: next } },
       )
+      wrote = id
     } else {
       res = await graphql(
         `mutation($from: ID!, $to: ID!, $relType: String!, $traitId: ID!, $die: DieType!, $elevated: Boolean!, $statement: String!) {
@@ -86,7 +88,10 @@ export function useFactionRoles() {
     }
     // Read the reason here: every call clears the api error ref on the way in, so
     // it cannot be read after another request.
-    return res ? { ok: true } : { ok: false, error: apiError.value || 'Could not save the role.' }
+    if (!res) return { ok: false, error: apiError.value || 'Could not save the role.' }
+    // The setting the tie now carries, so a caller can patch its row in place and
+    // skip the lookup on the next edit of that row.
+    return { ok: true, settingId: wrote || res?.addRelationshipTrait?.id || '' }
   }
 
   // The factions this entity is on the roster of — the inverse of the roster
