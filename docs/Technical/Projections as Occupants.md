@@ -110,19 +110,55 @@ that location** instead of the entity's active body.
 display, entity for every action — which is the exact split that has produced the
 drift bugs this role has been fixing.
 
+## Direction (human, 2026-09-15) — supersedes the (A)/(B) framing
+
+The human rejected the "resolution-only" shape and stated the model directly:
+**the map should draw the body, and the body should carry its own state.**
+
+1. **Positions move onto the projection.** `map_x`/`map_y` currently live on the
+   entity; track them per projection instead. This is the item that made the
+   earlier "(A) resolution-only" proposal wrong — it left two bodies sharing one
+   coordinate.
+2. **Only the *active* projection grows** (the enlarged "someone is in this body"
+   size) — wire it to the projection's active state rather than the entity-keyed
+   `controlledEntityIds`.
+3. **Only the *active* projection shows the dice ring** — same keying.
+4. **The canvas changes with it** — it must agree that a location contains a
+   projection, not an entity.
+5. **`hidden` becomes read-time enabled.** It is currently a stored `Entity` flag
+   that nothing filters on (settable through GraphQL, read nowhere); a vacant body
+   needs it honoured at read time. *Needs confirming — see below.*
+
+### Still unresolved, needs an answer before planning
+
+- **The self-filter** (dangling item 2). `occupantDots` drops any occupant whose
+  `id` equals the acting `props.entityId`, so when the GM acts as a character
+  whose *inactive* body is in the room being viewed, that body is replaced by the
+  self dot — one dot where there are two bodies. "Only active projections become
+  big" does not cover this: it needs the acting **body** compared against the
+  occupant **body** instead of entity ids.
+- **What "read-time enabled" means for `hidden`** — whether the flag moves onto
+  the projection, or stays on the entity and is merely *honoured* when reading,
+  and who computes vacancy (the reader, from
+  `entity.current_projection != projection.id`).
+
+### Superseded framing (kept for the record)
+
+**(A) Resolution only** — the dot stays the entity; only its name and art resolve
+from the body present. **Rejected**: leaves positions, control and dice
+entity-keyed, so a vacant body would still be sized as "driven" and ringed with
+the entity's dice.
+
+**(B) Identity — one dot per body** — the shape now chosen, with the pieces above
+spelled out.
+
 ## Open decisions
 
-1. **(A) or (B)?** Recommendation: (A). (B) only becomes worth it if bodies need
-   their own positions, or two bodies of one entity should stand in one place —
-   neither exists in the data today.
-2. **Should a vacant body look vacant?** The narrative gives the viewer a fact it
-   does not show: this body has no consciousness in it. Dim it, mark it, or leave
-   it looking like any other body? Undecided.
-3. **Do bodies get their own map position?** Today a left-behind body and the body
-   the consciousness is in **share one `map_x`/`map_y`** (entity-level). Mostly
-   invisible while they are in different locations, but moving one body's dot
-   moves the other's. If bodies are to stand independently this must move onto
-   `Projection` — a real domain change, its own ticket, not part of (A).
+1. **Self-filter** — compare acting body to occupant body (see above).
+2. **`hidden` at read time** — what exactly moves where (see above).
+3. **~~Do bodies get their own map position?~~** — **decided: yes** (direction 1).
+   Remaining question is migration: the 152 bodies standing somewhere today have
+   no stored coordinate of their own, so they need a starting value.
 4. **Names.** Only 1 of 886 bodies is named, but the field exists and a body in
    another universe could legitimately read as a different person. Confirm the
    fallback (body name → entity name) is the intent.
