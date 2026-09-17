@@ -30,7 +30,7 @@ status: canonical
 | Effects engine (trigger matching, scheduling, event → applied/pending effects) | `src/api/src/transversal/services/effects_engine.py` |
 | Effect applier (dispatch + mutation handlers, `{choose_*}` target resolution) | `src/api/src/transversal/services/effects_applier/` (package: `entry.py` dispatches, `registry.py` registers, `handlers_*.py` mutate) |
 | Changing a die, in either home (rating or pool) | `src/api/src/transversal/services/effects_applier/handlers_change_die.py` |
-| Target-candidate resolution (scope resolvers, `resolve_candidates`, `FILTER_FIELDS`) | `src/api/src/transversal/services/effect_targets.py` |
+| Target-candidate resolution (declared scopes, `resolve_candidates`, `FILTER_FIELDS`) | `src/api/src/transversal/services/target_scopes.py` |
 | Structured targeting catalog (elements, edges, fields + options, aggregations, collections) | `src/api/src/transversal/services/target_catalog.py` |
 | Target spec model + step types + type-checker | `src/api/src/transversal/services/target_spec.py` |
 | Target spec runtime resolver + edge resolvers | `src/api/src/transversal/services/target_resolver.py` |
@@ -81,7 +81,7 @@ One canonical, operational effect record shared by SFX and life-path consequence
 | `target` | `str` | Literal id, `"self"`, or a `{choose_*}` / `{random:*}` placeholder |
 | `entity` | `str` | Explicit subject entity; `""` or `"self"` = the entity the effect is applied to |
 | `result` | `Optional[str]` | Die rating, integer amount, relationship type, or `{context_key}` placeholder |
-| `target_scope` | `Optional[str]` | Narrowing hint for runtime target choice (e.g. `traitset:ts-complications-a190`) |
+| `target_scope` | `Optional[str]` | Narrowing hint for runtime target choice (e.g. `traitset:ts-complications-a190`) — a declared alias onto a catalog path, see [[Targeting Model]] |
 | `entity_scope` | `Optional[str]` | Narrowing hint for runtime entity choice |
 | `target_filter` | `dict` | Candidate field predicates for the target (e.g. `{"starter_location": true}`), AND-ed and applied across every scope |
 | `target_spec` | `Optional[TargetSpec]` | Structured targeting pipeline (the new model); wins over `target` when set. See [[Targeting Model]] |
@@ -372,7 +372,7 @@ There is a single persisted timer store — no in-memory schedule. The old in-me
 
 - `_parse_placeholder` parses `{mode:kind}` and `{mode_kind}` targets. Recognised modes are `choose` and `random`; recognised kinds are `location`, `occupant`, `trait`, `entity`, `rating_die`, `life_path`, `roll_table`, `universe`, `projection` (the `_TARGET_KINDS` map).
 - `is_choose_target` / `choose_kind` decide whether an effect needs user resolution.
-- `_resolve_target`: `"self"` → the entity's id; `{choose_*}` / empty-when-required → a `PendingChoice`; `{random:*}` → a random in-scope candidate via `effect_targets.resolve_candidates`; anything else → a literal target id.
+- `_resolve_target`: `"self"` → the entity's id; `{choose_*}` / empty-when-required → a `PendingChoice`; `{random:*}` → a random in-scope candidate via `target_scopes.resolve_candidates`; anything else → a literal target id.
 - `resolve_choice` re-applies a `PendingChoice` with a concrete target.
 - **Candidate filters**: `Effect.target_filter` (e.g. `{"starter_location": true}`) further narrows `choose`/`random` candidates — `_random_candidate`/`_resolve_target` pass it into `resolve_candidates`, which ANDs the field predicates across every scope resolver. This replaces the retired `starter_location` target kind.
 
@@ -381,7 +381,9 @@ There is a single persisted timer store — no in-memory schedule. The old in-me
 
 ### `target_scope` and `target_filter`
 
-A `target_scope` like `traitset:ts-complications-a190` or `universe:earth` narrows the candidate set the picker/random resolver presents (see `effect_targets.resolve_candidates`). Scope grammar is `prefix:value` — prefixes `universe`, `location`, `subtree`, `faction`, `traitset`, `life_path`; a bare value defaults to universe (or current location for occupants); empty means current context; `universe:current` explicitly means the entity's current universe. `target_filter` (e.g. `{"starter_location": true}`) adds candidate field predicates that compose with any scope. The GraphQL `targetCandidates` query resolves both for the runtime picker and the editor's live preview (`entityId` is optional; when omitted the resolver uses a synthetic universe context derived from `scope`).
+A `target_scope` like `traitset:ts-complications-a190` or `universe:earth` narrows the candidate set the picker/random resolver presents. It is **not a second vocabulary**: each `(prefix, kind)` pair is declared in `services/target_scopes.py` as the catalog **path** it stands for, and `resolve_candidates` runs that path through the same resolver as any authored spec (see [[Targeting Model]] → *The scope vocabulary*). Grammar is `prefix:value` — prefixes `universe`, `location`, `subtree`, `faction`, `actor_faction`, `traitset`, `life_path`; a bare value is a universe (a place id for occupants); empty means the acting entity's own context; `universe:current` explicitly means its current universe. `target_filter` (e.g. `{"starter_location": true}`) is appended as ordinary filter steps, so a candidate narrowing is the same language as the path. The GraphQL `targetCandidates` query resolves both for the runtime picker and the editor's live preview (`entityId` is optional; with no entity the universe narrowing is dropped, so the whole registry stays reachable while authoring), `targetScopes` reads the declared vocabulary, and `resolveTargetSpec` executes a spec read-only and reports every step.
+
+An unsupported `(kind, scope)` pair is an **error** naming the kinds that scope supports, not `[]` — an empty list is indistinguishable from "nothing matched" (an `occupant` picker on a faction once read as an empty 30-member roster). An unknown prefix is an error too.
 
 `roll_table` targets honour `universe:` (bare = current universe), `life_path:` (tables in one life path) and `faction:` (tables whose owning life path is in the faction's `suitable_life_path_ids`). A `trait` target with an empty scope resolves to the full trait registry in authoring (no concrete universe); with a universe it resolves to that universe's traits, and with `traitset:` to that trait set's traits.
 
@@ -535,7 +537,7 @@ Then context-free conditions are evaluated (`static_conditions`) so listing matc
 
 ### Editor vocabularies (backend-served)
 
-The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`dicepool`/`auto`); the activation surface is derived from the trigger (`manual` → sheet, `on_*` → auto, `menu` → the post-roll menu)), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py` — value + label + needs-target + placeholder + target-kind), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
+The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`dicepool`/`auto`); the activation surface is derived from the trigger (`manual` → sheet, `on_*` → auto, `menu` → the post-roll menu)), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py` — value + label + needs-target + placeholder + target-kind), and `targetFilterFields` (from `FILTER_FIELDS` in `target_scopes.py` — field + label + valueType + applicable kinds), and `targetScopes` (the declared scope vocabulary). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
 
 The editor also validates a draft on save (and live, debounced) via the `validateSfx` GraphQL field backed by `sfx_validation.validate_sfx`, which warns on unknown `{variables}`, a `target_filter` field that doesn't apply to the action's target kind, missing required fields, a declared `source_kind` that matches no actual owner (a silent `select source` / `source_rating` no-op), a `listener_spec` arming scope without a listener path, a condition whose **source** can't supply what it reads, and a condition whose **moment** doesn't supply a context key it reads. Warnings are advisory, not a save gate.
 

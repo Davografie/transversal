@@ -145,6 +145,37 @@ A duration is offered only where it means something (`duration_elements`): the e
 
 Unmappable forms (variables like `{effect_die}`, kinds without a collection/element) return `None` and stay on the legacy string for the author to fix by hand.
 
+## The scope vocabulary (`target_scope`)
+
+`target_scope` is a compact way of saying *which targets* — `subtree:krasnoyarsk`, `faction:ru-maffia`, `traitset:ts-complications-a190`. It is **not** a second vocabulary: every `(prefix, kind)` pair is declared in `services/target_scopes.py` as the **path** it stands for, and `resolve_candidates` runs that path through the same resolver as any authored spec. One vocabulary (the catalog), one evaluator.
+
+```
+target_scope = "traitset:ts-complications-a190", kind = "trait"
+  → literal traitset ts-complications-a190 → navigate traits
+target_scope = "subtree:loc-56720896", kind = "occupant"
+  → literal location loc-56720896 → navigate subtree → navigate occupants
+    → filter id != <the acting entity's id>
+```
+
+- **Declared, not registered.** `register_scope(prefix, resolver)` is gone. Adding a scope means declaring a path. `targetScopes` returns each prefix with its label, description, and the kinds it can select, so a caller reads the vocabulary instead of extracting it from the source.
+- **Kind vs element.** `kind` is the flat/editor word and `element` the catalog type the path ends on; they differ once, for `occupant` (an *entity at a place* — a scope question, not a type), declared in the selection row.
+- **The acting entity is the only parameter.** A builder receives the scope's value and the acting entity — the only two things the flat form ever depended on. *Not me* is `filter id != <its id>`; *my universe* is `filter universe == <the universe it is in>`. Both are ordinary filter steps.
+- **Unsupported pairs are errors.** `kind="occupant"` + `scope="faction:X"` used to answer `[]`, indistinguishable from an empty roster; it now raises an error naming the kinds that scope supports. An unknown prefix is an error too, rather than silently falling back to the default scope.
+- **`target_filter`** (`{"starter_location": true}`) is appended as ordinary filter steps, so a picker narrowing is the same language as the path.
+- **`universe:X` and a bare value** are the same selections — bare means "the acting entity's context", and a bare value is a universe (a place id for `occupant`).
+
+The declarations, and what each scope can select:
+
+| Prefix | Kinds | Means |
+|--------|-------|-------|
+| *(bare)* / `universe` | `rating_die`, `location`, `occupant`, `entity`, `trait`, `traitset`, `life_path`, `roll_table`, `universe`, `projection`, `scheduled_event` | The acting entity's own context; a bare value is a universe |
+| `location:` | `occupant`, `entity`, `location`, `projection` | At that place (its occupants; the place and its zones; the actor's own bodies there) |
+| `subtree:` | `occupant`, `entity`, `location`, `projection` | Everything inside that place, zones included |
+| `faction:` | `entity`, `roll_table` | Its roster; the tables of the life paths it may start people on |
+| `actor_faction:` | `entity`, `trait` | The orgs the acting entity is itself on the roster of (optionally narrowed to one by id) |
+| `traitset:` | `trait` | The traits that set defines — or, for a mutate-only action, only the ones the entity already holds in it |
+| `life_path:` | `roll_table` | The tables that follow that life path |
+
 ## The wizard (frontend)
 
 - `src/frontend/src/components/gm/TargetSpecBuilder.vue` — the step-by-step path builder: add/remove/reorder step rows, per-step config, catalog-driven affordances (only legal edges/fields/aggregations offered), and **live type highlighting** (each step's resolved type, green when it matches one of the field's declared destinations). It also reports the element its path currently resolves to, which is what lets an action offer a duration only where one means something.
@@ -157,7 +188,7 @@ Every action's `target` is a **targeting path**. The older way — a picker kind
 
 - **The picker kind is no longer declared** for a target. `path_element` states what a path must resolve to (`("traitsetting",)`, `("die", "rating_die")`, `("trait",)` …), and that is what the trace checks and the editor highlights against.
 - **A target that must be a path offers only the path.** When an action declares destinations and no picker kind, the mode row is not rendered at all — there is nothing to pick and no keyword to type, so a select with one option is not a UI.
-- **Where a `target_kind` survives it is not authoring**: a stored `{choose_trait}` / `{random:location}` target still carries its kind in the placeholder, and the runtime picker and `validate_sfx` read it from there.
+- **Where a `target_kind` survives it is not authoring**: a stored `{choose_trait}` / `{random:location}` target still carries its kind in the placeholder, and the runtime picker and `validate_sfx` read it from there. The pair means what the declared scope says it means ([[#The scope vocabulary (`target_scope`)]]), so the placeholder and the scope cannot disagree about *what* is being offered — only about *how* it is spelled.
 - **The keywords have path equivalents**, and any step's `output` makes one reusable (`select variable`):
   - `highest_trait_die` → `select rolled_dice → filter source_kind == trait → aggregate Highest element field=rating` (or `select self → navigate pool → navigate dice → …` for the live pool rather than the event's dice);
   - `the_hitch_die` → the same path filtered to `tier == fail`.
@@ -170,6 +201,9 @@ The wizard is catalog-driven: it cannot compose an invalid path, and a field wit
 
 - `targetCatalog` — the full catalog (elements, edges, fields + options, aggregations, collections).
 - `traceTargetSpec(input, destinationElements, destinationCardinality, sourceElement, variables)` — walks a draft spec through the shared type-checker; returns the type after each step, step errors, and `valid` (does the final type match the destination). `destinationElements` is a **list**, because a field may accept more than one kind of thing. `variables` seeds the bound-variable scope (name → element).
+- `targetScopes` — the declared `target_scope` vocabulary: every prefix with its label, description, and the kinds it can select. Read it instead of remembering it; the entries come from the same declaration the resolver uses.
+- `targetCandidates(kind, entityId, scope, action, filter)` — the candidates a `(kind, scope, filter)` choice selects, resolved through the declared path. Raises for an unsupported pair rather than answering `[]`.
+- `resolveTargetSpec(input, entityId, sourceKind, sourceId, bindings, valuesLimit)` — **execute** a spec against live data, read-only. The counterpart of `traceTargetSpec`: that one says what a draft *would* be, this one says what it *does*. Every step reports its values, its resulting type, and the exact count it produced (values are capped by `valuesLimit`, the count is not); a `choose` step reports `pending` with the element it is about plus the full candidate pool. Nothing is applied or committed, so a path can be inspected rather than guessed at — a single final list hides the step that collapsed.
 - `targetLabels(ids: [ID!]!)` — display names for ids, resolved through the same repository resolver the card text uses, so a picker shows a **name** for a value whose candidate is not in the loaded page. The editor never shows raw ids; a raw id is the last resort.
 - `effectVariables(effects, sourceElement, conditions, trigger, sourceKind)` — the typed names a path may `select variable` from. It seeds the scope with the **activation's own names** first (`target_catalog.scope_seed_names`: the source token and the trigger's declared variables, typed by catalog element, non-walkable ones dropped), then traces the SFX's conditions, then each effect's specs and its declared references. The engine binds the same names from the live event (`effects_engine._activation_bindings`), so what the wizard offers is what resolves — and a deferred effect carries them, snapshotted with the rest of the activation.
 
@@ -193,6 +227,7 @@ The targeting model exists to power **passive rules** like One Trick:
 | Catalog (elements, edges, fields + options, aggregations, collections) | `services/target_catalog.py` |
 | Spec model + step types + type-checker | `services/target_spec.py` |
 | Runtime resolver + edge resolvers | `services/target_resolver.py` (`resolve`, `Binding`, `TargetContext.bindings`) |
+| The scope vocabulary + candidate resolution | `services/target_scopes.py` (`TARGET_SCOPES`, `selection_spec`, `resolve_candidates`) |
 | Step outputs → typed variables | `services/target_spec.py::spec_variables`, `services/effects_engine.py` |
 | Legacy string → trivial spec | `services/target_legacy.py` |
 | `Effect.target_spec` / `entity_spec` fields | `domain/__init__.py` |

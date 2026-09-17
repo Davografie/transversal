@@ -300,7 +300,7 @@ What the effect points at. Five modes:
 4. **Named exit** — `{return:name}` for shared roll tables (only when the action supports it).
 5. **Targeting path** — a structured `target_spec` pipeline (see [[#Targeting path]]).
 
-The **scope** (`target_scope`) narrows choose/random candidates (`traitset:…`, `universe:…`, `location:…`, etc.).
+The **scope** (`target_scope`) narrows choose/random candidates: `traitset:…`, `universe:…`, `location:…`, `subtree:…`, `faction:…`, `actor_faction:…`, `life_path:…`. Each prefix is declared in the backend and readable over GraphQL (`targetScopes`); a pair that is not supported **says so** instead of coming back empty, so an empty picker means "nothing matched", never "wrong pair". `universe:current` is the acting entity's own universe, and an empty scope means its current context.
 
 ### Entity (subject)
 
