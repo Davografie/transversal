@@ -542,24 +542,6 @@ function toImagePos(viewX, viewY) {
   }
 }
 
-// The image point under the centre of the view, tracked *while* a perspective
-// entity is held. It has to be sampled continuously: the camera re-anchors the
-// instant `entityId` clears, so by the time the watcher below runs the framing
-// we wanted to preserve is already gone.
-let viewCentreBeforeRoam = null
-watchEffect(() => {
-  if (props.entityId) viewCentreBeforeRoam = toImagePos(50, 50)
-})
-
-// Acting entity → free-roam: park the roaming dot on the view centre (B96), so
-// the handover leaves the camera where it was rather than jumping to the
-// location centre. Nothing is stored — see the note on `gmDotPositions`.
-watch(() => props.entityId, (id, prev) => {
-  if (id || !prev) return  // only the acting-entity → free-roam edge
-  const clamp = (v) => Math.max(2, Math.min(98, Math.round(v ?? 50)))
-  setGmDotPos(clamp(viewCentreBeforeRoam?.x), clamp(viewCentreBeforeRoam?.y))
-})
-
 function getPosFromEvent(e) {
   const el = viewerEl.value
   if (!el) return { x: 50, y: 50 }
@@ -718,6 +700,31 @@ function arrivalPoint(destNav, fromId) {
 }
 
 const imageAspect = ref(null)  // width/height ratio of current image, or null if unknown
+
+// ── B96: where the roaming GM dot spawns ───────────────────────────────────
+// The image point under the centre of the view, sampled *while* a perspective
+// entity is held. The watcher below cannot work it out for itself: the camera
+// re-anchors the instant `entityId` clears, so by the time it runs the framing
+// we wanted to preserve is already gone.
+//
+// ⚠ Placement is load-bearing. `watchEffect` runs its callback **synchronously
+// during setup**, which evaluates `sceneCamera` on the spot — and `sceneCamera`
+// reads `imageAspect`. Put this block above that `const` and setup throws
+// "can't access lexical declaration 'imageAspect' before initialization", taking
+// the whole viewer down. The build cannot catch this class; only a browser can.
+let viewCentreBeforeRoam = null
+watchEffect(() => {
+  if (props.entityId) viewCentreBeforeRoam = toImagePos(50, 50)
+})
+
+// Acting entity → free-roam: park the roaming dot on the view centre, so the
+// handover leaves the camera where it was rather than jumping to the location
+// centre. Nothing is stored — see the note on `gmDotPositions`.
+watch(() => props.entityId, (id, prev) => {
+  if (id || !prev) return  // only the acting-entity → free-roam edge
+  const clamp = (v) => Math.max(2, Math.min(98, Math.round(v ?? 50)))
+  setGmDotPos(clamp(viewCentreBeforeRoam?.x), clamp(viewCentreBeforeRoam?.y))
+})
 
 // Scene layer: background + world dots, sized to the overscanned scene and
 // moved by a single translate3d. Panning is one compositor operation; the dots
