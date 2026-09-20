@@ -112,11 +112,32 @@ currency and no FX rate was verified, so currencies are reported as published.
 |---|---|---|---|---|---|
 | **Cloudflare Tunnel + Access** | **$0**: 50 users, email-OTP + allowlist IdPs, 1,000 tunnels, 1,000 routes, 100 MB request cap ([plans](https://www.cloudflare.com/plans/zero-trust-services/), [limits](https://developers.cloudflare.com/cloudflare-one/account-limits/)) | Zero Trust Standard **$7/user/mo** | **yes** — a domain in the CF account | **yes, bundled on Free**, deny-by-default | **contractual** — see below; neutralised by R2 |
 | **Tailscale Funnel** (public) | **$0** Personal, 6 users, unlimited devices; Funnel on **all plans, beta** ([pricing](https://tailscale.com/pricing), [funnel](https://tailscale.com/docs/features/tailscale-funnel)) | Standard **$8/user/mo** | **no** — and you *cannot* use your own (`tailnet-name.ts.net` only) | **no** — Funnel traffic carries no identity headers and does not work with access controls | no Funnel-specific clause; AUP bars "undue burden"; docs frame Funnel as ephemeral |
-| **VPS as public entry** (relay to home) | Oracle Always Free **$0**, 10 TB/mo egress ([oracle](https://www.oracle.com/cloud/free/)) | Netcup **€4.96/mo** ([netcup](https://www.netcup.com/en/server/vps)); DigitalOcean **$4/mo** ([DO](https://www.digitalocean.com/pricing/droplets)); Hetzner CX22 ≈**$5.60/mo** (third-party figure, [source](https://cloudpricecheck.com/hetzner/cloud-servers-pricing)) | recommended | **DIY** — oauth2-proxy / Authentik | none of the CDN kind |
+| **VPS as public entry** (relay to home) | Oracle Always Free **$0** — with real strings attached, see below ([oracle docs](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)) | **Hetzner cost-optimised from €5.49/mo** + €0.50 IPv4 ([Hetzner price API](https://website-price-api.hetzner.com/api/v1/products/CLOUD_132)); **OVH VPS-1 €3.81 excl. / €4.57 incl. VAT** ([OVH](https://www.ovhcloud.com/en/vps/)); **netcup VPS Lite 1 €4.88/mo incl. VAT** ([netcup](https://www.netcup.com/en/server/vps)); DigitalOcean **$4/mo** ([DO](https://www.digitalocean.com/pricing/droplets)) | recommended | **DIY** — oauth2-proxy / Authelia | none of the CDN kind |
 
 Also-rans: **ngrok is out** — its free plan is 1 GB/mo, below this app's 2–8 GB/mo
 ([limits](https://ngrok.com/docs/pricing-limits/free-plan-limits)). ZeroTier is a private-lane
 tool, not a public front door with identity ([pricing](https://www.zerotier.com/pricing/)).
+Fly.io's free tier is gone for new customers (trial only), so it is not a "$0" option either
+([pricing](https://fly.io/docs/about/pricing/)).
+
+### Oracle Always Free is weaker than it looks
+
+Verified against [Oracle's Always Free documentation](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
+(2026-09-20), because "free forever" is doing a lot of work in that phrase:
+
+- The A1 (ARM) allowance is **1,500 OCPU-hours + 9,000 GB-hours per month — "equivalent to 2 OCPUs
+  and 12 GB of memory"** for Always Free tenancies. The often-quoted 4 OCPU / 24 GB is not what the
+  docs say today.
+- **Idle reclamation is real and documented:** Oracle may reclaim an Always Free instance if, over a
+  7-day window, CPU p95 < 20%, network < 20%, and — for A1 shapes — memory < 20%. A nine-person app
+  that sits quiet between sessions could plausibly trip that.
+- "Out of host capacity" on creation is expected, instances must live in the **home region**,
+  outbound TCP/25 is blocked, and only the ephemeral public IP is free.
+- The 10 TB/mo outbound allowance is genuine, and far beyond what this app needs.
+
+The AMD micro shape (1/8 OCPU, 1 GB) is not a plausible host for this stack. So Oracle is free on
+paper but the least dependable cheap option for something you want always up — worth knowing before
+it becomes a game-night outage.
 
 ## Lane B — the owner's own remote access (Pixelbook 2017)
 
@@ -182,24 +203,39 @@ genuine risk is neutralised by R2, which the clause names as the compliant path.
 unprivileged (`cloudflared tunnel run --token`, or a container) rather than the root service
 installer — this box has a compromise history.
 
-**Runner-up:** a cheap VPS as the public entry, relaying to home over WireGuard — Netcup at
-€4.96/mo, or Oracle's Always Free tier at $0 — with oauth2-proxy or Authentik in front. No media
-ToS exposure and the public entry is decoupled from the home box; more setup, more robust long term.
+**Runner-up:** a cheap VPS as the public entry, relaying to home over WireGuard — **Hetzner from
+€5.49/mo**, **OVH VPS-1 €4.57/mo incl. VAT**, or **netcup VPS Lite 1 €4.88/mo incl. VAT** — with
+oauth2-proxy or Authelia in front. No media ToS exposure, and the public entry is decoupled from the
+home box, so a home outage is a 502 rather than a compromised front door. More setup, more robust
+long term. Oracle's Always Free tier is the cheapest on paper but carries the caveats above.
 
 **Regardless of the lane:** Tailscale (free) for the private lane — SSH, this agent GUI, and
 desktop access, none of it on the public internet.
 
 ## Verification and caveats
 
-Verified 2026-09-20 from vendor sources: Tailscale's plan limits and Funnel's constraints; the
-scope of Cloudflare's tunnel/media terms; Cloudflare Zero Trust's free seat count and request cap;
-R2's free tier; Oracle's free egress allowance. Hetzner's figure is from a third-party aggregator,
-not Hetzner.
+Verified 2026-09-20 from vendor sources, and **re-confirmed first-hand** for the two figures that
+most affect the decision: Oracle's Always Free allowances and idle-reclamation policy (from Oracle's
+own documentation), and Hetzner's cost-optimised server price (from Hetzner's own price API, which
+returns €5.49/mo and `active: true`). Also verified: Tailscale's plan limits and Funnel's
+constraints; the scope of Cloudflare's tunnel/media terms; Cloudflare Zero Trust's free seat count
+and request cap; R2's free tier.
 
-**Could not verify — not treated as fact:** Funnel's numeric bandwidth cap (the docs say only
-"non-configurable bandwidth limits"); Hetzner's own published server prices (client-rendered);
-Cloudflare Registrar's exact live `.com` price (dashboard-only); and any EUR↔USD conversion — none
-was applied, so vendors' own currencies stand.
+**Sourced from the research stream rather than re-verified here:** the OVH, netcup and
+DigitalOcean figures, and the domain renewal prices (Porkbun `.com` $11.08/yr). Treat those as
+second-hand until checked at order time.
+
+**Could not verify — not treated as fact:**
+- Funnel's numeric bandwidth cap (the docs say only "non-configurable bandwidth limits").
+- **Hetzner's orderability**: its price API reports the cost-optimised plans `active`, while its
+  plan pages render them as unavailable. Unresolved — check at order time.
+- Cloudflare Registrar's exact live `.com` price (dashboard-only; the at-cost policy is what is
+  published).
+- Whether netcup's "traffic flatrate" has a volume cap.
+
+Currencies are as published by each vendor. The research stream supplied a EUR→USD rate of
+1.147723 (2026-09-20), but no conversion was applied to the figures above, so no conversion error
+can propagate into them.
 
 ## Open decisions
 
@@ -222,3 +258,9 @@ was applied, so vendors' own currencies stand.
   *public hostname* routes are subject to the non-HTML terms while private routes are exempt, and
   identified R2 as the permitted mitigation. Recommendation recorded; the lane choice is the
   user's.
+- 2026-09-20 — corrections applied once the VPS research settled. The third-party Hetzner figure
+  was **wrong** and is replaced with Hetzner's own price API (€5.49/mo + €0.50 IPv4); Oracle's
+  Always Free caveats were added after re-reading Oracle's documentation first-hand — the A1
+  allowance is **2 OCPU / 12 GB**, idle reclamation is documented, and "out of host capacity" is
+  expected; netcup, OVH and Fly.io figures corrected (Fly's free tier no longer exists for new
+  customers). **Recommendation unchanged.**
