@@ -12,7 +12,6 @@ import { computed, ref, watch } from 'vue'
  *
  * The app owns everything downstream, so those are injected:
  *   entityId             current perspective entity (claimed on boot if owned)
- *   needsCharacterPick   true while a player must pick an owned character
  *   loadPlayerRole       fetch + apply the player's role (architect/player)
  *   initLocation         re-init the map/location after an identity switch
  *   fetchPlayerEntities / fetchSupportCharacters / fetchActiveMains
@@ -26,7 +25,6 @@ export function usePlayerIdentity({
   playerName,
   showLoginOverlay,
   entityId,
-  needsCharacterPick,
   loadPlayerRole,
   initLocation,
   fetchPlayerEntities,
@@ -242,11 +240,12 @@ export function usePlayerIdentity({
     localStorage.setItem('playerName', playerName.value.trim())
     nameStatus.value = ''
     pendingPlayer.value = null
-    // Stay on the overlay until this player has a usable character: a fresh
-    // player has no entities yet and must create or claim one before playing.
-    Promise.all([loadPlayerRole(), fetchPlayerEntities(), fetchSupportCharacters(), fetchActiveMains()]).then(() => {
-      if (!needsCharacterPick.value) showLoginOverlay.value = false
-    })
+    // Stay on the selector: logging in lands you on the character picker, never
+    // straight into the game, so you choose where to begin — whatever your role
+    // and whether or not a perspective was already restored. It closes when you
+    // pick a character, or via "Back to game" (App's `dismissOverlay`).
+    Promise.all([loadPlayerRole(), fetchPlayerEntities(), fetchSupportCharacters(), fetchActiveMains()])
+      .catch(() => {})
   }
 
   async function startSwitchEdit() {

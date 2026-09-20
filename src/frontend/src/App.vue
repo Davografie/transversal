@@ -438,14 +438,23 @@ const ownMainId = computed(() => {
 })
 
 let locationInitPromise = null
+// Set by switchPerspective when the entity being assumed is already on screen:
+// the assignment below must not re-init the scene (flashing "LOADING...") for a
+// location that is already in view.
+let skipLocationInit = false
 
-// entityId persists in every mode (refresh restores the GM's perspective too);
-// only the player flow re-inits location/bonuses on switch — the GM switch
-// path (switchPerspective) handles its own location load.
+// entityId persists in every mode (refresh restores the GM's perspective too).
+// The location always follows the new perspective: a GM assuming an entity
+// through the settings character picker (`beginCharacterSwitch`) has no other
+// location load, so gating this on `gmMode` left them roaming where they were.
+// The dice bonuses stay player-only (refreshDiceBonuses checks gmMode itself).
 watch(entityId, () => {
   if (entityId.value) localStorage.setItem('entityId', entityId.value)
   else localStorage.removeItem('entityId')
-  if (gmMode.value || !entityId.value) return
+  if (!entityId.value || skipLocationInit) {
+    skipLocationInit = false
+    return
+  }
   locationInitPromise = initLocation()
   refreshDiceBonuses()
 }, { flush: 'sync' })
@@ -524,7 +533,7 @@ const {
   startSwitchEdit, onSwitchBlur, onSwitchEnter, confirmSwitch, resetSwitch,
 } = usePlayerIdentity({
   playerId, playerName, showLoginOverlay,
-  entityId, needsCharacterPick,
+  entityId,
   loadPlayerRole, initLocation,
   fetchPlayerEntities, fetchSupportCharacters, fetchActiveMains, fetchEntitiesFor,
   pendingPlayerEntities,
@@ -539,8 +548,12 @@ const {
 } = useCharacterSwitch({
   entityId, playerId, showLoginOverlay, fetchPlayerEntities,
   locationInit: {
+    // reset() runs before entityId is assigned; the flush:'sync' watcher re-arms
+    // this during the assignment. `current()` therefore starts the load itself
+    // when that assignment changed nothing — re-picking the character you are
+    // already acting as must still land you where they are.
     reset: () => { locationInitPromise = null },
-    current: () => locationInitPromise,
+    current: () => locationInitPromise || (entityId.value ? (locationInitPromise = initLocation()) : null),
   },
 })
 
@@ -748,6 +761,10 @@ async function switchPerspective(id) {
     targetLoc = data?.entity?.currentLocation || null
   } catch {}
   const sameLocation = targetLoc != null && targetLoc === currentLocationId.value
+  const changed = entityId.value !== id
+  // The flush:'sync' watcher owns the location init; skip it only when it will
+  // actually fire and the entity is already in view.
+  skipLocationInit = changed && sameLocation
   entityId.value = id
   viewingEntityId.value = null  // clear any read-only location inspect
   // Presence only: other clients size up the dot of whatever this client is
@@ -755,7 +772,10 @@ async function switchPerspective(id) {
   if (playerId.value) {
     fetch(`/api/v1/players/${playerId.value}/control/${id}?stamp=false`, { method: 'POST' }).catch(() => {})
   }
-  if (!sameLocation) await initLocation()
+  if (sameLocation) return
+  // A changed perspective already has its init in flight (started by the
+  // watcher during the assignment above); otherwise start one here.
+  await (changed ? locationInitPromise : initLocation())
 }
 
 // The view moves optimistically (the location id and name are set before the
