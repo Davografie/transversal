@@ -24,10 +24,10 @@ status: canonical
 
 | What | Path |
 | --- | --- |
-| **Merged library** (canonical) | `/media/dave/Disk2/TTRPG-merged/` |
-| Cortex rules (the priority collection) | `/media/dave/Disk2/TTRPG-merged/Cortex/` → indexed in [[Cortex Rules Library]] |
-| Extracted-text cache | `/media/dave/Disk2/TTRPG-merged/.index/` |
-| Source trees (kept, untouched) | `/media/dave/Disk2/TTRPG/`, `/media/dave/Disk2/TTRPG2/` |
+| **Merged library** (canonical) | `/mnt/disk2/TTRPG-merged/` |
+| Cortex rules (the priority collection) | `/mnt/disk2/TTRPG-merged/Cortex/` → indexed in [[Cortex Rules Library]] |
+| Extracted-text cache | `/mnt/disk2/TTRPG-merged/.index/` |
+| Source trees (kept, untouched) | `/mnt/disk2/TTRPG/`, `/mnt/disk2/TTRPG2/` |
 
 ## How the merge was done
 
@@ -73,7 +73,7 @@ There is **early project source material** in here — worth reading before desi
 Any PDF can be turned into searchable text on demand:
 
 ```bash
-LIB=/media/dave/Disk2/TTRPG-merged
+LIB=/mnt/disk2/TTRPG-merged
 pdftotext -layout "$LIB/Cortex/Cortex Prime.pdf" /tmp/cortex-prime.txt   # extract
 pdfinfo "$LIB/Cortex/Cortex Prime.pdf" | head                            # pages, title
 ```

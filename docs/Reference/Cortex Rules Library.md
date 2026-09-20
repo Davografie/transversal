@@ -26,9 +26,9 @@ status: canonical
 
 | What | Path |
 | --- | --- |
-| The PDFs | `/media/dave/Disk2/TTRPG-merged/Cortex/` |
-| Extracted plain text (one `.txt` per PDF, `\f`-separated pages) | `/media/dave/Disk2/TTRPG-merged/.index/text/Cortex/` |
-| Manifest (path, bytes, pages, title, text file) | `/media/dave/Disk2/TTRPG-merged/.index/manifest.tsv` |
+| The PDFs | `/mnt/disk2/TTRPG-merged/Cortex/` |
+| Extracted plain text (one `.txt` per PDF, `\f`-separated pages) | `/mnt/disk2/TTRPG-merged/.index/text/Cortex/` |
+| Manifest (path, bytes, pages, title, text file) | `/mnt/disk2/TTRPG-merged/.index/manifest.tsv` |
 
 Parent library and how it was merged: [[TTRPG Library]].
 
@@ -38,10 +38,10 @@ Parent library and how it was merged: [[TTRPG Library]].
 ## How to read and cite
 
 ```bash
-RULES=/media/dave/Disk2/TTRPG-merged/.index/text/Cortex
+RULES=/mnt/disk2/TTRPG-merged/.index/text/Cortex
 grep -rn -i "effect die" "$RULES/Cortex_Prime.pdf.txt" | head    # find the passage
 pdftotext -f 21 -l 24 -layout \
-  /media/dave/Disk2/TTRPG-merged/Cortex/"Cortex Prime.pdf" -   # read it with layout
+  /mnt/disk2/TTRPG-merged/Cortex/"Cortex Prime.pdf" -   # read it with layout
 ```
 
 For a **page-accurate** citation, get the page from the text (`pdftotext` separates pages with a form feed) and quote the PDF path plus the page.
