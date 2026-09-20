@@ -105,13 +105,18 @@ Architecture, once a lane is chosen:
    mobile-testing opt-in (SEC-2).
 5. The agent runs as a **user** service, not root, and is pinned to `127.0.0.1:3001`.
 
-Options under consideration, with current prices to be verified and cited:
+Options, priced. Verified 2026-09-20; every figure carries a source. Vendors publish in their own
+currency and no FX rate was verified, so currencies are reported as published.
 
-| Option | Per-user identity | Custom domain | ToS risk for media | Non-root agent |
-|---|---|---|---|---|
-| Cloudflare Tunnel + Access | yes (bundled identity layer) | required | to verify (non-HTML/§2.8 clause) | yes |
-| Tailscale Funnel | no (public endpoint) | not required | to verify | yes |
-| VPS (reverse proxy or host) | depends on what you run | required | none | yes |
+| Option | Free tier | First paid tier | Domain needed | Per-user identity | Media / ToS risk |
+|---|---|---|---|---|---|
+| **Cloudflare Tunnel + Access** | **$0**: 50 users, email-OTP + allowlist IdPs, 1,000 tunnels, 1,000 routes, 100 MB request cap ([plans](https://www.cloudflare.com/plans/zero-trust-services/), [limits](https://developers.cloudflare.com/cloudflare-one/account-limits/)) | Zero Trust Standard **$7/user/mo** | **yes** — a domain in the CF account | **yes, bundled on Free**, deny-by-default | **contractual** — see below; neutralised by R2 |
+| **Tailscale Funnel** (public) | **$0** Personal, 6 users, unlimited devices; Funnel on **all plans, beta** ([pricing](https://tailscale.com/pricing), [funnel](https://tailscale.com/docs/features/tailscale-funnel)) | Standard **$8/user/mo** | **no** — and you *cannot* use your own (`tailnet-name.ts.net` only) | **no** — Funnel traffic carries no identity headers and does not work with access controls | no Funnel-specific clause; AUP bars "undue burden"; docs frame Funnel as ephemeral |
+| **VPS as public entry** (relay to home) | Oracle Always Free **$0**, 10 TB/mo egress ([oracle](https://www.oracle.com/cloud/free/)) | Netcup **€4.96/mo** ([netcup](https://www.netcup.com/en/server/vps)); DigitalOcean **$4/mo** ([DO](https://www.digitalocean.com/pricing/droplets)); Hetzner CX22 ≈**$5.60/mo** (third-party figure, [source](https://cloudpricecheck.com/hetzner/cloud-servers-pricing)) | recommended | **DIY** — oauth2-proxy / Authentik | none of the CDN kind |
+
+Also-rans: **ngrok is out** — its free plan is 1 GB/mo, below this app's 2–8 GB/mo
+([limits](https://ngrok.com/docs/pricing-limits/free-plan-limits)). ZeroTier is a private-lane
+tool, not a public front door with identity ([pricing](https://www.zerotier.com/pricing/)).
 
 ## Lane B — the owner's own remote access (Pixelbook 2017)
 
@@ -140,20 +145,80 @@ curl -s -D- -o /dev/null "https://<hostname>/enter?t=<token>" | grep -i set-cook
 curl -s -o /dev/null -w '%{http_code}\n' https://<hostname>/media/<asset>.webp
 ```
 
-## Cost
+## What binds, and what only looks like it does
 
-Being verified against current vendor pages; figures will be cited here with URLs when they
-land, together with free-tier user/device limits and the ToS clauses that apply. No price is
-recorded yet rather than record an unverified one.
+**Irrelevant at this scale:** Cloudflare's 50-user free cap (9 identities), its 100 MB request cap
+(the largest asset is 38 MB), 1,000 tunnels/routes; Tailscale's 6-user cap for the one-person
+private lane; ZeroTier's 10 devices; Oracle's 10 TB/mo egress against 2–8 GB.
+
+**Genuinely binding — three things, none of them price:**
+
+1. **Cloudflare's non-HTML CDN clause is the only contractual landmine.** The
+   [Service-Specific Terms](https://www.cloudflare.com/service-specific-terms-application-services/#content-delivery-network-free-pro-or-business)
+   require paid services to serve "video or a disproportionate percentage of pictures, audio
+   files, or other large files", and Cloudflare's own
+   [docs](https://developers.cloudflare.com/fundamentals/reference/policies-compliances/delivering-videos-with-cloudflare/)
+   confirm **tunnel public hostname routes are subject to it** while *private* network routes are
+   exempt. Enforcement is a redirect plus an email notification, not account termination. The 36
+   `.webm` files and 10–38 MB animated `.webp` are precisely the named shape.
+   **Mitigation:** serve media from **R2**, which the clause itself designates as the compliant
+   home — its [free tier](https://developers.cloudflare.com/r2/pricing/) (10 GB-month storage,
+   **free egress**, 1M Class A / 10M Class B ops) covers the 742 MB library and 2–8 GB/mo at $0.
+2. **Funnel cannot satisfy the requirement.** It is public and carries no identity — Tailscale's
+   own comparison notes it "doesn't work with … access controls". With no identity layer, the
+   app's single static token is the only gate, which *is* the SEC-3 gap rather than a fix for it.
+3. **A public front door wants a domain** (~$11/yr; Cloudflare Registrar is at-cost, Porkbun
+   `.com` verified at $11.08/yr). Access requires one; Funnel forbids one entirely.
+
+One structural note: the ComfyUI/GPU pipeline must stay at home, so hosting the app *outright* on
+a VPS splits the stack. A VPS is better used as a relay than as a host.
+
+## Recommendation
+
+**Cloudflare Tunnel + Access on the Free plan, with the media library on R2 behind a media
+subdomain.** Roughly **$11/yr domain + $0** — and it is the only option that satisfies both hard
+requirements (no forwards, real per-user identity) for nine people at no monthly cost. The single
+genuine risk is neutralised by R2, which the clause names as the compliant path. Run the agent
+unprivileged (`cloudflared tunnel run --token`, or a container) rather than the root service
+installer — this box has a compromise history.
+
+**Runner-up:** a cheap VPS as the public entry, relaying to home over WireGuard — Netcup at
+€4.96/mo, or Oracle's Always Free tier at $0 — with oauth2-proxy or Authentik in front. No media
+ToS exposure and the public entry is decoupled from the home box; more setup, more robust long term.
+
+**Regardless of the lane:** Tailscale (free) for the private lane — SSH, this agent GUI, and
+desktop access, none of it on the public internet.
+
+## Verification and caveats
+
+Verified 2026-09-20 from vendor sources: Tailscale's plan limits and Funnel's constraints; the
+scope of Cloudflare's tunnel/media terms; Cloudflare Zero Trust's free seat count and request cap;
+R2's free tier; Oracle's free egress allowance. Hetzner's figure is from a third-party aggregator,
+not Hetzner.
+
+**Could not verify — not treated as fact:** Funnel's numeric bandwidth cap (the docs say only
+"non-configurable bandwidth limits"); Hetzner's own published server prices (client-rendered);
+Cloudflare Registrar's exact live `.com` price (dashboard-only); and any EUR↔USD conversion — none
+was applied, so vendors' own currencies stand.
 
 ## Open decisions
 
-- Lane A: Cloudflare Tunnel + Access (recommended — it supplies the identity layer the app
-  lacks) versus Tailscale Funnel (no domain, but genuinely public) versus a VPS.
-- Lane B: tailnet for SSH + agent GUI; desktop GUI tool still to pick.
-- Whether to fix SEC-10/SEC-11 before the first external connection (they are small).
+- **Lane A — awaiting your choice.** Recommended: Cloudflare Tunnel + Access (Free) with media on
+  R2. Runner-up: a VPS relay. Funnel would need a separate identity layer bolted on first, which
+  is most of the work Access already does for free.
+- **Lane B** — tailnet for SSH and the agent GUI; the desktop GUI tool is still to pick. `sshd` is
+  installed but currently **disabled**.
+- Whether to fix SEC-10/SEC-11 before the first external connection (both small).
+- If R2 is chosen: mirror the whole library, or only the large and animated assets? The `_Large`
+  variants average 82 KB, which is well inside the terms' comfort zone — it is the 10–38 MB
+  animated files that give the clause its shape.
 
 ## Log
 
 - 2026-09-20 — plan drafted: preconditions tabulated, scale measured from the live media
-  library, and the two lanes defined. Pricing section pending verification.
+  library, and the two lanes defined.
+- 2026-09-20 — pricing verified and cited (Tailscale, Cloudflare Zero Trust, R2, Oracle, Netcup,
+  DigitalOcean, ngrok, ZeroTier). Confirmed from Cloudflare's own documentation that tunnel
+  *public hostname* routes are subject to the non-HTML terms while private routes are exempt, and
+  identified R2 as the permitted mitigation. Recommendation recorded; the lane choice is the
+  user's.
