@@ -5,6 +5,7 @@ gallery alongside generated images and can be animated.
 """
 
 import io
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,15 +30,27 @@ router = APIRouter(prefix="/api/v1", tags=["media"])
 
 MEDIA_DIR = Path("/app/media")
 IMAGEN_DIR = MEDIA_DIR / "imagen"
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".heic", ".heif"}
+# `.svg` is deliberately absent: it is passed through un-re-encoded, served
+# from the app's own origin, and can carry script — i.e. stored XSS (SEC-4).
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif"}
 MAX_SIZE = 10 * 1024 * 1024  # 10 MB
 WEBP_QUALITY = 85
 
+#: Request-supplied values that become filesystem path components must match
+#: this exactly — no separators, no `..`, no leading dot, no control characters
+#: (SEC-4).
+_SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def _safe_component(value: str, field: str) -> str:
+    """Validate a request value that will be used in a path. Raises 400."""
+    if not _SAFE_COMPONENT.match(value):
+        raise HTTPException(status_code=400, detail=f"Invalid {field}")
+    return value
+
 
 def _convert_to_webp(data: bytes, source_ext: str) -> bytes:
-    """Convert image data to WebP. SVG and GIF pass through unchanged."""
-    if source_ext in (".svg",):
-        return data
+    """Convert image data to WebP. GIFs pass through unchanged (animation)."""
     if source_ext == ".gif":
         return data
 
@@ -92,6 +105,11 @@ async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile
     """
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
+    # These both become path components below — validate before anything
+    # touches disk.
+    entity_id = _safe_component(entity_id, "entity_id") if entity_id else ""
+    universe = _safe_component(universe, "universe") if universe else ""
+
     ext = Path(file.filename or "unknown").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -104,7 +122,7 @@ async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile
         raise HTTPException(status_code=400, detail="File exceeds 10 MB limit")
 
     converted = _convert_to_webp(contents, ext)
-    out_ext = ext if ext in (".svg", ".gif") else ".webp"
+    out_ext = ext if ext == ".gif" else ".webp"
 
     # Original flat-file path (backward compat)
     prefix = f"{entity_id}_" if entity_id else ""
@@ -119,7 +137,11 @@ async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile
             repo = EntityRepository()
             entity = repo.get_entity(entity_id)
             if entity:
-                resolved_universe = universe or entity.current_universe
+                # Also a path component. The stored value is validated too, so a
+                # bad universe already in the data cannot traverse either.
+                resolved_universe = _safe_component(
+                    universe or entity.current_universe, "universe"
+                )
                 image_id = uuid.uuid4().hex[:8]
                 output_dir = IMAGEN_DIR / entity_id / resolved_universe
                 base_name = f"upload_{image_id}"

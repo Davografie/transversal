@@ -62,8 +62,13 @@ services:
   frontend:
     build: ./src/frontend
     container_name: tv2_frontend
+    # Dev server: loopback by default. It proxies /api straight to the API and so
+    # BYPASSES the nginx magic-link gate — binding 0.0.0.0 publishes the entire
+    # unauthenticated API to the LAN (SEC-2, docs/Technical/Security Posture.md).
+    # For mobile testing, opt in explicitly and knowingly:
+    #     DEV_BIND_ADDR=0.0.0.0 docker compose up -d frontend
     ports:
-      - "0.0.0.0:3000:3000"
+      - "${DEV_BIND_ADDR:-127.0.0.1}:3000:3000"
     volumes:
       - ./src/frontend/src:/app/src
       - ./src/frontend/public:/app/public

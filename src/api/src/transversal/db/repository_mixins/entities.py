@@ -252,19 +252,32 @@ class RepositoryEntities:
     def list_entities_by_type(
         self, entity_type: EntityType, universe: Optional[str] = None
     ) -> list[Entity]:
-        filters = [f"e.type == '{entity_type.value}'"]
+        # Values are bound, never interpolated: `universe` arrives from the
+        # GraphQL `entities(universe:)` argument and would otherwise be an AQL
+        # injection (SEC-1).
+        filters = ["e.type == @etype"]
+        binds: dict[str, str] = {"etype": entity_type.value}
         if universe:
-            filters.append(f"e.current_universe == '{universe}'")
+            filters.append("e.current_universe == @universe")
+            binds["universe"] = universe
         query = f"FOR e IN {ENTITIES} FILTER {' AND '.join(filters)} RETURN e"
-        return [self._doc_to_entity(doc) for doc in self.db.aql.execute(query)]
+        return [
+            self._doc_to_entity(doc)
+            for doc in self.db.aql.execute(query, bind_vars=binds)
+        ]
 
     def list_all_entities(self, universe: Optional[str] = None) -> list[Entity]:
         """List all entities, optionally filtered by universe."""
         if universe:
-            query = f"FOR e IN {ENTITIES} FILTER e.current_universe == '{universe}' RETURN e"
+            query = f"FOR e IN {ENTITIES} FILTER e.current_universe == @universe RETURN e"
+            binds = {"universe": universe}
         else:
             query = f"FOR e IN {ENTITIES} RETURN e"
-        return [self._doc_to_entity(doc) for doc in self.db.aql.execute(query)]
+            binds = {}
+        return [
+            self._doc_to_entity(doc)
+            for doc in self.db.aql.execute(query, bind_vars=binds)
+        ]
 
     def list_entities_by_location(self, location_id: str) -> list[Entity]:
         """List all entities currently at a given location (via their projections)."""
