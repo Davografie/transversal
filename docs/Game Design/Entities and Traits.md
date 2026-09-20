@@ -193,14 +193,14 @@ Ego vs morph is **derived from the trait setting's anchor** (`from_type`), not s
 
 | Anchor (`from_type`) | Kind | Persists across universes? | Example |
 |-----|------|---------------------------|---------|
-| `entity` | **Ego** | Yes — always available | Curious d8, Antisocial d6, "Answered Antonov's Call" d8 |
+| `entity` | **Ego** | Yes — unless its *traitset* is universe-gated | Curious d8, Antisocial d6, "Answered Antonov's Call" d8 |
 | `projection` | **Morph** | No — gated by that projection's origin universe | Hacking d10 (Earth only), qi_reserves d6 (Three Realms only) |
 
 When the resolver assembles a pool for Kael, it returns:
-- All ego (entity-anchored) traits, always (curious, antisocial, distinctions)
+- Ego (entity-anchored) traits, **unless their traitset is universe-gated** and the queried scope is not in that set's `universes`. The trait's *own* `universes` list never gates an ego trait — **the set decides** (human's call, 2026-09-13; `8da91f79`). An ego trait in an ungated set (curious, antisocial, distinctions) follows Kael everywhere; one sitting in an Earth-only set goes dark in the Three Realms.
 - Morph (projection-anchored) traits whose projection's `origin_universe` is in Kael's `effective_universes` — his active projection's universe plus any unexpired attunements
 
-Kael's hacking stays on Earth. His curiosity follows him everywhere. See [[Projections and Transversal]] for the gating rule.
+Kael's hacking stays on Earth. His curiosity follows him everywhere — unless the set holding it is itself gated. See [[Projections and Transversal]] for the gating rule.
 
 ## Projections
 
