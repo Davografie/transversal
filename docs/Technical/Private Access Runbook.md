@@ -154,24 +154,42 @@ curl -fsSL -o config/config.yaml \
   https://raw.githubusercontent.com/juanfont/headscale/v0.29.3/config-example.yaml
 ```
 
-Edit `config/config.yaml` — the values that matter:
+Empty `config/config.yaml` and substitute the prepared files instead of editing by hand:
+
+```bash
+cp /path/to/repo/deploy/headscale/config.yaml config/config.yaml
+cp /path/to/repo/deploy/headscale/acl.hujson  config/acl.hujson
+sed -i 's/headscale\.example\.com/headscale.YOURDOMAIN/g; s/ts\.example\.com/ts.YOURDOMAIN/g' \
+    config/config.yaml
+```
+
+Full copies live in `deploy/headscale/`, so this step is copy-and-run. The values that matter —
+all verified against the upstream v0.29.3 example file:
 
 ```yaml
 server_url: https://headscale.example.com     # must match the DNS name exactly
 listen_addr: 127.0.0.1:8080                   # loopback only; Caddy proxies to it
 metrics_listen_addr: 127.0.0.1:9090
 grpc_listen_addr: 127.0.0.1:50443
-# Prefixes are yours to choose; keep them off the LAN ranges you actually use.
-ip_prefixes:
-  - 100.64.0.0/10
-  - fd7a:115c:a1e0::/48
+prefixes:                 # NOT `ip_prefixes` — that key is stale
+  v4: 100.64.0.0/24
+  v6: fd7a:115c:a1e0::/64
+  allocation: sequential
 noise:
   private_key_path: /var/lib/headscale/noise_private.key
 database:
   type: sqlite
   sqlite:
     path: /var/lib/headscale/db.sqlite
+policy:
+  mode: file
+  path: /etc/headscale/acl.hujson
 ```
+
+> [!warning] Config keys are version-specific
+> `ip_prefixes` (a list) is now `prefixes` (a `v4`/`v6` map), and similar renames have happened
+> before. An earlier draft of this runbook had the stale key — re-check against the upstream
+> example on every upgrade rather than assuming a key still exists.
 
 `docker-compose.yaml`:
 
@@ -201,6 +219,36 @@ docker logs --follow headscale          # Ctrl-C once it reports healthy
 curl -s http://127.0.0.1:8080/health
 ```
 
+### The access policy — default-deny
+
+`config/acl.hujson` (copied above) restricts the tailnet to your own devices. This is the step that
+makes "no ACL" into "only the owner", and the semantics are worth stating precisely:
+
+- Headscale loads **no policy by default, which means allow-all traffic between nodes.** Supplying
+  this file flips the tailnet to **default-deny** — anything not granted is dropped.
+- The one rule is `tv2@` → `tv2@`: nodes owned by your Headscale user may reach each other, and
+  nothing else. It uses `grants` rather than the legacy `acls` section, per upstream guidance
+  (Tailscale considers ACLs legacy and is not adding features to them).
+
+Failure behaviour was **verified against the real v0.29.3 binary**, because "what happens if I get
+it wrong" is the part that actually matters:
+
+| Situation | Observed behaviour |
+|---|---|
+| Malformed policy at **startup** | Headscale **refuses to start**, with a parse error naming line and column. Fails closed and loud. |
+| Malformed policy on **reload** | Logged as `ERR reloading policy error="…"` and **the process keeps running**. Whether the previous policy is still enforced could not be conclusively determined — `headscale policy get` reads the file from disk, so it is not evidence. |
+
+Because of that second row, validate *before* you reload. The command exists but talks to the
+running instance over its Unix socket, so it has to run inside the container:
+
+```bash
+docker exec headscale headscale policy check --file /etc/headscale/acl.hujson
+#   -> "Policy is valid", or a parse error naming the line and column
+
+docker kill --signal=HUP headscale          # reload, not restart
+docker logs --tail 20 headscale             # confirm the reload succeeded
+```
+
 ## 5 · TLS in front (Caddy)
 
 Caddy with a one-line config obtains and renews the certificate automatically. Headscale keeps
@@ -223,10 +271,19 @@ sudo systemctl reload caddy
 curl -s https://headscale.example.com/health     # expect OK
 ```
 
-> [!note] Confirm Headscale's own TLS options at build time
-> Headscale's reference has a TLS page; Caddy is used here because it is the least fiddly and
-> already needed for Lane A. If you prefer Headscale to terminate TLS itself, verify the current
-> config keys against `headscale.net/stable/ref/tls/` rather than trusting this doc.
+> [!note] Headscale can terminate TLS itself — Caddy is still the better fit
+> Verified against the v0.29.3 config: built-in ACME exists (`acme_url`, `acme_email`,
+> `tls_letsencrypt_hostname`, `tls_letsencrypt_challenge_type: HTTP-01`), so Caddy is not strictly
+> required. It is used anyway because **only one service can hold port 443**, and Lane A will need
+> a reverse proxy there — so Caddy is pulled forward rather than adding a migration later. If you
+> prefer the built-in route, drop Caddy and set `tls_letsencrypt_hostname`, leaving
+> `listen_addr` on `0.0.0.0:443`.
+
+> [!note] A startup warning you should expect, not chase
+> Headscale logs `WRN listening without TLS but ServerURL does not start with http://` because it
+> serves plain HTTP on loopback while `server_url` is `https`. **That is correct** when a reverse
+> proxy terminates TLS — it is not a misconfiguration, and chasing it would mean giving up the
+> loopback binding.
 
 ## 6 · Create the user and first node
 
