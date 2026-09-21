@@ -587,7 +587,12 @@ VPS. The domain is reusable for Lane A either way.
   node reached it and got `HTTP/1.1 401 Unauthorized` from the app itself — i.e. the request
   traversed the tailnet and arrived; the 401 is the GUI's own token gate. Binding confirmed as
   `100.64.0.1:3080` + tailnet IPv6 only, with **no** `0.0.0.0`, so nothing was added to the LAN.
-- 2026-09-21 — outstanding: SSH on the desktop is still disabled. It needs `sudo ssh-keygen -A`
-  first (the host keys do not exist) plus the tailnet-only ListenAddress drop-in; the exact block
-  is in step 8. Then the Pixelbook joins. Awaiting the VPS and
+- 2026-09-21 — **SSH over the tailnet verified**, and confirmed absent from the LAN. From a separate
+  tailnet device: `ping ptdave` → pong, and port 22 returned the banner
+  `SSH-2.0-OpenSSH_10.5`; the same device found the desktop's LAN port 22 **closed**. The
+  tailnet-only `ListenAddress` binding does what it says. `sshd -t` passed and `ss -tln` showed
+  `127.0.0.1:22` + `100.64.0.1:22` with no `0.0.0.0:22`.
+- 2026-09-21 — outstanding: the **Pixelbook** node. Everything else on the objective is complete and
+  verified. Note `dave` has no `~/.ssh/authorized_keys`, so SSH from the Pixelbook will use password
+  auth until a key is added — acceptable, since only tailnet devices can reach port 22. Awaiting the VPS and
   domain before step 3 can run.
