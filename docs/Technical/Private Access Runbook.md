@@ -85,6 +85,31 @@ will not issue for a bare IP.
 
 ## 3 · First contact and hardening
 
+> [!note] Which account are you? Two different worlds
+> **Bare/minimal images:** you log in as `root` with the password the host emailed you, and
+> steps 3.3–3.5 below create an unprivileged admin user.
+>
+> **Ubuntu cloud images** (what OVH ships on a VPS): the password belongs to **`ubuntu`**, not
+> `root`. `root` login is refused, and `ubuntu` already has passwordless sudo. In that case skip
+> 3.3 entirely — keep `ubuntu` as the admin user — and install your key with
+> `ssh-copy-id -i ~/.ssh/<key>.pub ubuntu@<IP>`.
+>
+> This runbook was first executed against an OVH VPS, so the `ubuntu` path is the one that is
+> field-tested; the `root` path is the generic case.
+
+> [!warning] sshd overrides must sort BEFORE cloud-init's
+> Ubuntu's `/etc/ssh/sshd_config` does `Include /etc/ssh/sshd_config.d/*.conf` **at the top**, and
+> sshd honours the **first** value it reads for any keyword. `50-cloud-init.conf` sets
+> `PasswordAuthentication yes`, so a `99-transversal.conf` override **loses** despite looking more
+> specific. Name it `10-transversal.conf` so it sorts first.
+>
+> Then verify the *effective* configuration — `sshd -t` only checks syntax and will report success
+> while your setting has no effect at all:
+>
+> ```bash
+> sudo sshd -T | grep -iE '^(passwordauthentication|permitrootlogin)'
+> ```
+
 > [!important] This box will be internet-facing. Do this before anything else is installed.
 > This is the same class of exposure that got the desktop rooted, so the order matters: lock the
 > front door *before* putting services behind it.
