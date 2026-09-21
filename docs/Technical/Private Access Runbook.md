@@ -592,7 +592,16 @@ VPS. The domain is reusable for Lane A either way.
   `SSH-2.0-OpenSSH_10.5`; the same device found the desktop's LAN port 22 **closed**. The
   tailnet-only `ListenAddress` binding does what it says. `sshd -t` passed and `ss -tln` showed
   `127.0.0.1:22` + `100.64.0.1:22` with no `0.0.0.0:22`.
-- 2026-09-21 — outstanding: the **Pixelbook** node. Everything else on the objective is complete and
-  verified. Note `dave` has no `~/.ssh/authorized_keys`, so SSH from the Pixelbook will use password
-  auth until a key is added — acceptable, since only tailnet devices can reach port 22. Awaiting the VPS and
-  domain before step 3 can run.
+- 2026-09-21 — **COMPLETE.** The Pixelbook joined as node 10 (`google-pixelbook`, 100.64.0.7,
+  owner `tv2`), and the owner confirmed SSH **and** the DSH GUI both work from it over a **5G
+  hotspot** — the real test, away from the home LAN. Both devices belong to the single `tv2` user,
+  so the default-deny ACL scopes the tailnet to the owner's devices only. Server-side checks at
+  completion: one user, two nodes, both online; `sshd` on `127.0.0.1:22` + `100.64.0.1:22` with no
+  `0.0.0.0`; `tailscale serve` publishing `ptdave:3080` tailnet-only; no new non-loopback listeners.
+- 2026-09-21 — **DSH needed one app-side fix**, made by the Omarchy session and independently
+  verified here. DSH's web app rejects `/api` requests whose `Host` authority is untrusted, so
+  tailnet requests returned 403 while the page itself loaded fine. `dsh-web-start` now passes
+  `--trusted-host` for authorities it derives at runtime from `tailscale status --json`.
+  Verified: `127.0.0.1:3080` and `ptdave:3080` → 401 (trusted); `evil.example:3080` and
+  `100.64.0.1:3080` → **403**. Tightly scoped rather than opened generally — note even the bare
+  tailnet IP is refused, which is precisely why the GUI must be reached by name.
