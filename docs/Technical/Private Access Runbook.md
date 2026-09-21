@@ -463,6 +463,43 @@ Then from the Pixelbook: `http://<desktop-tailnet-name>:3080/`
 > printed by dsh web`). That is expected and separate from the tailnet — the tailnet proves *which
 > devices* may connect; the token is the app's own gate.
 
+### Enabling SSH on the desktop (tailnet only)
+
+```bash
+# 1. Generate the SSH host keys FIRST. A machine that has never run sshd has none:
+#    openssh can be installed with /etc/ssh/ssh_host_*_key entirely absent, and sshd
+#    then refuses to start. This is the normal state on a desktop, not a fault.
+sudo ssh-keygen -A
+
+# 2. Listen on the tailnet address and loopback ONLY — never the LAN or the internet.
+sudo tee /etc/ssh/sshd_config.d/10-tailnet.conf >/dev/null <<'EOF'
+ListenAddress 100.64.0.1
+ListenAddress 127.0.0.1
+EOF
+
+# 3. Order sshd after the tailnet, or the bind in step 2 fails at boot when
+#    100.64.0.1 does not exist yet.
+sudo mkdir -p /etc/systemd/system/sshd.service.d
+sudo tee /etc/systemd/system/sshd.service.d/10-after-tailscale.conf >/dev/null <<'EOF'
+[Unit]
+After=tailscaled.service
+Wants=tailscaled.service
+EOF
+
+# 4. Validate, then start. sshd -t checks syntax; `sshd -T` shows what is effective.
+sudo sshd -t && sudo systemctl daemon-reload && sudo systemctl enable --now sshd
+sudo ss -tlnp | grep ':22'      # expect 100.64.0.1:22 and 127.0.0.1:22, NOT 0.0.0.0:22
+```
+
+> [!note] On Arch, the drop-in directory IS honoured
+> `/etc/ssh/sshd_config` starts with `Include /etc/ssh/sshd_config.d/*.conf`, so the file above is
+> read. Note the same first-match-wins rule as on Ubuntu: give your file a low number (`10-`) so it
+> sorts ahead of anything else there.
+>
+> Password authentication over the tailnet is acceptable here — only your own devices can reach
+> port 22 — but keys are better. Confirm the connection works *before* tightening the auth method,
+> so a mistake can't lock you out of the only machine you'd fix it from.
+
 Store the SSH keys you already use; Tailscale SSH is optional:
 
 ```bash
