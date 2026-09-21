@@ -579,5 +579,15 @@ VPS. The domain is reusable for Lane A either way.
 - 2026-09-21 — **reboot test passed.** With no human involved, docker, caddy, ufw and sshd all
   returned `active`, the container came back healthy via its restart policy, and HTTPS served 200
   again. The lane survives a host reboot unattended — which is the point of having it.
-- 2026-09-21 — outstanding: the desktop and Pixelbook still need to join (owner action). Awaiting the VPS and
+- 2026-09-21 — **desktop joined.** `ptdave` at 100.64.0.1, owned by `tv2`, verified from the server
+  side rather than trusting the client. Install note: the vendor script does **not** support Arch —
+  on Omarchy it is `omarchy pkg add tailscale` plus `systemctl enable --now tailscaled`.
+- 2026-09-21 — **DSH GUI published over the tailnet and verified cross-device.** `tailscale serve
+  --bg --http=3080 3080` (HTTPS serve is impossible on Headscale). A separate kernel-mode tailnet
+  node reached it and got `HTTP/1.1 401 Unauthorized` from the app itself — i.e. the request
+  traversed the tailnet and arrived; the 401 is the GUI's own token gate. Binding confirmed as
+  `100.64.0.1:3080` + tailnet IPv6 only, with **no** `0.0.0.0`, so nothing was added to the LAN.
+- 2026-09-21 — outstanding: SSH on the desktop is still disabled. It needs `sudo ssh-keygen -A`
+  first (the host keys do not exist) plus the tailnet-only ListenAddress drop-in; the exact block
+  is in step 8. Then the Pixelbook joins. Awaiting the VPS and
   domain before step 3 can run.
