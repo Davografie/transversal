@@ -352,13 +352,28 @@ docker exec headscale headscale users list          # note the numeric USER_ID
 
 ```bash
 # Install the official client (must be >= v1.80.0 for Headscale v0.29.x)
+#
+# Debian / Ubuntu / Fedora / RHEL etc — the vendor script:
 curl -fsSL https://tailscale.com/install.sh | sh
+#
+# Arch / Omarchy — the vendor script does NOT support Arch. It fails with
+# "Couldn't determine what kind of Linux is running" (OS=other-linux) and installs
+# nothing at all. Tailscale is in the official 'extra' repo; on Omarchy use its wrapper:
+#     omarchy pkg add tailscale        # or: sudo pacman -S tailscale
+#     sudo systemctl enable --now tailscaled
 
-sudo tailscale up --login-server https://headscale.example.com
+# Join. --accept-dns=false keeps Tailscale from rewriting this machine's DNS settings.
+sudo tailscale up --login-server https://headscale.example.com --accept-dns=false
 # It prints a URL with an Auth ID; approve it:
 #   docker exec headscale headscale auth register --user tv2 --auth-id <AUTH_ID>
 sudo tailscale status
 ```
+
+> [!warning] The vendor install script is Linux-distro-specific
+> It supports Debian/Ubuntu and RHEL/Fedora families only. On anything else it prints
+> `Couldn't determine what kind of Linux is running` and exits without installing — which is
+> exactly what happened on the Omarchy (Arch) desktop. Use the distro's own package manager
+> instead; Tailscale ships in Arch's `extra` repository.
 
 > [!warning] Check the client version first
 > Headscale v0.29.3 declares **"Minimum supported Tailscale client version: v1.80.0"**. An older
