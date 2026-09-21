@@ -373,14 +373,38 @@ Then in the app: **Accounts → ⋮ → Use an auth key**, paste it, and tap **L
 ## 8 · Reach the desktop, safely
 
 The DSH web GUI is bound to `127.0.0.1:3080` on the desktop — deliberately. Do **not** rebind it to
-the tailnet address; publish it with `tailscale serve`, which keeps the loopback binding and adds
-TLS on the tailnet so the GUI is never listening on a routable interface:
+the tailnet address; publish it with `tailscale serve`, which leaves the loopback binding intact:
 
 ```bash
 # On the desktop
-sudo tailscale serve --bg 3080
+sudo tailscale serve --bg --http=3080 3080
 tailscale serve status
+#   -> Available within your tailnet:
+#        http://<desktop>:3080/ (tailnet only)
+#        |-- / proxy http://127.0.0.1:3080
 ```
+
+Then from the Pixelbook: `http://<desktop-tailnet-name>:3080/`
+
+> [!warning] `--http` is REQUIRED with Headscale — the HTTPS form fails
+> Verified against Headscale v0.29.3. Plain `tailscale serve` fails, because it asks the control
+> plane for a TLS certificate for the tailnet name and Headscale does not implement that endpoint:
+>
+> ```
+> $ tailscale cert <node>.<base-domain>
+> 500 Internal Server Error: your Tailscale account does not support getting TLS certs
+>
+> $ tailscale serve --bg 3080
+> error enabling https feature: ... No serve config
+> ```
+>
+> `tailscale serve --bg --http=<port> <target>` **does** work and was confirmed serving. This is not
+> a security downgrade: the traffic rides the WireGuard tunnel, which is already encrypted, so
+> plain HTTP *inside* the tunnel is not exposed. The same missing-certificate limitation rules out
+> Tailscale Funnel, which Headscale does not support at all.
+>
+> If you later want HTTPS on the GUI itself, terminate it on the desktop with a local reverse proxy
+> and a self-signed or locally-trusted certificate — do not expect `tailscale cert` to provide one.
 
 Store the SSH keys you already use; Tailscale SSH is optional:
 
@@ -392,10 +416,10 @@ sudo tailscale up --ssh --login-server https://headscale.example.com
 **Acceptance checks — run from the Pixelbook:**
 
 ```bash
-tailscale status                          # both nodes listed, desktop "online"
-tailscale ping <desktop-tailnet-name>     # direct connection, or via DERP relay
-ssh <user>@<desktop-tailnet-name>         # terminal works
-curl -sI https://<desktop-tailnet-name>/  # DSH GUI responds over the tailnet
+tailscale status                            # both nodes listed, desktop "online"
+tailscale ping <desktop-tailnet-name>       # direct connection, or via DERP relay
+ssh <user>@<desktop-tailnet-name>           # terminal works
+curl -sI http://<desktop-tailnet-name>:3080/   # DSH GUI responds over the tailnet
 ```
 
 Once these pass, close the public SSH port (step 3) and confirm you can still get in.
