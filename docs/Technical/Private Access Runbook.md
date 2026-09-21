@@ -497,5 +497,18 @@ VPS. The domain is reusable for Lane A either way.
 
 - 2026-09-20 — runbook created. Decisions locked with the owner: OVH VPS-1, domain to be bought,
   public DERP first. Commands taken from Headscale's v0.29.x documentation; client minimum
-  (v1.80.0) and the Android pre-auth-key friction recorded as known risks. Awaiting the VPS and
+  (v1.80.0) and the Android pre-auth-key friction recorded as known risks.
+- 2026-09-21 — **deployed.** Owner bought an OVH VPS (`vps-305e1870.vps.ovh.net`,
+  <vps-ip-redacted>) and the domain `transversal.app`, with `<control-plane-redacted>` → the VPS.
+  Steps 3–5 executed against the real box: key-only SSH with password and root login disabled,
+  ufw default-deny, unattended-upgrades, Docker + Caddy + pinned Headscale v0.29.3, and a real
+  Let's Encrypt certificate issued automatically by Caddy. `https://…/health` → 200.
+- 2026-09-21 — **production verified end-to-end** with three throwaway clients joined to the live
+  server over real TLS: same-owner path pinged (`pong`), cross-owner denied in both directions
+  (`no matching peer`). All test nodes and the temporary user were then removed; only `tv2`
+  remains.
+- 2026-09-21 — **reboot test passed.** With no human involved, docker, caddy, ufw and sshd all
+  returned `active`, the container came back healthy via its restart policy, and HTTPS served 200
+  again. The lane survives a host reboot unattended — which is the point of having it.
+- 2026-09-21 — outstanding: the desktop and Pixelbook still need to join (owner action). Awaiting the VPS and
   domain before step 3 can run.
