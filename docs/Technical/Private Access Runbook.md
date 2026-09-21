@@ -446,6 +446,23 @@ Then from the Pixelbook: `http://<desktop-tailnet-name>:3080/`
 > If you later want HTTPS on the GUI itself, terminate it on the desktop with a local reverse proxy
 > and a self-signed or locally-trusted certificate — do not expect `tailscale cert` to provide one.
 
+> [!warning] Reach it by tailnet NAME, not by IP
+> `tailscale serve` matches on the **Host** header. Verified on the live deployment:
+>
+> | Request | Result |
+> |---|---|
+> | `http://ptdave:3080/` | **401** — reaches the app (which then asks for its own token) |
+> | `http://ptdave.ts.transversal.app:3080/` | **401** — same |
+> | `http://100.64.0.1:3080/` | **404 page not found** — serve rejects the request |
+>
+> So the URL must use the MagicDNS **name**, which means the *client* side needs MagicDNS enabled.
+> Connecting by tailnet IP looks exactly like a broken service and is not one. This cost a round of
+> debugging: a test node with `--accept-dns=false` reached the name only via the IP and got a 404.
+>
+> The DSH GUI also has its **own** token auth (`dsh web authentication required; reopen the URL
+> printed by dsh web`). That is expected and separate from the tailnet — the tailnet proves *which
+> devices* may connect; the token is the app's own gate.
+
 Store the SSH keys you already use; Tailscale SSH is optional:
 
 ```bash
