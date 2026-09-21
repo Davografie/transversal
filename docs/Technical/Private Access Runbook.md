@@ -466,6 +466,28 @@ certificate — revisit once the tailnet is proven, and confirm the current appr
   in `/opt/headscale/lib`, so back it up before each upgrade.
 - `unattended-upgrades` handles the OS; it will not handle the container.
 
+## 11 · Removing a device (lost laptop, stolen phone)
+
+Revocation is the whole reason to run your own control plane, so know it before you need it.
+Verified against the live server:
+
+```bash
+# Nodes with their numeric IDs
+docker exec headscale headscale nodes list
+
+# Revoke by NUMERIC ID — this is the form that works
+docker exec headscale headscale nodes delete --identifier <ID> --force
+
+# Remove a user entirely, and its nodes with it
+docker exec headscale headscale users destroy --name <USER> --force
+```
+
+> [!warning] `--identifier` wants the numeric ID, and failure is quiet
+> Passing a hostname there does not work. If you also suppress stderr — as I did in a cleanup
+> script — it fails **silently**, and the run looks successful while the device stays registered.
+> A cleanup of mine appeared to succeed and left three nodes on the tailnet. Always re-run
+> `nodes list` afterwards and confirm with your own eyes that the device is gone.
+
 ## Rollback
 
 Everything here is reversible: `docker compose down`, `ufw delete allow 443/tcp`, and cancel the
