@@ -140,6 +140,28 @@ Enable automatic security updates (this box is now part of your attack surface):
 dpkg-reconfigure -plow unattended-upgrades     # choose "Yes"
 ```
 
+## 3.5 · Rehearse it locally first — no VPS required
+
+Before you rent anything, prove the whole thing works. `deploy/headscale/rehearse.sh` stands up
+Headscale and three real Tailscale client nodes on a private Docker network — nothing exposed, no
+domain, no certificate — and asserts that the ACL genuinely **denies** a node owned by another
+user:
+
+```bash
+bash deploy/headscale/rehearse.sh
+```
+
+It checks that the config loads, that the policy parses, that the client meets the version floor,
+that all three nodes register with the right owner, and that a same-owner path is **allowed** while
+a cross-owner path is **denied in both directions**. It cleans up after itself and exits non-zero
+on failure.
+
+This is worth running every time you touch `config.yaml` or `acl.hujson`. It has already caught a
+stale config key, a fatal DNS setting, and a policy-file mistake — all of which would otherwise have
+surfaced on the VPS. Note the assertion design: a denial is only accepted on the client's actual
+denial string, because a check that passes on *any* error output would happily "verify" a
+completely broken tailnet.
+
 ## 4 · Install Headscale (pinned, confined)
 
 The official image is **distroless** — no shell, no package manager — which is a meaningful
@@ -186,10 +208,18 @@ policy:
   path: /etc/headscale/acl.hujson
 ```
 
-> [!warning] Config keys are version-specific
+> [!warning] Config keys are version-specific, and some mistakes are fatal
 > `ip_prefixes` (a list) is now `prefixes` (a `v4`/`v6` map), and similar renames have happened
 > before. An earlier draft of this runbook had the stale key — re-check against the upstream
 > example on every upgrade rather than assuming a key still exists.
+>
+> Two more traps, both hit for real while rehearsing this config:
+> - **`override_local_dns` defaults to `true`.** If you disable MagicDNS or remove the nameservers
+>   without also setting it false, Headscale **refuses to start**:
+>   `Fatal config error: dns.nameservers.global must be set when dns.override_local_dns is true`.
+> - **Duplicate YAML keys are fatal.** `mapping key "dns" already defined at line 24`. Most YAML
+>   consumers silently take the last value; Headscale will not start. Edit sections in place —
+>   never append a second copy of one.
 
 `docker-compose.yaml`:
 
@@ -324,9 +354,15 @@ If the web-auth flow misbehaves — there are **open issues about Android + Head
 keys**, so treat this as the likeliest snag in the build — use the non-interactive path instead:
 
 ```bash
-# On the VPS: create a single-use key (default: one use, valid 1 hour)
+# On the VPS: create a pre-auth key
 docker exec headscale headscale preauthkeys create --user <USER_ID>
 ```
+
+> [!warning] Pre-auth keys are single-use by default
+> One key, one device — a second node using the same key fails with **`authkey already used`**, and
+> the client just sits there logged out. Either mint a key per device, or pass `--reusable` when
+> you create it. Confirm what is outstanding with `headscale preauthkeys list` (note: it takes no
+> `--user` flag, unlike `create`).
 
 Then in the app: **Accounts → ⋮ → Use an auth key**, paste it, and tap **Log in**.
 
