@@ -74,8 +74,20 @@ def _apply_dice_limit(entity, effect, repo, result):
     selects ``total`` (base 2) or ``effect`` (base 1). The delta is applied to
     ``Entity.total_dice_bonus`` / ``Entity.effect_dice_bonus``; a duration on the
     effect schedules the inverse (opposite sign, same magnitude) on expiry.
+
+    The limits live on the pool's *owner*, so ``refs["pool"]`` names whose to move
+    (a pool only says which entity the limits belong to). Without a resolvable
+    pool ref this falls back to the effect's subject, so pre-existing stored
+    effects keep working.
     """
-    subject = _effect_subject(entity, effect, result, repo)
+    pool_ref = (effect.refs or {}).get("pool")
+    pool_id = pool_ref.value if pool_ref else ""
+    # The owner is what matters, not its location: a pool id resolves to
+    # ``(location, owner)`` and an owner away from any location has no location.
+    _, owner_id = _resolve_pool(pool_id, entity, repo) if pool_id else ("", "")
+    subject = repo.get_entity(owner_id) if owner_id else None
+    if subject is None:
+        subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
         return
     _track_subject(result, entity, subject)
@@ -93,7 +105,9 @@ def _apply_dice_limit(entity, effect, repo, result):
     else:
         subject.total_dice_bonus = (subject.total_dice_bonus or 0) + delta
 
-    result.applied.append(AppliedEffect(effect, f"{effect.action}d {which} dice limit by {amount}"))
+    result.applied.append(
+        AppliedEffect(effect, f"{effect.action}d {which} dice limit by {amount} for {subject.id}")
+    )
     _queue_entity_revert(repo, subject, effect)
 
 def _resolve_pool(target: str, entity, repo) -> tuple[str, str]:

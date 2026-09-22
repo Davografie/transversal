@@ -272,6 +272,10 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="limit", label="Limit", field_type="select",
                           required=True, default="total", options=["total", "effect"]),
         ],
+        # The limits live on the pool's owner, so the ref names whose limits move.
+        refs=[
+            RefDef("pool", "Pool", "pool"),
+        ],
         supports_duration=True,
         inverse=("modify_dice_limit", "decrease"),
     ),
@@ -290,6 +294,10 @@ ACTIONS: list[EffectActionMeta] = [
         context_fields=[
             EffectFieldDef(name="limit", label="Limit", field_type="select",
                           required=True, default="total", options=["total", "effect"]),
+        ],
+        # The limits live on the pool's owner, so the ref names whose limits move.
+        refs=[
+            RefDef("pool", "Pool", "pool"),
         ],
         supports_duration=True,
         inverse=("modify_dice_limit", "increase"),

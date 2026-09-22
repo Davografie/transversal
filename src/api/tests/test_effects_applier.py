@@ -1089,6 +1089,80 @@ def test_dice_limit_source_rating_condition_threads_source():
     assert result3.applied == []
 
 
+def test_dice_limit_pool_ref_targets_the_pool_owner():
+    """A pool ref moves the limits on that pool's owner, not the acting entity."""
+    repo = FakeRepo(entities=[_entity(id="char-2", name="Other")])
+    actor = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+        result="2", context={"limit": "total"},
+        refs={"pool": TargetRef(value="pool:char-2")},
+    )
+    result = apply_effects(actor, [effect], repo)
+    owner = repo.get_entity("char-2")
+    assert owner.total_dice_bonus == 2
+    assert actor.total_dice_bonus == 0
+    assert owner in result.entities_to_update
+    assert result.applied[0].summary == "increased total dice limit by 2 for char-2"
+
+
+def test_dice_limit_pool_ref_on_the_actor_applies_in_place():
+    """A pool ref naming the actor needs no redirect (and the owner has no location)."""
+    actor = _entity()  # current_location defaults to None
+    repo = FakeRepo(entities=[actor])
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+        result="1", context={"limit": "effect"},
+        refs={"pool": TargetRef(value="pool:char-1")},
+    )
+    result = apply_effects(actor, [effect], repo)
+    assert actor.effect_dice_bonus == 1
+    assert result.applied[0].summary == "increased effect dice limit by 1 for char-1"
+
+
+def test_dice_limit_without_pool_ref_falls_back_to_subject():
+    """No ref → the pre-existing subject behaviour stays (stored effects keep working)."""
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+        result="1", context={"limit": "total"},
+    )
+    apply_effects(entity, [effect], repo)
+    assert entity.total_dice_bonus == 1
+
+
+def test_dice_limit_unresolvable_pool_ref_falls_back_to_subject():
+    """A pool ref that names no entity falls back rather than erroring."""
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+        result="1", context={"limit": "total"},
+        refs={"pool": TargetRef(value="pool:no-such-entity")},
+    )
+    apply_effects(entity, [effect], repo)
+    assert entity.total_dice_bonus == 1
+
+
+def test_dice_limit_pool_ref_schedules_the_revert_on_the_owner():
+    """The inverse lands on the owner too, so expiry undoes that entity's bonus."""
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    repo = FakeRepo(entities=[_entity(id="char-2", name="Other")])
+    actor = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+        result="1", context={"limit": "total"},
+        refs={"pool": TargetRef(value="pool:char-2")},
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    apply_effects(actor, [effect], repo)
+    event = repo.scheduled_events[0]
+    assert event.target_type == "entity"
+    assert event.target_id == "char-2"
+    assert event.effect.action == "decrease"
+
+
 # ── Dice-pool mutation (add_dice) ────────────────────
 
 def test_resolve_pool_targets():

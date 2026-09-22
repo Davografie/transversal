@@ -146,6 +146,14 @@ def test_dice_limit_actions_declare_amount_and_limit():
     assert get_inverse("modify_dice_limit", "decrease") == (("modify_dice_limit", "increase"), False)
 
 
+def test_dice_limit_actions_target_a_pool():
+    """The limits live on the pool's owner, so both actions name a pool ref."""
+    for action in ("increase", "decrease"):
+        meta = _meta(action)
+        assert meta.effect_type == "modify_dice_limit"
+        assert [(r.name, r.element) for r in meta.refs] == [("pool", "pool")]
+
+
 def test_increase_by_effect_die_mirrors_reduce():
     """P1.8's positive comparison: 'set if the effect die beats the rating, else
     step up'. Same declared shape as its negative twin, opposite direction."""
