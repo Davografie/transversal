@@ -21,7 +21,7 @@ defineProps({
   refDef: { type: Object, required: true },
   modelValue: { type: Object, default: () => ({ steps: [] }) },
   sourceElement: { type: String, default: '' },
-  variables: { type: Array, default: () => [] },
+  variables: { type: Object, default: null },   // { name: {element, cardinality} }
 })
 const emit = defineEmits(['update:modelValue'])
 </script>
