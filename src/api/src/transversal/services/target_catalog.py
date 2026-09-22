@@ -184,6 +184,15 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "entity_id": ScalarField("traitsetting", "entity_id", "string", references="entity", label="entity"),
         "projection_id": ScalarField("traitsetting", "projection_id", "string", references="projection", label="projection"),
         "from_type": ScalarField("traitsetting", "from_type", "string", ("entity", "projection"), label="owner type"),
+        # A disabled instance is *on* the character but not in play — a landed
+        # portent, a spent agenda entry. The state lives on the instance, so a
+        # path filters it here rather than through `HAS_EFFECTIVE_TRAIT` (which
+        # matches by registry trait and cannot tell two portents apart).
+        "enabled": ScalarField("traitsetting", "enabled", "boolean", label="Enabled"),
+        # Where the instance sits in an ordered list (an agenda's portents).
+        # `None` means *unordered* — deliberately not coerced to 0, so an ordering
+        # step ranks a numbered entry above an unnumbered one and skips the rest.
+        "order": ScalarField("traitsetting", "order", "int", label="Order"),
         # Free-form labels carried by the *registry* trait this instance points at
         # (e.g. "violent"). A list, so it is matched with `contains` — the same
         # shape as `armed_sfx_ids` below. Read through the trait, not the setting

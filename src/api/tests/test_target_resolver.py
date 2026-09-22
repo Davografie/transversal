@@ -951,3 +951,89 @@ def test_instance_and_registry_tags_are_deduplicated():
     _, repo = _instance_tagged_world()
     ts = repo.traitsettings["kael:trait-calm"]
     assert _traitsetting_tags(ts, repo) == ["violent", "soothing", "calm"]
+
+
+# ── B130: filtering `enabled`, ordering by `order` ───────────
+
+class _FactionRepo(FakeRepo):
+    """A faction plus the trait instances anchored to it (a container's members).
+
+    `entity → traitsettings` filters nested instances out, so a *faction's* own
+    agenda entries are read here the way a real repo would serve them.
+    """
+
+    def __init__(self, faction, settings):
+        super().__init__(entities={"faction-1": faction},
+                         traitsettings={ts.id: ts for ts in settings})
+
+    def get_traitsettings_for_entity(self, eid):
+        # A faction's plain trait list (parent-anchored entries excluded).
+        return [ts for ts in self.traitsettings.values()
+                if ts.entity_id == eid and getattr(ts, "from_type", "") == "entity"]
+
+
+def _portent(ts_id, order, enabled=True, parent="faction-1:agenda"):
+    return NS(id=ts_id, trait_id="trait-portents", traitset_id="ts-agenda",
+              entity_id="faction-1", projection_id=None, rating="d6",
+              from_type="traitsetting", parent_traitsetting_id=parent,
+              order=order, enabled=enabled)
+
+
+def _agenda_world():
+    faction = NS(id="faction-1", type="faction", current_location=None,
+                 current_universe="earth", current_projection=None, razmerit=0)
+    agenda = NS(id="faction-1:agenda", trait_id="trait-agenda", traitset_id="ts-agenda",
+                entity_id="faction-1", projection_id=None, rating="d6",
+                from_type="entity", order=None, enabled=True)
+    portents = [
+        _portent("p1", 1),
+        _portent("p2", 2),
+        _portent("p3", 3, enabled=False),
+        _portent("p4", None),
+        _portent("p5", 4),
+    ]
+    return faction, _FactionRepo(faction, [agenda, *portents])
+
+
+def _agenda_path(*tail):
+    return spec(SelectStep(collection="self"), NavigateStep(edge="traitsettings"),
+                FilterStep(field="trait_id", operator="==", value="trait-agenda"),
+                NavigateStep(edge="subtraits"), *tail)
+
+
+def test_a_path_can_filter_on_enabled():
+    """A landed (disabled) portent is filtered out — per *instance*, which is what
+    the state means."""
+    faction, repo = _agenda_world()
+    s = _agenda_path(FilterStep(field="enabled", operator="==", value=True))
+    res = resolve(s, TargetContext(subject=faction, repo=repo))
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["p1", "p2", "p4", "p5"]
+
+    s2 = _agenda_path(FilterStep(field="enabled", operator="==", value=False))
+    res2 = resolve(s2, TargetContext(subject=faction, repo=repo))
+    assert [v.id for v in res2.values] == ["p3"]
+
+
+def test_a_path_can_order_by_order_and_take_the_highest():
+    """`top order` gives the last numbered entry, and an unnumbered one (`order`
+    is None) is skipped rather than read as "0" (`_to_number` refuses a None)."""
+    faction, repo = _agenda_world()
+    s = _agenda_path(AggregateStep(fn="top", field="order"))
+    res = resolve(s, TargetContext(subject=faction, repo=repo))
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["p5"]
+
+
+def test_bottom_order_gives_the_first_numbered_entry():
+    faction, repo = _agenda_world()
+    s = _agenda_path(AggregateStep(fn="bottom", field="order"))
+    res = resolve(s, TargetContext(subject=faction, repo=repo))
+    assert [v.id for v in res.values] == ["p1"]
+
+
+def test_max_order_reads_the_number_not_the_element():
+    faction, repo = _agenda_world()
+    s = _agenda_path(AggregateStep(fn="max", field="order"))
+    res = resolve(s, TargetContext(subject=faction, repo=repo))
+    assert res.values == [4]

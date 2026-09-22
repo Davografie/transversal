@@ -206,3 +206,31 @@ def test_a_type_filter_narrows_the_element():
 def test_the_narrowing_map_only_points_at_real_elements():
     for target in tc.ELEMENT_NARROWING[("entity", "type")].values():
         assert tc.element(target) is not None, target
+
+
+# ── B130: `enabled` and `order` on a trait instance ──────────
+
+def test_a_trait_instance_exposes_enabled():
+    """`enabled` is a real field on the instance, so a path can filter a landed
+    portent out (or in) — something `HAS_EFFECTIVE_TRAIT` cannot do, because it
+    matches by registry trait and returns the first instance's flag."""
+    f = tc.field("traitsetting", "enabled")
+    assert f is not None
+    assert f.type == "boolean"
+    assert tc.field_label(f) == "Enabled"
+    # Equality/membership only: a boolean has no order, so an ordering step is
+    # refused by the type-checker (and never offered by the wizard).
+    assert tc.operators_for(f) == ("==", "!=", "in", "not in")
+    assert not tc.is_orderable(f)
+
+
+def test_a_trait_instance_exposes_order_as_an_ordered_int():
+    f = tc.field("traitsetting", "order")
+    assert f is not None
+    assert f.type == "int"
+    assert tc.field_label(f) == "Order"
+    assert tc.is_orderable(f)
+    # An int field can carry the whole ordering/aggregate family.
+    names = [a.name for a in tc.aggregations_for(f.type)]
+    for fn in ("min", "max", "top", "bottom", "mean"):
+        assert fn in names, fn

@@ -81,6 +81,12 @@
             placeholder="value"
             @update:model-value="onEnumPicked(i, $event)"
           />
+          <select v-else-if="isBooleanField(i)" class="tsb-bool" :value="boolValue(i)"
+                  @change="onBooleanPicked(i, $event)">
+            <option value="">—</option>
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
           <span v-else-if="isTokenValue(step.value)" class="tsb-value-token">
             <select v-if="variableChoicesFor(i).length" :value="step.value" @change="onFilterValue(i, $event)">
               <option v-for="[name, entry] in variableChoicesFor(i)" :key="name" :value="`{${name}}`">
@@ -591,7 +597,30 @@ function coerceValue(type, raw) {
     const n = Number(raw)
     return raw !== '' && Number.isFinite(n) ? n : raw
   }
+  // A boolean has to *be* a boolean: a string "true" would not equal the
+  // instance's flag at resolve time.
+  if (type === 'boolean') {
+    if (raw === '' || raw == null) return ''
+    return raw === true || raw === 'true'
+  }
   return raw
+}
+
+// A boolean field renders as true/false rather than a text box that would store
+// the string.
+function isBooleanField(i) {
+  return fieldTypeFor(i) === 'boolean'
+}
+
+function boolValue(i) {
+  const v = steps.value[i]?.value
+  if (v === true) return 'true'
+  if (v === false) return 'false'
+  return ''
+}
+
+function onBooleanPicked(i, e) {
+  steps.value[i].value = coerceValue('boolean', e.target.value)
 }
 
 function onFilterValue(i, e) {
