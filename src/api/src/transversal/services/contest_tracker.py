@@ -289,13 +289,56 @@ class ContestTracker:
 
     # ── Manual (concurrent) contest flow ────────────────
 
+    def refresh_committed(
+        self,
+        location_id: str,
+        entity_id: str,
+        committed: CommittedResult,
+    ) -> None:
+        """Replace a side's committed result with an effect's adjusted one.
+
+        ``CommittedResult`` says further *trait* changes do not touch it, and that
+        stands. This is the one deliberate exception: an outcome effect (Step Up
+        Effect) changes the roll's own effect die, and the comparison must be made
+        on the value the table will see — one number per roll, not two.
+        """
+        state = self._contests.get(location_id, {}).get(entity_id)
+        if state is not None:
+            state.committed = committed
+
+    def store_committed(
+        self,
+        location_id: str,
+        entity_id: str,
+        committed: CommittedResult,
+    ) -> bool:
+        """Record one side's committed result **without** comparing.
+
+        Split out so the set endpoint can store the raw result, let outcome
+        effects rewrite it, and compare once afterwards. Returns whether a
+        contest state existed to write to.
+        """
+        challenger, defendant = self.get_contestants(location_id, entity_id)
+        if challenger is None or defendant is None:
+            logger.info(f"[contest] store_committed no-contestants loc={location_id} entity={entity_id}")
+            return False
+        if entity_id == challenger.entity_id:
+            challenger.committed = committed
+        else:
+            defendant.committed = committed
+        logger.info(
+            f"[contest] store_committed loc={location_id} entity={entity_id} total={committed.total} "
+            f"challenger_committed={challenger.committed is not None} defendant_committed={defendant.committed is not None}"
+        )
+        return True
+
     def set_result(
         self,
         location_id: str,
         entity_id: str,
         committed: CommittedResult,
     ) -> ContestOutcome | ContestCompare | None:
-        """Commit one side's rolled+picked result.
+        """Commit one side's rolled+picked result, then compare if both are in.
 
         Returns:
           - ``ContestOutcome`` when both sides have committed and the
@@ -304,20 +347,25 @@ class ContestTracker:
             now-losing side must give in or push.
           - ``None`` while still waiting for the other side.
         """
+        if not self.store_committed(location_id, entity_id, committed):
+            return None
+        return self.compare_if_ready(location_id, entity_id)
+
+    def compare_if_ready(
+        self,
+        location_id: str,
+        entity_id: str,
+    ) -> ContestOutcome | ContestCompare | None:
+        """Compare the two committed results, if both sides have set.
+
+        Its own step because a compare is **not idempotent** — it flips
+        initiative when the attacker beats the difficulty — so the set endpoint
+        commits, lets outcome effects change the roll, and compares exactly once
+        here, on the final value.
+        """
         challenger, defendant = self.get_contestants(location_id, entity_id)
         if challenger is None or defendant is None:
-            logger.info(f"[contest] set_result no-contestants loc={location_id} entity={entity_id}")
             return None
-
-        if entity_id == challenger.entity_id:
-            challenger.committed = committed
-        else:
-            defendant.committed = committed
-
-        logger.info(
-            f"[contest] set_result loc={location_id} entity={entity_id} total={committed.total} "
-            f"challenger_committed={challenger.committed is not None} defendant_committed={defendant.committed is not None}"
-        )
         if challenger.committed is not None and defendant.committed is not None:
             return self._compare(challenger, defendant)
         return None

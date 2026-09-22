@@ -96,7 +96,10 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
     otherwise a waiting flag.
     """
     ct = get_contest_tracker()
-    result = ct.set_result(location_id, entity_id, _to_committed(body))
+    # Store the raw result first (no compare): an outcome effect firing below may
+    # rewrite the effect die it carries, and the compare flips initiative, so it
+    # must run exactly once afterwards on the value the table will see.
+    ct.store_committed(location_id, entity_id, _to_committed(body))
 
     # The total + effect dice are now locked — fire ``on_set``.
     from transversal.services.state_events import fire_state_sfx
@@ -128,14 +131,23 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
     if body.tier:
         fire_armed(entity_id, "on_success" if body.tier != "fail" else "on_failure", "", roll_context)
 
+    # An outcome effect may have stepped the effect die / tier while those fired.
+    # The committed result already carries the stepped value — compare once, now.
+    result = ct.compare_if_ready(location_id, entity_id)
+
     challenger, defendant = ct.get_contestants(location_id, entity_id)
     challenger_id = challenger.entity_id if challenger else None
     defendant_id = defendant.entity_id if defendant else None
 
+    # Re-read this side's committed result: an outcome effect may have stepped the
+    # effect die or the tier, and the table must see what the contest resolves on.
+    committed_state = challenger if (challenger and challenger.entity_id == entity_id) else defendant
+    committed = committed_state.committed if committed_state is not None else None
+
     _broadcast("contest_set", location_id, entity_id, {
-        "total": body.total,
-        "effect_die": body.effect_die,
-        "tier": body.tier,
+        "total": committed.total if committed else body.total,
+        "effect_die": (committed.effect_die.value if committed and committed.effect_die else body.effect_die),
+        "tier": (committed.tier.value if committed and committed.tier else body.tier),
         "pipeline": body.pipeline,
         "challenger_id": challenger_id,
         "defendant_id": defendant_id,

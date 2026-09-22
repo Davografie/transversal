@@ -207,3 +207,50 @@ class TestManualContestFlow:
         r = client.post("/api/v1/locations/loc-1/pools/guard/set", json={"total": 12, "effect_die": "d6", "pipeline": "pool"})
         assert r.json()["winner"] == "player"
 
+
+
+def test_an_outcome_effect_steps_the_result_the_contest_resolves_on(client, monkeypatch):
+    """The set endpoint's order: store → fire effects → compare once.
+
+    A Step Up Effect firing on ``on_set`` must land on the committed result *before*
+    the compare, so the resolution uses the stepped effect die. Staged here by
+    applying the real effect from inside the fired callback, which is what the
+    engine does on that path.
+    """
+    from transversal.domain import CommittedResult
+    from transversal.domain import DieType
+    from transversal.domain import Entity
+    from transversal.domain import EntityType
+    from transversal.domain import Effect
+    from transversal.domain import EffectTiming
+    from transversal.services.effects_applier import apply_effects
+    from transversal.services.state_events import fire_state_sfx
+
+    from transversal.services import contest_tracker as ct_module
+    from transversal.services import state_events as se_module
+
+    _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
+    client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
+
+    real_fire = fire_state_sfx
+
+    def fire_then_step(entity_id, universe, event, context=None, **kw):
+        real_fire(entity_id, universe, event, context, **kw)
+        if event != "on_set":
+            return
+        # The committed result is already stored, so the effect can step it.
+        kael = Entity(id="kael", type=EntityType.CHARACTER, name="Kael",
+                      current_universe="earth", current_location="loc-1")
+        apply_effects(kael, [Effect(timing=EffectTiming.IMMEDIATE, type="modify_outcome",
+                                    action="step_up_effect")], None)
+
+    monkeypatch.setattr(se_module, "fire_state_sfx", fire_then_step)
+
+    r = client.post("/api/v1/locations/loc-1/pools/kael/set",
+                    json={"total": 12, "effect_die": "d6", "pipeline": "pool"})
+    assert r.status_code == 200, r.text
+
+    ct = ct_module.get_contest_tracker()
+    kael_state, _ = ct.get_contestants("loc-1", "kael")
+    # The stored result carries the stepped die, not the one the client sent.
+    assert kael_state.committed.effect_die == DieType.D8

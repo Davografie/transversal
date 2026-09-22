@@ -297,6 +297,10 @@ def _register_core_handlers(em, raz):
     for action in ("set_die", "step_up_die", "step_down_die", "double_die",
                    "split_die", "remove_die", "restore_die", "play_as_rating"):
         effect_registry.register("modify_roll", action, _commit)
+    # Outcome effects are state changes too (they rewrite the committed result),
+    # so they commit rather than passing through.
+    for action in ("step_up_effect", "step_up_outcome"):
+        effect_registry.register("modify_outcome", action, _commit)
     # The rest of the dice-pool actions are still resolver-context only.
     effect_registry.register("modify_roll", "*",
         lambda a, eid, u, ctx: None)  # passed through to resolver context

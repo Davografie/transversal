@@ -44,6 +44,10 @@ from transversal.services.effects_applier.handlers_pools import (
     _apply_roll_pool,
     _apply_set_traitset_limit,
 )
+from transversal.services.effects_applier.handlers_outcome import (
+    _apply_step_up_effect,
+    _apply_step_up_outcome,
+)
 from transversal.services.effects_applier.handlers_sfx import (
     _apply_grant_sfx,
 )
@@ -118,6 +122,10 @@ _MUTATION_HANDLERS = {
     ("transfer_razmerit", "spend"): _apply_spend,
     ("transfer_razmerit", "transfer"): _apply_transfer,
     ("life_path", "discover"): _apply_discover,
+    # The roll's own result, changed after it is set — the one effect family that
+    # acts on a committed result rather than on an entity (see handlers_outcome).
+    ("modify_outcome", "step_up_effect"): _apply_step_up_effect,
+    ("modify_outcome", "step_up_outcome"): _apply_step_up_outcome,
     ("relationship", "create"): _apply_relationship_create,
     ("travel", "move"): _apply_travel,
     ("location", "set"): _apply_set_location,
