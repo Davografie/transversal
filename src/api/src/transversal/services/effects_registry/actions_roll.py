@@ -186,16 +186,28 @@ ACTIONS: list[EffectActionMeta] = [
     EffectActionMeta(
         action_id="play_as_rating",
         label="Play as Rating",
-        description="Use a trait at a specific die size instead of its normal rating for this roll",
+        description=(
+            "Play a trait instance at a named die size for this roll instead of its "
+            "own rating — the dice already in the pool follow it"
+        ),
         category="cost",
         effect_type="modify_roll",
         effect_action="play_as_rating",
-        valid_timings=["IMMEDIATE"],
+        valid_timings=["IMMEDIATE", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
-        implicit_target="{source_trait}",
+        # Which trait plays at that size is a path, not a keyword: the rule's own
+        # source is `select source` (the trait instance itself), and any other
+        # instance is reachable too. This replaced an `implicit_target` whose
+        # `{source_trait}` token nothing ever bound, so the effect silently did
+        # nothing.
+        path_element=("traitsetting",),
+        supports_duration=True,
+        # The undo restores the whole prior rating, which is why it is `restore_die`
+        # rather than a step back.
+        inverse=("modify_roll", "restore_die"),
     ),
     EffectActionMeta(
         action_id="add_dice",

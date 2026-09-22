@@ -1805,9 +1805,13 @@ function resetEditor() {
   }
 }
 
-function syncPool(dice) {
+function syncPool(dice, { notify = true } = {}) {
   // Replace the local pool with the server's authoritative dice (e.g. when
-  // another entity offers a negative trait into this entity's pool).
+  // another entity offers a negative trait into this entity's pool, or when an
+  // effect played one of my traits at another size).
+  //
+  // `notify: false` is for a broadcast the server sent about a change it made
+  // itself: the panel must show it, but re-saving it would be an echo.
   if (phase.value !== Phase.ADDING) return
   if (!Array.isArray(dice)) return
   pool.splice(0, pool.length)
@@ -1822,7 +1826,7 @@ function syncPool(dice) {
     })
   }
   panelOpen.value = true
-  notifyPool()
+  if (notify) notifyPool()
 }
 
 function clearPool() {

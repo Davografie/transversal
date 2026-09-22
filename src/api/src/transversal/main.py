@@ -188,6 +188,7 @@ async def _startup():
         remove_legacy_buy_hitch_sfx,
         backfill_trait_default_sfx,
         backfill_source_kinds,
+        backfill_play_as_rating_targets,
     )
 
     _register_core_handlers(_get_em(), _get_raz())
@@ -211,6 +212,7 @@ async def _startup():
     remove_legacy_buy_hitch_sfx(repo)
     backfill_trait_default_sfx(repo)
     backfill_source_kinds(repo)
+    backfill_play_as_rating_targets(repo)
     repo.collapse_legacy_personal_relationship_types()
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:

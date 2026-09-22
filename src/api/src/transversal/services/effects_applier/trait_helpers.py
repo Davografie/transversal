@@ -115,6 +115,20 @@ def _find_conflicting_traitsetting(subject: Entity, effect: Effect, repo, target
         return _find_traitsetting(owner, repo, target)
     return conflict(subject.id, target, statement, _allow_duplicates(target, repo))
 
+def _resync_pool(ts: TraitSetting) -> None:
+    """Let an assembled pool follow its trait's new rating.
+
+    One home for the call, because a rating change and its undo must both do it —
+    a pool that follows the forward change but not the restore would show a
+    temporary size against a trait that reads its own. Tolerates a double without
+    an owning entity (there is then no pool to follow).
+    """
+    entity_id = getattr(ts, "entity_id", "")
+    if not entity_id:
+        return
+    from transversal.services.scene_state import resync_pool_dice_for_trait
+    resync_pool_dice_for_trait(entity_id, ts.id, [d.value for d in (ts.dice or [])])
+
 def _step_up(ts: TraitSetting) -> bool:
     """Step up the smallest die, capped at d12. Restores an empty rating to d4."""
     if not ts.dice:

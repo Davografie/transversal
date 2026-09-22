@@ -2418,3 +2418,98 @@ def test_a_named_result_is_selectable_by_a_later_step():
 
     assert [getattr(v, "id", v) for v in resolution.values] == ["char-1:beast"]
     assert not resolution.errors
+
+
+# ── Play as Rating ───────────────────────────────────
+
+def _play_effect(ts_id, die):
+    return Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
+                  action="play_as_rating", target=ts_id, result=die)
+
+
+def _play_repo(**overrides):
+    ts = _ts("distinction", [DieType.D8], traitset_id="ts-dist")
+    return FakeRepo(traits=[FakeTrait("distinction", "ts-dist")],
+                    traitsettings=[ts], **overrides), ts
+
+
+def test_play_as_rating_temporarily_sets_the_trait_rating():
+    """The rating *is* the played size, so a pooled die added later reads it too."""
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    repo, ts = _play_repo()
+    result = apply_effects(_entity(), [_play_effect(ts.id, "d4")], repo)
+    assert [d.value for d in ts.dice] == ["d4"]
+    assert result.updated_trait_settings == [ts]
+    assert "plays as d4" in result.applied[0].summary
+    store.clear_all()
+
+
+def test_play_as_rating_matches_every_die_the_trait_contributes():
+    """A 2d8 trait plays as 2d4 — a multi-die rating is not half-played."""
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    ts = _ts("technique", [DieType.D8, DieType.D8], traitset_id="ts-tech")
+    repo = FakeRepo(traits=[FakeTrait("technique", "ts-tech")], traitsettings=[ts])
+    apply_effects(_entity(), [_play_effect(ts.id, "d6")], repo)
+    assert [d.value for d in ts.dice] == ["d6", "d6"]
+    store.clear_all()
+
+
+def test_play_as_rating_pulls_the_open_pool_dice_to_the_new_size():
+    """The rolled pool follows its trait — `resync_pool_dice_for_trait`."""
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    repo, ts = _play_repo()
+    store.save_pool("loc-1", "char-1", [
+        {"die": "d8", "source_kind": "trait", "source_id": ts.id, "label": "Distinction", "ts_id": ts.id},
+    ])
+    apply_effects(_entity(current_location="loc-1"), [_play_effect(ts.id, "d4")], repo)
+    assert [d["die"] for d in store.get_pool("loc-1", "char-1")] == ["d4"]
+    store.clear_all()
+
+
+def test_play_as_rating_restores_the_prior_rating_on_expiry():
+    """The inverse is `restore_die`: it restores the whole prior list, and the pool
+    follows back."""
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    repo, ts = _play_repo()
+    store.save_pool("loc-1", "char-1", [
+        {"die": "d8", "source_kind": "trait", "source_id": ts.id, "label": "Distinction", "ts_id": ts.id},
+    ])
+    apply_effects(_entity(current_location="loc-1"), [_play_effect(ts.id, "d4")], repo)
+    assert [d.value for d in ts.dice] == ["d4"]
+
+    revert = Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll", action="restore_die",
+                    target=f"rating:0:{ts.id}", context={"prior_dice": ["d8"]})
+    apply_effects(_entity(current_location="loc-1"), [revert], repo)
+    assert [d.value for d in ts.dice] == ["d8"]
+    assert [d["die"] for d in store.get_pool("loc-1", "char-1")] == ["d8"]
+    store.clear_all()
+
+
+def test_play_as_rating_without_a_target_does_nothing():
+    repo, _ = _play_repo()
+    result = apply_effects(_entity(), [_play_effect("", "d4")], repo)
+    assert result.applied[0].summary == "no trait instance (unset)"
+
+
+def test_play_as_rating_declares_a_traitsetting_path_not_an_implicit_target():
+    """The old `implicit_target={source_trait}` was never bound by any firing path,
+    so the effect silently did nothing; the path is now the only way to name the
+    trait (the rule's own source is `select source`)."""
+    from transversal.services.effects_registry import get_action_meta
+    meta = get_action_meta("play_as_rating")
+    assert meta is not None
+    assert meta.implicit_target is None
+    assert meta.path_element == ("traitsetting",)
+    assert meta.inverse == ("modify_roll", "restore_die")

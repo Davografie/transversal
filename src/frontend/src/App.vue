@@ -1223,6 +1223,21 @@ function handleSseEvent(evt) {
         if (evt.data.location_id) {
           poolLocations.value = { ...poolLocations.value, [eid]: evt.data.location_id }
         }
+        // The server changed *my* pool itself — an effect played one of my traits
+        // at another size, say. The echo of my own edit does not qualify: the
+        // roller already shows those dice, so re-syncing would only re-save them.
+        // The server changed *my* pool itself — an effect played one of my traits
+        // at another size, say. The echo of my own edit does not qualify: the
+        // roller already shows those dice, so re-syncing would only re-save them.
+        // (A closure, so the switch's other cases keep their own locals.)
+        ;(() => {
+          const sig = (ds) => (Array.isArray(ds)
+            ? ds.map((d) => `${d.die}|${d.ts_id || d.source_id || ''}`).join(',')
+            : '')
+          if (sig(evt.data.dice) !== sig(remotePools.value[eid]?.dice)) {
+            diceRef.value?.syncPool(evt.data.dice, { notify: false })
+          }
+        })()
       } else if (eid && eid !== entityId.value) {
         const phase = evt.data.phase || 'adding'
         const hasDice = Array.isArray(evt.data.dice)

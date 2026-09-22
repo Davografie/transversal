@@ -1141,6 +1141,40 @@ def backfill_source_kinds(repo) -> int:
     return changed
 
 
+def backfill_play_as_rating_targets(repo) -> int:
+    """Idempotently move a **Play as Rating** effect off the dead token onto a path.
+
+    The action used to declare ``implicit_target="{source_trait}"``, and no firing
+    path ever bound that token — so every stored ``play_as_rating`` effect passed a
+    literal ``"{source_trait}"`` as its target and resolved to no trait instance,
+    silently doing nothing (``sfx-hinder`` is the live case). The action now takes a
+    targeting path, and the rule's own source is ``select source`` — the trait
+    instance itself, since the source kind is ``trait_setting``.
+
+    Runs on every startup; a no-op once migrated. Effects that already carry a spec,
+    or whose target is something other than the dead token, are left alone — an
+    author's own path is not this pass's business. Returns the number of effects
+    rewritten.
+    """
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    changed = 0
+    for sfx in repo.get_all_sfxs():
+        touched = False
+        for effect in (sfx.effects or []):
+            if effect.action != "play_as_rating" or effect.target_spec is not None:
+                continue
+            if (effect.target or "").strip() != "{source_trait}":
+                continue
+            effect.target_spec = TargetSpec(steps=[SelectStep(collection="source")])
+            effect.target = ""
+            touched = True
+        if touched:
+            repo.update_sfx(sfx)
+            changed += 1
+    return changed
+
+
 def _entity_name(repo, entity_id: str) -> str:
     entity = repo.get_entity(entity_id)
     return entity.name if entity else ""

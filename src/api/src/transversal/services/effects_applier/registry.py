@@ -295,7 +295,7 @@ def _register_core_handlers(em, raz):
     # scene store's pool — so these go through the mutation dispatch above rather
     # than the resolver passthrough.
     for action in ("set_die", "step_up_die", "step_down_die", "double_die",
-                   "split_die", "remove_die", "restore_die"):
+                   "split_die", "remove_die", "restore_die", "play_as_rating"):
         effect_registry.register("modify_roll", action, _commit)
     # The rest of the dice-pool actions are still resolver-context only.
     effect_registry.register("modify_roll", "*",

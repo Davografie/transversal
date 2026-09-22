@@ -525,7 +525,9 @@ def test_validation_names_what_a_take_back_cannot_undo():
 
     sfx = SFX(id="sfx-x", name="X", trigger="manual", effects=[
         _invertible_effect(),  # undoable
-        Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll", action="play_as_rating"),
+        # An outcome effect still has no inverse — `play_as_rating` used to be the
+        # example here until it gained one (its undo restores the prior rating).
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_outcome", action="step_up_outcome"),
     ])
 
     warnings = validate_sfx(sfx)

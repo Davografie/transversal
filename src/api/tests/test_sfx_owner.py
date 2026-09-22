@@ -863,6 +863,43 @@ def test_backfill_source_kinds_folds_buckets_and_traits(monkeypatch):
     assert sfo.backfill_source_kinds(repo) == 0
 
 
+def test_backfill_play_as_rating_moves_the_dead_token_onto_a_path():
+    """`implicit_target="{source_trait}"` was never bound by any firing path, so a
+    stored Play as Rating effect passed a literal string as its target and did
+    nothing (sfx-hinder is the live case). The pass rewrites exactly those."""
+    from types import SimpleNamespace
+    from transversal.domain import Effect, EffectTiming
+
+    import transversal.services.sfx_owner as sfo
+
+    dead = Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
+                  action="play_as_rating", target="{source_trait}", result="d4")
+    already = Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
+                     action="play_as_rating", target="kael:distinction", result="d4")
+    other = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                   action="gain", target="{source_trait}", result="d6")
+    repo = SimpleNamespace()
+    repo._sfxs = {
+        "sfx-hinder": SimpleNamespace(id="sfx-hinder", effects=[dead]),
+        "sfx-authored": SimpleNamespace(id="sfx-authored", effects=[already]),
+        "sfx-other": SimpleNamespace(id="sfx-other", effects=[other]),
+    }
+    repo.get_all_sfxs = lambda: list(repo._sfxs.values())
+    repo.update_sfx = lambda sfx: repo._sfxs.__setitem__(sfx.id, sfx)
+
+    assert sfo.backfill_play_as_rating_targets(repo) == 1
+    assert dead.target == ""
+    assert dead.target_spec is not None
+    assert [s.kind for s in dead.target_spec.steps] == ["select"]
+    assert dead.target_spec.steps[0].collection == "source"
+    # An author's own path and another action's token are left alone.
+    assert already.target == "kael:distinction" and already.target_spec is None
+    assert other.target == "{source_trait}"
+
+    # Idempotent.
+    assert sfo.backfill_play_as_rating_targets(repo) == 0
+
+
 # ── Availability narrowing + record cache ─────────────────────
 #
 # Availability runs on every state event, every roll and every "what can I do"

@@ -13,6 +13,7 @@ from transversal.services.effects_applier.datatypes import (
 from transversal.services.effects_applier.handlers_change_die import (
     _apply_change_double,
     _apply_change_remove,
+    _apply_play_as_rating,
     _apply_restore_die,
     _apply_change_set,
     _apply_change_split,
@@ -106,6 +107,9 @@ _MUTATION_HANDLERS = {
     ("modify_roll", "double_die"): _apply_change_double,
     ("modify_roll", "split_die"): _apply_change_split,
     ("modify_roll", "remove_die"): _apply_change_remove,
+    # Playing a trait at another size for the roll: the rating is temporarily that
+    # die, so the pooled dice follow their trait.
+    ("modify_roll", "play_as_rating"): _apply_play_as_rating,
     # The undo of a change-die effect, from the prior dice the handler recorded.
     ("modify_roll", "restore_die"): _apply_restore_die,
     ("modify_trait", "change"): _apply_change_trait,

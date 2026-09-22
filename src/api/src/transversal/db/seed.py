@@ -14,6 +14,7 @@ from transversal.domain import (
     TraitSetting,
     Zone,
 )
+from transversal.services.target_spec import SelectStep, TargetSpec
 
 
 def seed_sfx_registry(repo: EntityRepository, engine=None) -> None:
@@ -132,7 +133,8 @@ def seed_sfx_registry(repo: EntityRepository, engine=None) -> None:
             effects=[
                 Effect(timing=EffectTiming.IMMEDIATE,
                          type="modify_roll", action="play_as_rating",
-                         target="{source_trait}", result="d4"),
+                         target_spec=TargetSpec(steps=[SelectStep(collection="source")]),
+                         result="d4"),
                 Effect(timing=EffectTiming.IMMEDIATE,
                          type="transfer_razmerit", action="earn",
                          target="self", result="1"),

@@ -41,6 +41,7 @@ from transversal.services.effects_applier.reverts import (
 )
 from transversal.services.effects_applier.trait_helpers import (
     _die_opt,
+    _resync_pool,
 )
 
 
@@ -276,6 +277,10 @@ def _apply_restore_die(entity, effect: Effect, repo, result) -> None:
         ts.dice = [DieType(d) for d in (context.get("prior_dice") or [])]
         result.updated_trait_settings.append(ts)
         result.applied.append(AppliedEffect(effect, f"restored {ts_id}'s rating", ts.id))
+        # The assembled pool follows its trait's rating — in *both* directions, or
+        # restoring a played-as rating would leave the pool showing the temporary
+        # size while the trait reads its own.
+        _resync_pool(ts)
         return
 
     prior = context.get("prior_rating")
@@ -325,3 +330,54 @@ def _apply_change_split(entity, effect, repo, result):
 
 def _apply_change_remove(entity, effect, repo, result):
     _apply_change(entity, effect, repo, result, "remove")
+
+
+# ── Play as Rating ────────────────────────────────────────────
+
+def _apply_play_as_rating(entity, effect, repo, result):
+    """Play a trait instance at a named die size for this roll.
+
+    The trait's **rating is temporarily that die**, which is what makes "play as
+    d4" reach the table: the assembled pool dice follow their trait
+    (:func:`resync_pool_dice_for_trait`), and a die added afterwards reads the
+    rating the trait has now. The alternative — rewriting only the pool entries —
+    would leave a die added later at the trait's own size.
+
+    The undo is again this action: the revert carries the rating the trait had
+    (``prior_dice``), so an expiry restores it and the pool follows back. A
+    duration is therefore meaningful, and a manual activation books the same hold
+    every other rating change does.
+    """
+    ts = repo.get_traitsetting(effect.target) if (repo and effect.target) else None
+    if ts is None:
+        result.applied.append(AppliedEffect(effect, f"no trait instance {effect.target or '(unset)'}"))
+        return
+
+    prior = (effect.context or {}).get("prior_dice")
+    if prior is not None:
+        # The revert: restore the rating the trait had, and let the pool follow.
+        ts.dice = [d for d in (_die_opt(v) for v in prior) if d is not None]
+        result.updated_trait_settings.append(ts)
+        result.applied.append(AppliedEffect(
+            effect, f"{ts.id} plays at its own rating again", ts.id))
+        _resync_pool(ts)
+        return
+
+    die = _die_opt(effect.result)
+    if die is None:
+        result.applied.append(AppliedEffect(effect, f"no die rating to play as ({effect.result!r})"))
+        return
+    before = [d.value for d in (ts.dice or [])]
+    if ts.dice:
+        # Every die the trait contributes plays at the named size — a 2d8 trait
+        # is not half-played as a d4.
+        ts.dice = [die for _ in ts.dice]
+    else:
+        ts.dice = [die]
+    result.updated_trait_settings.append(ts)
+    result.applied.append(AppliedEffect(effect, f"{ts.id} plays as {die.value}", ts.id))
+    _resync_pool(ts)
+    # The undo is addressed as a *rating die* reference: `restore_die` restores the
+    # whole prior list, and its branch is keyed on the target parsing as one.
+    _queue_trait_revert(repo, ts, effect, target=f"rating:0:{ts.id}",
+                        context_extra={"prior_dice": before})
