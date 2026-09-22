@@ -579,6 +579,108 @@ def test_copy_trait_without_a_resolved_ref_does_nothing():
     assert "no trait instance to copy" in result.applied[0].summary
 
 
+# ── Gain honours the set's duplicate rule ────────────
+
+def _gain_with_statement(action, trait_id, die, statement):
+    return Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action=action,
+        target=trait_id, result=die, context={"statement": statement},
+    )
+
+
+def test_gain_allows_a_distinct_statement_when_the_set_allows_duplicates():
+    """The portent model: one registry trait, many instances, keyed by statement."""
+    owned = _ts("portent", [DieType.D6], traitset_id="ts-agenda", statement="Portent 3")
+    repo = FakeRepo(
+        traits=[FakeTrait("portent", "ts-agenda")], traitsettings=[owned],
+        traitsets=[FakeTraitSet("ts-agenda", allow_duplicates=True)],
+    )
+    result = apply_effects(_entity(), [_gain_with_statement("gain", "portent", "d6", "Portent 5")], repo)
+    assert len(result.new_trait_settings) == 1
+    gained = result.new_trait_settings[0]
+    assert gained.statement == "Portent 5"
+    assert gained.id != "char-1:portent"      # statement-distinguished key
+    assert gained.id != owned.id
+
+
+def test_gain_refuses_a_same_statement_duplicate_when_the_set_allows_duplicates():
+    owned = _ts("portent", [DieType.D6], traitset_id="ts-agenda", statement="Portent 3")
+    repo = FakeRepo(
+        traits=[FakeTrait("portent", "ts-agenda")], traitsettings=[owned],
+        traitsets=[FakeTraitSet("ts-agenda", allow_duplicates=True)],
+    )
+    result = apply_effects(_entity(), [_gain_with_statement("gain", "portent", "d6", "Portent 3")], repo)
+    assert result.new_trait_settings == []
+    assert "already present" in result.applied[0].summary
+
+
+def test_gain_still_refuses_a_distinct_statement_when_duplicates_are_disallowed():
+    """The rule is the *set's*, not the statement's: a normal set stays one-per-trait."""
+    owned = _ts("medicine", [DieType.D6], traitset_id="ts-x", statement="Herbalism")
+    repo = FakeRepo(traits=[FakeTrait("medicine", "ts-x")], traitsettings=[owned])
+    result = apply_effects(_entity(), [_gain_with_statement("gain", "medicine", "d6", "Field surgery")], repo)
+    assert result.new_trait_settings == []
+    assert "already present" in result.applied[0].summary
+
+
+def test_gain_creates_distinct_ids_for_distinct_statements():
+    repo = FakeRepo(
+        traits=[FakeTrait("portent", "ts-agenda")],
+        traitsets=[FakeTraitSet("ts-agenda", allow_duplicates=True)],
+    )
+    entity = _entity()
+    result = apply_effects(
+        entity,
+        [_gain_with_statement("gain", "portent", "d6", "Portent 1"),
+         _gain_with_statement("gain", "portent", "d6", "Portent 2")],
+        repo,
+    )
+    ids = [ts.id for ts in result.new_trait_settings]
+    assert len(ids) == 2
+    assert ids[0] != ids[1]
+
+
+def test_gain_or_step_up_creates_a_second_instance_for_a_distinct_statement():
+    """A duplicate-allowing set gets a new instance, not a step-up of the first."""
+    owned = _ts("portent", [DieType.D6], traitset_id="ts-agenda", statement="Portent 3")
+    repo = FakeRepo(
+        traits=[FakeTrait("portent", "ts-agenda")], traitsettings=[owned],
+        traitsets=[FakeTraitSet("ts-agenda", allow_duplicates=True)],
+    )
+    result = apply_effects(
+        _entity(), [_gain_with_statement("gain_or_step_up", "portent", "d6", "Portent 5")], repo)
+    assert len(result.new_trait_settings) == 1
+    assert result.updated_trait_settings == []
+    assert owned.dice == [DieType.D6]          # the existing instance was not stepped
+
+
+def test_cortex_gain_allows_a_distinct_statement_when_the_set_allows_duplicates():
+    owned = _ts("portent", [DieType.D6], traitset_id="ts-agenda", statement="Portent 3")
+    repo = FakeRepo(
+        traits=[FakeTrait("portent", "ts-agenda")], traitsettings=[owned],
+        traitsets=[FakeTraitSet("ts-agenda", allow_duplicates=True)],
+    )
+    result = apply_effects(
+        _entity(), [_gain_with_statement("cortex_gain", "portent", "d8", "Portent 5")], repo)
+    assert len(result.new_trait_settings) == 1
+    assert result.new_trait_settings[0].statement == "Portent 5"
+    assert owned.dice == [DieType.D6]          # the existing instance was not replaced
+
+
+def test_negative_gain_keeps_the_complication_suffix_in_its_key():
+    """A live row depends on the shape (`gmc-…:trait-…:complication`)."""
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-1")])
+    negative = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                      target="hazard", result="d6", negative=True)
+    result = apply_effects(_entity(), [negative], repo)
+    assert result.new_trait_settings[0].id == "char-1:hazard:complication"
+    positive = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                      target="hazard", result="d6")
+    other = _entity(id="char-2")
+    result2 = apply_effects(other, [positive], FakeRepo(traits=[FakeTrait("hazard", "ts-1")]))
+    assert result2.new_trait_settings[0].id == "char-2:hazard"
+
+
 # ── Trait move (steal) ───────────────────────
 
 def _move_effect(recipient_id, source_ts_id):

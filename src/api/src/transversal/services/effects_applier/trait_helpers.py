@@ -63,6 +63,58 @@ def _find_traitsetting_by_target(subject: Entity, effect: Effect, repo, target: 
                 return ts
     return _find_traitsetting(_trait_owner(subject, effect, repo), repo, target)
 
+def _allow_duplicates(trait_id: str, repo) -> bool:
+    """Whether the trait's set permits more than one instance (default refuse)."""
+    traitset_id = _resolve_traitset_id(trait_id, repo)
+    get_traitset = getattr(repo, "get_traitset_by_id", None)
+    traitset = get_traitset(traitset_id) if traitset_id and get_traitset else None
+    return bool(getattr(traitset, "allow_duplicates", False))
+
+def _resolve_new_traitsetting_id(owner: tuple[str, str], trait_id: str, statement: str, repo, *, negative: bool = False) -> str:
+    """The key a new instance lands under, honouring the set's duplicate rule.
+
+    A set that allows duplicates distinguishes same-trait instances by their
+    statement, so the id and the collision check have to use the same scheme —
+    this is the one place that decides it for the gain path (copy/move ask the
+    repository directly, because there the statement comes from the *source*
+    instance rather than from the effect's context).
+
+    A **negative** instance keeps the ``:complication`` suffix it has always had,
+    so the polarity stays visible in the key and a positive instance of the same
+    registry trait on the same owner cannot take its place — one live row
+    (``gmc-40729203:trait-148427798:complication``) depends on the old shape.
+    """
+    owner_id = owner[1]
+    resolve = getattr(repo, "resolve_traitsetting_id", None)
+    base = (resolve(owner_id, trait_id, statement, _allow_duplicates(trait_id, repo))
+            if resolve is not None else f"{owner_id}:{trait_id}")
+    return f"{base}:complication" if negative else base
+
+def _find_conflicting_traitsetting(subject: Entity, effect: Effect, repo, target: str, statement: str) -> Optional[TraitSetting]:
+    """The existing instance a gain of ``target`` would collide with.
+
+    The gain path's twin of ``_find_traitsetting_by_target``: it keeps the
+    direct-instance lookup (a target may *be* a traitsetting id) but asks the
+    repository's duplicate rule instead of treating "any instance of the trait"
+    as a collision. A set that allows duplicates collides only on the same
+    statement, which is what makes two portents of one registry trait possible.
+
+    Only entity-anchored traits have this rule — a relationship-anchored trait is
+    one instance per edge by construction — so that case keeps the plain lookup.
+    """
+    if target:
+        getter = getattr(repo, "get_traitsetting", None)
+        if getter is not None and getter(target) is not None:
+            return getter(target)
+    owner = _trait_owner(subject, effect, repo)
+    if owner[0] != "entity":
+        return _find_traitsetting(owner, repo, target)
+    conflict = getattr(repo, "find_traitsetting_collision", None)
+    if conflict is None:
+        # No duplicate rule to consult (a bare repo double) — refuse as before.
+        return _find_traitsetting(owner, repo, target)
+    return conflict(subject.id, target, statement, _allow_duplicates(target, repo))
+
 def _step_up(ts: TraitSetting) -> bool:
     """Step up the smallest die, capped at d12. Restores an empty rating to d4."""
     if not ts.dice:
@@ -181,7 +233,8 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
             from_type = "projection"
             projection_id = entity.current_projection
     return TraitSetting(
-        id=f"{owner_id}:{trait_id}{':complication' if polarity == Polarity.NEGATIVE else ''}",
+        id=_resolve_new_traitsetting_id(owner, trait_id, statement, repo,
+                                       negative=polarity == Polarity.NEGATIVE),
         entity_id=owner_id,
         trait_id=trait_id,
         traitset_id=traitset_id,

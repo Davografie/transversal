@@ -24,6 +24,7 @@ from transversal.services.effects_applier.targeting import (
 from transversal.services.effects_applier.trait_helpers import (
     _ctx,
     _die,
+    _find_conflicting_traitsetting,
     _find_traitsetting_by_target,
     _has_steps,
     _new_traitsetting,
@@ -44,12 +45,13 @@ def _apply_gain(entity, effect, repo, result):
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
-    if _find_traitsetting_by_target(subject, effect, repo, target):
+    statement = _ctx(effect, "statement")
+    if _find_conflicting_traitsetting(subject, effect, repo, target, statement):
         result.applied.append(AppliedEffect(effect, f"trait {target} already present"))
         return
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),
-                           rating_type=_rating_type(effect), statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
+                           rating_type=_rating_type(effect), statement=statement, notes=_ctx(effect, "notes"))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
     _queue_entity_revert(repo, subject, effect, target=target)
@@ -220,7 +222,8 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
-    existing = _find_traitsetting_by_target(subject, effect, repo, target)
+    statement = _ctx(effect, "statement")
+    existing = _find_conflicting_traitsetting(subject, effect, repo, target, statement)
     steps = _steps(effect)
     if existing:
         if _step_up_trait(subject, existing, target, effect, result, repo, steps=steps):
@@ -231,7 +234,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
         return
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),
-                           rating_type=_rating_type(effect), statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
+                           rating_type=_rating_type(effect), statement=statement, notes=_ctx(effect, "notes"))
     if _has_steps(effect):
         _step_up_trait(subject, ts, target, effect, result, repo, steps=steps)
     result.new_trait_settings.append(ts)
@@ -257,7 +260,8 @@ def _apply_cortex_gain(entity, effect, repo, result):
     owner = _trait_owner(subject, effect, repo)
     die = _die(effect.result)
     negative = bool(effect.negative)
-    existing = _find_traitsetting_by_target(subject, effect, repo, target)
+    statement = _ctx(effect, "statement")
+    existing = _find_conflicting_traitsetting(subject, effect, repo, target, statement)
     if existing:
         if not existing.dice:
             existing.dice = [die]
@@ -276,7 +280,7 @@ def _apply_cortex_gain(entity, effect, repo, result):
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         return
     ts = _new_traitsetting(owner, target, die, repo, negative=negative,
-                           rating_type=_rating_type(effect), statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
+                           rating_type=_rating_type(effect), statement=statement, notes=_ctx(effect, "notes"))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
 
