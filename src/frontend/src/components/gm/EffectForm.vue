@@ -36,20 +36,21 @@
           {{ '{' + v.name + '}' }}<em class="ee-var-type">{{ v.type }}</em>
         </button>
       </div>
-      <!-- A rule that names its subject puts that ref first: "Trait to Move"
-           reads before "Give To". Same block as the one after the fields. -->
-      <template v-if="selectedAction.refsFirst">
-        <div v-for="r in selectedAction.refs" :key="r.name" class="ee-field ee-ref">
-          <label>{{ r.label }} <em class="ee-ref-element">{{ r.element }}</em></label>
-          <TargetSpecBuilder
-            v-model="newEffect.refs[r.name].spec"
-            :destination="{ elements: [r.element] }"
-            :source-element="sourceElement"
-            :variables="scopedVariables"
-          />
-        </div>
-      </template>
-      <div v-for="f in visibleFields" :key="f.name" class="ee-field">
+      <!-- The action's named refs, in the order the action declares
+           (`fieldOrder`); when it says nothing about them, a rule that names its
+           subject puts that ref first ("Trait to Move" reads before "Give To"). -->
+      <EffectRefField
+        v-if="refsFirst"
+        v-for="r in refsBefore"
+        :key="r.name"
+        :ref-def="r"
+        :model-value="newEffect.refs[r.name]?.spec || { steps: [] }"
+        :source-element="sourceElement"
+        :variables="scopedVariables"
+        @update:model-value="newEffect.refs[r.name].spec = $event"
+      />
+      <template v-if="fieldSlots.includes('fields')">
+      <div v-for="f in fieldsInOrder" :key="f.name" class="ee-field">
         <label>{{ f.label }}</label>
         <p v-if="f.description" class="ee-field-help">{{ f.description }}</p>
 
@@ -112,7 +113,7 @@
           />
         </template>
 
-        <template v-else>
+        <template v-else-if="!refsFirst">
           <template v-if="isResultDieField(f)">
             <div class="ee-result-mode">
               <button type="button" :class="{ active: resultMode === 'die' }" @click="resultMode = 'die'">Die</button>
@@ -130,18 +131,20 @@
           <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
         </template>
       </div>
-      <!-- refs-first actions repeat this block above the fields (see refsFirst). -->
-      <template v-if="!selectedAction.refsFirst">
-        <div v-for="r in selectedAction.refs" :key="r.name" class="ee-field ee-ref">
-          <label>{{ r.label }} <em class="ee-ref-element">{{ r.element }}</em></label>
-          <TargetSpecBuilder
-            v-model="newEffect.refs[r.name].spec"
-            :destination="{ elements: [r.element] }"
-            :source-element="sourceElement"
-            :variables="scopedVariables"
-          />
-        </div>
       </template>
+      <!-- Refs the declared order did not place render after the fields, which is
+           the default reading order for a secondary path (Attune's "life it comes
+           from"). -->
+      <EffectRefField
+        v-if="!refsFirst"
+        v-for="r in refsAfter"
+        :key="r.name"
+        :ref-def="r"
+        :model-value="newEffect.refs[r.name]?.spec || { steps: [] }"
+        :source-element="sourceElement"
+        :variables="scopedVariables"
+        @update:model-value="newEffect.refs[r.name].spec = $event"
+      />
       <TraitInstanceEditor
         v-if="isGainAction"
         mode="single"
@@ -160,6 +163,7 @@
         @update:statement="newEffect.context.statement = $event"
         @update:notes="newEffect.context.notes = $event"
       />
+      <template v-if="fieldSlots.includes('contextFields')">
       <div v-for="f in visibleContextFields" :key="f.name" class="ee-field">
         <label>{{ f.label }}</label>
         <DiePicker
@@ -191,6 +195,7 @@
         <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.context[f.name]" type="number" :placeholder="f.default || ''" />
         <input v-else v-model="newEffect.context[f.name]" type="text" :placeholder="f.default || ''" />
       </div>
+      </template>
       <div v-if="hasExtraContext" class="ee-field">
         <label>Other context</label>
         <div v-for="(value, key) in newEffect.extraContext" :key="key" class="ee-extra-row">
@@ -238,6 +243,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import TargetSpecBuilder from './TargetSpecBuilder.vue'
+import EffectRefField from './EffectRefField.vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
@@ -511,6 +517,50 @@ const visibleContextFields = computed(() => {
     return true
   })
 })
+
+// ── Declared input order ─────────────────────────────────────
+//
+// An action may name the order its inputs read in (`fieldOrder`), because the
+// default is not always right: a dice limit's pool is the *subject* ("whose
+// limit"), so it belongs before the limit chosen and the amount applied. Names
+// may be refs or fields — the editor only cares where each one goes.
+//
+// Unnamed items keep their default place: refs, then fields, both after the gain
+// editor. `refsFirst` still says a *secondary* ref reads above the field block,
+// which is what makes "Trait to Move" read before "Give To".
+const fieldOrderIndex = computed(() => {
+  const idx = {}
+  ;(selectedAction.value?.fieldOrder || []).forEach((name, i) => { idx[name] = i })
+  return idx
+})
+
+const fieldsInOrder = computed(() => {
+  const all = [...(visibleFields.value || []), ...(visibleContextFields.value || [])]
+  const rank = fieldOrderIndex.value
+  return all
+    .map((f, i) => ({ f, rank: rank[f.name] ?? Number.MAX_SAFE_INTEGER, i }))
+    .sort((a, b) => (a.rank - b.rank) || (a.i - b.i))
+    .map(x => x.f)
+})
+
+const refsInOrder = computed(() => {
+  const refs = selectedAction.value?.refs || []
+  const rank = fieldOrderIndex.value
+  return [...refs].sort((a, b) =>
+    (rank[a.name] ?? Number.MAX_SAFE_INTEGER) - (rank[b.name] ?? Number.MAX_SAFE_INTEGER))
+})
+
+// A declared order ranks refs among fields, so it puts them above the field block
+// itself; without one, `refsFirst` decides.
+const refsFirst = computed(() =>
+  !!(selectedAction.value?.refsFirst || (selectedAction.value?.fieldOrder || []).length))
+
+// The block order follows the refs' side; the context fields join the field block,
+// so the named position of a context field (a dice limit's `limit`) is honoured.
+const fieldSlots = computed(() => (refsFirst.value ? ['refs', 'fields'] : ['fields', 'refs']))
+
+const refsBefore = computed(() => (refsFirst.value ? refsInOrder.value : []))
+const refsAfter = computed(() => (refsFirst.value ? [] : refsInOrder.value))
 
 function isResultDieField(f) {
   return f.name === 'result' && f.fieldType === 'die_select'

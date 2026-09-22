@@ -227,3 +227,6 @@ class EffectActionMeta:
     # Render refs above the fields: a ref naming the *subject* ("Trait to Move")
     # reads before the field naming where it goes.
     refs_first: bool = False
+    # Explicit render order for this action's inputs, by name (refs, fields and
+    # context fields alike). Empty = the default grouping.
+    field_order: list[str] = strawberry.field(default_factory=list)

@@ -277,3 +277,31 @@ def test_change_trait_asks_for_the_instance_and_the_definition_separately():
 
     assert meta.supports_duration is True
     assert get_inverse("modify_trait", "change") == (("modify_trait", "change"), True)
+
+
+def test_the_dice_limit_actions_declare_their_reading_order():
+    """Whose limit, which limit, then how much.
+
+    The default grouping puts fields before refs, so the pool picker rendered last
+    and the amount first — the reverse of how the sentence reads. `field_order`
+    names the order, and it may name refs and context fields as well as fields
+    (the editor does not care which is which).
+    """
+    for action_id in ("increase_dice_limit", "decrease_dice_limit"):
+        meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
+        assert meta.field_order == ("pool", "limit", "result")
+        # Everything it names is something it actually declares, so a typo would
+        # be a field that silently never moves.
+        declared = (
+            {f.name for f in meta.fields}
+            | {f.name for f in meta.context_fields}
+            | {r.name for r in meta.refs}
+        )
+        assert set(meta.field_order) <= declared, (action_id, declared)
+
+
+def test_an_action_need_not_declare_a_render_order():
+    """Empty means the long-standing default (refs by `refs_first`, then fields),
+    so only the actions that need it carry one."""
+    meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "gain_trait")
+    assert meta.field_order == ()

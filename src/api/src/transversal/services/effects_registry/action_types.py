@@ -86,6 +86,16 @@ class EffectActionMeta:
     # Move") reads before the field that names where it goes; an action whose ref
     # is a secondary path (Attune's "life it comes from") keeps the default order.
     refs_first: bool = False
+    # The order the editor renders this action's inputs in, by name, when the
+    # default does not read right. Names may be refs, fields or context fields —
+    # the editor does not care which, only where each one goes. Anything not named
+    # keeps its default place (refs, then fields, then context fields), so an
+    # action only has to say what it wants moved.
+    #
+    # The dice-limit pair is the case that motivated it: the pool is the *subject*
+    # ("whose limit"), so it reads before the limit being chosen and the amount
+    # applied — where the default put the amount first and the pool last.
+    field_order: tuple[str, ...] = ()
     supports_duration: bool = False      # UI shows a duration/timers builder
     # When a duration is meaningful for *some* destinations but not others, name
     # the elements it is offered for. The change-die family changes a die in a

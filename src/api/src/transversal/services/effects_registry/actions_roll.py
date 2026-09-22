@@ -288,6 +288,9 @@ ACTIONS: list[EffectActionMeta] = [
         refs=[
             RefDef("pool", "Pool", "pool"),
         ],
+        # Whose limit, which limit, then how much: the pool is the subject, so it
+        # reads first rather than last.
+        field_order=("pool", "limit", "result"),
         supports_duration=True,
         inverse=("modify_dice_limit", "decrease"),
     ),
@@ -311,6 +314,7 @@ ACTIONS: list[EffectActionMeta] = [
         refs=[
             RefDef("pool", "Pool", "pool"),
         ],
+        field_order=("pool", "limit", "result"),
         supports_duration=True,
         inverse=("modify_dice_limit", "increase"),
     ),

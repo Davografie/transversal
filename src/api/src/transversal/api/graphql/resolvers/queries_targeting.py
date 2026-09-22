@@ -91,6 +91,7 @@ class QueriesTargeting:
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,
                 refs=[GqlRefDef(name=r.name, label=r.label, element=r.element) for r in m.refs],
                 refs_first=m.refs_first,
+                field_order=list(m.field_order),
             ) for m in EFFECT_ACTION_REGISTRY if not m.retired
         ]
 
