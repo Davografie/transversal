@@ -36,25 +36,26 @@
           {{ '{' + v.name + '}' }}<em class="ee-var-type">{{ v.type }}</em>
         </button>
       </div>
-      <!-- The action's named refs, in the order the action declares
-           (`fieldOrder`); when it says nothing about them, a rule that names its
-           subject puts that ref first ("Trait to Move" reads before "Give To"). -->
+      <!-- The action's refs and fields, rendered from ONE ordered list: a declared
+           `fieldOrder` may interleave them (a dice limit's pool reads before the
+           limit it moves), and an undeclared one keeps the default — refs, then
+           fields. Context fields are in the same list, so they can be positioned
+           too. -->
+      <template v-for="item in orderedInputs" :key="item.kind + (item.f.name || '')">
       <EffectRefField
-        v-if="refsFirst"
-        v-for="r in refsBefore"
-        :key="r.name"
-        :ref-def="r"
-        :model-value="newEffect.refs[r.name]?.spec || { steps: [] }"
+        v-if="item.kind === 'ref'"
+        :ref-def="item.f"
+        :model-value="newEffect.refs[item.f.name]?.spec || { steps: [] }"
         :source-element="sourceElement"
         :variables="scopedVariables"
-        @update:model-value="newEffect.refs[r.name].spec = $event"
+        @update:model-value="newEffect.refs[item.f.name].spec = $event"
       />
-      <template v-if="fieldSlots.includes('fields')">
-      <div v-for="f in fieldsInOrder" :key="f.name" class="ee-field">
-        <label>{{ f.label }}</label>
-        <p v-if="f.description" class="ee-field-help">{{ f.description }}</p>
+      <template v-else>
+      <div class="ee-field">
+        <label>{{ item.f.label }}</label>
+        <p v-if="item.f.description" class="ee-field-help">{{ item.f.description }}</p>
 
-        <div v-if="isScopedTargetField(f)" class="ee-target-group">
+        <div v-if="isScopedTargetField(item.f)" class="ee-target-group">
           <!-- An action whose target must be a path declares destinations but no
                picker kind, and has no keyword left to type — so the mode row
                would be a select with one option. It is not rendered at all; the
@@ -68,13 +69,13 @@
           </div>
           <input
             v-if="newEffect.targetMode === 'literal' && !selectedAction.targetKind && !pathOnlyTarget"
-            v-model="newEffect.fields[f.name]"
+            v-model="newEffect.fields[item.f.name]"
             type="text"
-            :placeholder="f.default || 'strategy…'"
+            :placeholder="item.f.default || 'strategy…'"
           />
           <TargetPicker
             v-else-if="newEffect.targetMode === 'literal'"
-            :model-value="newEffect.fields[f.name] || ''"
+            :model-value="newEffect.fields[item.f.name] || ''"
             :kind="selectedAction.targetKind"
             :scope="literalTargetScope"
             :allow-filters="false"
@@ -96,14 +97,14 @@
           />
         </div>
 
-        <template v-else-if="isEntityField(f)">
+        <template v-else-if="isEntityField(item.f)">
           <div class="ee-mode-row">
             <select v-model="newEffect.entityMode">
               <option value="literal">Pick specific</option>
               <option value="spec">Targeting path</option>
             </select>
           </div>
-          <input v-if="newEffect.entityMode === 'literal'" v-model="newEffect.fields[f.name]" type="text" placeholder="self" />
+          <input v-if="newEffect.entityMode === 'literal'" v-model="newEffect.fields[item.f.name]" type="text" placeholder="self" />
           <TargetSpecBuilder
             v-else
             v-model="newEffect.entitySpec"
@@ -113,38 +114,51 @@
           />
         </template>
 
-        <template v-else-if="!refsFirst">
-          <template v-if="isResultDieField(f)">
+        <template v-else>
+          <template v-if="isResultDieField(item.f)">
             <div class="ee-result-mode">
               <button type="button" :class="{ active: resultMode === 'die' }" @click="resultMode = 'die'">Die</button>
               <button type="button" :class="{ active: resultMode === 'variable' }" @click="resultMode = 'variable'">Variable</button>
             </div>
-            <select v-if="resultMode === 'die'" v-model="newEffect.fields[f.name]">
-              <option v-for="(o, i) in (f.options || [])" :key="o" :value="o">{{ (f.optionLabels || [])[i] || o }}</option>
+            <select v-if="resultMode === 'die'" v-model="valueStore(item.f)[item.f.name]">
+              <option v-for="(o, i) in (item.f.options || [])" :key="o" :value="o">{{ (item.f.optionLabels || [])[i] || o }}</option>
             </select>
-            <input v-else v-model="newEffect.fields[f.name]" type="text" placeholder="{effect_die}" />
+            <input v-else v-model="valueStore(item.f)[item.f.name]" type="text" placeholder="{effect_die}" />
           </template>
-          <select v-else-if="f.fieldType === 'die_select' || f.fieldType === 'select'" v-model="newEffect.fields[f.name]">
-            <option v-for="(o, i) in (f.options || [])" :key="o" :value="o">{{ (f.optionLabels || [])[i] || o }}</option>
+          <!-- A context field with its own editor: the dice array, the effect-die
+               die/`{variable}` toggle, and the shared-table return map. -->
+          <DiePicker
+            v-else-if="item.f.fieldType === 'dice_array'"
+            multiple
+            :model-value="newEffect.context[item.f.name] || []"
+            @update:model-value="newEffect.context[item.f.name] = $event"
+          />
+          <template v-else-if="item.f.fieldType === 'die_select'">
+            <div class="ee-result-mode">
+              <button type="button" :class="{ active: effectDieMode === 'die' }" @click="effectDieMode = 'die'">Die</button>
+              <button type="button" :class="{ active: effectDieMode === 'variable' }" @click="effectDieMode = 'variable'">Variable</button>
+            </div>
+            <select v-if="effectDieMode === 'die'" v-model="newEffect.context[item.f.name]">
+              <option v-for="(o, i) in (item.f.options || [])" :key="o" :value="o">{{ (item.f.optionLabels || [])[i] || o }}</option>
+            </select>
+            <input v-else v-model="newEffect.context[item.f.name]" type="text" :placeholder="item.f.default || ''" />
+          </template>
+          <ReturnMapEditor
+            v-else-if="item.f.fieldType === 'return_map'"
+            :model-value="newEffect.context[item.f.name] || {}"
+            @update:model-value="newEffect.context[item.f.name] = $event"
+            :target="newEffect.fields.target"
+            :universe="universe"
+          />
+          <select v-else-if="item.f.fieldType === 'die_select' || item.f.fieldType === 'select'" v-model="valueStore(item.f)[item.f.name]">
+            <option v-for="(o, i) in (item.f.options || [])" :key="o" :value="o">{{ (item.f.optionLabels || [])[i] || o }}</option>
           </select>
-          <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.fields[f.name]" type="number" />
-          <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
+          <input v-else-if="item.f.fieldType === 'number'" v-model.number="valueStore(item.f)[item.f.name]" type="number" />
+          <input v-else v-model="valueStore(item.f)[item.f.name]" type="text" :placeholder="item.f.default || ''" />
         </template>
       </div>
       </template>
-      <!-- Refs the declared order did not place render after the fields, which is
-           the default reading order for a secondary path (Attune's "life it comes
-           from"). -->
-      <EffectRefField
-        v-if="!refsFirst"
-        v-for="r in refsAfter"
-        :key="r.name"
-        :ref-def="r"
-        :model-value="newEffect.refs[r.name]?.spec || { steps: [] }"
-        :source-element="sourceElement"
-        :variables="scopedVariables"
-        @update:model-value="newEffect.refs[r.name].spec = $event"
-      />
+      </template>
       <TraitInstanceEditor
         v-if="isGainAction"
         mode="single"
@@ -163,39 +177,6 @@
         @update:statement="newEffect.context.statement = $event"
         @update:notes="newEffect.context.notes = $event"
       />
-      <template v-if="fieldSlots.includes('contextFields')">
-      <div v-for="f in visibleContextFields" :key="f.name" class="ee-field">
-        <label>{{ f.label }}</label>
-        <DiePicker
-          v-if="f.fieldType === 'dice_array'"
-          multiple
-          :model-value="newEffect.context[f.name] || []"
-          @update:model-value="newEffect.context[f.name] = $event"
-        />
-        <template v-else-if="f.fieldType === 'die_select'">
-          <div class="ee-result-mode">
-            <button type="button" :class="{ active: effectDieMode === 'die' }" @click="effectDieMode = 'die'">Die</button>
-            <button type="button" :class="{ active: effectDieMode === 'variable' }" @click="effectDieMode = 'variable'">Variable</button>
-          </div>
-          <select v-if="effectDieMode === 'die'" v-model="newEffect.context[f.name]">
-            <option v-for="(o, i) in (f.options || [])" :key="o" :value="o">{{ (f.optionLabels || [])[i] || o }}</option>
-          </select>
-          <input v-else v-model="newEffect.context[f.name]" type="text" :placeholder="f.default || ''" />
-        </template>
-        <select v-else-if="f.fieldType === 'select'" v-model="newEffect.context[f.name]">
-          <option v-for="(o, i) in (f.options || [])" :key="o" :value="o">{{ (f.optionLabels || [])[i] || o }}</option>
-        </select>
-        <ReturnMapEditor
-          v-else-if="f.fieldType === 'return_map'"
-          :model-value="newEffect.context[f.name] || {}"
-          @update:model-value="newEffect.context[f.name] = $event"
-          :target="newEffect.fields.target"
-          :universe="universe"
-        />
-        <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.context[f.name]" type="number" :placeholder="f.default || ''" />
-        <input v-else v-model="newEffect.context[f.name]" type="text" :placeholder="f.default || ''" />
-      </div>
-      </template>
       <div v-if="hasExtraContext" class="ee-field">
         <label>Other context</label>
         <div v-for="(value, key) in newEffect.extraContext" :key="key" class="ee-extra-row">
@@ -522,45 +503,52 @@ const visibleContextFields = computed(() => {
 //
 // An action may name the order its inputs read in (`fieldOrder`), because the
 // default is not always right: a dice limit's pool is the *subject* ("whose
-// limit"), so it belongs before the limit chosen and the amount applied. Names
-// may be refs or fields — the editor only cares where each one goes.
+// limit"), so it belongs before the limit chosen and the amount applied. A name
+// may be a ref or a field (context fields included) — the editor only cares
+// where each one goes.
 //
-// Unnamed items keep their default place: refs, then fields, both after the gain
-// editor. `refsFirst` still says a *secondary* ref reads above the field block,
-// which is what makes "Trait to Move" read before "Give To".
-const fieldOrderIndex = computed(() => {
-  const idx = {}
-  ;(selectedAction.value?.fieldOrder || []).forEach((name, i) => { idx[name] = i })
-  return idx
-})
-
-const fieldsInOrder = computed(() => {
-  const all = [...(visibleFields.value || []), ...(visibleContextFields.value || [])]
-  const rank = fieldOrderIndex.value
-  return all
-    .map((f, i) => ({ f, rank: rank[f.name] ?? Number.MAX_SAFE_INTEGER, i }))
-    .sort((a, b) => (a.rank - b.rank) || (a.i - b.i))
-    .map(x => x.f)
-})
-
-const refsInOrder = computed(() => {
+// Unnamed items keep the default reading order: refs first when the action says
+// one names its subject (`refsFirst`, "Trait to Move" before "Give To"), then
+// the fields. One list, rendered once, so a field cannot be placed twice or
+// dropped on the way.
+const orderedInputs = computed(() => {
+  const order = selectedAction.value?.fieldOrder || []
+  const rank = {}
+  order.forEach((name, i) => { rank[name] = i })
   const refs = selectedAction.value?.refs || []
-  const rank = fieldOrderIndex.value
-  return [...refs].sort((a, b) =>
-    (rank[a.name] ?? Number.MAX_SAFE_INTEGER) - (rank[b.name] ?? Number.MAX_SAFE_INTEGER))
+  const fields = [...(visibleFields.value || []), ...(visibleContextFields.value || [])]
+  const unranked = rank_by_declaration(refs, fields, refsFirst.value)
+  const declared = order.map((name) => by_name(name, refs, fields)).filter(Boolean)
+  const declaredNames = new Set(declared.map((x) => x.f.name))
+  return [...declared, ...unranked.filter((x) => !declaredNames.has(x.f.name))]
 })
 
-// A declared order ranks refs among fields, so it puts them above the field block
-// itself; without one, `refsFirst` decides.
+// A declared order ranks refs among the fields, so it decides their side itself;
+// without one, the action's own `refsFirst` does.
 const refsFirst = computed(() =>
   !!(selectedAction.value?.refsFirst || (selectedAction.value?.fieldOrder || []).length))
 
-// The block order follows the refs' side; the context fields join the field block,
-// so the named position of a context field (a dice limit's `limit`) is honoured.
-const fieldSlots = computed(() => (refsFirst.value ? ['refs', 'fields'] : ['fields', 'refs']))
+// The items the action did not place, in their own natural order.
+function rank_by_declaration(refs, fields, refsFirst) {
+  const refItems = refs.map((f) => ({ kind: 'ref', f }))
+  const fieldItems = fields.map((f) => ({ kind: 'field', f }))
+  return refsFirst ? [...refItems, ...fieldItems] : [...fieldItems, ...refItems]
+}
 
-const refsBefore = computed(() => (refsFirst.value ? refsInOrder.value : []))
-const refsAfter = computed(() => (refsFirst.value ? [] : refsInOrder.value))
+function by_name(name, refs, fields) {
+  const r = refs.find((x) => x.name === name)
+  if (r) return { kind: 'ref', f: r }
+  const f = fields.find((x) => x.name === name)
+  return f ? { kind: 'field', f } : null
+}
+
+// A field's storage: action *inputs* live in `fields`, everything else the
+// action reads (a limit, an effect die) lives in `context`.
+function valueStore(f) {
+  return (selectedAction.value?.fields || []).some((x) => x.name === f.name)
+    ? newEffect.fields
+    : newEffect.context
+}
 
 function isResultDieField(f) {
   return f.name === 'result' && f.fieldType === 'die_select'
