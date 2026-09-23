@@ -288,13 +288,32 @@ function expandPathTo(locationId) {
   return true
 }
 
-function scrollLocationIntoView(locationId) {
+// Scroll a row into the tree's own scroller.
+//   'center' keeps the ancestor chain visible above the location, instead of
+//            parking the row flush against the panel's bottom edge ('nearest').
+//   'top'    leaves a row or two of context above instead — what Locate uses,
+//            where the point is to read the location's expanded children below.
+// (scrollIntoView with block:'start' was not enough: the row would sit flush
+// against the pinned chrome, which reads as "the list starts here".)
+function scrollLocationIntoView(locationId, { align = 'center' } = {}) {
   nextTick(() => {
-    // 'center' keeps the ancestor chain visible above the location, instead of
-    // parking the row flush against the panel's bottom edge ('nearest').
-    document
-      .querySelector(`.gm-content [data-node-id="${locationId}"]`)
-      ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    const row = document.querySelector(`.gm-content [data-node-id="${locationId}"]`)
+    if (!row) return
+    const zone = align === 'top' ? row.closest('.browse-zone') : null
+    if (zone) {
+      // Context comes from the row's own height (32px + its 4px gap today), so
+      // restyling the rows cannot silently turn "a row or two above" into half
+      // the panel.
+      const contextRows = 2
+      const rowH = row.offsetHeight + 4
+      const fromScrollportTop = row.getBoundingClientRect().top - zone.getBoundingClientRect().top
+      zone.scrollTo({
+        top: Math.max(0, zone.scrollTop + fromScrollportTop - rowH * contextRows),
+        behavior: 'smooth',
+      })
+      return
+    }
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' })
   })
 }
 
@@ -307,7 +326,9 @@ function collapseTree() {
   collapseAll()
 }
 
-// Locate: make sure the target is on screen (and its level open).
+// Locate: make sure the target is on screen, its level open, and its own
+// children expanded, then park it near the top so the children below it are
+// what the eye lands on (with a row or two of context above).
 function scrollToNode(nodeId) {
   if (!nodeId) return
   const expanded = { ...expandedNodes.value }
@@ -318,9 +339,13 @@ function scrollToNode(nodeId) {
     // by default there, so the target row did not exist and the scroll found
     // nothing (the acting-entity case, once its filter chip is removed).
     path.filter((id) => id !== nodeId).forEach((id) => { expanded[id] = true })
+    // The target itself too. The button says "jump to the current location",
+    // and in that same plain view locations default *closed* — so centering a
+    // collapsed chevron was the whole complaint.
+    expanded[nodeId] = true
     expandedNodes.value = expanded
   }
-  scrollLocationIntoView(nodeId)
+  scrollLocationIntoView(nodeId, { align: 'top' })
 }
 
 watch(
