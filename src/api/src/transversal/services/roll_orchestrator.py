@@ -28,14 +28,41 @@ def _entity_sfx_context(repo, entity_id: str, universe: str) -> tuple[list[str],
     return get_available_sfx_ids(entity_id, universe, repo), entity.razmerit
 
 
-def _emit_pending_choices(entity_id: str, universe: str, effects: list, structured: list | None = None) -> None:
+def loop_choice_to_dict(loop) -> dict:
+    """The wire shape for a loop prompt — a rule offering to run one more round.
+
+    ``loop: True`` is what tells the picker this is a yes/no rather than a
+    candidate list: the same ``sfx_choice_required`` channel carries both, so a
+    table that already knows how to answer a ``choose`` step knows how to answer
+    this. The payload carries the moment, so ``resolveSfxLoop`` can re-run *this
+    rule for this change* — its conditions and targets re-resolved from live
+    state, which is why a round that has become impossible simply does nothing.
+    """
+    return {
+        "loop": True,
+        "sfx_id": loop.sfx_id,
+        "sfx_name": loop.sfx_name,
+        "sfx_description": loop.sfx_description,
+        "iteration": loop.iteration,
+        "event_type": loop.event_type,
+        "entity_id": loop.entity_id,
+        "universe": loop.universe,
+        "context": loop.context,
+    }
+
+
+def _emit_pending_choices(entity_id: str, universe: str, effects: list,
+                          structured: list | None = None,
+                          loops: list | None = None) -> None:
     """Broadcast a ``sfx_choice_required`` SSE event for unresolved effects.
 
     ``effects`` are deferred **context-policy** choices (``{choose_projection}``);
     ``structured`` are ``StructuredChoice``s from a ``choose`` step in a spec or
-    reference, which carry their own pre-resolved candidates.
+    reference, which carry their own pre-resolved candidates; ``loops`` are rules
+    that would re-enter the change they are already handling, offered a round at
+    a time rather than recursed.
     """
-    if not effects and not structured:
+    if not effects and not structured and not loops:
         return
 
     from transversal.api.sse.bus import StreamEvent, event_bus
@@ -69,6 +96,8 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list, structur
             "effect": effect_to_wire_dict(c.effect),
             **({"continuation": [effect_to_wire_dict(e) for e in c.continuation]} if c.continuation else {}),
         })
+    for l in (loops or []):
+        choices.append(loop_choice_to_dict(l))
     for session in session_manager.list_active():
         event_bus.publish(StreamEvent(
             event="sfx_choice_required",
@@ -139,7 +168,7 @@ def fire_roll_sfx(
         context=roll_context,
     )
     outcome = engine.process_event_outcome(event, sfx_ids, razmerit, repo=repo)
-    _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured)
+    _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured, outcome.loops)
     # Fire roll-scoped deferred effects armed with ``on_roll`` timing, passing
     # the real rolled dice so per-die selection (die_filter / armed_sfx_ids) works.
     from transversal.services.roll_deferral import fire_armed
@@ -178,5 +207,5 @@ def fire_result_sfx(
         },
     )
     outcome = _get_engine().process_event_outcome(event, sfx_ids, razmerit, repo=repo)
-    _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured)
+    _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured, outcome.loops)
     return outcome.applied

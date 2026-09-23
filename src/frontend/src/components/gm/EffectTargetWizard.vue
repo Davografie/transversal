@@ -3,8 +3,11 @@
     <div class="etw-title">{{ title }}</div>
     <div v-if="current" class="etw-step">
       <div class="etw-step-head">
-        <span class="etw-step-count">Target {{ stepIndex + 1 }} / {{ pendingChoices.length }}</span>
-        <span class="etw-kind">{{ isStructured ? `element: ${current.element}` : `kind: ${current.kind}` }}<template v-if="!isStructured && current.scope"> · {{ current.scope }}</template></span>
+        <span class="etw-step-count">
+          <template v-if="isLoop">Loop · round {{ current.iteration }}</template>
+          <template v-else>Target {{ stepIndex + 1 }} / {{ pendingChoices.length }}</template>
+        </span>
+        <span v-if="!isLoop" class="etw-kind">{{ isStructured ? `element: ${current.element}` : `kind: ${current.kind}` }}<template v-if="!isStructured && current.scope"> · {{ current.scope }}</template></span>
       </div>
       <div v-if="current.sfx_name" class="etw-sfx">
         <div class="etw-sfx-name">{{ current.sfx_name }}</div>
@@ -25,6 +28,15 @@
         </button>
         <div v-if="current.count > 1" class="etw-multi-hint">Select up to {{ current.count }}.</div>
       </div>
+      <div v-else-if="isLoop" class="etw-loop">
+        <div class="etw-loop-q">
+          Run <strong>{{ current.sfx_name || current.sfx_id }}</strong> again? This rule caused the
+          change it is handling, so it would keep going on its own.
+        </div>
+        <div class="etw-loop-why">
+          You decide each round — nothing more happens until you say so.
+        </div>
+      </div>
       <TargetPicker
         v-else
         :model-value="targets[current.index] || ''"
@@ -43,11 +55,15 @@
     <div v-else class="etw-empty">No targets to resolve.</div>
     <div class="etw-actions">
       <Button class="etw-btn" variant="neutral" :disabled="stepIndex === 0" @click="back">Back</Button>
-      <template v-if="needsConfirm">
+      <template v-if="isLoop">
+        <Button class="etw-btn etw-primary" variant="primary" @click="runAgain">Run again</Button>
+        <Button class="etw-btn etw-cancel" variant="neutral" @click="declineLoop">Stop here</Button>
+      </template>
+      <template v-else-if="needsConfirm">
         <Button v-if="!isLast" class="etw-btn etw-primary" variant="primary" :disabled="!hasSelection" @click="next">Next</Button>
         <Button v-else class="etw-btn etw-primary" variant="primary" :disabled="!hasSelection" @click="apply">Apply</Button>
       </template>
-      <Button class="etw-btn etw-cancel" variant="neutral" @click="$emit('cancel')">Cancel</Button>
+      <Button v-if="!isLoop" class="etw-btn etw-cancel" variant="neutral" @click="$emit('cancel')">Cancel</Button>
     </div>
   </div>
 </template>
@@ -63,13 +79,16 @@ const props = defineProps({
   pendingChoices: { type: Array, default: () => [] },
   title: { type: String, default: 'Resolve targets' },
 })
-const emit = defineEmits(['resolve', 'cancel'])
+const emit = defineEmits(['resolve', 'cancel', 'run-loop'])
 
 const stepIndex = ref(0)
 const targets = ref({})
 
 const current = computed(() => props.pendingChoices[stepIndex.value] || null)
 const isStructured = computed(() => !!current.value?.structured)
+// A loop prompt is a yes/no, not a target: the rule has already run once and
+// its own effect brought us back here, so the table decides whether to go on.
+const isLoop = computed(() => !!current.value?.loop)
 const currentTarget = computed(() => (current.value ? targets.value[current.value.index] || '' : ''))
 const hasSelection = computed(() => {
   const v = currentTarget.value
@@ -127,6 +146,18 @@ function advance() {
 
 function next() { if (!isLast.value) stepIndex.value++ }
 function back() { if (stepIndex.value > 0) stepIndex.value-- }
+
+// The loop answer travels on its own channel: it is not a target resolution but
+// "run this rule one more round for this moment", which the server re-resolves
+// from live state — so a round that has become impossible does nothing.
+function runAgain() { emit('run-loop', current.value) }
+
+// Declining is not an error, it is the loop ending. Step to any other pending
+// choice; if that was the last one, the request is simply over.
+function declineLoop() {
+  if (isLast.value) emit('cancel')
+  else stepIndex.value++
+}
 function apply() {
   const resolutions = props.pendingChoices
     .filter((c) => {

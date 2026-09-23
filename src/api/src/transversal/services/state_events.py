@@ -12,10 +12,6 @@ import logging
 
 log = logging.getLogger("transversal.sfx")
 
-# Re-entrancy guard: an SFX fired from a state change may itself mutate state
-# and re-enter the same event (e.g. an on_trait_gain SFX that gains a trait).
-_firing: set[tuple[str, str]] = set()
-
 
 def _triggers_for(event_type: str, **payload) -> frozenset[str] | None:
     """The triggers that event type could match (``None`` = don't narrow).
@@ -34,43 +30,49 @@ def fire_state_sfx(
     event_type: str,
     context: dict | None = None,
 ) -> None:
-    """Fire automatic SFX for a state-change event, if any match."""
-    key = (entity_id, event_type)
-    if key in _firing:
+    """Fire automatic SFX for a state-change event, if any match.
+
+    A state change caused *by* an effect nests: the engine is applying a rule
+    when this is called. That is not a problem to be blocked — an effect's
+    consequences are real, and an agenda filling its container completing is the
+    point — so the guard against a rule running away lives where the looping
+    actually is, in the engine (``shared.RULE_CHAIN``): a rule re-entering the
+    change it is already handling is offered to the table a round at a time.
+
+    What used to be here was a `(entity_id, event_type)` flag that returned
+    **before its own log line**, so any same-type nesting was dropped silently.
+    It swallowed the agenda's terminal event and every rule cascade that passed
+    through the same kind of change twice — a non-loop, blocked by a loop guard.
+    """
+    from transversal.main import _get_engine, _get_repo
+    from transversal.services.effects_engine import GameEvent
+    from transversal.services.roll_orchestrator import _emit_pending_choices
+    from transversal.services.sfx_owner import get_available_sfx_ids
+
+    engine = _get_engine()
+    repo = _get_repo()
+    entity = repo.get_entity(entity_id)
+    if entity is None:
         return
-    _firing.add(key)
-    try:
-        from transversal.main import _get_engine, _get_repo
-        from transversal.services.effects_engine import GameEvent
-        from transversal.services.roll_orchestrator import _emit_pending_choices
-        from transversal.services.sfx_owner import get_available_sfx_ids
+    if not universe:
+        universe = entity.current_universe
 
-        engine = _get_engine()
-        repo = _get_repo()
-        entity = repo.get_entity(entity_id)
-        if entity is None:
-            return
-        if not universe:
-            universe = entity.current_universe
-
-        sfx_ids = get_available_sfx_ids(
-            entity_id, universe, repo,
-            triggers=_triggers_for(event_type),
-        )
-        log.info(
-            "[fire_state_sfx] entity=%s event=%s universe=%s available=%s",
-            entity_id, event_type, universe, sfx_ids,
-        )
-        event = GameEvent(
-            type=event_type,
-            entity_id=entity_id,
-            universe=universe,
-            context=context or {},
-        )
-        outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
-        _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured)
-    finally:
-        _firing.discard(key)
+    sfx_ids = get_available_sfx_ids(
+        entity_id, universe, repo,
+        triggers=_triggers_for(event_type),
+    )
+    log.info(
+        "[fire_state_sfx] entity=%s event=%s universe=%s available=%s",
+        entity_id, event_type, universe, sfx_ids,
+    )
+    event = GameEvent(
+        type=event_type,
+        entity_id=entity_id,
+        universe=universe,
+        context=context or {},
+    )
+    outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
+    _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured, outcome.loops)
 
 
 def _opponent_in_contest(location_id: str, entity_id: str) -> str | None:
@@ -283,7 +285,7 @@ def fire_global_state_sfx(
         outcome = engine.process_event_outcome(
             event, sfx_ids, entity.razmerit, repo=repo, arm_deferred=arm_deferred,
         )
-        _emit_pending_choices(entity.id, entity.current_universe, outcome.pending, outcome.structured)
+        _emit_pending_choices(entity.id, entity.current_universe, outcome.pending, outcome.structured, outcome.loops)
 
 
 def fire_projection_created(entity_id: str, universe: str, projection_id: str) -> None:
@@ -413,7 +415,7 @@ def fire_contest_outcome_sfx(
             },
         )
         outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
-        _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured)
+        _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured, outcome.loops)
 
         # Fire effects deferred to the contest outcome (``on_contest_win`` /
         # ``on_contest_loss``) armed at trigger time (e.g. sfx-heal's step_down).

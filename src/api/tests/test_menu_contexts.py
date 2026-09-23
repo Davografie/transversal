@@ -107,7 +107,7 @@ def _fake_fire(monkeypatch, get_entity):
     class FakeEngine:
         def process_event_outcome(self, event, sfx_ids, razmerit, repo=None):
             captured.append(event)
-            return SimpleNamespace(applied=[], pending=[], structured=[])
+            return SimpleNamespace(applied=[], pending=[], structured=[], loops=[])
 
     monkeypatch.setattr("transversal.main._get_engine", lambda: FakeEngine())
     monkeypatch.setattr("transversal.main._get_repo", lambda: SimpleNamespace(get_entity=get_entity))

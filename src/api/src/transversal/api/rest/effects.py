@@ -96,7 +96,7 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
         repo=_get_repo(),
     )
     from transversal.services.roll_orchestrator import _emit_pending_choices
-    _emit_pending_choices(req.entity_id, req.universe, outcome.pending, outcome.structured)
+    _emit_pending_choices(req.entity_id, req.universe, outcome.pending, outcome.structured, outcome.loops)
     applied = outcome.applied
 
     # Effects are already applied by process_event internally.

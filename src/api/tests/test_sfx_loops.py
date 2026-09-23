@@ -116,3 +116,57 @@ def test_the_chain_is_left_clean_after_a_run():
     engine.process_event_outcome(_event("trait_updated", "e1:x"), ["sfx-plain"], 0)
 
     assert RULE_CHAIN.get() == ()
+
+
+def test_a_nested_state_event_reaches_the_engine(monkeypatch):
+    """The old guard returned **before its own log line**, so a nested event of
+    the same type for the same entity never reached the engine at all — which is
+    how the agenda's terminal "the agenda is complete" went missing. Its job now
+    belongs to the loop guard, which knows the difference between a rule acting
+    on a second thing and a rule re-entering its own change."""
+    from types import SimpleNamespace
+
+    from transversal.services import state_events
+
+    calls: list[str] = []
+
+    class FakeEngine:
+        def process_event_outcome(self, event, sfx_ids, razmerit, repo=None):
+            calls.append(event.type)
+            if len(calls) == 1:
+                # A rule's effect filled the container, which completed too.
+                state_events.fire_state_sfx(
+                    "e1", "earth", event.type, {"trait_setting": "e1:container"})
+            return SimpleNamespace(applied=[], pending=[], structured=[], loops=[])
+
+    entity = SimpleNamespace(razmerit=0, current_universe="earth")
+    monkeypatch.setattr("transversal.main._get_engine", lambda: FakeEngine())
+    monkeypatch.setattr("transversal.main._get_repo",
+                        lambda: SimpleNamespace(get_entity=lambda eid: entity))
+    monkeypatch.setattr(
+        "transversal.services.sfx_owner.get_available_sfx_ids", lambda *a, **k: [])
+
+    state_events.fire_state_sfx("e1", "earth", "challenge_completed",
+                                {"trait_setting": "e1:portent"})
+
+    assert calls == ["challenge_completed", "challenge_completed"]
+
+
+def test_a_loop_prompt_carries_the_moment_its_answer_needs():
+    """`resolveSfxLoop` re-runs *this rule for this change*, so the prompt has to
+    carry the rule, the event type and the context — and say which round it is,
+    because "the 4th time" reads differently from "again"."""
+    from transversal.services.effects_engine import PendingSfxLoop
+    from transversal.services.roll_orchestrator import loop_choice_to_dict
+
+    loop = PendingSfxLoop(
+        sfx_id="sfx-x", sfx_name="X", entity_id="e1", universe="earth",
+        event_type="trait_updated", context={"trait_setting": "e1:x"},
+        iteration=3)
+    payload = loop_choice_to_dict(loop)
+
+    assert payload["loop"] is True, "the picker shows a yes/no, not candidates"
+    assert payload["iteration"] == 3
+    assert payload["sfx_id"] == "sfx-x"
+    assert payload["event_type"] == "trait_updated"
+    assert payload["context"] == {"trait_setting": "e1:x"}

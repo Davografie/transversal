@@ -42,5 +42,31 @@ export function useEffectApplication() {
     }
   }
 
-  return { applying, applyEffects, resolveEffectTargets }
+  // Answer a loop prompt: run one more round of a rule whose own effect caused
+  // the change it was handling. `structured` comes back carrying whatever the
+  // round produced — including the *next* prompt, if it recursed again.
+  async function resolveSfxLoop(choice) {
+    applying.value = true
+    try {
+      const data = await graphql(
+        `mutation($entityId: ID!, $sfxId: ID!, $eventType: String!, $universe: String, $context: JSON) {
+          resolveSfxLoop(entityId: $entityId, sfxId: $sfxId, eventType: $eventType, universe: $universe, context: $context) {
+            applied structured
+          }
+        }`,
+        {
+          entityId: choice.entity_id,
+          sfxId: choice.sfx_id,
+          eventType: choice.event_type,
+          universe: choice.universe || '',
+          context: choice.context || {},
+        }
+      )
+      return data?.resolveSfxLoop || { applied: [], structured: [] }
+    } finally {
+      applying.value = false
+    }
+  }
+
+  return { applying, applyEffects, resolveEffectTargets, resolveSfxLoop }
 }

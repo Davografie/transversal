@@ -18,6 +18,7 @@ from transversal.api.graphql.resolvers.converters import (
     _em,
     _entity_to_gql,
     _resolve_continuation_effects,
+    _structured_choice_to_dict,
 )
 
 
@@ -153,6 +154,54 @@ class MutationsEffects:
             repo, entity, str(table_id), index
         )
         return _effects_result_to_gql(result, structured)
+
+    @strawberry.mutation
+    def resolve_sfx_loop(self, info: strawberry.Info, entity_id: strawberry.ID,
+                         sfx_id: strawberry.ID, event_type: str,
+                         universe: str = "",
+                         context: Optional[strawberry.scalars.JSON] = None) -> EffectApplicationResult:
+        """Run **one more round** of a rule that re-entered the change it handled.
+
+        The loop guard offers each round rather than recursing (see
+        ``PendingSfxLoop``), so this is how a table says "again" — and it is the
+        only way an automated loop advances, one answered round at a time.
+
+        The rule is re-run for *the same moment*: conditions and targets are
+        resolved from live state, so a round that has become impossible (the
+        challenge is already full, the trait is gone) simply does nothing, and a
+        round that causes the change again surfaces the next prompt by itself —
+        the recursion is the request, which is what makes "ask every iteration"
+        work without persisting loop state.
+        """
+        from transversal.main import _get_engine
+        from transversal.services.effects_engine import GameEvent
+        from transversal.services.roll_orchestrator import (
+            _emit_pending_choices,
+            loop_choice_to_dict,
+        )
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+        engine = _get_engine()
+        if engine is None:
+            raise ValueError("Effects engine is not available")
+
+        resolved_universe = universe or entity.current_universe or ""
+        outcome = engine.process_event_outcome(
+            GameEvent(type=event_type, entity_id=str(entity_id),
+                      universe=resolved_universe, context=dict(context or {})),
+            [str(sfx_id)], entity.razmerit, repo=repo,
+        )
+        _emit_pending_choices(str(entity_id), resolved_universe, outcome.pending,
+                              outcome.structured, outcome.loops)
+        return EffectApplicationResult(
+            applied=[],
+            pending_choices=[],
+            structured=([_structured_choice_to_dict(c) for c in outcome.structured]
+                        + [loop_choice_to_dict(l) for l in outcome.loops]),
+        )
 
     @strawberry.mutation
     def set_consequence_options(self, info: strawberry.Info, entity_id: strawberry.ID,

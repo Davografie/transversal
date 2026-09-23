@@ -17,6 +17,7 @@ from __future__ import annotations
 from transversal.services.effects_engine.events import (  # noqa: F401
     GameEvent,
     PendingSfxEffect,
+    PendingSfxLoop,
     StructuredChoice,
     EventOutcome,
 )

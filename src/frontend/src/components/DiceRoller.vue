@@ -50,6 +50,7 @@
         :pending-choices="sfxChoiceRequest"
         title="SFX choice"
         @resolve="resolveSfxChoices"
+        @run-loop="runSfxLoop"
         @cancel="clearSfxChoices"
       />
     </div>
@@ -377,7 +378,7 @@ const props = defineProps({
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange', 'offered-change', 'poolSaved'])
 
 const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
-const { resolveEffectTargets } = useEffectApplication()
+const { resolveEffectTargets, resolveSfxLoop } = useEffectApplication()
 const { applyOption: applyHitchEffect } = useHitchMenu()
 const pool = reactive([])
 const result = ref(null)
@@ -887,6 +888,16 @@ async function resolveSfxChoices(resolutions) {
 }
 function clearSfxChoices() {
   emit('sfx-choice-resolved')
+}
+
+// "Run it again" on a loop prompt. The round's own consequences come back as
+// `structured` — including the next loop prompt when the rule recursed — so the
+// panel keeps showing whatever still needs an answer.
+async function runSfxLoop(choice) {
+  const targetEntity = choice?.entity_id || props.entityId
+  const result = await resolveSfxLoop(choice)
+  const structured = (result?.structured || []).map((c, i) => ({ ...c, index: i, entity_id: targetEntity }))
+  emit('sfx-choice-resolved', structured)
 }
 
 // ── Buy-hitch / opportunity (hitch menu) ────────────
