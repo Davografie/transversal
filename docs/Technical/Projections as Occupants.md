@@ -1,11 +1,11 @@
 ---
 title: Projections as Occupants
 date: 2026-09-15
+last-updated: 2026-09-23
 tags:
   - transversal
   - technical
   - navigation
-  - open
 aliases:
   - Bodies as Occupants
   - Occupant Identity
@@ -14,11 +14,14 @@ aliases:
 
 # Projections as Occupants
 
-> [!warning] Open discussion — **not decided, not built**
+> [!info] Decided and ticketed — **not yet built**
 > Raised by the human 2026-09-15: *"I want the occupants to show the projections,
 > not the entities."* Investigated the same day; the findings below are measured
-> against the live database, not inferred. Nothing has been implemented. This note
-> exists so the discussion is not lost — see **Open decisions**.
+> against the live database, not inferred. The human said **"Go"** on the 6-slice
+> plan, and the work is now **[[B137]]** — cross-domain ([[backend-platform]] +
+> [[navigation]]), sequenced by the [[Overseer]]. **Nothing has been implemented.**
+> S0's two decisions have an Overseer recommendation awaiting the human's nod —
+> see **S0** below.
 
 ## The question
 
@@ -166,12 +169,22 @@ The human rejected the "resolution-only" shape and stated the model directly:
   see. (`unpublished` is currently filtered client-side in `occupantDots`; that
   could move with it.)
 
-### Still unresolved, needs an answer before planning
+### S0 — awaiting the human's nod (recommendation from the [[Overseer]], 2026-09-17)
 
 - **Where `hidden`/`known_to` live** — on the projection (per-body, pairing with
   the position move) or on the entity, merely honoured when reading.
+  **Recommended: both on the projection** — the human's own visibility rule
+  already says `known_to` is required on projections, and co-locating with the
+  position keeps one row per body for the reader instead of a join back to the
+  entity.
 - **Who computes vacancy** — the reader, from
   `entity.current_projection != projection.id`.
+  **Recommended: the reader** — vacancy is derived, so storing it would be a
+  second source of truth.
+- **Position-migration default** (proposal): seed each body from its entity's
+  current `map_x`/`map_y`, so nothing moves on day one.
+
+With those, **S0 closes** and S1–S5 are ready to sequence.
 
 ### Superseded framing (kept for the record)
 
@@ -186,8 +199,8 @@ spelled out.
 ## Open decisions
 
 1. **~~`unpublished` vs `hidden`~~** — **decided: separate axes, keep both.**
-2. **Where `hidden`/`known_to` live** — on the projection, or honoured from the
-   entity (see above).
+2. **Where `hidden`/`known_to` live** — **Overseer recommends the projection**
+   (2026-09-17); awaiting the human's nod. See **S0** above.
 3. **~~Do bodies get their own map position?~~** — **decided: yes** (direction 1).
    Remaining question is migration: the 152 bodies standing somewhere today have
    no stored coordinate of their own, so they need a starting value.
@@ -196,7 +209,7 @@ spelled out.
    fallback (body name → entity name) is the intent.
 5. **Parked:** an `enabled` flag on projections, independent of vacancy.
 
-## Plan (draft — awaiting a ticket)
+## Plan — **[[B137]]**, ticketed 2026-09-17
 
 Ordered so each slice is independently verifiable and nothing lands in a broken
 state. Ownership spans [[backend-platform]] (query, resolver, domain) and
@@ -243,15 +256,16 @@ badge. Blocked by S0. *Owner: both.*
 
 **Out of scope (parked):** a projection `enabled`/`disabled` flag.
 
-## Not decided here
+## Ownership
 
-Ownership spans two roles: the query and the resolver are
-[[backend-platform]]'s surface (`canvas.py`, `images.py`), the dot is
-[[navigation]]'s. Needs a ticket and the human's answer to decision 1.
+Ticketed as **[[B137]]** (2026-09-17). The query and the resolver are
+[[backend-platform]]'s surface (`canvas.py`, `images.py`); the dot is
+[[navigation]]'s. Cross-domain, so the [[Overseer]] sequences the slices. Still
+owed from the human: the nod on S0's three defaults above.
 
 ## Related
 
 - [[Location Viewer]] — the component and its dot model.
 - [[Projections and Transversal]] — what a projection is.
 - [[API Contract]] — the `/navigate` occupant payload.
-- [[Overseer]] — please ticket this rather than leaving it in a session doc.
+- [[B137]] — the ticket carrying this plan (minted 2026-09-17).
