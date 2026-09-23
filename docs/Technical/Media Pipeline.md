@@ -309,6 +309,38 @@ Requirements and gotchas:
 > frames). Verified in Chrome with a canvas alpha probe — the background is
 > genuinely transparent. Don't "fix" the encode based on `ffprobe`.
 
+## Container build & pins
+
+`src/imagen/Dockerfile` builds the ComfyUI + Ollama container (`tv2_imagen`,
+ComfyUI on 8188 → host `127.0.0.1:8190`). Two things there are pinned, and both
+matter:
+
+**The PyTorch stack.** `torch==2.11.0+cu129`, `torchvision==0.26.0+cu129`,
+`torchaudio==2.11.0+cu129`. torchaudio mirrors torch's version; torchvision is
+torch's minor + 15 (2.11 → 0.26); the `+cu129` local tag exists only on the
+PyTorch index, so these pins cannot be satisfied by PyPI.
+
+> [!warning] Do not unpin torch — it takes the whole pipeline down
+> The pins live in `PIP_CONSTRAINT=/app/torch-constraints.txt`, not merely in a
+> `-c` on the install command, because ComfyUI's own `requirements.txt` lists
+> bare `torch torchvision torchaudio` — a later `pip install -r` will re-resolve
+> and silently upgrade torch. With nothing pinned, pip takes the highest version
+> across PyPI *and* the `cu129` index, and those disagree at the top: cu129 stops
+> at torch 2.13.0 and torchaudio 2.11.0, so `torch` comes from PyPI as a **cu130**
+> build while `torchaudio` stays cu129. ComfyUI then dies during import —
+> `main.py → execution → latent_preview → comfy.sd →
+> comfy.ldm.lightricks.vae.audio_vae → import torchaudio` — with *"PyTorch has
+> CUDA version 13.0 whereas TorchAudio has CUDA version 12.9"*, the container
+> exits about five seconds into every start, and imagen / animate /
+> remove-background all go down together (the API reports it as
+> `ClientConnectorDNSError: Cannot connect to host imagen:8188`). See `B160`.
+
+**The remote clones.** ComfyUI and its 15 remote custom nodes are checked out to
+fixed commits. Changing the torch layer invalidates every layer after it, so an
+unpinned `git clone` would swap ComfyUI and the nodes for whatever is on master
+that day — a rebuild that changes two things at once cannot tell you which one
+broke it. (The White Rabbit nodes are a local `COPY`, so they need no pin.)
+
 ## Role assignment & auto-select
 
 Roles are **unique per (owner, role)**, where owner = `projection_id` when set,

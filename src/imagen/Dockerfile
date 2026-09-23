@@ -28,7 +28,8 @@ RUN apt-get update && apt-get install -y \
 # `pip install -r` would re-resolve and silently upgrade torch again. The env var
 # covers every pip invocation in the rest of the build, including those inside a
 # custom node's install.py.
-RUN printf 'torch==2.11.0+cu129\ntorchvision==0.26.0+cu129\ntorchaudio==2.11.0+cu129\n' \
+RUN mkdir -p /app \
+ && printf 'torch==2.11.0+cu129\ntorchvision==0.26.0+cu129\ntorchaudio==2.11.0+cu129\n' \
       > /app/torch-constraints.txt \
  && pip install --extra-index-url https://download.pytorch.org/whl/cu129 \
       torch==2.11.0+cu129 torchvision==0.26.0+cu129 torchaudio==2.11.0+cu129
