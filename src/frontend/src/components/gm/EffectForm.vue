@@ -119,11 +119,21 @@
             <div class="ee-result-mode">
               <button type="button" :class="{ active: resultMode === 'die' }" @click="resultMode = 'die'">Die</button>
               <button type="button" :class="{ active: resultMode === 'variable' }" @click="resultMode = 'variable'">Variable</button>
+              <!-- A die can also be a *fact in the world* — a challenge's next
+                   capacity slot — which no literal names. Then it is a path. -->
+              <button type="button" :class="{ active: resultMode === 'spec' }" @click="resultMode = 'spec'">Path</button>
             </div>
             <select v-if="resultMode === 'die'" v-model="valueStore(item.f)[item.f.name]">
               <option v-for="(o, i) in (item.f.options || [])" :key="o" :value="o">{{ (item.f.optionLabels || [])[i] || o }}</option>
             </select>
-            <input v-else v-model="valueStore(item.f)[item.f.name]" type="text" placeholder="{effect_die}" />
+            <input v-else-if="resultMode === 'variable'" v-model="valueStore(item.f)[item.f.name]" type="text" placeholder="{effect_die}" />
+            <TargetSpecBuilder
+              v-else
+              v-model="newEffect.resultSpec"
+              :destination="resultSpecDestination"
+              :source-element="sourceElement"
+              :variables="outputVariables"
+            />
           </template>
           <!-- A context field with its own editor: the dice array, the effect-die
                die/`{variable}` toggle, and the shared-table return map. -->
@@ -253,7 +263,7 @@ const emit = defineEmits(['save', 'cancel'])
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, negative: false, refs: {}, output: '', conditions: [] })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, resultSpec: { steps: [] }, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, negative: false, refs: {}, output: '', conditions: [] })
 
 // Variables the effect's *own* earlier paths expose. The engine walks an
 // effect's paths in order — target, then its references — so a name that path 1
@@ -434,6 +444,11 @@ const specDestination = computed(() => {
   return elements.length ? { elements } : null
 })
 
+// A die named by a path resolves to a *die* — either a slot of a challenge's
+// capacity (the ceiling) or a die of a trait instance's rating (what it holds).
+// Both carry a die size, so both are offered, and nothing else is.
+const resultSpecDestination = { elements: ['capacity_die', 'rating_die'] }
+
 // The element the target path currently resolves to, reported by the builder.
 // A change to a *rating* die is a fact about the character, so it can carry a
 // duration; a change to a die in the pool is gone at the next roll, so offering a
@@ -601,6 +616,7 @@ function onActionChange() {
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entitySpec = { steps: [] }
+  newEffect.resultSpec = { steps: [] }
   newEffect.negative = false
   newEffect.conditions = []
   initRefs(selectedAction.value)
@@ -696,6 +712,9 @@ function buildEffect(meta) {
         }
       : null,
     targetSpec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
+    // A die named by a path: sent only in that mode, so a literal/variable die is
+    // never shadowed by a stale spec the author left behind.
+    resultSpec: resultMode.value === 'spec' && (newEffect.resultSpec?.steps || []).length ? newEffect.resultSpec : null,
     entitySpec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
     refs: buildRefs(),
     output: (newEffect.output || '').trim() || null,
@@ -738,7 +757,10 @@ function populate(eff) {
     }
   }
   newEffect.conditions = (eff.conditions || []).map(c => ({ ...c }))
-  resultMode.value = (eff.result && eff.result.startsWith('{')) ? 'variable' : 'die'
+  resultMode.value = (eff.resultSpec?.steps || []).length
+    ? 'spec'
+    : ((eff.result && eff.result.startsWith('{')) ? 'variable' : 'die')
+  newEffect.resultSpec = eff.resultSpec || { steps: [] }
   effectDieMode.value = (eff.context?.effect_die && String(eff.context.effect_die).startsWith('{')) ? 'variable' : 'die'
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
     newEffect.fields.target = eff.target
@@ -785,6 +807,7 @@ function resetBlank() {
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entitySpec = { steps: [] }
+  newEffect.resultSpec = { steps: [] }
   newEffect.negative = false
   newEffect.refs = {}
   newEffect.conditions = []

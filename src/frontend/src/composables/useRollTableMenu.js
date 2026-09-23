@@ -6,7 +6,7 @@ import { useEffectApplication } from '@/composables/useEffectApplication.js'
 // menu, then apply the chosen entry (pay cost effects, gain effects).
 const EFFECT_FIELDS = `
   timing type action target entity result dieFilter negative
-  context duration { timers { event remaining } combine } targetSpec entitySpec refs
+  context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec refs
   conditions { type subject target targets value operator narrative spec }
 `
 

@@ -257,9 +257,11 @@ def resolve_effect_result(effect: Effect, entity_id: str, repo,
     a ``select source`` path works on an automatic trigger.
 
     The resolved value is a die: a ``capacity_die`` (or ``rating_die``) carries it
-    under ``rating``, and a raw die value is already the string. A path that names
-    a die we cannot read leaves the effect as authored, so the existing "no die
-    rating to add" report still fires rather than inventing one.
+    under ``rating``, and a raw die value is already the string. When the path
+    names nothing, ``result`` is **cleared** rather than left standing — an author
+    who named the die by a path left the literal as a placeholder, and applying it
+    would invent a die the world did not name. The handler then reports "no die
+    rating to add", which is the honest answer.
     """
     if effect.result_spec is None or not effect.result_spec.steps:
         return effect
@@ -285,7 +287,7 @@ def resolve_effect_result(effect: Effect, entity_id: str, repo,
         die = _die_from_spec_value(value)
         if die:
             return effect.model_copy(update={"result": die, "result_spec": None})
-    return effect
+    return effect.model_copy(update={"result": None, "result_spec": None})
 
 
 def _die_from_spec_value(value) -> str | None:
