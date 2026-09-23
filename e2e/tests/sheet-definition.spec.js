@@ -259,3 +259,38 @@ test('a relationship trait on one contact is still offered for another', async (
   await expect(pickerItem(page, first.name), `${first.name} must be offerable for ${target}`)
     .toHaveCount(1)
 })
+
+test('the contacts are grouped by entity type, then alphabetical', async ({ page, request }) => {
+  const character = await findPlayableCharacter(request)
+  await openSheet(page, character)
+  await ensureTraitRowsVisible(page)
+  await openRelationsStep(page)
+  await expect(page.locator('.trait-picker .picker-item').first(), 'the contacts must load')
+    .toBeVisible({ timeout: 15_000 })
+
+  const rows = await page.locator('.trait-picker .picker-item').evaluateAll((els) => els.map((e) => ({
+    name: (e.childNodes[0]?.textContent || '').trim(),
+    bucket: (e.querySelector('.picker-type')?.textContent || '').trim(),
+  })))
+  expect(rows.length, 'there must be contacts to order').toBeGreaterThan(1)
+
+  // The required order, written out here rather than imported from the app — a
+  // test that reads the app's own constant would agree with whatever it did.
+  const TYPE_ORDER = ['PC(MC)', 'PC(SC)', 'PC', 'GMC', 'ASSET', 'FACTION', 'LOCATION', 'UNIVERSE']
+  const rank = (b) => { const i = TYPE_ORDER.indexOf(b); return i === -1 ? TYPE_ORDER.length : i }
+
+  // One bucket alone would satisfy the ordering by doing nothing.
+  expect(new Set(rows.map((r) => r.bucket)).size, 'the list must span more than one type')
+    .toBeGreaterThan(1)
+
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i - 1]
+    const b = rows[i]
+    expect(rank(a.bucket), `"${a.name}" (${a.bucket}) comes before "${b.name}" (${b.bucket})`)
+      .toBeLessThanOrEqual(rank(b.bucket))
+    if (a.bucket === b.bucket) {
+      expect(a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+        `${a.name} should not come before ${b.name} inside ${a.bucket}`).toBeLessThanOrEqual(0)
+    }
+  }
+})

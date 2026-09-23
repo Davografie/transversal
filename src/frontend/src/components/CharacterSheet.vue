@@ -381,7 +381,7 @@
           />
           <button v-for="c in filteredRelationships" :key="c.id" class="picker-item" @click="selectRelationship(c)">
             {{ displayName(c.name) }}
-            <span class="picker-type">{{ c.type }}</span>
+            <span class="picker-type">{{ c.bucket }}</span>
           </button>
           <div v-if="relationshipsLoading" class="empty">Loading relationships…</div>
           <div v-else-if="!relationships.length" class="empty">
@@ -469,6 +469,7 @@ import RollTableMenu from './gm/RollTableMenu.vue'
 import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
 import { splitRefunds } from '../utils/poolSpends.js'
 import { DEFAULT_SHEET_TAB, hasSheetTab, sheetProfileFor } from '../utils/sheetProfile.js'
+import { entityTypeBucket, entityTypeRank } from '../constants/entityTypes.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -1322,8 +1323,30 @@ async function loadRelationships() {
       ).catch(() => null)
       return r?.relationship ? p : null
     }))
-    relationships.value = probed.filter(Boolean).sort((a, b) =>
-      String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }))
+    const contacts = probed.filter(Boolean)
+
+    // Which of those characters a player actually plays, in *one* read: the
+    // per-contact `agency` edge is what separates a main from a support, and
+    // `relatedEntities` does not carry it. A character with no player edge has no
+    // agency at all, which is how an unclaimed one is told apart from both.
+    const agency = new Map()
+    if (contacts.length) {
+      const rows = await graphql(
+        `query($ids: [ID!]!) { entities(ids: $ids) { id agency { main } } }`,
+        { ids: contacts.map(c => c.id) },
+      ).catch(() => null)
+      for (const r of rows?.entities || []) agency.set(r.id, r.agency)
+    }
+
+    // Grouped by the order an entity list reads in — mains, then supports, then
+    // everything else by type — and alphabetical inside each group, because a
+    // mixed list of people, places and factions is hard to scan for a particular one.
+    const accentFree = { sensitivity: 'base' }
+    relationships.value = contacts
+      .map(c => ({ ...c, bucket: entityTypeBucket(c.type, agency.get(c.id)) }))
+      .sort((a, b) =>
+        (entityTypeRank(a.type, agency.get(a.id)) - entityTypeRank(b.type, agency.get(b.id)))
+        || String(a.name || '').localeCompare(String(b.name || ''), undefined, accentFree))
   } catch (e) {
     console.error('[sheet] add: could not load relationships', e)
   } finally {
