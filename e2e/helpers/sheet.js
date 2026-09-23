@@ -127,6 +127,16 @@ export async function ensureTraitRowsVisible(page) {
   const rows = page.locator('.trait-row')
   if (await rows.count()) return null // flat sheet — rows are already the list
 
+  // The sheet element is visible before its traits have loaded, so wait for the
+  // set layer (or a flat list) to exist. Without this the enumeration below sees
+  // an empty sheet and reports "no set rendered rows" — a race, not a fault.
+  await page.waitForFunction(
+    () => document.querySelector('.set-name') || document.querySelector('.trait-row'),
+    null,
+    { timeout: 20_000 },
+  )
+  if (await rows.count()) return null
+
   const names = await page.locator('.set-name').evaluateAll(
     (els) => els.map((e) => e.innerText.trim()),
   )
