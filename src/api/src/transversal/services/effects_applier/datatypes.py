@@ -61,3 +61,8 @@ class EffectsResult:
     pending_choices: list[PendingChoice] = field(default_factory=list)
     passthrough: list[Effect] = field(default_factory=list)
     revealed: list[tuple[TraitSetting, str]] = field(default_factory=list)
+    #: Instances an effect *found* rather than made or changed. Only a gain with
+    #: "only if missing" produces these: the trait was already there, so nothing
+    #: was written, but the step still has a result worth naming — which is what
+    #: lets a later step act on "the trait, however it got here".
+    found_trait_settings: list[TraitSetting] = field(default_factory=list)

@@ -57,7 +57,16 @@ def _apply_gain(entity, effect, repo, result):
             f"then gain the trait onto it"))
         return
     statement = _ctx(effect, "statement")
-    if _find_conflicting_traitsetting(subject, effect, repo, target, statement):
+    existing = _find_conflicting_traitsetting(subject, effect, repo, target, statement)
+    if existing is not None:
+        # "Only if missing": the trait is already there, so nothing is written —
+        # but the step still *found* an instance, and naming it is what lets a
+        # later step act on whichever case happened.
+        if (_ctx(effect, "if_not_exists") or "").lower() in ("true", "1", "yes"):
+            result.found_trait_settings.append(existing)
+            result.applied.append(AppliedEffect(
+                effect, f"{target} already present — using it", existing.id))
+            return
         result.applied.append(AppliedEffect(effect, f"trait {target} already present"))
         return
     die = _die(effect.result)

@@ -153,6 +153,24 @@ _ENTITY_FIELD = EffectFieldDef(
     required=False,
 )
 
+#: *Gain Trait* only, and the reason it is a real field rather than prose: with it
+#: set, a trait that is already there is **left alone** and the step still names
+#: **that** instance as its output — so a later *Step Up Die* / *Increase by Effect
+#: Die* can act on "the trait, whether it was just made or already mine". That is
+#: the composition which replaces `cortex_gain` and `gain_or_step_up`.
+_IF_NOT_EXISTS_FIELD = EffectFieldDef(
+    name="if_not_exists",
+    label="Only if missing",
+    field_type="select",
+    required=False,
+    default="false",
+    options=["false", "true"],   # "true" = only create when missing
+    description=(
+        "When set, an already-present trait is untouched (rather than the step "
+        "failing), and the step's output name still points at it."
+    ),
+)
+
 _STATEMENT_CONTEXT_FIELD = EffectFieldDef(
     name="statement",
     label="Statement",

@@ -2652,3 +2652,68 @@ def test_the_relationship_fields_are_authorable():
     labels = {f.name: f.label for f in meta.context_fields}
     assert labels["relationship"] == "Relationship with"
     assert labels["relationship_type"] == "Relationship type"
+
+
+# ── Gain: "create only if missing" ───────────────────
+
+def _gain_if_not_exists(trait="medicine", statement=""):
+    return Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                  target=trait, result="d8", output="it",
+                  context={"if_not_exists": "true", "statement": statement})
+
+
+def test_gain_if_not_exists_creates_when_absent():
+    repo = FakeRepo(traits=[FakeTrait("medicine", "ts-x")])
+    result = apply_effects(_entity(), [_gain_if_not_exists()], repo)
+    assert len(result.new_trait_settings) == 1
+    assert result.found_trait_settings == []
+    assert "gained medicine" in result.applied[0].summary
+
+
+def test_gain_if_not_exists_found_an_existing_instance():
+    """The point of the flag: nothing is written, and the step still names the
+    instance that is there — so a later step can act on whichever case happened."""
+    owned = _ts("medicine", [DieType.D6], traitset_id="ts-x")
+    repo = FakeRepo(traits=[FakeTrait("medicine", "ts-x")], traitsettings=[owned])
+    result = apply_effects(_entity(), [_gain_if_not_exists()], repo)
+    assert result.new_trait_settings == []
+    assert result.found_trait_settings == [owned]
+    assert "already present — using it" in result.applied[0].summary
+
+
+def test_gain_without_the_flag_still_refuses_silently():
+    """Default unchanged: no flag, no output binding — nothing moves for existing
+    content."""
+    owned = _ts("medicine", [DieType.D6], traitset_id="ts-x")
+    repo = FakeRepo(traits=[FakeTrait("medicine", "ts-x")], traitsettings=[owned])
+    plain = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                   target="medicine", result="d8")
+    result = apply_effects(_entity(), [plain], repo)
+    assert result.new_trait_settings == [] and result.found_trait_settings == []
+
+
+def test_the_found_instance_is_what_the_output_name_binds():
+    """`publish_effect_output` reads the found list too, which is the junction that
+    makes 'name the trait, however it got here' work."""
+    from transversal.services.effects_applier.registry import publish_effect_output
+    from transversal.services.target_resolver import Binding
+
+    owned = _ts("medicine", [DieType.D6], traitset_id="ts-x")
+    repo = FakeRepo(traits=[FakeTrait("medicine", "ts-x")], traitsettings=[owned])
+    effect = _gain_if_not_exists()
+    result = apply_effects(_entity(), [effect], repo)
+    ctx = {}
+    publish_effect_output(effect, result, ctx)
+    bindings = ctx.get("_bindings") or {}
+    bound = bindings.get("it")
+    assert bound is not None, ctx
+    assert (bound.value if isinstance(bound, Binding) else bound) == owned.id
+
+
+def test_gain_if_not_exists_is_authorable_only_on_gain_trait():
+    from transversal.services.effects_registry import get_action_meta
+    names = [f.name for f in get_action_meta("gain_trait").context_fields]
+    assert "if_not_exists" in names
+    # Not on the step-up variants: a "don't touch it" flag would contradict them.
+    for aid in ("gain_or_step_up_trait", "cortex_gain_trait"):
+        assert "if_not_exists" not in [f.name for f in get_action_meta(aid).context_fields]

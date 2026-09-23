@@ -24,7 +24,8 @@ def _produced_id(result, element: str) -> str:
     both are "what this step made", which is what the author named.
     """
     if element == "traitsetting":
-        for ts in (*result.new_trait_settings, *result.updated_trait_settings):
+        for ts in (*result.new_trait_settings, *result.updated_trait_settings,
+                   *result.found_trait_settings):
             return getattr(ts, "id", "")
     elif element == "projection":
         for p in (*result.new_projections, *result.updated_projections):
