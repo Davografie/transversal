@@ -232,6 +232,39 @@ For a **projection** generation, trait selection is scoped by
 (`from_type == 'projection'` and matching `projection_id`). Entity-level
 generation uses entity traits only.
 
+### Location prompts
+
+A `location` opens with
+`(location background image, a humanless atmospheric image focusing on {name}:1.2), `
+— deliberately **no** "seen from above": not every location is viewed from
+above. Two place-aware clauses can follow, both restored from the original app
+by `B162` and built by `_location_context_clause`:
+
+- **Sub-locations — always.** `navigate_from(id)["children"]` (inbound `super`
+  edges — v1's "zones"), each rendered `(name, appearance:0.4)` inside one
+  `:0.8` group:
+
+  ```
+  the different zones in {name} are ((A, …:0.4) and (B, …:0.4)):0.8),
+  ```
+
+- **Ancestor chain — opt-in per location.** `Entity.prompt_include_ancestors`
+  (the **Surroundings** toggle in the GM panel, next to the imagen button) gates
+  it, because surrounding geography makes an exterior read right and is usually
+  noise for an interior. `get_location_ancestors` returns the chain
+  nearest-first and the weight decays ×0.6 per level:
+
+  ```
+  located in (Wilderness, … in (Verdant Dominion in (Valley of Ascension:0.216):0.36):0.6)
+  ```
+
+  Non-location parents are skipped — a `super` parent may be a character, and
+  only a place describes where a place is.
+
+Where v1 read a location's `description`, v2 has no such field: both clauses use
+the `appearance` trait's `statement` + `notes`, the same content the appearance
+clause carries (see `B159`).
+
 ### Imagen (static)
 
 `run_imagen` → ComfyUI Flux → `_save_image_variants` (Original/Large/Small/Mini

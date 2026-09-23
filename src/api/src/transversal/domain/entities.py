@@ -124,6 +124,11 @@ class Entity(BaseModel):
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
     # Universe — free-text style steering appended to every prompt generated here
     prompt_steering: str = ""
+    # Location image prompts — also describe the ancestor chain ("located in …").
+    # Useful for exteriors and landscapes, usually noise for interiors, so it is
+    # per-location and off by default. Sub-locations ("zones") are always
+    # included and are not gated by this.
+    prompt_include_ancestors: bool = False
     # Life path tracking
     life_paths: list["Enrollment"] = Field(default_factory=list)  # memberships (faction + path)
     active_universes: list[str] = Field(default_factory=list)  # faction-only: where active

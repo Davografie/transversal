@@ -112,6 +112,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         ],
         lora_config=json.dumps(e.lora_config) if e.lora_config else None,
         prompt_steering=e.prompt_steering or None,
+        prompt_include_ancestors=e.prompt_include_ancestors,
     )
 
 def _player_to_gql(p: DomainPlayer, repo) -> GqlPlayer:

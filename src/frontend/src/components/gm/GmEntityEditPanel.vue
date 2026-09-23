@@ -56,6 +56,20 @@
             <span class="btn-label">{{ imagenStatus.label }}</span>
             <span v-if="imagenStatus.status" class="btn-status">{{ imagenStatus.status }}</span>
           </button>
+          <label
+            v-if="form.type === 'LOCATION'"
+            class="ancestors-toggle"
+            :class="{ saving: savingAncestors }"
+            title="Also describe this location's ancestors in the image prompt — the surrounding geography. Good for exteriors; usually noise for interiors. Sub-locations are always described."
+          >
+            <input
+              type="checkbox"
+              :checked="promptIncludeAncestors"
+              :disabled="savingAncestors"
+              @change="onToggleAncestors"
+            />
+            Surroundings
+          </label>
         </div>
       </div>
       <div v-if="!entityImages.length" class="gallery-empty">No entity images yet — upload or generate one.</div>
@@ -1017,6 +1031,50 @@ const imagenStatus = computed(() => {
 
 const genTarget = ref(null)  // projection id (or '' for entity) of the active generation
 
+// ── Location prompt: describe the surrounding geography? ─────────────
+// Sub-locations ("zones") always go into a location's image prompt. The ancestor
+// chain is opted into per location — the surroundings make an exterior read
+// right and are usually noise for an interior. Stored as
+// `Entity.prompt_include_ancestors`; survives the form save because that
+// mutation only sends the fields it names.
+const promptIncludeAncestors = ref(false)
+const savingAncestors = ref(false)
+
+async function fetchPromptIncludeAncestors() {
+  if (!props.entityId || form.value?.type !== 'LOCATION') {
+    promptIncludeAncestors.value = false
+    return
+  }
+  const result = await graphql(
+    `query($id: ID!) { entity(id: $id) { id promptIncludeAncestors } }`,
+    { id: props.entityId }
+  )
+  if (result?.entity) {
+    promptIncludeAncestors.value = !!result.entity.promptIncludeAncestors
+  }
+}
+
+async function onToggleAncestors(event) {
+  const next = event.target.checked
+  const previous = promptIncludeAncestors.value
+  promptIncludeAncestors.value = next   // optimistic; the checkbox is controlled by this ref
+  savingAncestors.value = true
+  const result = await graphql(
+    `mutation($input: UpdateEntityInput!) {
+      updateEntity(input: $input) { id promptIncludeAncestors }
+    }`,
+    { input: { id: props.entityId, promptIncludeAncestors: next } }
+  )
+  if (result?.updateEntity) {
+    promptIncludeAncestors.value = !!result.updateEntity.promptIncludeAncestors
+  } else {
+    promptIncludeAncestors.value = previous   // revert; `apiError` carries the reason
+  }
+  savingAncestors.value = false
+}
+
+watch(() => [props.entityId, form.value?.type], fetchPromptIncludeAncestors, { immediate: true })
+
 function onImagenClick(projectionId = '') {
   if (imagenStatus.value.cancelling) {
     doCancel()
@@ -1103,6 +1161,9 @@ defineExpose({ refresh: loadImages })
 .imagen-btn.cancelling { background: var(--danger-strong); }
 .imagen-btn .btn-label { padding: 4px 8px; }
 .imagen-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
+.ancestors-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); cursor: pointer; user-select: none; white-space: nowrap; }
+.ancestors-toggle input { margin: 0; cursor: pointer; accent-color: var(--violet); }
+.ancestors-toggle.saving { opacity: 0.6; }
 
 .panel-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .panel-top-left { display: flex; align-items: center; gap: 6px; min-width: 0; }

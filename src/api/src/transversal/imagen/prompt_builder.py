@@ -26,12 +26,136 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
+#: How much an ancestor's description decays per level up the location chain.
+#: The immediate parent describes a scene far more than its grandparent, which
+#: is the behaviour the original Transversal app had.
+ANCESTOR_WEIGHT_DECAY = 0.6
+
+
+def _weight(value: float) -> str:
+    """Format a prompt weight without float artifacts (0.216, not 0.21600000000000003)."""
+    return f"{round(value, 4):g}"
+
+
+def _appearance_text(repository, entity_id: str, universes: list[str]) -> str:
+    """An entity's authored appearance: its `appearance` traits' statement + notes.
+
+    v1 stored a location's description in a `description` field; v2 has no such
+    field, so the equivalent content lives in the `appearance` trait — which is
+    why both parts are read here.
+    """
+    try:
+        settings = repository.get_prompt_traitsettings(entity_id, universes)
+    except Exception:
+        return ""
+    parts: list[str] = []
+    for ts in settings:
+        try:
+            trait = repository.get_trait(ts.trait_id)
+        except Exception:
+            trait = None
+        if trait is None or trait.name != "appearance":
+            continue
+        for value in (ts.statement, ts.notes):
+            cleaned = clean_text(value or "")
+            if cleaned:
+                parts.append(cleaned)
+    return ", ".join(parts)
+
+
+def _build_location_context(repository, entity: Entity, universes: list[str]) -> dict:
+    """What the repository knows about a location's place in the world.
+
+    Sub-locations are always gathered; the ancestor chain only when the location
+    opts in via ``prompt_include_ancestors`` (exteriors want the surrounding
+    geography, interiors usually do not).
+    """
+    children: list[dict] = []
+    try:
+        navigation = repository.navigate_from(entity.id)
+    except Exception:
+        navigation = {}
+    for child in navigation.get("children") or []:
+        child_id = child.get("_key")
+        if child_id:
+            children.append({
+                "name": child.get("name") or "",
+                "appearance": _appearance_text(repository, child_id, universes),
+            })
+
+    ancestors: list[dict] = []
+    if entity.prompt_include_ancestors:
+        try:
+            ancestor_ids = repository.get_location_ancestors(entity.id)
+        except Exception:
+            ancestor_ids = []
+        for ancestor_id in ancestor_ids:
+            ancestor = repository.get_entity(ancestor_id)
+            # A `super` parent can be a non-location (the live data has one
+            # location under a character); only places describe where a place is.
+            if ancestor is None or ancestor.type != EntityType.LOCATION:
+                continue
+            ancestors.append({
+                "name": ancestor.name or "",
+                "appearance": _appearance_text(repository, ancestor_id, universes),
+            })
+
+    return {"children": children, "ancestors": ancestors}
+
+
+def _nested_ancestors(ancestors: list[dict], strength: float) -> str:
+    """``in (parent in (grandparent:0.36):0.6)`` — nearest ancestor outermost."""
+    nearest, rest = ancestors[0], ancestors[1:]
+    label = nearest["name"]
+    if nearest.get("appearance"):
+        label += f", {nearest['appearance']}"
+    weight = _weight(strength * ANCESTOR_WEIGHT_DECAY)
+    if not rest:
+        return f"in ({label}:{weight})"
+    return f"in ({label} {_nested_ancestors(rest, strength * ANCESTOR_WEIGHT_DECAY)}:{weight})"
+
+
+def _location_context_clause(name: str, context: Optional[dict]) -> str:
+    """Render a location's sub-locations and (optionally) its ancestor chain.
+
+    Sub-locations keep the original app's "zones" phrasing, with every child at
+    its own ``:0.4`` inside one ``:0.8`` group. The two parts are joined with the
+    same ", " separator the rest of the prompt uses, and the result ends with one
+    so the caller can append directly — joining them by hand is how you get
+    either a doubled comma or two clauses running together.
+    """
+    if not context:
+        return ""
+    parts: list[str] = []
+    zones = []
+    for child in context.get("children") or []:
+        label = child["name"]
+        if child.get("appearance"):
+            label += f", {child['appearance']}"
+        zones.append(f"({label}:0.4)")
+    if zones:
+        parts.append(
+            f"the different zones in {name} are (" + " and ".join(zones) + "):0.8)"
+        )
+    ancestors = context.get("ancestors") or []
+    if ancestors:
+        parts.append(f"located {_nested_ancestors(ancestors, 1.0)}")
+    if not parts:
+        return ""
+    return ", ".join(parts) + ", "
+
+
 def _build_entity_prompt(
     entity: Entity,
     trait_settings: list[TraitSetting],
     universe: str,
+    location_context: Optional[dict] = None,
 ) -> tuple[str, str, list[str], int]:
     """Build positive prompt, negative prompt, LoRA list, and step count.
+
+    ``location_context`` carries what only the repository knows about a
+    location's place in the world (sub-locations, and its ancestor chain when it
+    opted in). It is None for other entity types.
 
     Returns: (positive_prompt, negative_prompt, loras, steps)
     """
@@ -58,8 +182,9 @@ def _build_entity_prompt(
         negative += ", photo, person, environment"
         steps = 24
     elif entity_type == EntityType.LOCATION:
-        prompt = f"(location background image, a humanless atmospheric image focusing on {name}, seen from above:1.2), "
+        prompt = f"(location background image, a humanless atmospheric image focusing on {name}:1.2), "
         negative += ", person"
+        prompt += _location_context_clause(name, location_context)
     else:
         prompt = f"(a concept art image of {name}:1.2), "
 
@@ -169,8 +294,11 @@ def build_imagen_prompt(
     trait_settings = repository.get_prompt_traitsettings(
         entity.id, trait_universes, projection_id
     )
+    location_context = None
+    if entity.type == EntityType.LOCATION:
+        location_context = _build_location_context(repository, entity, trait_universes)
     prompt, negative, loras, steps = _build_entity_prompt(
-        entity, trait_settings, universe
+        entity, trait_settings, universe, location_context
     )
 
     # Merge universe-level LoRA config + prompt steering for this entity type
