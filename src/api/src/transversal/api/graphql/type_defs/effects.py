@@ -48,6 +48,7 @@ class Effect:
     duration: Optional[EffectDuration] = None
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
+    owner_spec: Optional[strawberry.scalars.JSON] = None
     result_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
     output: Optional[str] = None  # the author's name for this step's result
@@ -67,6 +68,7 @@ class EffectInput:
     duration: Optional[EffectDurationInput] = None
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
+    owner_spec: Optional[strawberry.scalars.JSON] = None
     result_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
     output: Optional[str] = None  # the author's name for this step's result
@@ -225,6 +227,10 @@ class EffectActionMeta:
     # the change-die family takes a pool die or a rating die. The editor offers
     # the path mode on this and type-checks against the whole set.
     path_elements: list[str] = strawberry.field(default_factory=list)
+    # What this action's *owner path* may land on (empty = no owner path; the
+    # subject entity owns what it makes). Drives the builder's destination the
+    # same way `pathElements` drives the target path's.
+    owner_elements: list[str] = strawberry.field(default_factory=list)
     refs: list[RefDef] = strawberry.field(default_factory=list)
     # Render refs above the fields: a ref naming the *subject* ("Trait to Move")
     # reads before the field naming where it goes.
