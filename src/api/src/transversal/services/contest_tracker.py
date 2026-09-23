@@ -21,6 +21,7 @@ from transversal.domain import (
     ContestWinner,
     DicePoolRequest,
     DieType,
+    RollKind,
 )
 from transversal.services.dice_resolver import resolve_contest
 
@@ -53,6 +54,12 @@ class ContestState:
     razmerit_spent: int = 0
     committed: Optional[CommittedResult] = None
     gave_in: bool = False
+    # Whether this roll is a **test** or a **contest**. Not derivable from the
+    # state after the fact — a pool that later gets opposed was still rolled as a
+    # test — so the commit path records it where the flow is known: `set-opposition`
+    # / `/set` mean a contest, `/resolve` means a test. Defaults to TEST, which is
+    # what a state created by a pool save is.
+    kind: RollKind = RollKind.TEST
 
 
 @dataclass
@@ -99,6 +106,8 @@ class ContestTracker:
         """
         state = self.get_or_create(location_id, entity_id, universe)
         state.opposition_entity_id = opponent_id
+        # Declaring a challenge is what makes this side's roll a contest.
+        state.kind = RollKind.CONTEST
         state.committed = None
         state.gave_in = False
         state.initiative = None
@@ -113,6 +122,9 @@ class ContestTracker:
         opponent.pending_decision = None
         opponent.high_stakes = False
         opponent.pushed_this_loop = False
+        # Both sides are in the same contest, so both records say so — neither
+        # side's `kind` may depend on which one was challenged.
+        opponent.kind = RollKind.CONTEST
         return state
 
     def set_pushed(self, location_id: str, entity_id: str) -> None:
@@ -306,6 +318,19 @@ class ContestTracker:
         if state is not None:
             state.committed = committed
 
+    def mark_kind(self, location_id: str, entity_id: str, kind: RollKind) -> None:
+        """Record whether this roll is being resolved as a test or a contest.
+
+        Called from the two commit endpoints, each of which knows the answer and
+        neither of which could be derived from the other: `/set` commits a
+        contest, `/resolve` commits a test. A state that does not exist yet is
+        created, because "this was a test" is itself worth recording.
+        """
+        state = self._contests.get(location_id, {}).get(entity_id)
+        if state is None:
+            state = self.get_or_create(location_id, entity_id, "")
+        state.kind = kind
+
     def store_committed(
         self,
         location_id: str,
@@ -326,6 +351,12 @@ class ContestTracker:
             challenger.committed = committed
         else:
             defendant.committed = committed
+        # Committing *here* is what makes it a contest: this endpoint is reachable
+        # only through the tracker's contest path (`/resolve` is the test path).
+        if entity_id == challenger.entity_id:
+            challenger.kind = RollKind.CONTEST
+        else:
+            defendant.kind = RollKind.CONTEST
         logger.info(
             f"[contest] store_committed loc={location_id} entity={entity_id} total={committed.total} "
             f"challenger_committed={challenger.committed is not None} defendant_committed={defendant.committed is not None}"

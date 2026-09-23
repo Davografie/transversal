@@ -223,6 +223,11 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
                                references="entity", label="must decide"),
         "stakes": ScalarField("contest", "stakes", "string", ("high", "low"),
                               label="stakes"),
+        # Test or contest. Recorded at the commit path (`/set` is a contest,
+        # `/resolve` is a test) rather than derived, because a pool later opposed
+        # was still rolled as a test.
+        "kind": ScalarField("contest", "kind", "string", ("test", "contest"),
+                            label="kind"),
         # Where the dice are: assembly, rolled, or resolved. Read through the
         # scene store (the contest record itself has no phase).
         "phase": ScalarField("contest", "phase", "string",

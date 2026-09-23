@@ -220,6 +220,13 @@ async def resolve_pool(location_id: str, entity_id: str):
     from transversal.services.state_events import fire_state_sfx
     fire_state_sfx(entity_id, universe, "on_set", {"effect_die": effect_die, "total": total})
 
+    # This is the *test* path — a contest commits through the tracker's own
+    # `/set`. Record which one it was while the flow is known: a challenge made
+    # *later* must not turn a test already resolved into a contest.
+    from transversal.domain import RollKind
+    from transversal.services.contest_tracker import get_contest_tracker
+    get_contest_tracker().mark_kind(location_id, entity_id, RollKind.TEST)
+
     from transversal.services.roll_orchestrator import fire_result_sfx
     fire_result_sfx(entity_id, universe, dice, effect_die=effect_die, total=total)
 

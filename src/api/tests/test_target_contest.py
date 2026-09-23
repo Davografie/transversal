@@ -114,8 +114,8 @@ def test_the_challenged_side_reaches_the_same_contest(tracker):
     assert [c.id for c in res.values] == ["contest:loc-1:guard"]
 
 
-def test_an_entity_in_no_contest_resolves_to_nothing(tracker):
-    """A solo roll is a test: no opponent, no contest, and the path says so."""
+def test_an_entity_with_no_roll_recorded_resolves_to_nothing(tracker):
+    """Nothing recorded at this location for this entity — no roll in play."""
     repo, *_, = _world()
     bystander = repo.get_entity("mel")
     res = resolve(spec(SelectStep(collection="self"), NavigateStep(edge="contest")),
@@ -220,6 +220,48 @@ def test_a_contests_pools_are_each_sides_own_pool(tracker):
     assert sorted(p["id"] for p in res.values) == ["pool:guard", "pool:kael"]
     assert sorted(p["owner_id"] for p in res.values) == ["guard", "kael"]
     assert all(p["location_id"] == "loc-1" for p in res.values)
+
+
+def test_the_element_covers_a_recorded_roll_of_either_kind(tracker):
+    """`entity -> contest` means *a roll is in play at this location*, and `kind`
+    says which it was — so one element answers both questions and a filter picks.
+
+    Deliberately not "declared a challenge": a test and a contest both reach the
+    same `on_set`/`on_result` effects (`/resolve` says so in its own docstring),
+    so a rule that gates on the roll needs to see both. Gate on a *challenge* with
+    `filter kind == contest`.
+    """
+    repo, kael, *_ = _world()
+    _challenge(tracker)
+    # Both a test elsewhere and a contest here read back, distinguishable by kind.
+    assert [c.kind for c in resolve(
+        spec(SelectStep(collection="self"), NavigateStep(edge="contest")),
+        TargetContext(subject=kael, repo=repo)).values] == ["contest"]
+
+
+def test_a_roll_resolved_as_a_test_says_so(tracker):
+    """A test is recorded as a test at its commit path (`/resolve`), not inferred:
+    a pool opposed *later* was still rolled as a test."""
+    from transversal.domain import RollKind
+
+    repo, kael, *_ = _world()
+    tracker.mark_kind("loc-1", "kael", RollKind.TEST)
+    res = resolve(spec(SelectStep(collection="self"), NavigateStep(edge="contest"),
+                       FilterStep(field="kind", operator="==", value="test")),
+                  TargetContext(subject=kael, repo=repo))
+    assert [c.id for c in res.values] == ["contest:loc-1:kael"]
+
+
+def test_a_committed_contest_says_contest(tracker):
+    """Committing through the contest endpoint is what makes it a contest."""
+    from transversal.domain import CommittedResult, DieType, RollKind
+
+    repo, kael, *_ = _world()
+    _challenge(tracker)
+    tracker.store_committed("loc-1", "kael",
+                            CommittedResult(total=10, effect_die=DieType.D6, pipeline="pool"))
+    states = tracker.get_contests_at("loc-1")
+    assert states["kael"].kind == RollKind.CONTEST
 
 
 # ── location → contests ──────────────────────────────────────

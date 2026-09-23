@@ -79,6 +79,7 @@ class ContestRef:
     initiative: str = ""
     pending: str = ""
     stakes: str = "low"          # "high" | "low"
+    kind: str = "test"           # "test" | "contest"
     took_initiative: bool = False
 
 
@@ -90,6 +91,9 @@ def contest_handle(location_id: str, entity_id: str, state: Any = None) -> Conte
     """
     opp = getattr(state, "opposition_entity_id", "") or ""
     initiative = getattr(state, "initiative", "") or ""
+    # `ContestState.kind` is a `RollKind` enum; the catalog compares against the
+    # value, so carry the value (`"test"`), not the enum.
+    kind = getattr(state, "kind", None)
     return ContestRef(
         id=f"contest:{location_id}:{entity_id}",
         location_id=location_id,
@@ -98,6 +102,7 @@ def contest_handle(location_id: str, entity_id: str, state: Any = None) -> Conte
         initiative=initiative,
         pending=getattr(state, "pending_decision", None) or "",
         stakes="high" if getattr(state, "high_stakes", False) else "low",
+        kind=getattr(kind, "value", None) or (str(kind) if kind else "test"),
         # Who holds initiative — the side that set the difficulty to beat.
         took_initiative=bool(initiative) and initiative == entity_id,
     )
