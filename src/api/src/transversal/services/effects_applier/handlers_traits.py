@@ -172,6 +172,36 @@ def _apply_invert_polarity(entity, effect, repo, result):
         effect, f"{was.value} → {existing.polarity.value} on {target}", existing.id))
     _queue_trait_revert(repo, existing, effect, prior_result=was.value)
 
+def _apply_set_polarity(entity, effect, repo, result):
+    """Set a trait instance's polarity outright, rather than flipping it.
+
+    The counterpart of *Invert Polarity*: the author says **which** value, so the
+    same effect is idempotent (a flip is not — firing twice returns to where it
+    started). Its inverse captures the prior value, so a duration restores it.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, repo)
+    if target is None:
+        return
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
+    if existing is None:
+        result.applied.append(AppliedEffect(effect, f"no trait instance {target} to set polarity on"))
+        return
+    wanted = (_ctx(effect, "polarity") or "positive").lower()
+    was = existing.polarity
+    existing.polarity = Polarity.NEGATIVE if wanted == "negative" else Polarity.POSITIVE
+    result.updated_trait_settings.append(existing)
+    if existing.polarity == was:
+        result.applied.append(AppliedEffect(
+            effect, f"{target} is already {was.value}", existing.id))
+        return
+    result.applied.append(AppliedEffect(
+        effect, f"{was.value} → {existing.polarity.value} on {target}", existing.id))
+    _queue_trait_revert(repo, existing, effect, prior_result=was.value)
+
 def _apply_change_trait(entity, effect, repo, result):
     """Point a trait instance at a different registry trait.
 

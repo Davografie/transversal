@@ -282,6 +282,50 @@ ACTIONS: list[EffectActionMeta] = [
         path_element=("traitsetting",),
     ),
     EffectActionMeta(
+        action_id="enable_trait",
+        label="Enable Trait",
+        description=(
+            "Bring a disabled trait back into play, so it contributes its dice again "
+            "(the counterpart of Disable Trait; needed by the portent agenda)"
+        ),
+        category="benefit",
+        effect_type="modify_trait",
+        effect_action="enable",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
+        fields=[
+            EffectFieldDef(name="target", label="Target Trait", field_type="text",
+                          required=True, default="primary"),
+        ],
+        supports_duration=True,
+        # The handler already existed as `disable`'s duration-revert and had no
+        # action name of its own, so it could not be authored directly.
+        inverse=("modify_trait", "disable"),
+        path_element=("traitsetting",),
+    ),
+    EffectActionMeta(
+        action_id="set_polarity",
+        label="Set Polarity",
+        description=(
+            "Set a trait instance's polarity outright, rather than flipping it — "
+            "the same change as Invert Polarity when the other value is known"
+        ),
+        category="either",
+        effect_type="modify_trait",
+        effect_action="set_polarity",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+        ],
+        context_fields=[
+            EffectFieldDef(name="polarity", label="Polarity", field_type="select",
+                          required=True, default="positive", options=["positive", "negative"]),
+        ],
+        supports_duration=True,
+        inverse=("modify_trait", "set_polarity"),
+        inverse_captures_prior=True,
+        path_element=("traitsetting",),
+    ),
+    EffectActionMeta(
         action_id="toggle_trait",
         label="Toggle Trait",
         description="Flip a trait between enabled and disabled",

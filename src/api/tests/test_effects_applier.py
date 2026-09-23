@@ -2804,3 +2804,56 @@ def test_reroll_die_is_pool_only_and_has_an_inverse():
     assert meta.supports_duration is False   # a pool is rebuilt every roll
     assert meta.inverse == ("modify_roll", "reroll_die")
     assert get_inverse("modify_roll", "reroll_die") == (("modify_roll", "reroll_die"), True)
+
+
+# ── Enable Trait / Set Polarity (B127's remaining vocabulary) ───
+
+def test_enable_trait_is_a_first_class_action():
+    """The handler existed as `disable`'s duration-revert and had no name of its
+    own, so a rule could not enable a disabled trait directly (the portent agenda)."""
+    from transversal.services.effects_registry import get_action_meta
+    meta = get_action_meta("enable_trait")
+    assert meta is not None and meta.retired is False
+    assert (meta.effect_type, meta.effect_action) == ("modify_trait", "enable")
+    assert meta.inverse == ("modify_trait", "disable")
+
+
+def test_enabling_a_disabled_trait_works():
+    ts = _ts("portent", [DieType.D6], traitset_id="ts-agenda", enabled=False)
+    repo = FakeRepo(traits=[FakeTrait("portent", "ts-agenda")], traitsettings=[ts])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="enable", target="char-1:portent")
+    result = apply_effects(_entity(), [effect], repo)
+    assert ts.enabled is True
+    assert "enabled" in result.applied[0].summary
+
+
+def test_set_polarity_sets_the_value_it_is_given():
+    ts = _ts("hazard", [DieType.D6], traitset_id="ts-1", polarity=Polarity.POSITIVE)
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-1")], traitsettings=[ts])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="set_polarity", target="char-1:hazard",
+                    context={"polarity": "negative"})
+    result = apply_effects(_entity(), [effect], repo)
+    assert ts.polarity == Polarity.NEGATIVE
+    assert "positive → negative" in result.applied[0].summary
+
+
+def test_set_polarity_is_idempotent_unlike_a_flip():
+    """The difference that justifies its own action: firing twice lands the same
+    place, where Invert Polarity would return."""
+    ts = _ts("hazard", [DieType.D6], traitset_id="ts-1", polarity=Polarity.NEGATIVE)
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-1")], traitsettings=[ts])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="set_polarity", target="char-1:hazard",
+                    context={"polarity": "negative"})
+    for _ in range(2):
+        result = apply_effects(_entity(), [effect], repo)
+    assert ts.polarity == Polarity.NEGATIVE
+    assert "already negative" in result.applied[0].summary
+
+
+def test_reroll_highest_is_retired_in_favour_of_a_path():
+    from transversal.services.effects_registry import get_action_meta
+    assert get_action_meta("reroll_highest").retired is True
+    assert get_action_meta("reroll_die").retired is False

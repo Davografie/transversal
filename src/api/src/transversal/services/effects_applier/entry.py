@@ -63,6 +63,7 @@ from transversal.services.effects_applier.handlers_traits import (
     _apply_move_trait,
     _apply_remove,
     _apply_reveal,
+    _apply_set_polarity,
     _apply_step_down,
     _apply_step_up,
 )
@@ -88,6 +89,7 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "reduce_by_effect"): _apply_reduce_by_effect,
     ("modify_trait", "increase_by_effect"): _apply_increase_by_effect,
     ("modify_trait", "set"): _apply_set,
+    ("modify_trait", "set_polarity"): _apply_set_polarity,
     ("modify_trait", "disable"): _apply_disable,
     ("modify_trait", "enable"): _apply_enable,
     ("modify_trait", "toggle"): _apply_toggle,

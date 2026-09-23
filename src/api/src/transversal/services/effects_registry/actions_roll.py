@@ -383,6 +383,9 @@ ACTIONS: list[EffectActionMeta] = [
         effect_type="modify_outcome",
         effect_action="reroll_highest",
         valid_timings=["IMMEDIATE"],
+        # Superseded by *Reroll Die* on a path ending `aggregate max` — the path
+        # names the die instead of the action guessing which one is highest.
+        retired=True,
     ),
 
 ]
