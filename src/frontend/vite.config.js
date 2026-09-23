@@ -52,6 +52,15 @@ export default defineConfig({
     })
   ],
   server: {
+    // Vite rejects requests whose Host header it does not recognise (protecting
+    // against DNS rebinding). Without this, reaching the dev server over the
+    // tailnet returns "Blocked request. This host is not allowed." List the
+    // tailnet names explicitly rather than `allowedHosts: true`, which would
+    // disable the fence for every host.
+    //
+    // Host-based, so this one entry covers every dev port — :3000 and the role
+    // worktree servers on :3002+ (scripts/dev-worktree.sh).
+    allowedHosts: ['ptdave', 'ptdave.ts.transversal.app'],
     proxy: {
       '/api': 'http://api:8080',
       '/media': 'http://api:8080'
