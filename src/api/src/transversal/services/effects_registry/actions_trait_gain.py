@@ -67,6 +67,7 @@ ACTIONS: list[EffectActionMeta] = [
         supports_polarity=True,
         inverse=("modify_trait", "remove"),
         path_element=("trait",),
+        field_order=("target", "entity", "owner", "result"),
         # The edge to anchor to. `select self → relationships → filter contact_id == …`
         # is the shape, and `contact_id` is a reference, so it offers an entity
         # picker rather than the text box the old "Relationship with" field was.
@@ -105,6 +106,7 @@ ACTIONS: list[EffectActionMeta] = [
         supports_polarity=True,
         inverse=("modify_trait", "remove"),
         path_element=("trait",),
+        field_order=("target", "owner", "result"),
         # The container it hangs under: `select self → traitsettings → filter …`.
         owner_elements=("traitsetting",),
     ),

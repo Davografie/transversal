@@ -50,6 +50,20 @@
         :variables="scopedVariables"
         @update:model-value="newEffect.refs[item.f.name].spec = $event"
       />
+      <!-- Where this effect anchors what it makes, when the action says that is
+           not the subject entity: a relationship edge, or another trait instance.
+           Its destination comes from the action (`ownerElements`), so the builder
+           offers exactly what that verb can anchor to and nothing else. -->
+      <div v-else-if="item.kind === 'owner'" class="ee-field">
+        <label>{{ item.f.label }}</label>
+        <p class="ee-field-help">{{ ownerHelp }}</p>
+        <TargetSpecBuilder
+          v-model="newEffect.ownerSpec"
+          :destination="ownerPathDestination"
+          :source-element="sourceElement"
+          :variables="scopedVariables"
+        />
+      </div>
       <template v-else>
       <div class="ee-field">
         <label>{{ item.f.label }}</label>
@@ -263,7 +277,7 @@ const emit = defineEmits(['save', 'cancel'])
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, resultSpec: { steps: [] }, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, negative: false, refs: {}, output: '', conditions: [] })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, resultSpec: { steps: [] }, ownerSpec: { steps: [] }, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, negative: false, refs: {}, output: '', conditions: [] })
 
 // Variables the effect's *own* earlier paths expose. The engine walks an
 // effect's paths in order — target, then its references — so a name that path 1
@@ -444,6 +458,22 @@ const specDestination = computed(() => {
   return elements.length ? { elements } : null
 })
 
+// The owner path exists only when the action declares it, and it may land only on
+// what the action declares — so the builder can never offer an anchor the verb
+// cannot use.
+const OWNER_ELEMENT_LABEL = {
+  relationship: 'the relationship edge this trait hangs on',
+  traitsetting: 'the trait instance this one nests under',
+}
+const ownerPathDestination = computed(() => {
+  const elements = selectedAction.value?.ownerElements || []
+  return elements.length ? { elements } : null
+})
+const ownerHelp = computed(() => {
+  const element = (selectedAction.value?.ownerElements || [])[0]
+  return `Anchored to ${OWNER_ELEMENT_LABEL[element] || element}.`
+})
+
 // A die named by a path resolves to a *die* — either a slot of a challenge's
 // capacity (the ceiling) or a die of a trait instance's rating (what it holds).
 // Both carry a die size, so both are offered, and nothing else is.
@@ -535,8 +565,14 @@ const orderedInputs = computed(() => {
   const unranked = rank_by_declaration(refs, fields, refsFirst.value)
   const declared = order.map((name) => by_name(name, refs, fields)).filter(Boolean)
   const declaredNames = new Set(declared.map((x) => x.f.name))
-  return [...declared, ...unranked.filter((x) => !declaredNames.has(x.f.name))]
+  const tail = unranked.filter((x) => !declaredNames.has(x.f.name))
+  // An action that declares an owner path but does not rank it still shows it, at
+  // the end — the anchor reads after the thing it anchors.
+  if (ownerPathDestination.value && !declaredNames.has('owner')) tail.push(OWNER_INPUT)
+  return [...declared, ...tail]
 })
+
+const OWNER_INPUT = { kind: 'owner', f: { name: 'owner', label: 'Anchored to' } }
 
 // A declared order ranks refs among the fields, so it decides their side itself;
 // without one, the action's own `refsFirst` does.
@@ -551,6 +587,7 @@ function rank_by_declaration(refs, fields, refsFirst) {
 }
 
 function by_name(name, refs, fields) {
+  if (name === 'owner' && ownerPathDestination.value) return OWNER_INPUT
   const r = refs.find((x) => x.name === name)
   if (r) return { kind: 'ref', f: r }
   const f = fields.find((x) => x.name === name)
@@ -617,6 +654,7 @@ function onActionChange() {
   newEffect.entityMode = 'literal'
   newEffect.entitySpec = { steps: [] }
   newEffect.resultSpec = { steps: [] }
+  newEffect.ownerSpec = { steps: [] }
   newEffect.negative = false
   newEffect.conditions = []
   initRefs(selectedAction.value)
@@ -715,6 +753,7 @@ function buildEffect(meta) {
     // A die named by a path: sent only in that mode, so a literal/variable die is
     // never shadowed by a stale spec the author left behind.
     resultSpec: resultMode.value === 'spec' && (newEffect.resultSpec?.steps || []).length ? newEffect.resultSpec : null,
+    ownerSpec: (newEffect.ownerSpec?.steps || []).length ? newEffect.ownerSpec : null,
     entitySpec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
     refs: buildRefs(),
     output: (newEffect.output || '').trim() || null,
@@ -761,6 +800,7 @@ function populate(eff) {
     ? 'spec'
     : ((eff.result && eff.result.startsWith('{')) ? 'variable' : 'die')
   newEffect.resultSpec = eff.resultSpec || { steps: [] }
+  newEffect.ownerSpec = eff.ownerSpec || { steps: [] }
   effectDieMode.value = (eff.context?.effect_die && String(eff.context.effect_die).startsWith('{')) ? 'variable' : 'die'
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
     newEffect.fields.target = eff.target
@@ -808,6 +848,7 @@ function resetBlank() {
   newEffect.entityMode = 'literal'
   newEffect.entitySpec = { steps: [] }
   newEffect.resultSpec = { steps: [] }
+  newEffect.ownerSpec = { steps: [] }
   newEffect.negative = false
   newEffect.refs = {}
   newEffect.conditions = []

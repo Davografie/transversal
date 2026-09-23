@@ -38,7 +38,7 @@ export function useTraitsConfig() {
           duration { timers { event remaining } combine }
           listenerSpec acquireSpec
           conditions { type subject target targets value operator narrative spec }
-          effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec refs output conditions { type subject target targets value operator narrative spec } }
+          effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } }
         }
       }`),
     ])
