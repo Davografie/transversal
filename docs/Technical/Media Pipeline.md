@@ -352,6 +352,20 @@ portraits.
 
 ## Upload & format handling
 
-`ALLOWED_EXTENSIONS = png, jpg, jpeg, gif, webp, svg, heic, heif`. HEIC/HEIF
-(iOS camera photos) are decoded via `pillow-heif`, then converted to WebP;
-SVG and GIF pass through unchanged. Size cap is 10 MB.
+`ALLOWED_EXTENSIONS = png, jpg, jpeg, gif, webp, heic, heif`. HEIC/HEIF
+(iOS camera photos) are decoded via `pillow-heif`, then converted to WebP. GIF —
+and any other source Pillow reports as animated — passes through unchanged;
+everything else is re-encoded to WebP. Size cap is 10 MB.
+
+> [!warning] `.svg` is not accepted (SEC-4)
+> SVG used to be allowed and passed through un-re-encoded. It is served from the
+> app's own origin and can carry script — i.e. stored XSS — so the extension is
+> now rejected at upload. The removal is deliberate; don't re-add it without a
+> sanitizer.
+
+`entity_id` and `universe` become filesystem path components, so both are
+validated against `_SAFE_COMPONENT`
+(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`) before anything touches disk — no
+separators, no `..`, no leading dot. The *stored* `current_universe` is
+validated on the same path, so a bad value already in the data cannot traverse
+either. A failure is a 400.
