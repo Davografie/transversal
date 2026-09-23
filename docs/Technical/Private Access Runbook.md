@@ -603,6 +603,51 @@ docker exec headscale headscale users destroy --name <USER> --force
 > A cleanup of mine appeared to succeed and left three nodes on the tailnet. Always re-run
 > `nodes list` afterwards and confirm with your own eyes that the device is gone.
 
+## 12 · Developing remotely (the dev server over the tailnet)
+
+The dev server is loopback-bound and **must stay that way** — rebinding it to `0.0.0.0` is SEC-2.
+To reach it remotely, publish the port to the tailnet instead:
+
+```bash
+tailscale serve --bg --http=3000 3000                       # canonical dev server (release-build)
+for p in 3002 3003 3004 3005 3006 3007 3008; do             # role worktree servers
+  tailscale serve --bg --http=$p $p
+done
+tailscale serve status
+```
+
+Vite must also be told the hostname. Without it, the page returns
+`Blocked request. This host ("ptdave") is not allowed.` — an error page, not the app:
+
+```js
+// src/frontend/vite.config.js
+server: {
+  allowedHosts: ['ptdave', 'ptdave.ts.transversal.app'],
+  proxy: { /* unchanged */ }
+}
+```
+
+List the names explicitly rather than `allowedHosts: true`: that setting is Vite's DNS-rebinding
+fence, and `true` disables it for every host including attacker-controlled ones. It is
+**host-based**, so this one entry covers `:3000` and every worktree port on `:3002+`.
+
+> [!warning] The single-file bind mount will silently defeat you
+> `docker-compose.yaml` mounts the config as one file:
+> `./src/frontend/vite.config.js:/app/vite.config.js`. A single-file bind mount follows the
+> **inode**, and git (like most editors) replaces files atomically — i.e. with a *new* inode. The
+> running container therefore keeps seeing the old file, and Vite never notices, however many
+> times you save.
+>
+> **Symptom:** you edit the config, Vite reports nothing, the old behaviour persists.
+>
+> **Diagnose:** `docker exec tv2_frontend grep allowedHosts /app/vite.config.js` — stale if absent.
+>
+> **Fix:** `docker restart tv2_frontend`, so the mount re-resolves the path. (Restarting is enough;
+> no need to recreate.)
+>
+> Verified after the restart: `http://ptdave:3000/` answered **200** over the tailnet from a
+> separate device, while `Host: evil.example` was still refused.
+
 ## Rollback
 
 Everything here is reversible: `docker compose down`, `ufw delete allow 443/tcp`, and cancel the
