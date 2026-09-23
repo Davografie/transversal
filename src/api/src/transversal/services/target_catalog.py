@@ -62,6 +62,12 @@ ELEMENT_TYPES: dict[str, ElementType] = {
     # A pending timer, as a targetable thing: an effect can be aimed at a
     # countdown that is already running on someone.
     "scheduled_event": ElementType("scheduled_event", "Pending timer"),
+    # A contest (or a test with an opponent) as a *thing in play*: session state
+    # keyed (location, entity) in the contest tracker, so like `pool` it is a
+    # **handle** rather than a persisted document. It exists so "is this entity /
+    # this pool / this place in a contest" is one hop, and so a rule can reach the
+    # other side, the stakes and the committed result without a context token.
+    "contest": ElementType("contest", "Contest"),
 }
 
 
@@ -200,6 +206,28 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "tags": ScalarField("traitsetting", "tags", "string",
                             operators=("contains", "==", "!="), suggest="trait_tags",
                             label="tag"),
+    },
+    "contest": {
+        "location_id": ScalarField("contest", "location_id", "string",
+                                   references="location", label="location"),
+        "entity_id": ScalarField("contest", "entity_id", "string",
+                                 references="entity", label="side"),
+        # The other side — what "the opponent" was before it became a hop.
+        "opposition_id": ScalarField("contest", "opposition_id", "string",
+                                     references="entity", label="opponent"),
+        # Who set the difficulty to beat.
+        "initiative": ScalarField("contest", "initiative", "string",
+                                  references="entity", label="has initiative"),
+        # The side that must give in or push, when a compare is pending.
+        "pending": ScalarField("contest", "pending", "string",
+                               references="entity", label="must decide"),
+        "stakes": ScalarField("contest", "stakes", "string", ("high", "low"),
+                              label="stakes"),
+        # Where the dice are: assembly, rolled, or resolved. Read through the
+        # scene store (the contest record itself has no phase).
+        "phase": ScalarField("contest", "phase", "string",
+                             ("adding", "rolling", "picking", "resolved"),
+                             label="phase"),
     },
     "traitsetsetting": {
         "entity_id": ScalarField("traitsetsetting", "entity_id", "string", references="entity"),
@@ -429,6 +457,23 @@ EDGES: tuple[Edge, ...] = (
     Edge("locations", "universe", ("location",), "many", "Locations",
          noun="location", plural="locations"),
 
+    # A contest, reachable from the three things that know about one. `pool →
+    # contest` is the short route and the one that speaks the moment (dice are
+    # being assembled right now); `entity → contest` is "the contest I am in";
+    # `location → contests` is "is this place running one".
+    Edge("contest", "pool", ("contest",), "one", "Contest",
+         noun="contest", plural="contest"),
+    Edge("contest", "entity", ("contest",), "one", "Contest in",
+         noun="contest", plural="contest"),
+    Edge("contests", "location", ("contest",), "many", "Contests",
+         noun="contest", plural="contests"),
+    # The parties, and each side's pool — "who is in it" and "what are they
+    # fighting with".
+    Edge("entities", "contest", ("entity",), "many", "Participants",
+         noun="participant", plural="participants"),
+    Edge("pools", "contest", ("pool",), "many", "Their dice pools",
+         noun="pool", plural="pools"),
+
     # entity / location → their dice pool (pool-assembly target for add_dice)
     Edge("pool", "entity", ("pool",), "one", "Dice pool"),
     Edge("difficulty_pool", "location", ("pool",), "one", "GM difficulty pool",
@@ -648,6 +693,7 @@ DISPLAY_FIELDS: dict[str, DisplayFields] = {
     "relationship": DisplayFields("relationship", "contact_name", "type"),
     "universe": DisplayFields("universe", "name", ""),
     "pool": DisplayFields("pool", "kind", ""),
+    "contest": DisplayFields("contest", "stakes", "phase"),
     "sfx": DisplayFields("sfx", "name", "trigger"),
     "life_path": DisplayFields("life_path", "name", "universe"),
     "roll_table": DisplayFields("roll_table", "name", "universe"),

@@ -58,6 +58,93 @@ class UniverseRef:
     name: str = ""
 
 
+@dataclass(frozen=True)
+class ContestRef:
+    """A contest as the catalog models it: a **handle**, plus what a card can say.
+
+    A contest has no id of its own — it is session state keyed
+    ``(location, entity)`` in the contest tracker, and it vanishes on restart. So
+    the element *is* a handle, like a pool and a universe: ``contest:<location>:<entity>``
+    naming **one side's** contest state. The two sides of one challenge are two
+    states that know about each other, so a path that lands on either can reach
+    the other through ``contest → entities``.
+
+    ``opponent_id`` is the other side; ``member_ids`` is both sides, which is what
+    "who are the participants" reads.
+    """
+    id: str
+    location_id: str
+    entity_id: str
+    opposition_id: str = ""
+    initiative: str = ""
+    pending: str = ""
+    stakes: str = "low"          # "high" | "low"
+    took_initiative: bool = False
+
+
+def contest_handle(location_id: str, entity_id: str, state: Any = None) -> ContestRef:
+    """The handle for one side's contest at a location.
+
+    ``state`` is the tracker's ``ContestState`` when the caller has it; without it
+    the handle still names the contest (an id is all a literal or a filter needs).
+    """
+    opp = getattr(state, "opposition_entity_id", "") or ""
+    initiative = getattr(state, "initiative", "") or ""
+    return ContestRef(
+        id=f"contest:{location_id}:{entity_id}",
+        location_id=location_id,
+        entity_id=entity_id,
+        opposition_id=opp,
+        initiative=initiative,
+        pending=getattr(state, "pending_decision", None) or "",
+        stakes="high" if getattr(state, "high_stakes", False) else "low",
+        # Who holds initiative — the side that set the difficulty to beat.
+        took_initiative=bool(initiative) and initiative == entity_id,
+    )
+
+
+def _contest_state(location_id: str, entity_id: str) -> Any | None:
+    """This side's ``ContestState``, from the tracker (session state)."""
+    if not location_id or not entity_id:
+        return None
+    from transversal.services.contest_tracker import get_contest_tracker
+
+    states = get_contest_tracker().get_contests_at(location_id)
+    return states.get(entity_id)
+
+
+def contest_of_side(location_id: str, entity_id: str) -> ContestRef | None:
+    """The contest this entity is a party to at a location, or ``None``.
+
+    A contest exists as soon as one entity is challenged (``set_opposition``), so
+    this is also the answer to "is this entity in a contest".
+    """
+    if _contest_state(location_id, entity_id) is not None:
+        return contest_handle(location_id, entity_id, _contest_state(location_id, entity_id))
+    # The challenged side also has a state (``set_opposition`` creates both), but
+    # a stale/partial table may only carry the challenger's — find it by reverse
+    # lookup so an opponent still reads as being in the contest.
+    from transversal.services.contest_tracker import get_contest_tracker
+
+    for state in get_contest_tracker().get_contests_at(location_id).values():
+        if getattr(state, "opposition_entity_id", None) == entity_id:
+            return contest_handle(location_id, getattr(state, "entity_id", entity_id), state)
+    return None
+
+
+def _parse_contest_ref(value: Any) -> tuple[str, str] | None:
+    """``contest:<location>:<entity>`` → ``(location, entity)``.
+
+    Split from the front because a location id has no colons today but an entity
+    id may (``character-20809:three_realms:trait-…`` is a *trait setting*, not an
+    entity, but the convention keeps the tail free for one).
+    """
+    parts = str(value or "").split(":", 2)
+    if len(parts) != 3 or parts[0] != "contest":
+        return None
+    return (parts[1], parts[2]) if parts[1] and parts[2] else None
+
+
 @dataclass
 class Binding:
     """A typed output variable bound in a per-activation scope.
@@ -1287,6 +1374,10 @@ def register_default_fields() -> None:
     register_derived_field("traitsetting", "tags", _traitsetting_tags)
     register_derived_field("die", "rating", _die_rating)
     register_derived_field("location", "universe", _location_universe)
+    # A contest's *phase* belongs to the dice pool, not to the contest record: the
+    # tracker knows who is fighting and what is at stake, the scene store knows
+    # whether they are still assembling dice or have rolled. One reader joins them.
+    register_derived_field("contest", "phase", _contest_phase)
     # A registry trait's picker subtitle is its trait set's *name* — the raw
     # `traitset_id` is a second id where a word belongs.
     register_derived_field("trait", "traitset_name", _trait_traitset_name)
@@ -1299,7 +1390,130 @@ def register_default_fields() -> None:
     register_derived_field("scheduled_event", "subtitle", _scheduled_event_subtitle)
 
 
+def _contest_phase(contest: Any, repo) -> str:
+    """Whether this contest is still assembling dice, or past that.
+
+    The tracker records *who* is contesting; the scene store records where the
+    dice are. A contest with no pool yet reads ``"adding"`` — the phase a fresh
+    contest is always in — so a gate on "dice already rolled" cannot pass early.
+    """
+    location_id = _get_field(contest, "location_id")
+    entity_id = _get_field(contest, "entity_id")
+    if not location_id or not entity_id:
+        return "adding"
+    from transversal.services.scene_state import get_scene_store
+
+    return get_scene_store().get_phase(location_id, entity_id)
+
+
+def _pool_contest(pool: Any, ctx: TargetContext) -> list[Any]:
+    """The contest this pool belongs to, if the pool's owner is a party.
+
+    The short route, and the one the moment speaks: a pool exists during
+    assembly and roll, which is exactly when "am I in a contest" is being asked.
+    A pool with no contest (a test rolled alone) resolves to nothing — which is
+    how a rule tells a test from a contest without a separate flag.
+    """
+    location_id = _get_field(pool, "location_id")
+    owner_id = _get_field(pool, "owner_id")
+    ref = contest_of_side(location_id or "", owner_id or "")
+    return [ref] if ref is not None else []
+
+
+def _entity_contest(entity: Any, ctx: TargetContext) -> list[Any]:
+    """The contest this entity is currently in, if any.
+
+    The tracker is keyed ``(location, entity)``, so "in a contest" is a lookup
+    rather than a scan over the world: no location, no contest. `select self →
+    navigate contest` is therefore "the contest I am in".
+    """
+    entity_id = getattr(entity, "id", None) or (entity.get("id") if isinstance(entity, dict) else "")
+    location_id = getattr(entity, "current_location", None) or ""
+    if not location_id and isinstance(entity, dict):
+        location_id = entity.get("current_location") or ""
+    ref = contest_of_side(location_id or "", entity_id or "")
+    return [ref] if ref is not None else []
+
+
+def _contest_parties(contest: Any, ctx: TargetContext) -> list[Any]:
+    """Both sides of the contest, as entities — "who are the participants".
+
+    The challenger's state carries the opponent, and ``set_opposition`` creates
+    the other side's state too, so the pair is derivable from either handle.
+    """
+    location_id = _get_field(contest, "location_id")
+    entity_id = _get_field(contest, "entity_id")
+    if not location_id or not entity_id:
+        return []
+    from transversal.services.contest_tracker import get_contest_tracker
+
+    challenger, defendant = get_contest_tracker().get_contestants(location_id, entity_id)
+    ids = [getattr(s, "entity_id", None) for s in (challenger, defendant) if s is not None]
+    out = []
+    for eid in dict.fromkeys(i for i in ids if i):
+        entity = ctx.repo.get_entity(eid) if ctx.repo else None
+        if entity is not None:
+            out.append(entity)
+    return out
+
+
+def _contest_pools(contest: Any, ctx: TargetContext) -> list[Any]:
+    """Each side's pool, as pool handles — the dice they are fighting with."""
+    location_id = _get_field(contest, "location_id")
+    entity_id = _get_field(contest, "entity_id")
+    if not location_id or not entity_id:
+        return []
+    from transversal.services.contest_tracker import get_contest_tracker
+
+    challenger, defendant = get_contest_tracker().get_contestants(location_id, entity_id)
+    out = []
+    for state in (challenger, defendant):
+        side = getattr(state, "entity_id", None) if state is not None else None
+        if side:
+            out.append(_pool_handle(side, location_id, "pool"))
+    return out
+
+
+def _location_contests(location: Any, ctx: TargetContext) -> list[Any]:
+    """Every contest running at this location — "is this place running one".
+
+    One read of the location's contest table; empty when the place is quiet.
+    """
+    location_id = getattr(location, "id", None) or (location.get("id") if isinstance(location, dict) else "")
+    if not location_id:
+        return []
+    from transversal.services.contest_tracker import get_contest_tracker
+
+    states = get_contest_tracker().get_contests_at(location_id)
+    # One handle per *contest*, not per state. The tracker keeps a state for each
+    # side, but only the challenger's carries ``opposition_entity_id`` — the
+    # defendant's is a bare record — so the challenger is what names the contest,
+    # and `get_contestants` is what pairs the two reliably.
+    seen: set[str] = set()
+    out = []
+    for entity_id in list(states):
+        challenger, _defendant = get_contest_tracker().get_contestants(location_id, entity_id)
+        side = getattr(challenger, "entity_id", None) if challenger is not None else None
+        if not side or side in seen:
+            continue
+        seen.add(side)
+        out.append(contest_handle(location_id, side, states.get(side) or challenger))
+    return out
+
+
 def register_default_edges() -> None:
+    # A contest is reached from the two things that know about one: a *pool* (the
+    # dice being assembled — the shortest route, and the one that speaks the
+    # moment) and an *entity* (who is in one). `pool → contest` deliberately comes
+    # first so "the contest for this pool of dice" is one hop rather than
+    # pool → entity → contest.
+    register_edge("pool", "contest", _pool_contest)
+    register_edge("entity", "contest", _entity_contest)
+    register_edge("contest", "entities", _contest_parties)
+    # The two sides fight *with* their pools, so a contest reaches each side's pool
+    # (and through it, the dice).
+    register_edge("contest", "pools", _contest_pools)
+    register_edge("location", "contests", _location_contests)
     register_edge("die", "traitsetting", lambda d, ctx: _maybe(ctx.repo.get_traitsetting(d.get("ts_id"))))
     register_edge("die", "owner", _die_owner)
 
