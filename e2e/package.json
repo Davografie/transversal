@@ -1,0 +1,16 @@
+{
+  "name": "transversal-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser verification for the Transversal frontend. Lives outside src/frontend on purpose — see README.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:chromium": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}
