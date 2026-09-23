@@ -165,6 +165,10 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
         # (the engine resolves first on its own path); handlers then see a
         # concrete ``entity`` id, matching the engine's ``target_spec`` rewrite.
         effect = resolve_effect_entity(effect, entity.id, repo, context)
+        # A die named by a path (``result_spec``) is read here too, for the same
+        # reason: this entry point is reached directly (a life-path entry) as well
+        # as through the engine, and an unread die silently means "no die".
+        effect = resolve_effect_result(effect, entity.id, repo, context)
         if effect.target_spec is not None and effect.target_spec.steps:
             _apply_spec_effect(effect, entity, repo, result, bindings)
             continue
@@ -231,26 +235,90 @@ def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | 
     # caller iterating one die means *that die* is the roll. `added_dice` is
     # narrowed by the rule's source, which the caller threaded into the context.
     source = (context or {}).get(SOURCE_CONTEXT_KEY)
+    source_element = (context or {}).get(SOURCE_ELEMENT_CONTEXT_KEY)
     seeds = event_collections(
-        context, getattr(source, "id", None), (context or {}).get(SOURCE_ELEMENT_CONTEXT_KEY))
+        context, getattr(source, "id", None), source_element)
     seeds.update(collections or {})
-    resolved = _resolve_entity_spec(effect, entity, repo, bindings, seeds)
+    resolved = _resolve_entity_spec(effect, entity, repo, bindings, seeds,
+                                    source=source, source_element=source_element)
     return resolved if resolved is not None else effect
 
+
+def resolve_effect_result(effect: Effect, entity_id: str, repo,
+                          context: dict | None = None,
+                          collections: dict | None = None) -> Effect:
+    """Rewrite ``effect`` so its die is concrete, resolving ``result_spec``.
+
+    ``result`` is a literal (``d6``) or a ``{variable}`` token, which covers a die
+    anyone can name while authoring. A die that is a *fact in the world* — the
+    capacity slot an agenda's next step fills — has no literal, so the author
+    names it by a path and this reads it. Mirrors :func:`resolve_effect_entity`,
+    including the event-scoped collections and the resolved activation source, so
+    a ``select source`` path works on an automatic trigger.
+
+    The resolved value is a die: a ``capacity_die`` (or ``rating_die``) carries it
+    under ``rating``, and a raw die value is already the string. A path that names
+    a die we cannot read leaves the effect as authored, so the existing "no die
+    rating to add" report still fires rather than inventing one.
+    """
+    if effect.result_spec is None or not effect.result_spec.steps:
+        return effect
+    entity = repo.get_entity(entity_id) if repo is not None else None
+    if entity is None:
+        return effect
+    from transversal.services.effects_applier.datatypes import SOURCE_CONTEXT_KEY
+    from transversal.services.effects_applier.datatypes import SOURCE_ELEMENT_CONTEXT_KEY
+    from transversal.services.target_resolver import TargetContext, event_collections, resolve
+
+    bindings = (context or {}).get(BINDINGS_CONTEXT_KEY) or {}
+    source = (context or {}).get(SOURCE_CONTEXT_KEY)
+    source_element = (context or {}).get(SOURCE_ELEMENT_CONTEXT_KEY)
+    seeds = event_collections(context, getattr(source, "id", None), source_element)
+    seeds.update(collections or {})
+
+    resolution = resolve(
+        effect.result_spec,
+        TargetContext(subject=entity, repo=repo, bindings=bindings,
+                      collections=seeds, source=source, source_element=source_element),
+    )
+    for value in resolution.values:
+        die = _die_from_spec_value(value)
+        if die:
+            return effect.model_copy(update={"result": die, "result_spec": None})
+    return effect
+
+
+def _die_from_spec_value(value) -> str | None:
+    """The die a resolved ``result_spec`` value names, if it names one."""
+    raw = None
+    if isinstance(value, dict):
+        raw = value.get("rating") or value.get("die")
+    if raw is None:
+        raw = getattr(value, "rating", None) or getattr(value, "die", None)
+    if raw is None and isinstance(value, str) and value[:1] == "d":
+        raw = value  # a bare die value, e.g. an aggregate over a die field
+    size = getattr(raw, "value", raw)
+    return str(size) if size else None
+
 def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict,
-                         collections: dict | None = None) -> Effect | None:
+                         collections: dict | None = None,
+                         source=None, source_element: str | None = None) -> Effect | None:
     """Resolve ``effect.entity_spec`` to a concrete id, or None if it resolves nothing.
 
     ``bindings`` is the activation scope (condition + earlier-effect outputs), so a
     path can pick up a variable a condition named — e.g. the d4 traits this roll
-    matched, navigated on to their owning entities.
+    matched, navigated on to their owning entities. ``source``/``source_element``
+    are the activation's resolved source, without which a path that starts
+    ``select source`` resolves to nobody (the same gap the immediate-target path
+    had).
     """
     from transversal.services.target_resolver import TargetContext, resolve
 
     resolution = resolve(
         effect.entity_spec,
         TargetContext(subject=entity, repo=repo, bindings=bindings,
-                      collections=dict(collections or {})),
+                      collections=dict(collections or {}),
+                      source=source, source_element=source_element),
     )
     for value in resolution.values:
         rid = getattr(value, "id", None)

@@ -35,6 +35,12 @@ ELEMENT_TYPES: dict[str, ElementType] = {
     # the element it lands on is what tells them apart.
     "die": ElementType("die", "Pool die"),
     "rating_die": ElementType("rating_die", "Rating die"),
+    # A die of a challenge's *capacity* — the target it fills toward, as opposed
+    # to the dice it has already banked (`rating_dice`). Its own element because
+    # it is the ceiling, not the contents: an agenda's slots are read to find out
+    # *which* one a step lands on (`filter index == {order}`), and a step that
+    # adds progress takes the slot rather than a die already in play.
+    "capacity_die": ElementType("capacity_die", "Capacity die"),
     "traitsetting": ElementType("traitsetting", "Trait instance"),
     "traitsetsetting": ElementType("traitsetsetting", "Trait set instance"),
     "trait": ElementType("trait", "Trait"),
@@ -180,6 +186,16 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "index": ScalarField("rating_die", "index", "int"),
         "ts_id": ScalarField("rating_die", "ts_id", "string",
                              references="traitsetting", label="trait instance"),
+    },
+    "capacity_die": {
+        # The slot's own die size — what a step that fills the slot needs.
+        "rating": ScalarField("capacity_die", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
+        # Which slot this is, **1-based**: an agenda's 2nd portent fills this
+        # challenge's 2nd capacity die, so `filter index == {order}` lines up
+        # with the sub-trait's own 1-based position and needs no arithmetic.
+        "index": ScalarField("capacity_die", "index", "int"),
+        "ts_id": ScalarField("capacity_die", "ts_id", "string",
+                             references="traitsetting", label="challenge"),
     },
     "traitsetting": {
         "rating": ScalarField("traitsetting", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
@@ -417,6 +433,15 @@ EDGES: tuple[Edge, ...] = (
          noun="rating die", plural="rating dice"),
     Edge("traitsetting", "rating_die", ("traitsetting",), "one", "Trait instance",
          noun="trait instance", plural="trait instances"),
+
+    # traitsetting → the dice of its *capacity*, when it is a positive challenge.
+    # The sibling of `rating_dice`, and the only way to reach a slot that the
+    # challenge has not filled yet: an agenda's sub-traits each name one, by
+    # position, so "fill my slot" is `filter index == {order}`.
+    Edge("capacity_dice", "traitsetting", ("capacity_die",), "many", "Capacity dice",
+         noun="capacity die", plural="capacity dice"),
+    Edge("traitsetting", "capacity_die", ("traitsetting",), "one", "Challenge",
+         noun="challenge", plural="challenges"),
 
     # traitsetting → registry trait / traitset / owners
     # (the polymorphic `_from` anchor is split into already-distinct fields)
@@ -703,6 +728,7 @@ class DisplayFields:
 DISPLAY_FIELDS: dict[str, DisplayFields] = {
     "die": DisplayFields("die", "rating", "role"),
     "rating_die": DisplayFields("rating_die", "rating", "index"),
+    "capacity_die": DisplayFields("capacity_die", "rating", "index"),
     "traitsetting": DisplayFields("traitsetting", "trait_id", "rating"),
     "traitsetsetting": DisplayFields("traitsetsetting", "traitset_id", ""),
     "trait": DisplayFields("trait", "name", "traitset_name"),
@@ -830,18 +856,33 @@ def element_for_variable(type_name: str) -> str:
     return _VARIABLE_ELEMENTS.get(type_name or "", "")
 
 
+#: Scalar fields of the *source instance* the activation puts in scope as value
+#: tokens, as ``{element: {name: field}}``. A source token (``{trait_setting}``)
+#: names the instance; these name a fact about it, so a rule can say "my
+#: position" (`{order}`) without navigating to a field — the language has no
+#: step that reads a field *as a value*.
+SOURCE_SCALAR_SEEDS: dict[str, dict[str, str]] = {
+    "traitsetting": {"order": "order"},
+}
+
+
 def scope_seed_names(trigger: str, source_kind_value: str | None) -> dict[str, str]:
     """The names the *activation itself* puts in scope, as ``{name: element}``.
 
     These are the tokens the SFX editor already lists under *Available
-    variables*: the source token (``{trait_setting}``, ``{location}``, …) and
+    variables*: the source token (``{trait_setting}``, ``{location}``, …),
     whatever the trigger declares (``{contest_entity_opponent}``, ``{effect_die}``,
-    …). Declared tokens that a path cannot walk (a number, a string, a boolean)
-    are left out — the wizard should not offer a seed that cannot be navigated.
+    …), and the source instance's own **scalar** fields (``{order}``).
 
-    One declaration, two readers: the editor's ``effectVariables`` types the
-    wizard's ``select variable`` candidates from this, and the engine binds the
-    same names from the live event — so what is offered is what resolves.
+    A source scalar is not a walkable element — there is nothing to navigate on
+    a number — but it is a *value* seed: ``filter index == {order}`` is how a
+    rule says "the slot my position names" without an ordering dance. So it is
+    declared here with its field type (``int``) rather than with an element.
+
+    One declaration, three readers: the editor's ``effectVariables`` types the
+    wizard's candidates from this, the engine binds the same names from the live
+    event (and the resolved source), and the card text renders them — so what is
+    offered is what resolves.
     """
     from transversal.services.menu_contexts import trigger_variables
 
@@ -849,6 +890,10 @@ def scope_seed_names(trigger: str, source_kind_value: str | None) -> dict[str, s
     declared = _SOURCE_KINDS_BY_VALUE.get(source_kind_value or "")
     if declared is not None and declared.variable and declared.element:
         seeds[declared.variable] = declared.element
+        for name, field_name in SOURCE_SCALAR_SEEDS.get(declared.element, {}).items():
+            f = SCALAR_FIELDS.get(declared.element, {}).get(field_name)
+            if f is not None:
+                seeds[name] = f.type
     for v in trigger_variables(trigger or ""):
         element = element_for_variable(v.type)
         if element:

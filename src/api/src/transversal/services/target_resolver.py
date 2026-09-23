@@ -539,6 +539,10 @@ def resolved_id(value) -> str | None:
     if isinstance(value, dict):
         if value.get("locus") == "rating":
             return f"rating:{value.get('index')}:{value.get('ts_id', '')}"
+        if value.get("locus") == "capacity":
+            # A capacity *slot*, addressed the same way as a rating die: the index
+            # first, because a traitsetting id contains colons.
+            return f"capacity:{value.get('index')}:{value.get('ts_id', '')}"
         if value.get("pool_owner"):
             return f"die:{value.get('pool_location', '')}:{value['pool_owner']}:{value.get('pool_index')}"
         return value.get("ts_id") or value.get("id")
@@ -1187,6 +1191,41 @@ def _traitsetting_rating_dice(ts: Any, ctx: TargetContext) -> list[dict]:
     return out
 
 
+def _traitsetting_capacity_dices(ts: Any, ctx: TargetContext) -> list[dict]:
+    """The dice that make up a trait instance's *capacity*.
+
+    A capacity is a list (``TraitSetting.capacity``) on a positive challenge: the
+    target the pool fills toward, as opposed to ``rating_dice``, which are the
+    dice it has already banked. Everything that is not a positive challenge has
+    none, so this is empty rather than a guess.
+
+    Each slot is addressed by its **1-based** position, which is the whole point:
+    an agenda's sub-trait carries ``order`` (1-based) and fills the capacity die
+    at the matching position, so the author writes ``filter index == {order}``
+    and no arithmetic is needed anywhere.
+    """
+    ts_id = _get_field(ts, "id") or ""
+    out: list[dict] = []
+    for i, d in enumerate(getattr(ts, "capacity", None) or [], start=1):
+        size = getattr(d, "value", d)
+        out.append({
+            "locus": "capacity",
+            "die": size,
+            "rating": size,
+            "ts_id": ts_id,
+            "index": i,
+        })
+    return out
+
+
+def _capacity_die_traitsetting(slot: Any, ctx: TargetContext) -> list[Any]:
+    """The challenge a capacity slot belongs to (the upward half)."""
+    if not isinstance(slot, dict) or ctx.repo is None:
+        return []
+    ts_id = slot.get("ts_id") or ""
+    return _maybe(ctx.repo.get_traitsetting(ts_id)) if ts_id else []
+
+
 def _location_universe(value: Any, repo) -> Any:
     """A location's universe.
 
@@ -1556,6 +1595,12 @@ def register_default_edges() -> None:
     register_edge("traitsetting", "rating_dice", _traitsetting_rating_dice)
     register_edge("rating_die", "traitsetting",
                   lambda d, ctx: _maybe(ctx.repo.get_traitsetting(d.get("ts_id"))))
+
+    # The un-filled ceiling, as addressable slots. A challenge's capacity is the
+    # target it fills toward, and an agenda's sub-traits each own one slot — so
+    # reaching *the slot my position names* is an index filter, not a dance.
+    register_edge("traitsetting", "capacity_dice", _traitsetting_capacity_dices)
+    register_edge("capacity_die", "traitsetting", _capacity_die_traitsetting)
 
     register_edge("entity", "location", lambda e, ctx: _maybe(ctx.repo.get_entity(e.current_location)))
     register_edge("entity", "universe", _entity_to_universe)

@@ -24,12 +24,15 @@ from transversal.services.target_resolver import TargetContext, resolve
 # ── The declaration ───────────────────────────────────
 
 def test_a_source_token_is_a_seed_typed_by_its_element():
-    assert scope_seed_names("manual", "trait_setting") == {"trait_setting": "traitsetting"}
+    # A trait instance also exposes its **position** as a value (`{order}`): an
+    # integer is not a walkable element, but it is exactly what an indexed read
+    # needs, so it is declared with its field type instead of an element.
+    assert scope_seed_names("manual", "trait_setting") == {
+        "trait_setting": "traitsetting", "order": "int"}
     assert scope_seed_names("manual", "location") == {"location": "location"}
     # Bucket sources (table/gm) resolve to nothing at all.
     assert scope_seed_names("manual", "table") == {}
     assert scope_seed_names("manual", None) == {}
-
 
 def test_trigger_variables_are_seeds_when_a_path_can_walk_them():
     # The pool-change moment declares the pool it is changing, and the opponent.
@@ -42,8 +45,8 @@ def test_trigger_variables_are_seeds_when_a_path_can_walk_them():
 
 def test_source_and_trigger_seeds_combine_without_colliding():
     seeds = scope_seed_names("on_pool_change", "trait_setting")
-    assert seeds == {"trait_setting": "traitsetting", "dice_pool": "pool",
-                     "contest_entity_opponent": "entity"}
+    assert seeds == {"trait_setting": "traitsetting", "order": "int",
+                     "dice_pool": "pool", "contest_entity_opponent": "entity"}
 
 
 def test_declared_types_map_to_catalog_elements():
@@ -70,6 +73,42 @@ def test_the_engine_binds_the_source_token_from_the_activation():
     assert set(bindings) == {"trait_setting"}
     assert bindings["trait_setting"].value == "e1:cultivation"
     assert bindings["trait_setting"].element == "traitsetting"
+
+
+def test_the_source_instance_binds_its_own_order_as_an_integer():
+    """`{order}` is the source's *position* — the 2nd sub-trait exposes `2`.
+
+    It has no event-carried value: it is a fact about the instance the rule lives
+    on, so it is read from the resolved source. That is what lets a path say
+    `filter index == {order}` without an ordering step.
+    """
+    from transversal.services.effects_engine import GameEvent
+    from transversal.services.effects_engine.engine import _activation_bindings
+
+    sfx = SFX(id="sfx-x", name="X", trigger="on_challenge_completed",
+              source_kind="trait_setting")
+    event = GameEvent(type="challenge_completed", entity_id="e1", universe="earth",
+                      context={"trait_setting_id": "e1:portent-2"})
+    source = NS(id="e1:portent-2", order=2)
+    bindings = _activation_bindings(sfx, event, "e1:portent-2", source)
+
+    assert bindings["order"].value == "2"
+    assert bindings["order"].element == "int"
+
+
+def test_an_unordered_source_binds_no_order():
+    """A top-level trait has no position. `order` is deliberately not coerced to
+    0, so a path that filters on it finds nobody rather than the first slot."""
+    from transversal.services.effects_engine import GameEvent
+    from transversal.services.effects_engine.engine import _activation_bindings
+
+    sfx = SFX(id="sfx-x", name="X", trigger="on_challenge_completed",
+              source_kind="trait_setting")
+    event = GameEvent(type="challenge_completed", entity_id="e1", universe="earth",
+                      context={"trait_setting_id": "e1:cultivation"})
+    source = NS(id="e1:cultivation", order=None)
+
+    assert "order" not in _activation_bindings(sfx, event, "e1:cultivation", source)
 
 
 def test_the_engine_binds_a_trigger_variable_from_the_event():

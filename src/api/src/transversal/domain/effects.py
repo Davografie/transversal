@@ -44,6 +44,12 @@ class Effect(BaseModel):
     # Structured subject resolution (who the effect applies to). None means the
     # effect still uses the legacy ``entity`` string.
     entity_spec: Optional[TargetSpec] = None
+    # Die-valued effects take ``result`` as a literal (``d6``) or a ``{variable}``
+    # token. Some dice are *facts in the world* rather than a number anyone knows
+    # while authoring — an agenda's next capacity slot — so they are named by a
+    # path instead. Resolved at fire time into ``result``; None means ``result``
+    # stands as authored.
+    result_spec: Optional[TargetSpec] = None
     # Named references — the multi-target model. Each key is a declared ref name
     # (see ``EffectActionMeta.refs``); ``target``/``entity`` remain as the
     # legacy single-reference fallback until the Step-3 migration removes them.

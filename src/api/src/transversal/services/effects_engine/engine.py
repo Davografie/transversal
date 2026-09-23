@@ -96,7 +96,8 @@ def _source_was_added(sfx: SFX, event: GameEvent, source_id: str | None) -> bool
     return _added_die_of(event.context, source_id) is not None
 
 
-def _activation_bindings(sfx: SFX, event: GameEvent, source_id: str | None) -> dict:
+def _activation_bindings(sfx: SFX, event: GameEvent, source_id: str | None,
+                         source=None) -> dict:
     """The activation's own names, bound as typed seeds for targeting paths.
 
     The source token and the trigger's declared variables were authorable but
@@ -108,8 +109,14 @@ def _activation_bindings(sfx: SFX, event: GameEvent, source_id: str | None) -> d
     A declared name the event does not carry is left unbound rather than bound
     empty: at a pool save with no contest there is no opponent, and a path that
     starts from one should resolve to nobody, not to a blank id.
+
+    ``source`` is the *resolved* activation source. A source **scalar**
+    (``{order}``) has no event-carried value — it is a fact about the instance
+    the rule lives on, so it is read from there.
     """
-    from transversal.services.target_catalog import scope_seed_names, source_kind as sk
+    from transversal.services.target_catalog import (
+        SOURCE_SCALAR_SEEDS, scope_seed_names, source_kind as sk,
+    )
     from transversal.services.target_resolver import Binding
 
     names = scope_seed_names(sfx.trigger or "", sfx.source_kind)
@@ -119,6 +126,15 @@ def _activation_bindings(sfx: SFX, event: GameEvent, source_id: str | None) -> d
     declared = sk(sfx.source_kind) if sfx.source_kind else None
     if declared is not None and declared.variable and source_id:
         values[declared.variable] = source_id
+
+    # Source scalars come from the instance, not the event.
+    scalars: dict[str, str] = (
+        SOURCE_SCALAR_SEEDS.get(declared.element, {}) if declared is not None else {}
+    )
+    for name, field_name in scalars.items():
+        raw = getattr(source, field_name, None) if source is not None else None
+        if raw is not None and raw != "":
+            values[name] = raw
 
     out: dict = {}
     for name, element in names.items():
@@ -231,7 +247,7 @@ class EffectsEngine:
             # the trigger's declared variables — so a path can begin at "the
             # thing this rule is attached to" or "the opponent in this moment"
             # rather than only joining to a name an earlier step produced.
-            bindings: dict = _activation_bindings(sfx, event, source_id)
+            bindings: dict = _activation_bindings(sfx, event, source_id, source)
 
             # Condition gate (only when a repo is available to evaluate state)
             if sfx.conditions and repo is not None:
@@ -354,6 +370,11 @@ class EffectsEngine:
                 # service included — receives a concrete entity id rather than a
                 # spec it would silently ignore.
                 effect = _effects_applier.resolve_effect_entity(
+                    effect, event.entity_id, repo, effect_context,
+                )
+                # And its *die*, when the author named one by a path instead of a
+                # literal (`result_spec`): "the capacity slot my position fills".
+                effect = _effects_applier.resolve_effect_result(
                     effect, event.entity_id, repo, effect_context,
                 )
                 if effect.timing == EffectTiming.IMMEDIATE:
