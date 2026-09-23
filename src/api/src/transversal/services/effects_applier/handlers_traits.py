@@ -5,6 +5,10 @@ from __future__ import annotations
 from transversal.domain import Effect
 from transversal.domain import Entity
 from transversal.domain import TraitSetting
+from transversal.services.trait_change import (
+    TraitChangeError,
+    repoint_trait_setting,
+)
 from transversal.services.trait_reveal import reveal_trait_to
 from typing import Optional
 from transversal.services.effects_applier.datatypes import (
@@ -125,15 +129,14 @@ def _apply_copy_trait(entity, effect, repo, result):
 def _apply_change_trait(entity, effect, repo, result):
     """Point a trait instance at a different registry trait.
 
-    The instance keeps everything that is *its own* — its owner, dice, rating
-    type, polarity, statement, notes and grants — and changes what it **is**. The
-    Arango registry pointer (``_to``) is not touched here: the repository derives
+    The repointing itself lives in :func:`transversal.services.trait_change.
+    repoint_trait_setting`, shared with the sheet's trait editor so the two cannot
+    drift: the instance keeps everything that is *its own* — its owner, dice,
+    rating type, polarity, statement, notes and grants — and changes what it **is**.
+    The Arango registry pointer (``_to``) is not touched here: the repository derives
     it from ``trait_id`` on every write (``trait_settings.update_traitsetting``), so
-    committing the updated instance rewrites the pointer itself.
-
-    ``traitset_id`` follows the new definition, because the instance's set is what
-    says where it renders and how a `HAS_TRAIT_IN_TRAITSET` condition reads it — an
-    instance that kept the old set would point at a trait that is not in it.
+    committing the updated instance rewrites the pointer itself.  The instance's set
+    follows the new definition for the same reason it does there.
 
     The undo is this action pointed back at the prior definition: the handler
     captures it on apply (``prior_result``) and the revert carries it in ``result``,
@@ -158,21 +161,25 @@ def _apply_change_trait(entity, effect, repo, result):
     # and carries the definition it restores in `result` instead.
     wanted_id = (getattr(ref, "value", "") or "") if ref else ""
     wanted_id = wanted_id or (effect.result or "")
-    wanted = repo.get_trait(wanted_id) if wanted_id else None
-    if wanted is None:
-        result.applied.append(
-            AppliedEffect(effect, f"no trait definition to change to ({wanted_id or 'unset'})"))
-        return
-    if wanted.id == existing.trait_id:
-        result.applied.append(AppliedEffect(effect, f"{target} is already {wanted.id}"))
+
+    # A refused change (the container rule, a collision) must not abort the rest of
+    # the activation: like the "already that trait" case below, it is reported and
+    # the remaining effects still apply.
+    try:
+        change = repoint_trait_setting(existing, wanted_id, repo)
+    except TraitChangeError as exc:
+        result.applied.append(AppliedEffect(effect, str(exc)))
         return
 
-    was = existing.trait_id
-    existing.trait_id = wanted.id
-    if getattr(wanted, "traitset_id", ""):
-        existing.traitset_id = wanted.traitset_id
+    if not change.changed:
+        detail = (f"no trait definition to change to ({wanted_id or 'unset'})"
+                  if change.reason == "missing" else f"{target} is already {wanted_id}")
+        result.applied.append(AppliedEffect(effect, detail))
+        return
+
+    was = change.was_trait_id
     result.updated_trait_settings.append(existing)
-    result.applied.append(AppliedEffect(effect, f"changed {was} into {wanted.id}", existing.id))
+    result.applied.append(AppliedEffect(effect, f"changed {was} into {change.is_trait_id}", existing.id))
     # Addressed to the instance: the authored target may be a registry trait id,
     # which no longer names this instance once the pointer has moved.
     _queue_trait_revert(repo, existing, effect, target=existing.id, prior_result=was)

@@ -21,13 +21,16 @@ from transversal.services.effects_applier import PendingChoice, apply_effects, r
 
 
 class FakeTrait:
-    def __init__(self, trait_id, traitset_id, name=None, universes=None):
+    def __init__(self, trait_id, traitset_id, name=None, universes=None, tags=None):
         self.id = trait_id
         self.traitset_id = traitset_id
         self.name = name or trait_id
         # A trait definition always belongs to at least one universe, and a path
         # that ranges over the registry narrows by exactly that.
         self.universes = list(universes) if universes is not None else ["earth"]
+        # The `container` tag is what lets a trait hold others, and the
+        # definition-change rule reads it.
+        self.tags = list(tags or [])
 
 
 class FakeTraitSet:

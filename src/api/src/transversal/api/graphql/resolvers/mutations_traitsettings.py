@@ -8,6 +8,7 @@ from transversal.api.graphql.types import TraitSetting
 from transversal.api.graphql.types import TraitSettingInput
 from transversal.api.graphql.types import TraitSettingUpdateInput
 from transversal.domain import TraitSetting as DomainTraitSetting
+from transversal.services.trait_change import repoint_trait_setting
 from typing import Optional
 from transversal.api.graphql.resolvers.converters import (
     _em,
@@ -146,6 +147,15 @@ class MutationsTraitSettings:
             ts.order = input.order
         if input.tags is not None:
             ts.tags = [str(t) for t in input.tags]
+        # Changing the instance's definition. Shares one implementation with the
+        # `change_trait` effect action (`services/trait_change`), so the sheet and
+        # an effect can never disagree about what the move means — in particular
+        # that the instance keeps everything it owns and only its registry pointer
+        # (and, with it, its set) moves.
+        if input.trait_id is not None:
+            change = repoint_trait_setting(ts, str(input.trait_id), _em(info).repo)
+            if not change.changed and change.reason == "missing":
+                raise ValueError(f"Trait definition '{input.trait_id}' not found")
         # Re-anchoring. A **relationship** setting is anchored by its edge key and
         # must not be moved; everything else may be (a top-level trait, or a
         # sub-trait moving between containers or back out to the entity).

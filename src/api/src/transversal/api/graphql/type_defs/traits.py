@@ -334,6 +334,12 @@ class TraitSettingUpdateInput:
     sfx_ids: Optional[list[strawberry.ID]] = None
     known_to: Optional[list[strawberry.ID]] = None
     enabled: Optional[bool] = None
+    # Change the instance's *definition* (its registry trait). The set follows the
+    # new definition; everything the instance owns — dice, statement, notes, tags,
+    # grants, children — is untouched. The rules (container↔container, no
+    # collision) live in ``services.trait_change``, shared with the change_trait
+    # effect action so the two write paths cannot diverge.
+    trait_id: Optional[strawberry.ID] = None
 
 def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
     """Build a GQL TraitSetting from a domain setting + optional relationship contact."""

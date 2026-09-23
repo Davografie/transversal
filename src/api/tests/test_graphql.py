@@ -901,3 +901,102 @@ def test_roster_graphql_surface():
     assert "factionMembers(factionId: ID!): [FactionMember!]!" in sdl
     assert "coMembers: [FactionMember!]!" in sdl
     assert "role: String" in sdl and "rank: String" in sdl
+
+
+class TestChangeTraitDefinitionSurface:
+    """`updateTraitSetting(traitId:)` — the sheet's change-definition write.
+
+    The rules themselves live in `services/trait_change` and are unit-tested in
+    `test_trait_change.py`; these only prove the GraphQL surface reaches that
+    function and reports what it decided.
+    """
+
+    def _entity_with(self, client, trait_id, traitset_id, **extra):
+        entity = _gql(client, """
+            mutation {
+                createEntity(input: {name: "Remaker", type: CHARACTER,
+                                     universe: "earth", razmerit: 3}) { id }
+            }
+        """)["createEntity"]
+        eid = entity["id"]
+        fields = " ".join(f"{k}: {v}" for k, v in extra.items())
+        added = _gql(client, f"""
+            mutation($eid: ID!) {{
+                addTraitSetting(entityId: $eid, input: {{
+                    traitId: "{trait_id}" traitsetId: "{traitset_id}" dice: [D10] {fields}
+                }}) {{ id traitId traitsetId dice statement }}
+            }}
+        """, {"eid": eid})["addTraitSetting"]
+        return eid, added
+
+    def test_repointing_reports_the_new_definition(self, client):
+        """Both definitions are in one set here, so this isolates the pointer move
+        from any set change."""
+        _, added = self._entity_with(client, "trait-earth-hacking", "ts-earth-skills")
+        updated = _gql(client, """
+            mutation($id: ID!) {
+                updateTraitSetting(id: $id, input: { traitId: "trait-earth-shooting" }) {
+                    id traitId traitsetId dice
+                }
+            }
+        """, {"id": added["id"]})["updateTraitSetting"]
+
+        assert updated["traitId"] == "trait-earth-shooting"
+        assert updated["traitsetId"] == "ts-earth-skills"
+        # The instance's own state is untouched by the re-pointing.
+        assert updated["dice"] == ["D10"]
+
+    def test_the_set_follows_a_cross_set_definition(self, client):
+        """An instance that kept the old set would point at a trait that is not in it.
+
+        Asserted on the id, not the derived `traitsetName`: the in-memory repo this
+        harness uses inherits `get_traitset_by_id` from the Arango repository, so
+        name lookups come back empty here for every setting — a harness limitation,
+        not something this change introduced.
+        """
+        _, added = self._entity_with(client, "trait-earth-strength", "ts-earth-attributes")
+        assert added["traitsetId"] == "ts-earth-attributes"
+
+        updated = _gql(client, """
+            mutation($id: ID!) {
+                updateTraitSetting(id: $id, input: { traitId: "trait-3r-qi-reserves" }) {
+                    traitId traitsetId
+                }
+            }
+        """, {"id": added["id"]})["updateTraitSetting"]
+
+        assert updated["traitId"] == "trait-3r-qi-reserves"
+        assert updated["traitsetId"] == "ts-3r-cultivation"
+
+    def test_an_unknown_definition_is_an_error_not_a_silent_no_op(self, client):
+        """The editor asked for something specific; a typo must not read as success."""
+        _, added = self._entity_with(client, "trait-earth-hacking", "ts-earth-skills")
+        r = client.post("/api/v1/graphql", json={
+            "query": """mutation($id: ID!) {
+                updateTraitSetting(id: $id, input: { traitId: "trait-nope" }) { traitId }
+            }""",
+            "variables": {"id": added["id"]},
+        })
+        payload = r.json()
+        assert payload.get("errors"), "an unknown definition must surface as an error"
+        assert "trait-nope" in str(payload["errors"])
+
+    def test_a_collision_is_refused(self, client):
+        """The owner already holds the destination, so the repoint would produce a
+        twin — `addTraitSetting` refuses that on create and this must agree."""
+        eid, first = self._entity_with(client, "trait-earth-hacking", "ts-earth-skills")
+        _gql(client, """
+            mutation($eid: ID!) {
+                addTraitSetting(entityId: $eid, input: {
+                    traitId: "trait-earth-shooting" traitsetId: "ts-earth-skills" dice: [D8]
+                }) { id }
+            }
+        """, {"eid": eid})
+
+        r = client.post("/api/v1/graphql", json={
+            "query": """mutation($id: ID!) {
+                updateTraitSetting(id: $id, input: { traitId: "trait-earth-shooting" }) { traitId }
+            }""",
+            "variables": {"id": first["id"]},
+        })
+        assert r.json().get("errors"), "a colliding repoint must be refused"

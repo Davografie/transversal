@@ -720,6 +720,12 @@ def update_trait_setting(args: dict) -> dict:
     ``"projection"`` with ``projection_id``, or ``"entity"`` to lift it back out.
     The resolver acts on ``from_type`` alone, so a parent or projection without it
     would be silently ignored — refused here instead of quietly doing nothing.
+
+    ``trait_id`` changes the instance's *definition* (its registry trait). The
+    instance keeps its dice, statement, notes, tags and grants; its set follows the
+    new definition. The rules (a container may only become another container, and a
+    definition the owner already holds is not a legal destination) are enforced by
+    the same function the ``change_trait`` effect uses.
     """
     if args.get("from_type") is None and (
         args.get("parent_traitsetting_id") is not None or args.get("projection_id") is not None
@@ -736,6 +742,7 @@ def update_trait_setting(args: dict) -> dict:
         ("enabled", "enabled"), ("known_to", "knownTo"), ("sfx_ids", "sfxIds"),
         ("from_type", "fromType"), ("projection_id", "projectionId"),
         ("parent_traitsetting_id", "parentTraitsettingId"),
+        ("trait_id", "traitId"),
     ):
         if args.get(key) is not None:
             input_[gql_key] = args[key]
@@ -1756,6 +1763,10 @@ TOOL_SCHEMAS = {
                                            "description": "New container when from_type is 'traitsetting'"},
                 "tags": {"type": "array", "items": {"type": "string"},
                          "description": "Instance-level labels (B116); [] clears them"},
+                "trait_id": {"type": "string",
+                             "description": "Change the instance's definition (its registry trait). "
+                                            "The set follows; dice/statement/tags are kept. A container "
+                                            "may only become another container."},
                 "dry_run": _dry_run_property(),
             },
             "required": ["id"],

@@ -3,6 +3,45 @@
     <Button class="set-back" variant="link" @click="$emit('back')">← Back</Button>
     <h4 class="edit-title">{{ displayName(trait.name) }}</h4>
 
+    <!-- What the instance *is*. Changing it repoints the instance at another
+         registry trait and leaves everything the instance owns alone — so this
+         belongs at the top, above the fields that survive the change. -->
+    <div class="edit-field">
+      <span class="edit-label">Definition</span>
+      <template v-if="canRedeclare">
+        <div class="edit-definition">
+          <button type="button" class="definition-chip" @click="toggleDefinitionPicker">
+            {{ displayName(trait.name) }}
+          </button>
+          <span v-if="definitionPending" class="edit-definition-note">saving…</span>
+        </div>
+        <div v-if="showDefinitionPicker" class="definition-dropdown">
+          <input
+            v-model="definitionFilter"
+            class="definition-filter"
+            type="search"
+            placeholder="Filter traits…"
+            aria-label="Filter trait definitions"
+          />
+          <button
+            v-for="opt in filteredDefinitions"
+            :key="opt.id"
+            type="button"
+            class="definition-option"
+            :class="{ selected: opt.id === trait.traitId }"
+            @click="pickDefinition(opt)"
+          >{{ displayName(opt.name) }}</button>
+          <span v-if="!filteredDefinitions.length" class="edit-sfx-none">No trait matches.</span>
+        </div>
+      </template>
+      <!-- A relationship's traits are the substance of the relationship itself,
+           so they cannot be redefined — the row is "what this connection holds",
+           and pointing it at another trait would rewrite the connection. -->
+      <span v-else class="edit-definition-fixed" title="A relationship's own traits cannot be redefined">
+        {{ displayName(trait.name) }}
+      </span>
+    </div>
+
     <TraitInstanceEditor
       v-model:dice="diceModel"
       v-model:capacity="capacityModel"
@@ -115,7 +154,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Button from '@/components/ui/Button.vue'
 import TagInput from '@/components/ui/TagInput.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
@@ -159,6 +198,17 @@ const props = defineProps({
   inheritTags: { type: Array, default: () => [] },
   tagSuggestions: { type: Array, default: () => [] },
   acquirableSfxIds: { type: Array, default: null },
+  /**
+   * Every definition this instance could become — already scoped to the
+   * entity's current universe and filtered by the container rule, so the list
+   * only ever offers changes the write path accepts. `null` = not loaded yet;
+   * the sheet fetches it the first time the picker is opened.
+   */
+  definitionOptions: { type: Array, default: null },
+  /** False for a relationship's own traits, which carry the connection itself. */
+  canRedeclare: { type: Boolean, default: true },
+  /** True while the repoint mutation is in flight. */
+  definitionPending: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
@@ -166,7 +216,33 @@ const emit = defineEmits([
   'rating-type', 'change', 'field-blur', 'recover-die',
   'back', 'delete', 'toggle-sfx', 'toggle-ego', 'toggle-polarity',
   'toggle-projection-picker', 'select-projection', 'add-subtrait', 'remove-subtrait',
+  'request-definitions', 'change-definition',
 ])
+
+// The definition picker is local UI state: which option list the sheet should
+// load is the sheet's business, but whether the list is open is not.
+const showDefinitionPicker = ref(false)
+const definitionFilter = ref('')
+
+const filteredDefinitions = computed(() => {
+  const opts = props.definitionOptions || []
+  const q = definitionFilter.value.trim().toLowerCase()
+  if (!q) return opts
+  return opts.filter(o => String(o.name || '').toLowerCase().includes(q))
+})
+
+function toggleDefinitionPicker() {
+  showDefinitionPicker.value = !showDefinitionPicker.value
+  definitionFilter.value = ''
+  if (showDefinitionPicker.value) emit('request-definitions')
+}
+
+function pickDefinition(opt) {
+  showDefinitionPicker.value = false
+  definitionFilter.value = ''
+  if (opt.id === props.trait.traitId) return
+  emit('change-definition', opt.id)
+}
 
 // v-model proxies onto the parent's draft refs.
 const diceModel = computed({ get: () => props.dice, set: (v) => emit('update:dice', v) })
@@ -225,6 +301,75 @@ function displayName(name) {
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
+}
+/* The definition chip reads like the projection chip below it, because both are
+   "what this instance currently is/points at" and both open a picker. */
+.edit-definition {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.edit-definition-note {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.edit-definition-fixed {
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+.definition-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-dim);
+  background: var(--accent-12);
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.definition-chip:hover {
+  border-color: var(--accent);
+}
+.definition-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+}
+.definition-filter {
+  margin-bottom: 4px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--overlay-10);
+  background: var(--overlay-4);
+  color: var(--text);
+  font-size: 12px;
+}
+.definition-option {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.definition-option:hover {
+  background: var(--bg-hover);
+}
+.definition-option.selected {
+  color: var(--accent);
+  background: var(--accent-12);
 }
 .edit-title {
   margin: 0 0 2px;

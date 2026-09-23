@@ -64,6 +64,7 @@ from transversal.domain.dice import (  # noqa: F401
 )
 
 from transversal.domain.traits import (  # noqa: F401
+    CONTAINER_TAG,
     TraitDisplayName,
     Trait,
     TraitSet,

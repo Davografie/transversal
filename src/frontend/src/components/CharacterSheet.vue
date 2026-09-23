@@ -272,6 +272,9 @@
           :show-projection-picker="showProjectionPicker"
           :delete-countdown="deleteCountdown"
           :deleting-trait-id="deletingTraitId"
+          :definition-options="definitionOptions"
+          :can-redeclare="editingTrait?.fromType !== 'relationship'"
+          :definition-pending="definitionPending"
           @update:dice="editDice = $event"
           @update:capacity="editCapacity = $event"
           @update:statement="editStatement = $event"
@@ -290,6 +293,8 @@
           @select-projection="selectProjection"
           @add-subtrait="addSubTrait"
           @remove-subtrait="removeSubTrait"
+          @request-definitions="fetchDefinitionOptions"
+          @change-definition="changeDefinition"
         />
 
         <!-- Trait detail (read-only) — the row's "elsewhere" click zone.
@@ -1362,6 +1367,77 @@ function openTraitDetail(t) {
   // detail panel behind it.
   if (editingTraitId.value) return
   detailTrait.value = t
+}
+
+// ── Changing a trait instance's definition ──────────────────────
+// The candidate definitions for the instance being edited, and the repoint
+// itself. Kept in the sheet (not the panel) because both need the entity's
+// universe and the entity refresh — the panel is deliberately presentational.
+const definitionOptions = ref(null)
+const definitionPending = ref(false)
+
+// A different instance may hold different things already, so the candidate list
+// is per-instance: drop it when the editor moves to another trait rather than
+// reusing a list built for the one before.
+watch(editingTraitId, () => { definitionOptions.value = null })
+
+/**
+ * What this instance could become.
+ *
+ * Scoped to the entity's current universe, like the add-trait picker — a
+ * definition from another universe is not one this body can hold. Two filters,
+ * both mirroring rules the write path enforces (``services/trait_change``), so
+ * the list never offers a change that would be refused: a container may only
+ * become another container, and a definition the entity already holds is not a
+ * legal destination (its one instance is not this one).
+ *
+ * ``isContainer`` unions the instance's own tags with the definition's, which is
+ * the same predicate the rows use — hence "the instance *or* its definition" on
+ * the left-hand side of the comparison.
+ */
+async function fetchDefinitionOptions() {
+  if (definitionOptions.value) return
+  const t = editingTrait.value
+  if (!t) return
+  const u = entity.value?.currentUniverse || props.universe
+  const data = await graphql(
+    `query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId } }`, { u },
+  )
+  const alreadyHeld = new Set(
+    ((showAllTraits.value ? allTraitSettings.value : effectiveSettings.value) || [])
+      .filter(s => s.id !== t.id)
+      .map(s => s.traitId),
+  )
+  const wantContainer = isContainer(t)
+  definitionOptions.value = (data?.traitsByUniverse || [])
+    .filter(o => isContainer(o) === wantContainer && !alreadyHeld.has(o.id))
+}
+
+/** Repoint the edited instance at another definition, keeping it open. */
+async function changeDefinition(traitId) {
+  const t = editingTrait.value
+  if (!t || !traitId || definitionPending.value) return
+  definitionPending.value = true
+  try {
+    const result = await graphql(`mutation($id: ID!, $traitId: ID!) {
+      updateTraitSetting(id: $id, input: { traitId: $traitId }) { id traitId traitsetId }
+    }`, { id: t.id, traitId })
+    if (!result?.updateTraitSetting) {
+      console.error('[sheet] change definition failed:', error.value || 'unknown error')
+      return
+    }
+    definitionOptions.value = null
+    // The instance keeps its id, so re-open the same one — the panel remounts
+    // with the new name, set and possible SFX/sub-traits, and `startEdit`
+    // re-seeds every draft field from it.
+    await fetchEntity('change-definition')
+    await nextTick()
+    openEditorForNewTrait(t.id)
+  } catch (e) {
+    console.error('[sheet] change definition failed:', e)
+  } finally {
+    definitionPending.value = false
+  }
 }
 
 function closeTraitDetail() {

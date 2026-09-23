@@ -16,6 +16,13 @@ from transversal.domain.enums import (
 )
 
 
+#: The tag that marks a trait as a **container** — an ordinary trait that may
+#: hold other traits. Shared with the sheet's ``CONTAINER_TAG`` in
+#: ``src/frontend/src/utils/traitTree.js``; the two must agree, or the editor
+#: would offer a change the write path refuses (and vice versa).
+CONTAINER_TAG = "container"
+
+
 class TraitDisplayName(BaseModel):
     """Dynamic display name for a trait, keyed by universe and rating.
 
