@@ -418,6 +418,14 @@ EDGES: tuple[Edge, ...] = (
     Edge("entity", "traitsetting", ("entity",), "one", "Owning entity", noun="owner"),
     Edge("projection", "traitsetting", ("projection",), "one", "Owning projection"),
 
+    # traitsetting → the instance it is nested *under*. The upward half of
+    # `subtraits`: a portent that just completed has to reach the container that
+    # holds it (to enable the next one, or to advance the container's own
+    # progress), and without this every such rule would have to be authored on the
+    # parent and read the child from the trigger instead.
+    Edge("parent", "traitsetting", ("traitsetting",), "one", "Owning container",
+         noun="container", plural="container"),
+
     # traitsetting → the trait instances nested *under* it (sub-traits).
     # A root is a facet of the trait it hangs from, not an independent thing the
     # entity holds, so it is deliberately absent from `entity → traitsettings`

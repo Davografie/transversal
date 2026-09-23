@@ -296,3 +296,27 @@ def test_a_location_can_count_its_contests(tracker):
                        AggregateStep(fn="count")),
                   TargetContext(subject=kael, repo=repo))
     assert res.values == [1]
+
+
+# ── A sub-trait reaches its container ────────────────
+
+def test_a_nested_instance_reaches_its_parent():
+    """The upward half of `subtraits`: a portent that completed has to reach the
+    container that holds it (enable the next one, or advance its progress)."""
+    from transversal.services.target_resolver import _traitsetting_parent
+
+    parent = NS(id="fac:portents", trait_id="trait-portents", parent_traitsetting_id=None)
+    child = NS(id="fac:portents:portent:a", trait_id="trait-portent",
+               parent_traitsetting_id="fac:portents")
+    repo = FakeRepo([])
+    repo.get_traitsetting = lambda i: {"fac:portents": parent}.get(i)
+    ctx = TargetContext(repo=repo)
+    assert [p.id for p in _traitsetting_parent(child, ctx)] == ["fac:portents"]
+
+
+def test_a_top_level_instance_has_no_parent():
+    from transversal.services.target_resolver import _traitsetting_parent
+
+    top = NS(id="kael:medicine", trait_id="trait-medicine", parent_traitsetting_id=None)
+    repo = FakeRepo([])
+    assert _traitsetting_parent(top, TargetContext(repo=repo)) == []

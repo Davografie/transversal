@@ -1113,6 +1113,21 @@ def _pool_from_id(value: str, repo) -> Any | None:
     return None
 
 
+def _traitsetting_parent(ts: Any, ctx: TargetContext) -> list[Any]:
+    """The container a nested instance hangs under, or nothing.
+
+    A sub-trait is anchored by ``parent_traitsetting_id`` (see
+    ``repository.resolve_subtrait_id``), so this is a straight read. `subtraits`
+    is the downward half; a rule that completes a child and then acts on the
+    container needs this one.
+    """
+    parent_id = _get_field(ts, "parent_traitsetting_id")
+    if not parent_id or ctx.repo is None:
+        return []
+    parent = ctx.repo.get_traitsetting(parent_id)
+    return _maybe(parent)
+
+
 def _traitsetting_tags(ts: Any, repo) -> list[str]:
     """A trait *instance*'s tags: its own, plus its registry trait's (B116).
 
@@ -1532,6 +1547,10 @@ def register_default_edges() -> None:
     # the parent and marked `from_type == 'traitsetting'`.
     register_edge("traitsetting", "subtraits",
                   lambda ts, ctx: list(ctx.repo.get_sub_traitsettings(ts.id)))
+    # The upward half: the container this instance is nested under. One read, and
+    # nothing when the instance is top-level (an empty hop is honest here — a
+    # top-level trait has no container).
+    register_edge("traitsetting", "parent", _traitsetting_parent)
     # The dice of this instance's rating — the persistent locus of a change-die
     # effect, as opposed to the assembled pool's dice below.
     register_edge("traitsetting", "rating_dice", _traitsetting_rating_dice)
