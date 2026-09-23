@@ -213,7 +213,11 @@ the `imagen_progress` SSE event. Statuses are `prompting` → `generating` →
 - Starts from a per-entity-type base prompt (character/GMC portrait, asset
   concept, faction emblem, location backdrop).
 - Enriches from trait settings:
-  - `appearance` trait → weighted appearance clause.
+  - `appearance` trait → weighted appearance clause. The clause carries the
+    setting's `statement` **and** its freeform `notes` (both run through
+    `clean_text`), joined into one `:1.4` clause — the appearance description
+    lives in `notes` far more often than in `statement` (of the live appearance
+    settings, 438/455 carry notes and 434 have no statement at all).
   - `LoRA*` traits → LoRA list.
   - `negative imagen` / `positive imagen` traits → negative/positive additions.
   - generic traits → `(trait is statement:rating_weight)` clauses.

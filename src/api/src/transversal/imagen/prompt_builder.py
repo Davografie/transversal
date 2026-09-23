@@ -80,8 +80,16 @@ def _build_entity_prompt(
         statement = clean_text(ts.statement) if ts.statement else ""
 
         if trait_name == "appearance":
-            if statement:
-                appearance_parts.append(f"({statement}:1.4)")
+            # `statement` is the short distinction ("lithe"); the longer
+            # appearance description lives in the setting's freeform `notes`.
+            # Both are authored appearance content, so both go in the one
+            # emphasised clause — dropping `notes` silently discarded most of
+            # what a GM writes about how a character looks.
+            appearance = ", ".join(
+                part for part in (statement, clean_text(ts.notes or "")) if part
+            )
+            if appearance:
+                appearance_parts.append(f"({appearance}:1.4)")
         elif trait_name.startswith("LoRA"):
             if statement:
                 loras.append(statement)
