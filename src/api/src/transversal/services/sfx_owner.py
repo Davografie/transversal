@@ -612,6 +612,79 @@ def remove_legacy_contest_complication_sfx(repo) -> None:
         repo.update_sfx_owner(owner)
 
 
+# ── Rules on a *sub*-trait ───────────────────────────
+#
+# An instance can hang under another instance rather than under the entity:
+# an agenda's portents under their container, an elemental root under Spiritual
+# Power. **A rule can live there, and it must still work.** Both availability and
+# ownership used to read `get_effective_traitsettings` alone, which returns only
+# `from_type == 'entity'` rows — so a rule on a sub-trait was authored, attached
+# and *silently dead*: the engine never considered it, and `select source` could
+# never resolve to the instance granting it.
+#
+# Effectiveness is inherited: a sub-trait grants its rules when its **ancestor
+# chain reaches an instance that is itself in play**. A disabled ancestor
+# therefore takes its whole subtree dark, which is the same rule that makes a
+# landed portent grant nothing.
+
+
+def _walk_nested(repo, parent_ids: list[str]) -> list:
+    """Every sub-trait reachable downward from ``parent_ids`` (one read per level).
+
+    The walk is what makes the ancestor rule true by construction rather than by
+    a depth limit: it recurses until a level yields nothing new, so nesting a root
+    under a root works without anyone remembering to raise a constant.
+    """
+    out: list = []
+    seen: set[str] = set()
+    parents = list(parent_ids)
+    while parents:
+        children = repo.get_sub_traitsettings_for_parents(parents)
+        nxt: list[str] = []
+        for kids in children.values():
+            for k in kids:
+                if k.id in seen:
+                    continue
+                seen.add(k.id)
+                out.append(k)
+                nxt.append(k.id)
+        parents = nxt
+    return out
+
+
+def _nested_traitsettings_for(repo, entity_id: str, universe: str) -> list:
+    """The entity's sub-trait instances that are in play (see the note above)."""
+    effective = repo.get_effective_traitsettings(entity_id, [universe])
+    # An instance with no id has no children to walk to, so it is skipped rather
+    # than crashing the whole availability call for the entity.
+    return _walk_nested(repo, [ts.id for ts in effective if getattr(ts, "id", None)])
+
+
+def _walk_nested_bulk(repo, effective_by_entity: dict[str, list]) -> dict[str, list]:
+    """The bulk sibling of :func:`_walk_nested`, for the availability prefetch."""
+    out: dict[str, list] = {}
+    owner: dict[str, str] = {}
+    for eid, tss in effective_by_entity.items():
+        for ts in tss:
+            if getattr(ts, "id", None):
+                owner[ts.id] = eid
+    parents = list(owner)
+    while parents:
+        nxt: list[str] = []
+        for pid, kids in repo.get_sub_traitsettings_for_parents(parents).items():
+            eid = owner.get(pid)
+            if eid is None:
+                continue
+            for k in kids:
+                if k.id in owner:  # already walked — also stops a cycle dead
+                    continue
+                owner[k.id] = eid
+                out.setdefault(eid, []).append(k)
+                nxt.append(k.id)
+        parents = nxt
+    return out
+
+
 @dataclass
 class SfxAvailabilityPrefetch:
     """Bulk-loaded per-entity data for :func:`get_available_sfx_ids`.
@@ -708,6 +781,13 @@ def build_sfx_availability_prefetch(
         traitsettings.update(repo.get_effective_traitsettings_bulk(eids, scoped))
         traitsetsettings.update(repo.get_effective_traitsetsettings_bulk(eids, scoped))
 
+    # Sub-trait grants, in the same bulk shape: the effective reads above return
+    # only `from_type == 'entity'` rows, so an entity's nested instances are
+    # walked in here rather than costing a per-entity query during the fan-out.
+    for eid, nested in _walk_nested_bulk(repo, traitsettings).items():
+        traitsettings.setdefault(eid, [])
+        traitsettings[eid] = traitsettings[eid] + nested
+
     # Location scope, resolved once per *distinct* location rather than per
     # entity: the fan-out visits every entity, and most of them share a room.
     location_rules: dict[str, list] = {}
@@ -784,6 +864,10 @@ def get_available_sfx_ids(
         traitset_settings = prefetch.traitsetsettings.get(entity_id, [])
     else:
         trait_settings = repo.get_effective_traitsettings(entity_id, [universe])
+        # A *sub*-trait's rules count too (a portent, an elemental root); the
+        # effective read excludes them, so they are walked in.
+        trait_settings = trait_settings + _nested_traitsettings_for(
+            repo, entity_id, universe)
         traitset_settings = repo.get_effective_traitsetsettings(entity_id, [universe])
 
     for ts in trait_settings:
@@ -951,6 +1035,14 @@ def resolve_sfx_source(repo, entity_id: str, universe: str, sfx_id: str, source_
         return (proj, "projection") if proj is not None else None
     if element == "traitsetting":
         for ts in repo.get_effective_traitsettings(entity_id, [universe]):
+            if sfx_id in (ts.sfx_ids or []):
+                return (ts, "traitsetting")
+        # A rule may live on a *sub*-trait (an agenda's portent, an elemental
+        # root). The effective read returns only `from_type == 'entity'` rows, so
+        # without this the rule was attached and silently dead — and `select
+        # source`, which is how such a rule reaches its container, could never
+        # resolve to the instance granting it.
+        for ts in _nested_traitsettings_for(repo, entity_id, universe):
             if sfx_id in (ts.sfx_ids or []):
                 return (ts, "traitsetting")
         return None

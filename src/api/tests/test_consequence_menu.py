@@ -27,6 +27,9 @@ class MenuRepo:
     def get_effective_traitsettings(self, entity_id, universes):
         return self.trait_settings
 
+    def get_sub_traitsettings_for_parents(self, parent_ids):
+        return {pid: [] for pid in parent_ids}
+
     def get_effective_traitsetsettings(self, entity_id, universes):
         return getattr(self, "traitset_settings", [])
 

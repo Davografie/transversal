@@ -65,6 +65,9 @@ class Repo:
     def get_effective_traitsettings(self, entity_id, universes=None):
         return [ts for ts in self.traitsettings.values() if ts.entity_id == entity_id]
 
+    def get_sub_traitsettings_for_parents(self, parent_ids):
+        return {pid: [] for pid in parent_ids}
+
 
 def _register_like_startup(repo):
     from transversal.services.effects_applier import registry as applier_registry

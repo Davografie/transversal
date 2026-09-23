@@ -30,6 +30,16 @@ class Repo:
         self.traitset_settings = []     # SimpleNamespace(sfx_ids=[...])
         self.locations = {}             # location_id -> SimpleNamespace(sfx_ids=[...])
         self.location_parents = {}      # location_id -> parent location_id
+        self.nested = {}                # parent_traitsetting_id -> [sub-instances]
+
+    def get_sub_traitsettings_for_parents(self, parent_ids):
+        """Mirror the real batch read: sub-instances grouped by parent.
+
+        Availability and ownership walk *into* sub-traits (a portent, an
+        elemental root), so every double needs this — an absent method would be
+        an AttributeError, but a silently empty one would hide the walk.
+        """
+        return {pid: list(self.nested.get(pid, [])) for pid in parent_ids}
 
     def list_ancestor_locations_with_sfx(self, location_id, max_depth=8):
         """Mirror the real scope query: the location and its parents, filtered
@@ -68,6 +78,69 @@ class Repo:
 def _entity(sfx_ids=None, current_projection=None, current_location=None):
     return SimpleNamespace(sfx_ids=sfx_ids or [], current_projection=current_projection,
                            current_location=current_location)
+
+
+# ── Rules on a *sub*-trait ───────────────────────────
+#
+# A rule can live on an instance nested under another instance — an agenda's
+# portent, an elemental root. Both availability and ownership read
+# `get_effective_traitsettings`, which returns only `from_type == 'entity'` rows,
+# so before the walk these rules were authored, attached and *silently dead*.
+
+def _nested_world(nested, effective):
+    repo = Repo()
+    repo.entity = _entity()
+    repo.trait_settings = effective
+    repo.nested = nested
+    return repo
+
+
+def test_a_rule_on_a_sub_trait_is_offered_and_is_its_own_source():
+    """The portent agenda's shape: the container is the parent, the rule is on a
+    portent, and the portent — not the container — is the activation source."""
+    parent = SimpleNamespace(id="e1:portents", sfx_ids=[], trait_id="portents")
+    child = SimpleNamespace(id="e1:portent-1", sfx_ids=["sfx-advance"],
+                            trait_id="portent", enabled=True)
+    repo = _nested_world({"e1:portents": [child]}, [parent])
+
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-advance"]
+    resolved = resolve_sfx_source(repo, "e1", "earth", "sfx-advance", "trait_setting")
+    assert resolved is not None
+    assert resolved[0].id == "e1:portent-1"
+    assert resolved[1] == "traitsetting"
+
+
+def test_a_disabled_sub_trait_grants_nothing():
+    """`enabled` is a fact about the owner, so a landed portent takes its rule
+    dark with it — the same rule that applies to a top-level instance."""
+    parent = SimpleNamespace(id="e1:portents", sfx_ids=[], trait_id="portents")
+    child = SimpleNamespace(id="e1:portent-1", sfx_ids=["sfx-advance"],
+                            trait_id="portent", enabled=False)
+    repo = _nested_world({"e1:portents": [child]}, [parent])
+
+    assert get_available_sfx_ids("e1", "earth", repo) == []
+
+
+def test_a_sub_trait_under_an_inactive_parent_grants_nothing():
+    """Effectiveness is *inherited*: the walk starts only from instances that are
+    themselves in play, so a subtree under nothing is dark."""
+    orphan_parent = SimpleNamespace(id="e1:gone", sfx_ids=[], trait_id="portents")
+    child = SimpleNamespace(id="e1:portent-1", sfx_ids=["sfx-advance"],
+                            trait_id="portent", enabled=True)
+    # `e1:gone` is not in the effective list — the walk never reaches its child.
+    repo = _nested_world({"e1:gone": [child]}, [])
+
+    assert get_available_sfx_ids("e1", "earth", repo) == []
+
+
+def test_the_walk_recurses_so_a_root_under_a_root_still_grants():
+    parent = SimpleNamespace(id="e1:power", sfx_ids=[], trait_id="power")
+    mid = SimpleNamespace(id="e1:root", sfx_ids=[], trait_id="root", enabled=True)
+    deep = SimpleNamespace(id="e1:root:leaf", sfx_ids=["sfx-leaf"],
+                           trait_id="leaf", enabled=True)
+    repo = _nested_world({"e1:power": [mid], "e1:root": [deep]}, [parent])
+
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-leaf"]
 
 
 def test_empty_repo_returns_empty():
