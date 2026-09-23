@@ -1431,7 +1431,12 @@ async function fetchDefinitionOptions() {
   )
   const wantContainer = isContainer(t)
   definitionOptions.value = (data?.traitsByUniverse || [])
-    .filter(o => isContainer(o) === wantContainer && !alreadyHeld.has(o.id))
+    // The instance's *own* definition is always offered, even when the entity
+    // holds another instance of it: it is where the player is, and the list marks
+    // it selected so the control never reads as a dead end. Choosing it is a
+    // no-op, not a mutation.
+    .filter(o => isContainer(o) === wantContainer
+      && (o.id === t.traitId || !alreadyHeld.has(o.id)))
 }
 
 /** Repoint the edited instance at another definition, keeping it open. */
