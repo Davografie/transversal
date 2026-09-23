@@ -199,6 +199,13 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         # `None` means *unordered* — deliberately not coerced to 0, so an ordering
         # step ranks a numbered entry above an unnumbered one and skips the rest.
         "order": ScalarField("traitsetting", "order", "int", label="Order"),
+        # A challenge's target/ceiling, as the dice it fills toward. A list, so it
+        # is matched with `contains` — "the portent this event finished" is
+        # `filter capacity contains {capacity}`. Without this a path could see that
+        # a challenge was completed but not which one, since the trigger carries the
+        # capacity and nothing else about the pool.
+        "capacity": ScalarField("traitsetting", "capacity", "die",
+                                operators=("contains", "==", "!="), label="capacity"),
         # Free-form labels carried by the *registry* trait this instance points at
         # (e.g. "violent"). A list, so it is matched with `contains` — the same
         # shape as `armed_sfx_ids` below. Read through the trait, not the setting
