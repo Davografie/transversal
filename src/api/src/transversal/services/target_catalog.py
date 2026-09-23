@@ -265,7 +265,16 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "limit": ScalarField("traitsetsetting", "limit", "int"),
     },
     "trait": {
-        "id": ScalarField("trait", "id", "string"),
+        # The registry identity. `references` is what makes a filter offer the
+        # *picker* instead of a raw id box, and the label is what the dropdown and
+        # the card read — an authored rule says "with trait Beast", never
+        # "with id trait-2081905".
+        "id": ScalarField("trait", "id", "string", references="trait", label="trait"),
+        # The registry's human name, and the field a loose filter wants
+        # (`name contains stress`). Names are **not unique** — four traits are
+        # called "size" — so a name match is a *search*; the identity field above
+        # is what you pick when the rule must mean exactly one trait.
+        "name": ScalarField("trait", "name", "string", suggest="trait_names", label="name"),
         "traitset_id": ScalarField("trait", "traitset_id", "string", references="traitset"),
         "default_die_type": ScalarField("trait", "default_die_type", "die"),
         # The trait's own labels, matched the same way as on a trait instance.
@@ -278,8 +287,8 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
                                  operators=("contains", "==", "!="), label="universe"),
     },
     "traitset": {
-        "id": ScalarField("traitset", "id", "string"),
-        "name": ScalarField("traitset", "name", "string"),
+        "id": ScalarField("traitset", "id", "string", references="traitset", label="trait set"),
+        "name": ScalarField("traitset", "name", "string", suggest="traitset_names", label="name"),
         "universes": ScalarField("traitset", "universes", "string",
                                  operators=("contains", "==", "!="), label="universe"),
     },
@@ -287,12 +296,12 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
     # `universe` is a plain attribute on both, and a table also says which path it
     # follows — which is how "that faction's table" is reachable as a path.
     "life_path": {
-        "id": ScalarField("life_path", "id", "string"),
+        "id": ScalarField("life_path", "id", "string", references="life_path", label="life path"),
         "name": ScalarField("life_path", "name", "string"),
         "universe": ScalarField("life_path", "universe", "string", references="universe"),
     },
     "roll_table": {
-        "id": ScalarField("roll_table", "id", "string"),
+        "id": ScalarField("roll_table", "id", "string", references="roll_table", label="roll table"),
         "name": ScalarField("roll_table", "name", "string"),
         "universe": ScalarField("roll_table", "universe", "string", references="universe"),
         "life_path": ScalarField("roll_table", "life_path", "string", references="life_path"),
@@ -301,10 +310,13 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
     # derived (see the resolver's derived readers), because both are assembled
     # from the effect it carries rather than stored.
     "scheduled_event": {
-        "id": ScalarField("scheduled_event", "id", "string"),
+        "id": ScalarField("scheduled_event", "id", "string", references="scheduled_event", label="scheduled event"),
     },
     "entity": {
-        "id": ScalarField("entity", "id", "string"),
+        "id": ScalarField("entity", "id", "string", references="entity", label="entity"),
+        # Entity names repeat too ("The Floating Vagabond" is six entities), so
+        # this is a search field; `id` above is the unambiguous pick.
+        "name": ScalarField("entity", "name", "string", suggest="entity_names", label="name"),
         "razmerit": ScalarField("entity", "razmerit", "int"),
         # A location flagged as a valid random-spawn destination. A *candidate*
         # filter (the picker's "starter location" checkbox), which is why it is a
@@ -330,8 +342,8 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "last_used_at": ScalarField("projection", "last_used_at", "datetime", label="recently used"),
     },
     "location": {
-        "id": ScalarField("location", "id", "string"),
-        "name": ScalarField("location", "name", "string"),
+        "id": ScalarField("location", "id", "string", references="location", label="location"),
+        "name": ScalarField("location", "name", "string", suggest="location_names", label="name"),
         "type": ScalarField("location", "type", "string"),
         # Read through a derived reader: an Entity stores this as
         # `current_universe`, so the raw attribute read returned None — which
@@ -355,8 +367,8 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "contact_name": ScalarField("relationship", "contact_name", "string", label="other entity's name"),
     },
     "universe": {
-        "id": ScalarField("universe", "id", "string"),
-        "name": ScalarField("universe", "name", "string"),
+        "id": ScalarField("universe", "id", "string", references="universe", label="universe"),
+        "name": ScalarField("universe", "name", "string", suggest="universe_names", label="name"),
     },
     # The SFX registry's own columns, so a path can say "the manual rules", "the
     # ones sourced on a location", or name one outright. All three value sources
