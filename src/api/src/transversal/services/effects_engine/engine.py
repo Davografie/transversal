@@ -371,7 +371,7 @@ class EffectsEngine:
                         if effect.target_spec is not None and effect.target_spec.steps:
                             targets, target_blocked = _resolve_primary_targets(
                                 effect, fire_ctx, outcome.structured, sfx,
-                                source_id=event.context.get("source_id") or "",
+                                source_id=source_id or "",
                             )
                             if target_blocked:
                                 blocked = True
@@ -399,6 +399,7 @@ class EffectsEngine:
                         before = len(outcome.structured)
                         applied = _apply_immediate_spec(
                             effect, event, sfx, effect_context, repo, outcome.structured, bindings=bindings,
+                            source_id=source_id, source_element=source_element,
                         )
                         outcome.applied.extend(applied)
                         if applied:

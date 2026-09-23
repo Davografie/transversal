@@ -137,8 +137,8 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
     source, resolved_element = (
         resolve_source(sfx.source_kind or "", raw_source_id, repo)
         if sfx.source_kind and raw_source_id and repo is not None
-        else (None, None)
-    )
+        else None
+    ) or (None, None)
     source_element = source_element or resolved_element
     # Event-carried dice are seeds wherever the context travels, so an immediate
     # effect can read the same collections a condition can; an explicit
@@ -185,12 +185,22 @@ def _apply_immediate_spec(
     structured: Optional[list] = None,
     answers: dict[int, list[str]] | None = None,
     bindings: dict | None = None,
+    source_id: str | None = None,
+    source_element: str | None = None,
 ) -> list[Effect]:
     """Resolve an immediate effect's ``target_spec`` and apply once per target.
 
     The immediate counterpart of ``roll_deferral._apply_spec_target``: resolve
     the spec (with the SFX's activation source for ``select source``) and fan
     out one concrete effect per resolved target. Returns the applied effects.
+
+    ``source_id``/``source_element`` are the *resolved* activation source when the
+    caller has it, and they must be threaded in. An automatic trigger carries no
+    ``source_id`` in the event, so re-deriving the source from the context alone
+    left ``select source`` with nothing: the step reported *requires a declared
+    source_kind*, the spec resolved to zero values, and the effect was dropped
+    while the rule still logged a match. :func:`_fire_context` takes the same
+    pair for the reference path.
 
     When the spec hits a ``choose`` step, nothing is applied and a
     ``StructuredChoice`` is appended to ``structured`` (if provided).
@@ -201,11 +211,14 @@ def _apply_immediate_spec(
     repo = repo if repo is not None else _get_repo()
     entity = repo.get_entity(event.entity_id) if repo is not None else None
 
-    source, source_element = (
-        resolve_source(sfx.source_kind or "", event.context.get("source_id"), repo)
-        if sfx.source_kind and event.context.get("source_id") and repo is not None
-        else (None, None)
+    raw_source_id = source_id or (event.context.get("source_id") if event.context else None)
+    resolved = (
+        resolve_source(sfx.source_kind or "", raw_source_id, repo)
+        if sfx.source_kind and raw_source_id and repo is not None
+        else None
     )
+    source, resolved_element = resolved or (None, None)
+    source_element = source_element or resolved_element
     # Event-carried dice seed this path too: an effect's own target/entity spec
     # must be able to start from the same collections a condition can
     # (`rolled_dice` / `added_dice` / `opposing_dice`). `_fire_context` does this
@@ -217,10 +230,7 @@ def _apply_immediate_spec(
         effect.target_spec,
         TargetContext(subject=entity, repo=repo,
                       collections=event_collections(
-                          event.context,
-                          getattr(source, "id", None)
-                          or (event.context.get("source_id") if event.context else None),
-                          source_element),
+                          event.context, raw_source_id, source_element),
                       source=source, source_element=source_element, bindings=bindings if bindings is not None else {}),
         answers=answers,
     )
@@ -229,7 +239,7 @@ def _apply_immediate_spec(
         for pc in resolution.pending_choices:
             structured.append(_structured_choice(
                 pc, effect, "target", sfx,
-                source_kind=sfx.source_kind or "", source_id=event.context.get("source_id") or "",
+                source_kind=sfx.source_kind or "", source_id=raw_source_id or "",
                 source_sfx_id=sfx.id,
                 repo=repo,
             ))
