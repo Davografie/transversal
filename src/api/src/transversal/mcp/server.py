@@ -144,7 +144,7 @@ query($id: ID!) {
     traitSettings {
       id traitId name statement notes dice ratingType polarity capacity
       traitsetId traitsetName traitsetTab traitsetOrder
-      fromType relationshipType relationshipContactId relationshipContactName
+      fromType projectionId relationshipType relationshipContactId relationshipContactName
       enabled order sfxIds
     }
   }
@@ -1087,6 +1087,8 @@ def _build_entry(t: dict) -> str:
         bit += f" {dice}"
     if (t.get("statement") or "").strip():
         bit += f' "{t["statement"].strip()}"'
+    if t.get("_bodies"):
+        bit += f" ({t['_bodies']})"
     if t.get("enabled") is False:
         bit += " (disabled)"
     return bit
@@ -1122,11 +1124,21 @@ def character_build(args: dict) -> dict:
 
     named = [t for t in own if (t.get("name") or "").strip()]
     unresolved = [t for t in settings if not (t.get("name") or "").strip()]
-    dupes = sorted(
-        key for key, n in collections.Counter(
-            (t.get("traitId"), (t.get("statement") or "").strip()) for t in named
-        ).items() if n > 1
+
+    def surface(t: dict) -> str:
+        """Which body (or the entity) a setting is anchored to.
+
+        Traits are **per-surface**: the same trait on four projections is four
+        settings *by design* — a morph trait on each body — not four duplicates.
+        Keying duplication on the trait alone reported Margaret's `essence` as
+        quadruplicated when it is one correct setting per body.
+        """
+        return t.get("projectionId") or (t.get("fromType") or "entity")
+
+    surface_counts = collections.Counter(
+        (t.get("traitId"), (t.get("statement") or "").strip(), surface(t)) for t in named
     )
+    dupes = sorted(k for k, n in surface_counts.items() if n > 1)
 
     grouped: dict[str, list[dict]] = {}
     for t in named:
@@ -1143,15 +1155,23 @@ def character_build(args: dict) -> dict:
                         "rating": t.get("ratingType"), "statement": t.get("statement"),
                         "notes": t.get("notes"), "enabled": t.get("enabled")} for t in rows],
         })
-        # One line per *distinct* trait: a repeated setting is a record problem, and
-        # repeating it four times in the brief is noise, not information. ``problems``
-        # below says it happened; the structured ``groups`` keep every row.
-        seen, uniq = set(), []
+        # Collapse for reading: a true repeat on one surface is a record problem
+        # (reported below), and the same trait on *several* bodies is a morph trait
+        # worth saying out loud rather than printing once per body.
+        all_bodies = {p.get("id") for p in (entity.get("projections") or [])}
+        collapsed: dict[tuple, dict] = {}
         for t in rows:
             key = (t.get("traitId"), (t.get("statement") or "").strip(), _fmt_dice(t.get("dice")))
-            if key not in seen:
-                seen.add(key)
-                uniq.append(t)
+            entry = collapsed.setdefault(key, {"row": t, "surfaces": set()})
+            entry["surfaces"].add(surface(t))
+        uniq = []
+        for entry in collapsed.values():
+            row = dict(entry["row"])
+            bodies = entry["surfaces"]
+            if len(bodies) > 1:
+                row["_bodies"] = ("all bodies" if bodies >= all_bodies
+                                  else "on " + ", ".join(sorted(b.split(":")[-1] for b in bodies)))
+            uniq.append(row)
         spread = {_fmt_dice(t.get("dice")) for t in uniq}
         if len(uniq) >= 5 and len(spread) == 1:
             lines.append(f"{set_name} ({len(uniq)} @ {spread.pop()}): "
@@ -1229,10 +1249,8 @@ def character_build(args: dict) -> dict:
         problems.append(f"{len(unresolved)} unresolved (" + ", ".join(
             sorted({t.get("traitId") or "?" for t in unresolved})) + ")")
     if dupes:
-        problems.append(f"{len(dupes)} duplicated (" + ", ".join(
-            f"{tid}×{n}" for (tid, _), n in collections.Counter(
-                (t.get("traitId"), (t.get("statement") or "").strip()) for t in named).items()
-            if n > 1) + ")")
+        problems.append(f"{len(dupes)} repeated on one surface (" + ", ".join(
+            f"{tid}×{n}" for (tid, _stmt, sfc), n in surface_counts.items() if n > 1) + ")")
 
     digest = "\n".join(
         [head, " · ".join(meta), ""]
@@ -1245,7 +1263,8 @@ def character_build(args: dict) -> dict:
             "projections": entity.get("projections") or [],
             "groups": groups, "ties": ties,
             "problems": {"unresolved": [{"id": t.get("id"), "trait_id": t.get("traitId")} for t in unresolved],
-                         "duplicates": [{"trait_id": k[0], "statement": k[1]} for k in dupes]},
+                         "duplicates": [{"trait_id": k[0], "statement": k[1], "surface": k[2]}
+                                        for k in dupes]},
             "digest": digest}
 
 
