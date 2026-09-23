@@ -10,10 +10,10 @@ module the API itself imports, so there is no logic divergence.
 Content authoring workflow (fictional worldbuilding) is the primary use case:
 create universes → factions → locations → GMCs → assets, in that order.
 
-Every mutating tool accepts ``dry_run`` (default ``true``). With ``dry_run=false``
+Every mutating tool accepts ``dry_run`` (default ``true``). With ``dry_run=true``
 the tool returns the ordered GraphQL operations it *would* run, without touching
 the database — so an agent (or a human) can review the plan and align with the
-GM's vision before committing.
+GM's vision before committing. ``dry_run=false`` executes them.
 
 Tool groups
 -----------
@@ -372,6 +372,24 @@ mutation($input: SfxInput!) {
 _MUT_ADD_OWNER_SFX = """
 mutation($sfxId: ID!, $ownerRefs: [OwnerRefInput!]!) {
   addOwnerSfx(sfxId: $sfxId, ownerRefs: $ownerRefs)
+}
+"""
+
+_MUT_UPDATE_SFX = """
+mutation($input: SfxUpdateInput!) {
+  updateSfx(input: $input) { id name description trigger }
+}
+"""
+
+_MUT_DELETE_SFX = """
+mutation($id: ID!) {
+  deleteSfx(id: $id)
+}
+"""
+
+_MUT_REMOVE_OWNER_SFX = """
+mutation($sfxId: ID!, $ownerRefs: [OwnerRefInput!]!) {
+  removeOwnerSfx(sfxId: $sfxId, ownerRefs: $ownerRefs)
 }
 """
 
@@ -856,6 +874,46 @@ def add_owner_sfx(args: dict) -> dict:
                           args.get("dry_run", True), "addOwnerSfx")
 
 
+def update_sfx(args: dict) -> dict:
+    """Edit an existing SFX — the other half of ``create_sfx``.
+
+    Pass ``input`` as an ``SfxUpdateInput``: ``id`` plus any of ``name``,
+    ``description``, ``trigger``, ``limit``, ``sourceKind``, ``placement``,
+    ``armingScope``, ``listenerSpec``, ``acquireSpec``, ``conditions``,
+    ``effects``, ``duration``. **Only what you pass is written** — an omitted key
+    is left alone rather than cleared, so this is a patch and not a replace. To
+    clear a list, pass it as ``[]``.
+    """
+    return _call_mutation("updateSfx", _MUT_UPDATE_SFX, {"input": args["input"]},
+                          args.get("dry_run", True), "updateSfx")
+
+
+def delete_sfx(args: dict) -> dict:
+    """Delete an SFX outright.
+
+    Retiring a rule that an owner still carries leaves that owner pointing at
+    nothing, so detach it first with ``remove_owner_sfx`` when it is attached —
+    ``sfx_owners`` is the read that lists the surfaces carrying it.
+    """
+    return _call_mutation("deleteSfx", _MUT_DELETE_SFX, {"id": args["sfx_id"]},
+                          args.get("dry_run", True), "deleteSfx")
+
+
+def remove_owner_sfx(args: dict) -> dict:
+    """Take an SFX off an owner surface — the undo of ``add_owner_sfx``.
+
+    ``owner_type`` is one of ENTITY | LOCATION | PROJECTION | TRAIT |
+    TRAIT_INSTANCE | TRAIT_SET | TABLE | GM, and must name the surface the SFX is
+    actually attached to; ``sfx_owners(ownerType)`` is how to find it.
+    """
+    variables = {
+        "sfxId": args["sfx_id"],
+        "ownerRefs": [{"ownerType": args["owner_type"], "ownerId": args["owner_id"]}],
+    }
+    return _call_mutation("removeOwnerSfx", _MUT_REMOVE_OWNER_SFX, variables,
+                          args.get("dry_run", True), "removeOwnerSfx")
+
+
 def get_entity(args: dict) -> dict:
     data = _graphql(_QUERY_ENTITY, {"id": args["entity_id"]})
     return data.get("entity")
@@ -1241,6 +1299,9 @@ TOOLS = {
     "save_life_path": save_life_path,
     "create_sfx": create_sfx,
     "add_owner_sfx": add_owner_sfx,
+    "update_sfx": update_sfx,
+    "delete_sfx": delete_sfx,
+    "remove_owner_sfx": remove_owner_sfx,
     "roll_dice": roll_dice,
     "pick_total": pick_total,
     "pick_effect_die": pick_effect_die,
@@ -1886,15 +1947,55 @@ TOOL_SCHEMAS = {
     },
     "create_sfx": {
         "name": "create_sfx",
-        "description": "Create a new SFX. Pass the full SfxInput as `input`.",
+        "description": "Create a new SFX. Pass the full SfxInput as `input`. Required: id, name, description, trigger, limit. Optional: sourceKind, placement, armingScope, listenerSpec, acquireSpec, conditions, effects, duration. (description and limit may be omitted — the backend defaults them — but the other three are required.)",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "input": {"type": "object",
-                           "description": "SfxInput (id,name,trigger,conditions,effects)"},
+                           "description": "SfxInput: id, name, description, trigger, limit, sourceKind, placement, armingScope, listenerSpec, acquireSpec, conditions, effects, duration"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["input"],
+        },
+    },
+    "update_sfx": {
+        "name": "update_sfx",
+        "description": "Edit an existing SFX. Pass an SfxUpdateInput as `input`: id plus any of name, description, trigger, limit, sourceKind, placement, armingScope, listenerSpec, acquireSpec, conditions, effects, duration. A patch, not a replace — omitted keys are left alone; pass [] to clear a list.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "input": {"type": "object",
+                           "description": "SfxUpdateInput: id (required) + the fields to change"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["input"],
+        },
+    },
+    "delete_sfx": {
+        "name": "delete_sfx",
+        "description": "Delete an SFX. Detach it first with remove_owner_sfx when an owner still carries it, otherwise the owner points at nothing.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sfx_id": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["sfx_id"],
+        },
+    },
+    "remove_owner_sfx": {
+        "name": "remove_owner_sfx",
+        "description": "Take an SFX off an owner surface — the undo of add_owner_sfx. owner_type must name the surface it is actually attached to; sfx_owners(ownerType) lists them.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sfx_id": {"type": "string"},
+                "owner_type": {"type": "string",
+                               "description": "ENTITY|LOCATION|PROJECTION|TRAIT|TRAIT_INSTANCE|TRAIT_SET|TABLE|GM"},
+                "owner_id": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["sfx_id", "owner_type", "owner_id"],
         },
     },
     "add_owner_sfx": {
