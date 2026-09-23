@@ -16,6 +16,13 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   reporter: [['list']],
 
+  // Serial, because this suite drives a *live* backend rather than a fixture.
+  // Two workers opening the same player's same character collide over the shared
+  // session: tests that pass one at a time fail two at a time, in both engines.
+  // The whole suite is a few seconds either way, so the parallelism buys nothing.
+  fullyParallel: false,
+  workers: 1,
+
   use: {
     baseURL,
     // Keep evidence when something fails — a screenshot is usually the fastest
