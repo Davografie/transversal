@@ -25,6 +25,7 @@ Tool groups
 
 from __future__ import annotations
 
+import collections
 import json
 import os
 import sys
@@ -130,6 +131,23 @@ mutation($input: DeleteRelationshipInput!) {
 _QUERY_ENTITY = """
 query($id: ID!) {
   entity(id: $id) { id type name razmerit currentUniverse currentLocation hidden ownedBy }
+}
+"""
+
+#: Everything needed to *grasp* an entity in one call — see ``character_build``.
+_QUERY_ENTITY_BUILD = """
+query($id: ID!) {
+  entity(id: $id) {
+    id name type razmerit currentUniverse currentLocation currentProjection
+    hidden unpublished ownedBy knownTo
+    projections { id universe transversalType currentLocation }
+    traitSettings {
+      id traitId name statement notes dice ratingType polarity capacity
+      traitsetId traitsetName traitsetTab traitsetOrder
+      fromType relationshipType relationshipContactId relationshipContactName
+      enabled order sfxIds
+    }
+  }
 }
 """
 
@@ -1033,6 +1051,204 @@ def gmc_web(args: dict) -> dict:
     return _rest(f"/api/v1/gmcs/{args['gmc_id']}/web")
 
 
+#: The order a sheet reads in — who you are, what you can do, what you have, what
+#: is wrong, who you know. Trait sets outside this list sort after it, by name, so
+#: a new scene's sets still appear without a code change here.
+_BUILD_ORDER = (
+    "character", "npc", "distinctions", "faction", "attributes", "approaches",
+    "skills", "know-how", "powers", "cultivation", "motivations", "resources",
+    "assets", "challenges", "complications", "relations", "secrets", "subtraits",
+    "laws", "session record", "imagen",
+)
+
+_DIE_ORDER = {"d4": 4, "d6": 6, "d8": 8, "d10": 10, "d12": 12}
+
+
+def _fmt_dice(dice) -> str:
+    """``['D4','D4','D6']`` → ``d4×2+d6``; nothing → an em dash."""
+    values = [str(d).lower() for d in (dice or [])]
+    if not values:
+        return "—"
+    counts = collections.Counter(values)
+    return "+".join(
+        f"{d}×{n}" if n > 1 else d
+        for d, n in sorted(counts.items(), key=lambda kv: _DIE_ORDER.get(kv[0], 0))
+    )
+
+
+def _dice_rank(t: dict) -> int:
+    return max((_DIE_ORDER.get(str(d).lower(), 0) for d in (t.get("dice") or [])), default=0)
+
+
+def _build_entry(t: dict) -> str:
+    dice = _fmt_dice(t.get("dice"))
+    bit = t.get("name") or t.get("traitId") or "?"
+    if dice != "—":
+        bit += f" {dice}"
+    if (t.get("statement") or "").strip():
+        bit += f' "{t["statement"].strip()}"'
+    if t.get("enabled") is False:
+        bit += " (disabled)"
+    return bit
+
+
+def character_build(args: dict) -> dict:
+    """Grasp an entity in one call: who it is, what it has, who it knows, what is wrong with the record.
+
+    Built because the pieces existed and the *reading* did not. ``get_entity``
+    returns eight fields and no traits at all, so seeing a build meant a raw
+    GraphQL call plus assembling sixty-odd settings by hand — with the signal
+    buried under default d4 spreads, duplicates and dead rows.
+
+    Returns the structured data **and** a ``digest``: a readable brief, one line
+    per trait set in sheet order, dice attached, long same-die spreads collapsed
+    to a count, and named-but-unrated traits (containers, cultivation stages)
+    kept. Ties are folded by the entity on the other end. ``problems`` is
+    deliberately last and terse — dead trait ids and duplicate settings are worth
+    knowing, but they are not the point.
+
+    Args: ``entity_id``; optional ``notes_chars`` (default 160) caps each note
+    excerpt in the digest — the structured ``groups`` always carry it whole.
+    """
+    entity = _graphql(_QUERY_ENTITY_BUILD, {"id": args["entity_id"]}).get("entity")
+    if not entity:
+        return {"error": f"no entity {args['entity_id']}"}
+    note_cap = int(args.get("notes_chars", 160))
+    settings = entity.get("traitSettings") or []
+
+    own, tie_settings = [], []
+    for t in settings:
+        (tie_settings if t.get("fromType") == "relationship" else own).append(t)
+
+    named = [t for t in own if (t.get("name") or "").strip()]
+    unresolved = [t for t in settings if not (t.get("name") or "").strip()]
+    dupes = sorted(
+        key for key, n in collections.Counter(
+            (t.get("traitId"), (t.get("statement") or "").strip()) for t in named
+        ).items() if n > 1
+    )
+
+    grouped: dict[str, list[dict]] = {}
+    for t in named:
+        grouped.setdefault(t.get("traitsetName") or "(no trait set)", []).append(t)
+    order = lambda n: (_BUILD_ORDER.index(n), "") if n in _BUILD_ORDER else (len(_BUILD_ORDER), n)
+
+    groups, lines = [], []
+    for set_name in sorted(grouped, key=order):
+        rows = sorted(grouped[set_name], key=lambda t: (-_dice_rank(t), t.get("name") or ""))
+        groups.append({
+            "traitset": set_name,
+            "tab": rows[0].get("traitsetTab"),
+            "traits": [{"trait": t.get("name"), "trait_id": t.get("traitId"), "dice": t.get("dice"),
+                        "rating": t.get("ratingType"), "statement": t.get("statement"),
+                        "notes": t.get("notes"), "enabled": t.get("enabled")} for t in rows],
+        })
+        # One line per *distinct* trait: a repeated setting is a record problem, and
+        # repeating it four times in the brief is noise, not information. ``problems``
+        # below says it happened; the structured ``groups`` keep every row.
+        seen, uniq = set(), []
+        for t in rows:
+            key = (t.get("traitId"), (t.get("statement") or "").strip(), _fmt_dice(t.get("dice")))
+            if key not in seen:
+                seen.add(key)
+                uniq.append(t)
+        spread = {_fmt_dice(t.get("dice")) for t in uniq}
+        if len(uniq) >= 5 and len(spread) == 1:
+            lines.append(f"{set_name} ({len(uniq)} @ {spread.pop()}): "
+                         + ", ".join(t.get("name") for t in uniq))
+        else:
+            lines.append(f"{set_name}: " + " · ".join(_build_entry(t) for t in uniq))
+        for t in [r for r in uniq if (r.get("notes") or "").strip()][:3]:
+            note = " ".join(t["notes"].split())
+            lines.append(f"    » {t['name']}: {note[:note_cap]}{'…' if len(note) > note_cap else ''}")
+
+    # Who they know comes from the relation edges (``gmc_web``, which generalises past
+    # GMCs) — the *labels* come from the relationship-scoped trait settings. Reading
+    # only the settings undercounts badly: Margaret has 16 others and 3 labelled ties.
+    labels: dict[str, list[dict]] = {}
+    for t in tie_settings:
+        cid = t.get("relationshipContactId")
+        if cid:
+            labels.setdefault(cid, []).append(t)
+    contacts: dict[str, dict] = {}
+    try:
+        for r in (_rest(f"/api/v1/gmcs/{args['entity_id']}/web").get("relations") or []):
+            oid = r.get("other_id")
+            if not oid or oid == args["entity_id"]:
+                continue
+            row = contacts.setdefault(oid, {"name": (r.get("other_name") or "").strip() or oid,
+                                            "out": False, "in": False})
+            if r.get("from") == args["entity_id"]:
+                row["out"] = True
+            else:
+                row["in"] = True
+    except Exception:
+        pass                                   # a web read is a nice-to-have, never fatal
+    for cid, rows_ in labels.items():
+        row = contacts.setdefault(cid, {"name": (rows_[0].get("relationshipContactName") or "").strip() or cid,
+                                        "out": False, "in": False})
+        row["traits"] = rows_
+
+    ties = []
+    labelled = []
+    for oid, row in sorted(contacts.items(), key=lambda kv: kv[1]["name"].lower()):
+        arrow = "↔" if row["out"] and row["in"] else ("→" if row["out"] else "←")
+        parts = []
+        for x in row.get("traits") or []:
+            dice = _fmt_dice(x.get("dice"))
+            bit = f"{x.get('name')} {dice}" if dice != "—" else str(x.get("name"))
+            if (x.get("statement") or "").strip():
+                bit += f' "{x["statement"].strip()[:60]}"'
+            parts.append(bit)
+        ties.append({"contact": row["name"], "contact_id": oid, "arrow": arrow,
+                     "labelled": bool(parts), "labels": parts})
+        if parts:
+            labelled.append(f"{arrow} {row['name']} — " + ", ".join(parts))
+    bare = [f"{t['arrow']} {t['contact']}" for t in ties if not t["labelled"]]
+    if labelled:
+        lines += ["", f"ties ({len(ties)} others, {len(labelled)} with traits):"] + ["    " + x for x in labelled]
+    if bare:
+        lines.append("    also: " + ", ".join(x[2:] for x in bare))
+
+    universes = [p.get("universe") for p in (entity.get("projections") or [])]
+    loc_name = ""
+    if entity.get("currentLocation"):
+        loc_name = (_graphql(_QUERY_ENTITY, {"id": entity["currentLocation"]}).get("entity") or {}).get("name") or ""
+    head_bits = [str(entity.get("type", "")).lower(), entity.get("currentUniverse") or "?"]
+    if loc_name:
+        head_bits.append(f"@ {loc_name}")
+    head = f"{entity.get('name')} — " + " · ".join(head_bits)
+    if len(universes) > 1:
+        head += f"  [{len(universes)} bodies: {', '.join(universes)}]"
+    meta = [f"razmerit {entity.get('razmerit')}", f"{len(settings)} settings",
+            f"{len(named)} named traits", f"{len(ties)} others linked"]
+    if entity.get("hidden"):
+        meta.append("HIDDEN")
+    problems = []
+    if unresolved:
+        problems.append(f"{len(unresolved)} unresolved (" + ", ".join(
+            sorted({t.get("traitId") or "?" for t in unresolved})) + ")")
+    if dupes:
+        problems.append(f"{len(dupes)} duplicated (" + ", ".join(
+            f"{tid}×{n}" for (tid, _), n in collections.Counter(
+                (t.get("traitId"), (t.get("statement") or "").strip()) for t in named).items()
+            if n > 1) + ")")
+
+    digest = "\n".join(
+        [head, " · ".join(meta), ""]
+        + lines
+        + ["", "record: " + (" · ".join(problems) if problems else "clean")]
+    )
+    return {"entity": {k: entity.get(k) for k in
+                       ("id", "name", "type", "razmerit", "currentUniverse", "currentLocation",
+                        "currentProjection", "hidden", "unpublished")},
+            "projections": entity.get("projections") or [],
+            "groups": groups, "ties": ties,
+            "problems": {"unresolved": [{"id": t.get("id"), "trait_id": t.get("traitId")} for t in unresolved],
+                         "duplicates": [{"trait_id": k[0], "statement": k[1]} for k in dupes]},
+            "digest": digest}
+
+
 # ── Plan staging + reveal tools (API) ────────────────
 
 def draft_entity(args: dict) -> dict:
@@ -1273,6 +1489,7 @@ TOOLS = {
     "location_tree": location_tree,
     "location_neighborhood": location_neighborhood,
     "gmc_web": gmc_web,
+    "character_build": character_build,
     "draft_entity": draft_entity,
     "draft_relationship": draft_relationship,
     "read_plan": read_plan,
@@ -1581,6 +1798,18 @@ TOOL_SCHEMAS = {
             "type": "object",
             "properties": {"gmc_id": {"type": "string"}},
             "required": ["gmc_id"],
+        },
+    },
+    "character_build": {
+        "name": "character_build",
+        "description": "Grasp an entity in one call: identity, the build grouped by trait set in sheet order, ties folded by contact, and a terse account of what is wrong with the record (dead trait ids, duplicate settings). Returns structured groups/ties plus a readable `digest`. Use this instead of get_entity whenever the question is 'who is this and what can they do'.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string", "description": "character, gmc, faction, location or asset id"},
+                "notes_chars": {"type": "integer", "description": "cap on each note excerpt in the digest (default 160); the structured groups keep notes whole"},
+            },
+            "required": ["entity_id"],
         },
     },
     "draft_entity": {
