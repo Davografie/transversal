@@ -273,9 +273,26 @@ def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
         canvas_y=t.canvas_y,
     )
 
+def _effect_timing_to_domain(timing):
+    """The domain's snake-case ``EffectTiming`` from the GraphQL enum's value.
+
+    The GraphQL enum is spelled upper-case (``IMMEDIATE``) while the domain
+    values are lower-case (``immediate``), and this seam passed the former to the
+    latter — so `createSfx` rejected **every** effect-bearing SFX with a
+    pydantic error that graphql-core then failed to format (it surfaced as
+    ``'str' object has no attribute 'get_location'``). The editor only ever misses
+    this because it saves through `updateSfx`.
+    """
+    from transversal.domain import EffectTiming
+    value = getattr(timing, "value", timing)
+    if isinstance(value, EffectTiming):
+        return value
+    return EffectTiming(str(value).strip().lower())
+
+
 def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
     return DomainEffect(
-        timing=e.timing, type=e.type, action=e.action,
+        timing=_effect_timing_to_domain(e.timing), type=e.type, action=e.action,
         target=e.target, entity=e.entity, result=e.result,
 
         die_filter=e.die_filter or {},

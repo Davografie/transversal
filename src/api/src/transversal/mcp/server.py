@@ -646,7 +646,7 @@ def add_relationship_trait(args: dict) -> dict:
     # Omit rather than send null: both are non-null arguments with defaults, and an
     # explicit null is an error while an omitted key lets the default apply.
     if args.get("die") is not None:
-        variables["die"] = args["die"]
+        variables["die"] = _enum(args["die"])
     if args.get("traitset_id") is not None:
         variables["ts"] = args["traitset_id"]
     return _call_mutation("addRelationshipTrait", _MUT_ADD_RELATIONSHIP_TRAIT_FULL, variables,
@@ -675,8 +675,8 @@ def add_trait_to_entity(args: dict) -> dict:
     input_ = {
         "traitId": args["trait_id"],
         "traitsetId": args["traitset_id"],
-        "dice": args.get("dice", []),
-        "ratingType": args.get("rating_type", "STATIC"),
+        "dice": _enums(args.get("dice", [])),
+        "ratingType": _enum(args.get("rating_type", "STATIC")),
         "statement": args.get("statement", ""),
     }
     for key, gql_key in (
@@ -686,7 +686,12 @@ def add_trait_to_entity(args: dict) -> dict:
         ("capacity", "capacity"), ("order", "order"), ("enabled", "enabled"),
     ):
         if args.get(key) is not None:
-            input_[gql_key] = args[key]
+            value = args[key]
+            if key in ("polarity",):
+                value = _enum(value)
+            elif key in ("capacity",):
+                value = _enums(value)
+            input_[gql_key] = value
     variables = {"entityId": args["entity_id"], "input": input_}
     return _call_mutation("addTraitSetting", _MUT_ADD_TRAIT_SETTING, variables,
                           args.get("dry_run", True), "addTraitSetting")
@@ -745,7 +750,12 @@ def update_trait_setting(args: dict) -> dict:
         ("trait_id", "traitId"),
     ):
         if args.get(key) is not None:
-            input_[gql_key] = args[key]
+            value = args[key]
+            if key in ("rating_type", "polarity", "from_type"):
+                value = _enum(value)
+            elif key in ("dice", "capacity"):
+                value = _enums(value)
+            input_[gql_key] = value
     variables = {"id": args["id"], "input": input_}
     return _call_mutation("updateTraitSetting", _MUT_UPDATE_TRAIT_SETTING, variables,
                           args.get("dry_run", True), "updateTraitSetting")
@@ -818,7 +828,12 @@ def save_life_path(args: dict) -> dict:
 
 
 def create_sfx(args: dict) -> dict:
-    """Create a new SFX (full SfxInput passthrough: id, name, trigger, conditions, effects)."""
+    """Create a new SFX (full SfxInput passthrough: id, name, trigger, conditions, effects).
+
+    ``timing`` is spelled the way the GraphQL enum spells it (``IMMEDIATE``) — the
+    domain's snake-case spelling is converted server-side, so the tool passes the
+    caller's input straight through.
+    """
     variables = {"input": args["input"]}
     return _call_mutation("createSfx", _MUT_CREATE_SFX, variables,
                           args.get("dry_run", True), "createSfx")
@@ -1234,6 +1249,23 @@ TOOLS = {
 
 
 _DRY_RUN_HELP = "Preview the operations without committing (true) or execute (false)"
+
+
+def _enum(value):
+    """Upper-case a value the GraphQL schema models as an enum.
+
+    ``DieType``, ``Polarity`` and ``RatingType`` are enums on the wire
+    (``D6``/``POSITIVE``/``CHALLENGE``), so a caller passing the domain's own
+    lower-case spelling — which is what the REST layer, the docs and every die in
+    the catalog use — got a raw enum error back. Normalising here keeps the tools
+    authoring-shaped: a caller should not have to know which arguments are enums.
+    """
+    return value.strip().upper() if isinstance(value, str) else value
+
+
+def _enums(values):
+    """The list form, for ``dice`` / ``capacity``."""
+    return [_enum(v) for v in values] if isinstance(values, list) else values
 
 
 def _dry_run_property() -> dict:
