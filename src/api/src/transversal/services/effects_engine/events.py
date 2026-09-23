@@ -63,6 +63,32 @@ class StructuredChoice:
     continuation: list[Effect] = field(default_factory=list)
 
 @dataclass
+class PendingSfxLoop:
+    """A rule that would run again for the change it is already handling.
+
+    An automated loop: the rule's own effect caused another event *of the change
+    it is applying to* — a trait it steps up, a challenge it fills. Instead of
+    recursing, or silently refusing, the round is offered to the table: an
+    accidental loop cannot decide game state on its own, and a deliberate cascade
+    can be walked one round at a time.
+
+    Carries the event so the answer can re-run **this rule for this moment**
+    (``resolveSfxLoop``); the rule's conditions and targets are re-resolved from
+    live state, so a round that has become impossible simply does nothing.
+    """
+    sfx_id: str
+    sfx_name: str
+    entity_id: str
+    universe: str
+    event_type: str
+    context: dict = field(default_factory=dict)
+    sfx_description: str = ""
+    #: Which round this would be. The first already ran, so the first prompt is
+    #: round 2 — and it is shown to the table, because "the 4th time" reads very
+    #: differently from "again".
+    iteration: int = 2
+
+@dataclass
 class EventOutcome:
     """Result of processing an event through the effects engine.
 
@@ -70,8 +96,10 @@ class EventOutcome:
     effects with a ``{choose_*}`` target that were skipped and need user
     resolution before they can be applied. ``structured`` are effects whose
     ``target_spec``/``refs`` hit a ``choose`` step and carry the pre-resolved
-    candidate set for the picker.
+    candidate set for the picker. ``loops`` are rules that would re-enter the
+    change they are already handling, offered to the table rather than recursed.
     """
     applied: list[Effect] = field(default_factory=list)
     pending: list[PendingSfxEffect] = field(default_factory=list)
     structured: list[StructuredChoice] = field(default_factory=list)
+    loops: list[PendingSfxLoop] = field(default_factory=list)

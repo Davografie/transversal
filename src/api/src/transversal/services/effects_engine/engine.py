@@ -14,6 +14,7 @@ from transversal.services.effects_engine.events import (
     EventOutcome,
     GameEvent,
     PendingSfxEffect,
+    PendingSfxLoop,
 )
 from transversal.services.target_resolver import resolved_id as _resolved_id  # noqa: E402
 from transversal.services.effects_engine.firing import (
@@ -28,8 +29,33 @@ from transversal.services.effects_engine.refs import (
     resolve_refs,
 )
 from transversal.services.effects_engine.shared import (
+    RULE_CHAIN,
     log,
 )
+
+
+#: Context keys that name the *thing* an event is about, most specific first. A
+#: change is "what happened, to which thing, on which entity" — so a rule that
+#: re-enters the same change is looping, while the same rule acting on a
+#: *different* thing (an agenda rule filling its parent) is a new application.
+_CHANGE_SUBJECT_KEYS = ("trait_setting_id", "trait_setting", "entity_created",
+                        "projection_id")
+
+
+def _change_key(event: GameEvent) -> tuple[str, str, str]:
+    """Identify the change an event carries, for the loop guard.
+
+    The subject is whatever the event names as the thing it is about; events that
+    name no single thing (a roll, a beat) fall back to the entity and type, which
+    is the coarse key the old guard used — correct there, because a roll has no
+    sub-part for a rule to act on and loop through.
+    """
+    ctx = event.context or {}
+    for key in _CHANGE_SUBJECT_KEYS:
+        value = ctx.get(key)
+        if value:
+            return (event.entity_id, event.type, str(value))
+    return (event.entity_id, event.type, "")
 
 
 def _resolve_listeners(sfx: SFX, repo, event, source, source_element) -> list[str]:
@@ -210,11 +236,32 @@ class EffectsEngine:
         arming inside the walk would stack N copies of the same rule).
         """
         outcome = EventOutcome()
+        change = _change_key(event)
 
         for sfx_id in available_sfx_ids:
             sfx = self._sfx_registry.get(sfx_id)
             if sfx is None:
                 log.info("[process_event] sfx=%s NOT in registry (skip)", sfx_id)
+                continue
+
+            # Loop guard. This rule is already handling *this change* further up
+            # the chain, so applying it again is the rule re-entering itself —
+            # its own effect caused this event. Offer the round to the table
+            # instead of recursing; see `PendingSfxLoop`.
+            chain = RULE_CHAIN.get()
+            if (sfx.id, change) in chain:
+                rounds = sum(1 for frame in chain if frame == (sfx.id, change))
+                outcome.loops.append(PendingSfxLoop(
+                    sfx_id=sfx.id, sfx_name=sfx.name,
+                    sfx_description=sfx.description or "",
+                    entity_id=event.entity_id, universe=event.universe,
+                    event_type=event.type, context=dict(event.context or {}),
+                    iteration=rounds + 1,
+                ))
+                log.info(
+                    "[process_event] sfx=%s would re-enter %s (round %s) — asking the table",
+                    sfx.id, change, rounds + 1,
+                )
                 continue
 
             # Trigger match
@@ -300,6 +347,10 @@ class EffectsEngine:
                     "sfx_id": sfx.id,
                     "cancelable": event.type in ("manual", "on_activate"),
                     "source_id": source_id or "",
+                    # The change this rule is acting on, so the dispatch can put
+                    # the rule on the loop chain for exactly as long as its own
+                    # effects run (see `shared.RULE_CHAIN`).
+                    "change": change,
                 },
             }
             roll_effects = [e for e in sfx.effects if e.timing in _deferred_timings]

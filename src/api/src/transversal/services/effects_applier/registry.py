@@ -115,9 +115,29 @@ class EffectRegistry:
                 activation.get("sfx_id"), cancelable=bool(activation.get("cancelable")),
                 source_id=activation.get("source_id") or "",
             ):
-                handler(action, entity_id, universe, context)
+                self._apply_guarded(handler, action, activation, entity_id, universe, context)
         else:
             handler(action, entity_id, universe, context)
+
+    def _apply_guarded(self, handler, action: Effect, activation: dict,
+                       entity_id: str, universe: str, context: dict) -> None:
+        """Apply a handler with the rule on the loop chain for its duration.
+
+        The chain is what lets a nested state event tell *"this rule is causing
+        this"* from *"this rule is being asked to cause it again"*. It is a stack,
+        so the frame is alive precisely while the effects that could recurse are
+        running, and per-request, so concurrent activations cannot see each other.
+        A dispatch outside an activation (a life-path entry) pushes nothing: it is
+        not an auto-triggered rule and has no chain to re-enter.
+        """
+        from transversal.services.effects_engine.shared import RULE_CHAIN
+
+        frame = (activation.get("sfx_id"), activation.get("change"))
+        token = RULE_CHAIN.set(RULE_CHAIN.get() + (frame,))
+        try:
+            handler(action, entity_id, universe, context)
+        finally:
+            RULE_CHAIN.reset(token)
 
 def _register_core_handlers(em, raz):
     """Register handlers for the core service operations.

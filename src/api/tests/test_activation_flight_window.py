@@ -727,9 +727,13 @@ def test_the_engine_marks_a_manual_activation_cancelable(monkeypatch):
 
     engine.process_event_outcome(
         GameEvent(type="manual", entity_id="kael", universe="earth"), ["sfx-x"], 0)
-    assert captured == [{"sfx_id": "sfx-x", "cancelable": True, "source_id": ""}]
+    # `change` is the loop guard's frame key: what this rule is acting on, so a
+    # nested event can tell "this rule is causing this" from "run it again".
+    assert captured == [{"sfx_id": "sfx-x", "cancelable": True, "source_id": "",
+                         "change": ("kael", "manual", "")}]
 
     captured.clear()
     engine.process_event_outcome(
         GameEvent(type="on_roll", entity_id="kael", universe="earth"), ["sfx-auto"], 0)
-    assert captured == [{"sfx_id": "sfx-auto", "cancelable": False, "source_id": ""}]
+    assert captured == [{"sfx_id": "sfx-auto", "cancelable": False, "source_id": "",
+                         "change": ("kael", "on_roll", "")}]
