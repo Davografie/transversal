@@ -75,11 +75,11 @@
           <TagInput
             v-if="fieldOptionsFor(i)"
             class="tsb-enum"
-            :model-value="enumValues(i)"
+            :model-value="oneOrSeveral(i)"
             :suggestions="fieldOptionsFor(i)"
             :allow-custom="false"
             placeholder="value"
-            @update:model-value="onEnumPicked(i, $event)"
+            @update:model-value="onOneOrSeveralPicked(i, $event)"
           />
           <select v-else-if="isBooleanField(i)" class="tsb-bool" :value="boolValue(i)"
                   @change="onBooleanPicked(i, $event)">
@@ -97,15 +97,19 @@
             <button type="button" class="tsb-token-btn active" title="Pick a value instead" @click="useToken(i, false)">{ }</button>
           </span>
           <span v-else-if="fieldReferences(i)" class="tsb-value-token">
-            <!-- Autosuggest by name; a universe stores its *handle* (`earth`),
-                 which is what a projection's `universe` holds. -->
+            <!-- Pick by name, store the identity: the dropdown lists names and
+                 the step keeps the id, so the rule means exactly one thing even
+                 when several registry entries share a name. Several picks become
+                 a list with `in`. A universe stores its *handle* (`earth`),
+                 which is what a projection's `universe` field actually holds. -->
             <TargetPicker
               :kind="fieldReferences(i)"
               :model-value="step.value"
               :clearable="false"
               placeholder="Pick…"
-              @select="(opt) => onFilterPicked(i, opt)"
-              @update:model-value="(v) => onFilterPickerValue(i, v)"
+              multiple
+              :option-to-value="optionToValueFor(i)"
+              @update:model-value="(v) => onReferenceValue(i, v)"
             />
             <button type="button" class="tsb-token-btn" title="Compare against a bound value" @click="useToken(i, true)">{ }</button>
           </span>
@@ -123,15 +127,20 @@
               @update:model-value="(v) => onTagsChange(i, v)"
             />
           </span>
-          <input v-else-if="fieldSuggest(i)" :value="step.value" placeholder="value"
-                 :list="suggestListId" @input="onFilterValue(i, $event)" />
+          <!-- A field whose values are *data*: the known ones are chips you can
+               pick, and typing a name nobody has used stays allowed — the value
+               may be something not in the list yet. One stays a scalar (`==`),
+               several become a list (`in`) — the same one-or-several rule an
+               enum filter follows. -->
+          <TagInput
+            v-else-if="fieldSuggest(i)"
+            class="tsb-enum"
+            :model-value="oneOrSeveral(i)"
+            :suggestions="suggestOptions(i)"
+            placeholder="value"
+            @update:model-value="onOneOrSeveralPicked(i, $event)"
+          />
           <input v-else :value="step.value" placeholder="value" @input="onFilterValue(i, $event)" />
-          <!-- Free-form fields whose values are *data*: known ones are proposed,
-               typing a new one stays allowed. `suggest` in the catalog names the
-               source (trait tags, SFX names / triggers / source kinds). -->
-          <datalist v-if="fieldSuggest(i)" :id="suggestListId">
-            <option v-for="o in suggestOptions(i)" :key="o.id" :value="o.id" />
-          </datalist>
         </div>
 
         <!-- navigate: hop an edge -->
@@ -249,10 +258,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, useId, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
+import { useApi } from '@/composables/useApi.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import TagInput from '@/components/ui/TagInput.vue'
 import DiePicker from '../DiePicker.vue'
@@ -294,8 +304,22 @@ const { loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregation
 // suggestable field is a catalog line plus a row here.
 const { allSfxs, traitsets, fetchTraitsConfig } = useTraitsConfig()
 const { load: loadSfxMeta, triggers } = useSfxMeta()
+const { graphql } = useApi()
 
-const suggestListId = `tsb-suggest-options-${useId()}`
+// The universe's name / location / entity vocabularies come from the entity
+// list, which is far larger than the trait config — so it is fetched the first
+// time a field actually suggests from it, not on mount.
+const entityRows = ref([])
+let entityRowsLoading = false
+async function loadEntityRows() {
+  if (entityRows.value.length || entityRowsLoading) return
+  entityRowsLoading = true
+  try {
+    const data = await graphql(`query { entities { id name type } }`)
+    entityRows.value = data?.entities || []
+  } catch (e) { /* a suggestion list is a convenience; typing still works */ }
+  finally { entityRowsLoading = false }
+}
 
 const tagOptions = computed(() => {
   const seen = new Set()
@@ -316,12 +340,33 @@ const sfxTriggerOptions = computed(() =>
 const sfxSourceKindOptions = computed(() =>
   (sourceKinds() || []).map((s) => ({ id: s.value, name: s.label })))
 
+const names = (list) => [...new Set(list.filter(Boolean))].sort().map((n) => ({ id: n, name: n }))
+
+const traitNameOptions = computed(() =>
+  names((traitsets.value || []).flatMap((ts) => (ts.traits || []).map((t) => t.name))))
+
+const traitsetNameOptions = computed(() =>
+  names((traitsets.value || []).map((ts) => ts.name)))
+
+const byType = (type) => names((entityRows.value || []).filter((e) => e.type === type).map((e) => e.name))
+const entityNameOptions = computed(() => names((entityRows.value || []).map((e) => e.name)))
+const locationNameOptions = computed(() => byType('location'))
+const universeNameOptions = computed(() => byType('universe'))
+
 const SUGGEST_SOURCES = {
   trait_tags: tagOptions,
+  trait_names: traitNameOptions,
+  traitset_names: traitsetNameOptions,
+  entity_names: entityNameOptions,
+  location_names: locationNameOptions,
+  universe_names: universeNameOptions,
   sfx_names: sfxNameOptions,
   sfx_triggers: sfxTriggerOptions,
   sfx_source_kinds: sfxSourceKindOptions,
 }
+
+// Anything served from the entity list needs that list; ask for it on first use.
+const ENTITY_BACKED_SUGGESTS = new Set(['entity_names', 'location_names', 'universe_names'])
 
 /** The tag editor's own suggestions (string values), from the suggest table. */
 const tagSuggestions = computed(() => (tagOptions.value || []).map((o) => o.id))
@@ -361,6 +406,7 @@ function fieldSuggest(i) {
 /** The option list for whichever suggest source this step's field names. */
 function suggestOptions(i) {
   const source = fieldSuggest(i)
+  if (source && ENTITY_BACKED_SUGGESTS.has(source)) loadEntityRows()
   const list = source ? SUGGEST_SOURCES[source] : null
   return list ? list.value : []
 }
@@ -520,8 +566,20 @@ function fieldReferences(i) {
   return f && f.references ? f.references : null
 }
 
-function onFilterPickerValue(i, val) {
-  steps.value[i].value = val
+function optionToValueFor(i) {
+  // A universe field holds the world's *handle* (`earth`), not its entity id
+  // (`universe-earth`) — the one kind where the stored value differs from the
+  // candidate's id.
+  return fieldReferences(i) === 'universe' ? ((opt) => opt?.universe || opt?.id || '') : null
+}
+
+function onReferenceValue(i, val) {
+  const step = steps.value[i]
+  if (!step) return
+  const values = (Array.isArray(val) ? val : (val ? [val] : [])).filter(Boolean)
+  step.value = values.length > 1 ? values : (values[0] || '')
+  if (values.length > 1) step.operator = 'in'
+  else if (step.operator === 'in') step.operator = '=='
 }
 
 // A value that names a bound variable rather than holding a literal.
@@ -554,27 +612,16 @@ function useToken(i, on) {
 // its entity id (a projection's `universe` is `earth`, not `universe-earth`).
 // A single value stays a string with `==` (unchanged behaviour); several become a
 // list with `in`, which is the operator the resolver reads as membership.
-function enumValues(i) {
+function oneOrSeveral(i) {
   const v = steps.value[i]?.value
   return Array.isArray(v) ? v : (v ? [v] : [])
 }
 
-function onEnumPicked(i, picked) {
+function onOneOrSeveralPicked(i, picked) {
   const values = [...picked]
   steps.value[i].value = values.length > 1 ? values : (values[0] || '')
   if (values.length > 1) steps.value[i].operator = 'in'
   else if (steps.value[i].operator === 'in') steps.value[i].operator = '=='
-}
-
-function onFilterPicked(i, opt) {
-  // A universe-valued field stores the world's *handle* (`earth`); everything
-  // else stores the candidate's id. The candidate's own `universe` field only
-  // says where it lives — preferring it wrote a universe handle into trait
-  // filters (pick "Beast", get the universe's name/`aelor-citar`).
-  const kind = fieldReferences(i)
-  steps.value[i].value = kind === 'universe'
-    ? (opt?.universe || opt?.id || '')
-    : (opt?.id || '')
 }
 
 // Operators valid for the current field (from the catalog; falls back to the

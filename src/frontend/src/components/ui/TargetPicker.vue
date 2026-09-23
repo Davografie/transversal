@@ -1,15 +1,25 @@
 <template>
-  <div class="tp-root">
+  <div class="tp-root" :class="{ 'tp-multi': multiple }">
+    <!-- Several picks render as chips and the dropdown appends (it already
+         excludes what is chosen), so one value stays a string and several
+         become a list — the one-or-several shape every filter follows. -->
+    <div v-if="multiple && picked.length" class="tp-chips">
+      <span v-for="v in picked" :key="v" class="tp-chip">
+        {{ labelFor(v) }}
+        <button type="button" class="tp-chip-x" :title="`Remove ${labelFor(v)}`"
+                @click="remove(v)">×</button>
+      </span>
+    </div>
     <div class="tp-input">
       <SearchDropdown
         :options="candidates"
-        :model-value="modelValue"
-        :exclude-ids="excludeIds"
+        :model-value="multiple ? '' : modelValue"
+        :exclude-ids="excludeCandidates"
         :placeholder="placeholder"
         value-key="id"
         label-key="name"
         :fallback-label="resolvedLabel"
-        :clearable="clearable"
+        :clearable="multiple ? false : clearable"
         @select="pick"
         @clear="clear"
       >
@@ -86,7 +96,7 @@ import { useApi } from '@/composables/useApi.js'
 // same field) and are sent with every candidate lookup. New fields appear here
 // automatically as the backend adds them.
 const props = defineProps({
-  modelValue: { type: String, default: '' },
+  modelValue: { type: [String, Array], default: '' },
   kind: { type: String, required: true },
   scope: { type: String, default: '' },
   filter: { type: Object, default: null },
@@ -99,6 +109,13 @@ const props = defineProps({
   allowFilters: { type: Boolean, default: true },
   clearable: { type: Boolean, default: true },
   excludeIds: { type: Array, default: () => [] },
+  /** Pick several: the picks become chips and `modelValue` is a list. The
+      caller stores one as a scalar (`==`) and several as a list (`in`). */
+  multiple: { type: Boolean, default: false },
+  /** How a candidate becomes the *stored* value. A universe field holds the
+      world's handle (`earth`), not its entity id (`universe-earth`), so the
+      caller supplies the mapping; everything else stores the id. */
+  optionToValue: { type: Function, default: null },
 })
 
 const emit = defineEmits(['update:modelValue', 'select', 'update:filter'])
@@ -110,19 +127,55 @@ const { graphql } = useApi()
 // A saved value whose candidate isn't in the loaded set would otherwise render
 // as a raw id. The backend resolves the name through the same resolver the card
 // text uses — so the picker shows "Beast", never "trait-2081905".
-const resolvedLabel = ref('')
+function toValue(opt) {
+  return props.optionToValue ? (props.optionToValue(opt) || '') : (opt?.id || '')
+}
+
+const picked = computed(() => {
+  const v = props.modelValue
+  return Array.isArray(v) ? v.filter(Boolean) : (v ? [v] : [])
+})
+
+const resolvedLabels = ref({})
 watch([() => props.modelValue, candidates], async ([value, list]) => {
-  resolvedLabel.value = ''
-  if (!value || (list || []).some((c) => c.id === value)) return
+  const values = Array.isArray(value) ? value.filter(Boolean) : (value ? [value] : [])
+  const known = new Set((list || []).map((c) => toValue(c)))
+  const unknown = values.filter((v) => !known.has(v))
+  if (!unknown.length) {
+    resolvedLabels.value = {}
+    return
+  }
   try {
     const data = await graphql(
       `query($ids: [ID!]!) { targetLabels(ids: $ids) { id name } }`,
-      { ids: [value] },
+      { ids: unknown },
     )
-    const name = data?.targetLabels?.[0]?.name || ''
-    if (name && name !== value) resolvedLabel.value = name
+    const names = {}
+    for (const row of (data?.targetLabels || [])) names[row.id] = row.name
+    resolvedLabels.value = names
   } catch (e) { /* the raw value stays as the last resort */ }
 })
+
+const resolvedLabel = computed(() =>
+  props.multiple ? '' : (resolvedLabels.value[props.modelValue] || ''))
+
+function labelFor(value) {
+  const hit = (candidates.value || []).find((c) => toValue(c) === value)
+  return hit?.name || resolvedLabels.value[value] || value
+}
+
+// In chip/append mode the dropdown must not offer what is already picked. It
+// excludes by candidate id, so the picked *values* are mapped back.
+const excludeCandidates = computed(() => {
+  if (!props.multiple) return props.excludeIds
+  const chosen = new Set(picked.value)
+  return [...props.excludeIds,
+          ...(candidates.value || []).filter((c) => chosen.has(toValue(c))).map((c) => c.id)]
+})
+
+function remove(value) {
+  emit('update:modelValue', picked.value.filter((v) => v !== value))
+}
 
 // Fields the backend says can narrow this kind.
 const filterFields = computed(() =>
@@ -160,12 +213,22 @@ const randomCandidates = computed(() =>
 )
 
 function pick(opt) {
-  emit('update:modelValue', opt.id)
+  const value = toValue(opt)
+  if (props.multiple) {
+    // The dropdown hides what is already chosen, so this is an append; a
+    // repeat (from the dice button) would be a no-op rather than a duplicate.
+    const next = picked.value.includes(value)
+      ? picked.value.filter((v) => v !== value)
+      : [...picked.value, value]
+    emit('update:modelValue', next)
+  } else {
+    emit('update:modelValue', value)
+  }
   emit('select', opt)
 }
 
 function clear() {
-  emit('update:modelValue', '')
+  emit('update:modelValue', props.multiple ? [] : '')
   emit('select', null)
 }
 
@@ -208,6 +271,19 @@ watch(effective, load)
 
 <style scoped>
 .tp-root { position: relative; display: flex; align-items: center; gap: 4px; width: 100%; }
+/* Chip/append mode: the picks take their own row above the dropdown. */
+.tp-multi { flex-wrap: wrap; }
+.tp-chips { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+.tp-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 6px;
+  background: var(--overlay-8); border: 1px solid var(--overlay-12);
+  border-radius: 3px; font-size: 10px; color: var(--text);
+}
+.tp-chip-x {
+  border: 0; background: none; padding: 0 2px; cursor: pointer;
+  color: var(--text-dim); font-size: 11px; line-height: 1;
+}
+.tp-chip-x:hover { color: var(--accent); }
 .tp-input { flex: 1; min-width: 0; }
 .tp-random {
   flex: none; width: 26px; height: 24px; line-height: 1; cursor: pointer;
