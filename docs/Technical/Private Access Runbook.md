@@ -506,6 +506,37 @@ sudo ss -tlnp | grep ':22'      # expect 100.64.0.1:22 and 127.0.0.1:22, NOT 0.0
 > but that address depends on node registration order, so it is stable only for a small, stable
 > tailnet.
 
+> [!tip] Stranded remotely with no shell? A user-level sshd needs no root
+> If you are away from the machine and the system sshd is refusing over the tailnet — exactly the
+> boot-race failure above — you cannot restart it without a password, and you have no shell in
+> which to type one. A **non-root sshd on a high port** breaks that deadlock:
+>
+> ```bash
+> mkdir -p ~/.ssh/sshd && chmod 700 ~/.ssh/sshd
+> ssh-keygen -t ed25519 -f ~/.ssh/sshd/host_ed25519 -N ""     # its own host key
+> cat > ~/.ssh/sshd/config <<'EOF'
+> Port 2222
+> ListenAddress 100.64.0.1
+> HostKey /home/<user>/.ssh/sshd/host_ed25519
+> PidFile /home/<user>/.ssh/sshd/sshd.pid
+> AuthorizedKeysFile /home/<user>/.ssh/authorized_keys
+> UsePAM no
+> PasswordAuthentication no
+> PubkeyAuthentication yes
+> AllowUsers <user>
+> EOF
+> /usr/bin/sshd -f ~/.ssh/sshd/config
+> ```
+>
+> Bound to the tailnet address only, it is tailnet-scoped like everything else, and because it runs
+> as your user it can only ever authenticate that one user. **Password auth cannot work** — a
+> non-root sshd cannot read `/etc/shadow` — so this needs a key. Verified working on the live
+> desktop: `ss` showed `100.64.0.1:2222`.
+>
+> Use it to get back in, run the real fix (`sudo systemctl restart sshd`), then stop the user-level
+> one. It is a recovery hatch, not a permanent second door — and it also works when you have no
+> passwordless sudo, which is the usual reason you are locked out in the first place.
+
 > [!note] On Arch, the drop-in directory IS honoured
 > `/etc/ssh/sshd_config` starts with `Include /etc/ssh/sshd_config.d/*.conf`, so the file above is
 > read. Note the same first-match-wins rule as on Ubuntu: give your file a low number (`10-`) so it
