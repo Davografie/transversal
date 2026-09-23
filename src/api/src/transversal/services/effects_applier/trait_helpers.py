@@ -21,18 +21,19 @@ def _resolve_traitset_id(trait_id: str, repo) -> str:
 def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
     """Return ``(from_type, owner_id)`` for the trait targeted by an effect.
 
-    Defaults to the entity. When ``effect.context.relationship`` names another
-    entity, the trait is anchored to the **relationship edge** between them
-    instead — that is how a tie *to* someone is stored (a rank on a membership, a
-    bond on a relation).
+    **A resolved owner path wins.** The action declares what that path may land on
+    (``owner_elements``) and the engine resolves it, so the kind is read from the
+    declaration rather than guessed from the value — which is how a tie (a
+    relationship edge) and a facet (another trait instance) are anchored now.
 
-    ``effect.context.relationship_type`` says *which* edge, defaulting to
-    ``"membership"`` so nothing authored before this moves. It exists because the
-    type used to be hardcoded, which made every other edge type unreachable — and
-    the miss then fell through to the entity, so a trait aimed at a bond quietly
-    landed on the character instead. Live data has **264** relationship-anchored
-    traits on ``relation`` edges against **43** on ``membership``, so both kinds
-    are real content.
+    With no owner path the owner is the subject entity.
+
+    **The legacy branch below is for stored content only.** No action declares
+    ``context.relationship`` / ``relationship_type`` any more — that pair was the
+    old way to anchor a tie, and it survives here because **14 roll-table effects**
+    still carry it (plus one seeded ``{term_faction}`` rule). Reading it keeps
+    their anchors working; migrating them to the owner path is [[B164]], after
+    which this branch and its reserved token can go.
 
     An absent edge is **not** created here: ``create_relationship`` takes its key
     from Arango and a trait setting stores its owner by that key, so the edge must

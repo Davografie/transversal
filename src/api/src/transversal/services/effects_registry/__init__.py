@@ -22,7 +22,6 @@ from transversal.services.effects_registry.action_types import (  # noqa: F401
     RefDef,
     _ENTITY_FIELD,
     _NOTES_CONTEXT_FIELD,
-    _RELATIONSHIP_CONTEXT_FIELD,
     _STATEMENT_CONTEXT_FIELD,
     _STEPS_CONTEXT_FIELD,
 )
