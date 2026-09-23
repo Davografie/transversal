@@ -477,19 +477,34 @@ ListenAddress 100.64.0.1
 ListenAddress 127.0.0.1
 EOF
 
-# 3. Order sshd after the tailnet, or the bind in step 2 fails at boot when
-#    100.64.0.1 does not exist yet.
+# 3. Make sshd WAIT FOR THE ADDRESS, not merely for tailscaled to have started.
+#    `After=tailscaled.service` alone is NOT enough. On the real deployment both
+#    units started in the same second, sshd bound 100.64.0.1 before the address
+#    existed, logged "Cannot assign requested address", and carried on listening on
+#    loopback only — so SSH refused over the tailnet until sshd was restarted.
 sudo mkdir -p /etc/systemd/system/sshd.service.d
 sudo tee /etc/systemd/system/sshd.service.d/10-after-tailscale.conf >/dev/null <<'EOF'
 [Unit]
 After=tailscaled.service
 Wants=tailscaled.service
+
+[Service]
+# Poll for the address itself; give up (starting anyway, degraded) after 30s so a
+# tailnet problem can never block boot.
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do /usr/bin/ip -4 addr show dev tailscale0 2>/dev/null | grep -q "100.64.0.1" && exit 0; sleep 1; done; echo "tailnet address absent after 30s; starting with loopback only" >&2; exit 0'
 EOF
 
 # 4. Validate, then start. sshd -t checks syntax; `sshd -T` shows what is effective.
 sudo sshd -t && sudo systemctl daemon-reload && sudo systemctl enable --now sshd
 sudo ss -tlnp | grep ':22'      # expect 100.64.0.1:22 and 127.0.0.1:22, NOT 0.0.0.0:22
 ```
+
+> [!warning] If SSH still refuses, check the address family
+> The tailnet has both an IPv4 (`100.64.0.1`) and an IPv6 (`fd7a:…`) address, and a client
+> resolving the MagicDNS name may try IPv6 first. The `ListenAddress` above is IPv4-only. Check
+> `ss -tln | grep ':22'`; if IPv6 is needed, add the tailnet IPv6 as a second `ListenAddress` —
+> but that address depends on node registration order, so it is stable only for a small, stable
+> tailnet.
 
 > [!note] On Arch, the drop-in directory IS honoured
 > `/etc/ssh/sshd_config` starts with `Include /etc/ssh/sshd_config.d/*.conf`, so the file above is
@@ -605,3 +620,13 @@ VPS. The domain is reusable for Lane A either way.
   Verified: `127.0.0.1:3080` and `ptdave:3080` → 401 (trusted); `evil.example:3080` and
   `100.64.0.1:3080` → **403**. Tightly scoped rather than opened generally — note even the bare
   tailnet IP is refused, which is precisely why the GUI must be reached by name.
+- 2026-09-23 — **SSH over the tailnet broke on reboot, and my first fix was wrong.** After the
+  desktop rebooted, `sshd` was listening on `127.0.0.1:22` only, so SSH from the Pixelbook got
+  "Connection refused" while the GUI and `:3001` worked fine. Cause, from the journal:
+  `Bind to port 22 on 100.64.0.1 failed: Cannot assign requested address` — sshd and tailscaled
+  started in the same second, and the tailnet address did not exist yet. sshd logged the bind
+  error and carried on with loopback only. `After=tailscaled.service` was satisfied and useless:
+  "tailscaled started" is not "the address exists". Step 8 now polls for the address in an
+  `ExecStartPre` (bounded at 30s so a tailnet outage cannot block boot), and warns to check the
+  address family if it recurs. Immediate remedy at the time: `systemctl restart sshd`, because
+  the address does exist by then.
