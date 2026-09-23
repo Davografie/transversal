@@ -15,6 +15,24 @@ import { findPlayableCharacter, openSheet, ensureTraitRowsVisible, openTraitEdit
 //
 // Hence the shape of the assertion below: one click, then look.
 
+/**
+ * Open the definition picker with a single click, and wait for its options.
+ *
+ * Both halves matter. One click is the regression assertion — the panel used to
+ * wipe its own open state on the re-render that follows the fetch, so the list
+ * only appeared on a second click. And the wait is for the *options*, not the
+ * box: the dropdown is visible the instant the chip is clicked, while the options
+ * are fetched on open and land a beat later. Every count in this file counts
+ * options, so reading too early reports zero — which reads exactly like "the
+ * picker is broken" and is not.
+ */
+async function openDefinitionPicker(page) {
+  await page.locator('.definition-chip').click()
+  await expect(page.locator('.definition-dropdown'), 'one click must open the picker').toBeVisible()
+  await expect(page.locator('.definition-option').first(), 'the picker must load its options')
+    .toBeVisible({ timeout: 10_000 })
+}
+
 test('the definition picker opens on the first click', async ({ page, request }) => {
   const character = await findPlayableCharacter(request)
   await openSheet(page, character)
@@ -26,13 +44,9 @@ test('the definition picker opens on the first click', async ({ page, request })
   const current = (await chip.innerText()).trim()
   expect(current.length, 'the chip names the instance’s current definition').toBeGreaterThan(0)
 
-  // Exactly one click — the whole point of this test.
-  await chip.click()
-
-  const dropdown = page.locator('.definition-dropdown')
-  await expect(dropdown, 'one click must open the picker').toBeVisible()
-  const options = page.locator('.definition-option')
-  expect(await options.count(), 'the picker must offer candidate definitions').toBeGreaterThan(0)
+  await openDefinitionPicker(page)
+  expect(await page.locator('.definition-option').count(), 'the picker must offer candidates')
+    .toBeGreaterThan(0)
 
   // The current definition is always among them, marked as selected, so the list
   // is never a dead end and the player can see where they are.
@@ -47,7 +61,7 @@ test('the traitset filter opens on the instance’s own set, and can widen', asy
   const setting = character.traitSettings.find((s) => s.id === settingId)
   expect(setting, `the edited setting ${settingId} is in the fetched list`).toBeTruthy()
 
-  await page.locator('.definition-chip').click()
+  await openDefinitionPicker(page)
   const setFilter = page.locator('.definition-set-filter')
   await expect(setFilter, 'the picker offers a trait set filter').toBeVisible()
 
@@ -71,6 +85,34 @@ test('the traitset filter opens on the instance’s own set, and can widen', asy
     .toBe(inSet)
 })
 
+test('the definitions are listed alphabetically', async ({ page, request }) => {
+  const character = await findPlayableCharacter(request)
+  await openSheet(page, character)
+  await ensureTraitRowsVisible(page)
+  await openTraitEditor(page)
+
+  await openDefinitionPicker(page)
+  // Every set, not just the instance's: a single set can happen to come back
+  // alphabetical from the API, which lets an unsorted list pass by luck. Across
+  // the whole universe that is not a coincidence that can survive.
+  await page.locator('.definition-set-filter').selectOption('')
+  const labels = await page.locator('.definition-option').evaluateAll(
+    (els) => els.map((e) => e.innerText.trim()),
+  )
+  expect(labels.length, 'the list must have something to order').toBeGreaterThan(50)
+
+  // Non-decreasing, checked pairwise rather than against a re-sorted copy: a
+  // sorted copy would just re-run the implementation and pass whatever it did.
+  // Case-insensitively, because that is how the list reads.
+  for (let i = 1; i < labels.length; i++) {
+    const order = labels[i - 1].localeCompare(labels[i], undefined, { sensitivity: 'base' })
+    expect(
+      order,
+      `"${labels[i - 1]}" comes before "${labels[i]}" but sorts after it (position ${i})`,
+    ).toBeLessThanOrEqual(0)
+  }
+})
+
 test('the picker filters, and closing it leaves the editor open', async ({ page, request }) => {
   const character = await findPlayableCharacter(request)
   await openSheet(page, character)
@@ -78,7 +120,7 @@ test('the picker filters, and closing it leaves the editor open', async ({ page,
   await openTraitEditor(page)
 
   const chip = page.locator('.definition-chip')
-  await chip.click()
+  await openDefinitionPicker(page)
   const filter = page.locator('.definition-filter')
   await expect(filter).toBeVisible()
 
@@ -121,8 +163,7 @@ test('the sheet reports no console or page errors while the picker is used', asy
   await openTraitEditor(page)
 
   const chip = page.locator('.definition-chip')
-  await chip.click()
-  await expect(page.locator('.definition-dropdown')).toBeVisible()
+  await openDefinitionPicker(page)
   await chip.click()
   await expect(page.locator('.definition-dropdown')).toBeHidden()
 

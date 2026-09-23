@@ -268,8 +268,15 @@ const filteredDefinitions = computed(() => {
   const set = effectiveTraitsetFilter.value
   const opts = (props.definitionOptions || []).filter(o => !set || o.traitsetId === set)
   const q = props.definitionFilter.trim().toLowerCase()
-  if (!q) return opts
-  return opts.filter(o => String(o.name || '').toLowerCase().includes(q))
+  const matched = q
+    ? opts.filter(o => String(o.name || '').toLowerCase().includes(q))
+    : opts
+  // Alphabetical by the *label*, not the raw name: the list is read top-down and
+  // the label is what the eye is scanning, and the two can differ because the
+  // label capitalises and strips underscores. Case-insensitive, so `Fire Blade`
+  // and `fire blade` do not sort into separate runs.
+  return [...matched].sort((a, b) =>
+    definitionLabel(a).localeCompare(definitionLabel(b), undefined, { sensitivity: 'base' }))
 })
 
 const emptyDefinitionNote = computed(() => {
@@ -315,6 +322,11 @@ function displayName(name) {
     .split('_')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
+}
+
+/** The text a definition option shows — the same string the list is sorted on. */
+function definitionLabel(opt) {
+  return displayName(String(opt?.name || ''))
 }
 </script>
 
