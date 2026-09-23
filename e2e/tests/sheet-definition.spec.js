@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 // Scanning sets for one with visible traits can take a few loads' worth of time.
 test.setTimeout(120_000)
-import { findPlayableCharacter, openSheet, ensureTraitRowsVisible, openTraitEditor } from '../helpers/sheet.js'
+import { findPlayableCharacter, gql, openSheet, ensureTraitRowsVisible, openTraitEditor } from '../helpers/sheet.js'
 
 // The trait editor's "Definition" control — changing an instance's registry trait.
 //
@@ -169,4 +169,93 @@ test('the sheet reports no console or page errors while the picker is used', asy
 
   expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toEqual([])
   expect(sheetErrors, `sheet errors: ${sheetErrors.join(' | ')}`).toEqual([])
+})
+
+// ── The relationship step (relations traitset) ───────────────────
+
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Open the add-trait picker and choose the `relations` set.
+ *
+ * When the sheet is drilled into a set, the picker opens straight on *that* set's
+ * traits (by design — the set you are looking at is the set you are adding to), so
+ * reach the list through Back when it is not already showing.
+ */
+async function openRelationsStep(page) {
+  await page.getByRole('button', { name: /Add Trait/i }).click()
+  const relations = page.locator('.trait-picker .picker-item')
+    .filter({ hasText: /^relations$/i })
+  if (!(await relations.count())) await page.locator('.picker-back').first().click()
+  await relations.first().click()
+  await expect(page.locator('.picker-filter'), 'picking relations must ask which relationship')
+    .toBeVisible()
+}
+
+const pickerItem = (page, label) => page.locator('.trait-picker .picker-item')
+  .filter({ hasText: new RegExp(`^${escapeRe(label)}\\b`, 'i') })
+
+test('adding from the relations set asks which relationship first', async ({ page, request }) => {
+  const character = await findPlayableCharacter(request)
+  await openSheet(page, character)
+  await ensureTraitRowsVisible(page)
+
+  await openRelationsStep(page)
+  await expect(page.locator('.trait-picker h4')).toHaveText(/which relationship/i)
+
+  // The contacts are fetched on entering the step, so wait for them: the filter
+  // and the heading are there before the list is.
+  await expect(page.locator('.trait-picker .picker-item').first(), 'the contacts must load')
+    .toBeVisible({ timeout: 15_000 })
+
+  // Each contact carries its type, so a place or a faction reads as what it is.
+  const listed = await page.locator('.trait-picker .picker-item').evaluateAll(
+    (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()),
+  )
+  expect(listed.length, 'a character carrying relations traits should have contacts')
+    .toBeGreaterThan(0)
+  expect(listed.every((t) => /\S/.test(t)), 'every contact is named').toBe(true)
+
+  // The extra step is *only* for this set. An ordinary set must go straight to its
+  // traits, or every add would cost a click more than it used to.
+  await page.locator('.picker-back').click()
+  await page.locator('.trait-picker .picker-item')
+    .filter({ hasText: /^assets$/i }).first().click()
+  await expect(page.locator('.picker-filter'), 'an ordinary set must not ask for a relationship')
+    .toHaveCount(0)
+})
+
+test('a relationship trait on one contact is still offered for another', async ({ page, request }) => {
+  // A relationship trait's id is `{edge}:{trait}`, so the same definition belongs
+  // on two contacts. The picker filtered "already assigned" entity-wide, which
+  // hid four of the relations set's twenty-four traits from *every* contact
+  // because they sat on one.
+  const character = await findPlayableCharacter(request)
+  const relations = character.traitSettings.filter((s) =>
+    s.fromType === 'relationship' && s.relationshipType === 'relation' && s.relationshipContactId)
+  expect(relations.length, 'this test needs contacts carrying relationship traits')
+    .toBeGreaterThan(1)
+  const first = relations[0]
+  const other = relations.find((s) => s.relationshipContactId !== first.relationshipContactId)
+  expect(other, 'this test needs two *different* contacts carrying traits').toBeTruthy()
+
+  const nameOf = async (id) =>
+    (await gql(request, `query($id: ID!) { entity(id: $id) { name } }`, { id })).entity.name
+  const holder = await nameOf(first.relationshipContactId)
+  const target = await nameOf(other.relationshipContactId)
+
+  await openSheet(page, character)
+  await ensureTraitRowsVisible(page)
+  await openRelationsStep(page)
+
+  // On the contact that already has it: not offered again.
+  await pickerItem(page, holder).first().click()
+  await expect(pickerItem(page, first.name), `${first.name} is already on ${holder}`)
+    .toHaveCount(0)
+
+  // On a different contact: still offered, which is the point.
+  await page.locator('.picker-back').click()
+  await pickerItem(page, target).first().click()
+  await expect(pickerItem(page, first.name), `${first.name} must be offerable for ${target}`)
+    .toHaveCount(1)
 })

@@ -54,7 +54,10 @@ export async function findPlayableCharacter(request) {
       query($id: ID!) {
         entity(id: $id) {
           id name currentUniverse
-          traitSettings { id traitId name traitsetId traitsetName }
+          traitSettings {
+            id traitId name traitsetId traitsetName
+            fromType relationshipType relationshipContactId
+          }
         }
       }
     `, { id: c.entityId })

@@ -369,8 +369,29 @@
           <h4>Pick a trait set</h4>
           <button v-for="ts in availableTraitSets" :key="ts.id" class="picker-item" @click="selectSet(ts)">{{ ts.name }}</button>
         </template>
-        <template v-if="addPhase === 'traits'">
+        <template v-if="addPhase === 'relationships'">
           <Button class="picker-back" variant="link" @click="addPhase = 'sets'">← {{ selectedTraitSet?.name }}</Button>
+          <h4>Which relationship?</h4>
+          <input
+            v-model="relationshipFilter"
+            class="picker-filter"
+            type="search"
+            placeholder="Filter relationships…"
+            aria-label="Filter relationships"
+          />
+          <button v-for="c in filteredRelationships" :key="c.id" class="picker-item" @click="selectRelationship(c)">
+            {{ displayName(c.name) }}
+            <span class="picker-type">{{ c.type }}</span>
+          </button>
+          <div v-if="relationshipsLoading" class="empty">Loading relationships…</div>
+          <div v-else-if="!relationships.length" class="empty">
+            No relationships yet — add one from the other character’s sheet.
+          </div>
+          <div v-else-if="!filteredRelationships.length" class="empty">No relationship matches.</div>
+        </template>
+        <template v-if="addPhase === 'traits'">
+          <Button class="picker-back" variant="link" @click="addPhase = traitsBackPhase">← {{ selectedTraitSet?.name }}</Button>
+          <h4 v-if="selectedRelationship">For {{ displayName(selectedRelationship.name) }}</h4>
           <button v-for="t in filteredTraits" :key="t.id" class="picker-item" @click="addTrait(t)">
             {{ t.name }}
             <span v-if="t.defaultRatingType !== 'EMPTY'" class="picker-die">{{ t.defaultDieType }}</span>
@@ -1130,21 +1151,61 @@ const availableTraitSets = ref([])
 const availableTraits = ref([])
 const selectedTraitSet = ref(null)
 
+// ── The relationship step (relations traitset only) ──────────────
+// A trait in the `relations` set is not an entity trait: it is anchored to a
+// relationship edge, which is why adding one needs to know *whose* relationship.
+// Hence one extra step for this set, and only for this set.
+//
+// The set is identified by name, matching `useFactionRoles`'s `RELATIONS_SET` —
+// the registry is keyed by name for this (it holds duplicate trait names resolved
+// by set), and a second signal for the same thing would be a second thing to keep
+// in step.
+const RELATIONS_SET = 'relations'
+const selectedRelationship = ref(null)
+const relationships = ref([])
+const relationshipsLoading = ref(false)
+const relationshipFilter = ref('')
+
+const isRelationsSet = (ts) => ts?.name === RELATIONS_SET
+
+const filteredRelationships = computed(() => {
+  const q = relationshipFilter.value.trim().toLowerCase()
+  if (!q) return relationships.value
+  return relationships.value.filter(c => String(c.name || '').toLowerCase().includes(q))
+})
+
 const filteredTraits = computed(() => {
   if (!selectedTraitSet.value) return []
+  const inSet = availableTraits.value.filter(t => t.traitsetId === selectedTraitSet.value.id)
+
+  // A relationship trait's identity is `{edge}:{trait}`, so the same definition
+  // may sit on two different relationships — "already assigned" is per *edge*
+  // here, not per entity. The entity-wide set below would hide `loyalty` from
+  // every contact because it is on one of them, which defeats the point of a
+  // relationships set (and it did: it hid four of the set's twenty-four traits).
+  if (addMode.value === 'relationship') {
+    const onThisEdge = new Set((relationTraits.value || []).map(t => t.traitId || t.id))
+    return inSet.filter(t => !onThisEdge.has(t.id))
+  }
+  if (isRelationsSet(selectedTraitSet.value) && selectedRelationship.value) {
+    const contactId = selectedRelationship.value.id
+    const onThisEdge = new Set((allTraitSettings.value || [])
+      .filter(s => s.fromType === 'relationship'
+        && s.relationshipType === 'relation'
+        && s.relationshipContactId === contactId)
+      .map(s => s.traitId))
+    return inSet.filter(t => !onThisEdge.has(t.id))
+  }
+
   // A set with allow_duplicates can hold several instances of the same trait
   // definition (e.g. two weapons, distinguished by statement), so don't drop
   // already-assigned traits there. Otherwise a trait may be assigned once.
-  if (selectedTraitSet.value.allowDuplicates) {
-    return availableTraits.value.filter(t => t.traitsetId === selectedTraitSet.value.id)
-  }
+  if (selectedTraitSet.value.allowDuplicates) return inSet
   const assigned = new Set([
     ...traitSets.value.flatMap(ts => ts.traits.map(t => t.traitId || t.id)),
     ...profileTraits.value.map(t => t.traitId || t.id),
   ])
-  return availableTraits.value.filter(t =>
-    t.traitsetId === selectedTraitSet.value.id && !assigned.has(t.id)
-  )
+  return inSet.filter(t => !assigned.has(t.id))
 })
 
 const totalInSet = computed(() => {
@@ -1162,6 +1223,7 @@ async function openAddTrait() {
   addMode.value = 'trait'
   addPhase.value = 'sets'
   selectedTraitSet.value = null
+  selectedRelationship.value = null
   // Trait sets come from the entity being viewed (a foreign location may live
   // in a different universe than the acting character).
   const u = entity.value?.currentUniverse || props.universe
@@ -1190,6 +1252,7 @@ async function openAddRelationshipTrait() {
   addMode.value = 'relationship'
   addPhase.value = 'sets'
   selectedTraitSet.value = null
+  selectedRelationship.value = null
   // Relationship traits are universe-agnostic: offer every trait set that is
   // usable on the 'relation' entity type.
   const tsData = await graphql(`query { traitsets { id name order limit entityTypes allowDuplicates } }`)
@@ -1212,6 +1275,64 @@ async function openAddRelationshipTrait() {
 
 function selectSet(ts) {
   selectedTraitSet.value = ts
+  selectedRelationship.value = null
+  if (isRelationsSet(ts) && addMode.value === 'trait') {
+    // The relations set needs to know *whose* relationship before it can offer
+    // traits. `addMode === 'relationship'` already knows (the sheet being viewed)
+    // and keeps its two-step flow.
+    addPhase.value = 'relationships'
+    loadRelationships()
+    return
+  }
+  addPhase.value = 'traits'
+}
+
+/** Where Back goes from the trait list — the relationship step, when there was one. */
+const traitsBackPhase = computed(() =>
+  (isRelationsSet(selectedTraitSet.value) && addMode.value === 'trait') ? 'relationships' : 'sets')
+
+/**
+ * The entity's contacts: everyone they hold a personal relationship with.
+ *
+ * Composed, because there is no read for "my relationship edges". Two existing
+ * reads do it without a backend change, and the second is what narrows it:
+ * `relatedEntities` is *undirected and unfiltered* — it returns everything joined
+ * by any edge, structural ones included, so for one character it was 18 entities
+ * of which most were locations and factions. `relationship`'s `type` argument
+ * defaults to `relation` (the personal type), so a probe that comes back non-null
+ * is exactly "I have a relationship with them" — and its entity-level fallback is
+ * what makes it find the migrated edges `relatedEntities` already found.
+ *
+ * The probes go out together: it is one burst, not a waterfall.
+ */
+async function loadRelationships() {
+  const me = props.overrideEntityId || props.entityId
+  relationshipsLoading.value = true
+  relationships.value = []
+  relationshipFilter.value = ''
+  try {
+    const data = await graphql(
+      `query($id: ID!) { relatedEntities(entityId: $id) { id name type } }`, { id: me },
+    )
+    const peers = data?.relatedEntities || []
+    const probed = await Promise.all(peers.map(async (p) => {
+      const r = await graphql(
+        `query($from: ID!, $to: ID!) { relationship(fromEntityId: $from, toEntityId: $to) { id } }`,
+        { from: me, to: p.id },
+      ).catch(() => null)
+      return r?.relationship ? p : null
+    }))
+    relationships.value = probed.filter(Boolean).sort((a, b) =>
+      String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }))
+  } catch (e) {
+    console.error('[sheet] add: could not load relationships', e)
+  } finally {
+    relationshipsLoading.value = false
+  }
+}
+
+function selectRelationship(contact) {
+  selectedRelationship.value = contact
   addPhase.value = 'traits'
 }
 
@@ -1240,6 +1361,40 @@ async function addTrait(trait) {
     try {
       await fetchRelationship()
       openEditorForNewTrait(newRelationshipId, { relation: true })
+    } catch (e) {
+      console.error('[sheet] add: refreshed but could not open the editor', e)
+    }
+    return
+  }
+
+  // A trait from the relations set is anchored to the *relationship*, not to the
+  // entity — so it goes through `addRelationshipTrait` for the contact picked in
+  // the extra step, which find-or-creates that edge.
+  if (isRelationsSet(selectedTraitSet.value) && selectedRelationship.value) {
+    const contact = selectedRelationship.value
+    const result = await graphql(`mutation($from: ID!, $to: ID!, $traitId: ID!, $die: DieType!) {
+      addRelationshipTrait(fromEntityId: $from, toEntityId: $to, traitId: $traitId, die: $die) { id }
+    }`, {
+      from: props.overrideEntityId || props.entityId,
+      to: contact.id,
+      traitId: trait.id,
+      die: (trait.defaultDieType || 'd6').toUpperCase(),
+    })
+    if (!result?.addRelationshipTrait) {
+      console.error('addRelationshipTrait failed:', error.value || 'unknown error')
+      return
+    }
+    const newSettingId = result.addRelationshipTrait.id
+    showAddTrait.value = false
+    addPhase.value = 'sets'
+    selectedTraitSet.value = null
+    selectedRelationship.value = null
+    // Relationship-anchored settings come back on the entity's own query (with
+    // their contact), so this lands like any other trait add — unlike the
+    // relation tab's path, which reads the *other* sheet's edge.
+    try {
+      await fetchEntity('add-relationship-trait')
+      openEditorForNewTrait(newSettingId)
     } catch (e) {
       console.error('[sheet] add: refreshed but could not open the editor', e)
     }
@@ -2662,6 +2817,22 @@ watch(() => props.externalPoolSources, (sources) => {
   font-weight: 700;
   font-size: 12px;
   color: var(--text-dim);
+}
+.picker-filter {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--overlay-10);
+  background: var(--overlay-4);
+  color: var(--text);
+}
+.picker-type {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
   .picker-back { margin-bottom: 6px; }
   .picker-cancel { margin-top: 6px; }
