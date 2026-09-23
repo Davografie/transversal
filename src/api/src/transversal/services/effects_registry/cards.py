@@ -21,6 +21,8 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_trait", "gain_or_step_up"): "gain or step up {target}",
     ("modify_trait", "disable"): "disable {target}",
     ("modify_trait", "gain"): "gain {target}",
+    ("modify_trait", "gain_relationship"): "gain {target} on your tie to {owner}",
+    ("modify_trait", "gain_subtrait"): "gain {target} under {owner}",
     ("modify_trait", "remove"): "remove {target}",
     ("modify_trait", "cortex_gain"): "gain {target} as a complication at {result}",
     ("modify_trait", "add_die"): "add a {result} die to {target}",

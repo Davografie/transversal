@@ -81,6 +81,12 @@ class EffectActionMeta:
     # sense on one of them. The trace refuses a spec whose final type is none of
     # these, naming every type that would have worked.
     path_element: tuple[str, ...] = ()
+    # The catalog elements this action's **owner path** (`Effect.owner_spec`) may
+    # land on, when it anchors what it makes somewhere other than the subject
+    # entity: a `relationship` edge (a tie to someone) or a `traitsetting` (a
+    # facet of another trait). Empty = the action has no owner path, and the
+    # subject entity is the owner — the ordinary case.
+    owner_elements: tuple[str, ...] = ()
     refs: list[RefDef] = field(default_factory=list)  # named references (multi-target model)
     # Render the refs above the fields. A ref that names the *subject* ("Trait to
     # Move") reads before the field that names where it goes; an action whose ref

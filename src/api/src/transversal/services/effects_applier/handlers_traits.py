@@ -33,6 +33,8 @@ from transversal.services.effects_applier.trait_helpers import (
     _find_traitsetting_by_target,
     _has_steps,
     _new_traitsetting,
+    _opt_bool,
+    _opt_int,
     _rating_type,
     _step_down_one,
     _step_up_trait,
@@ -56,6 +58,13 @@ def _apply_gain(entity, effect, repo, result):
             f"no relationship to {owner[1]} — create it first (Create Relationship), "
             f"then gain the trait onto it"))
         return
+    parent = None
+    if owner[0] == "traitsetting":
+        parent = repo.get_traitsetting(owner[1])
+        if parent is None:
+            result.applied.append(AppliedEffect(
+                effect, f"no trait instance {owner[1]} to nest under"))
+            return
     statement = _ctx(effect, "statement")
     existing = _find_conflicting_traitsetting(subject, effect, repo, target, statement)
     if existing is not None:
@@ -71,7 +80,9 @@ def _apply_gain(entity, effect, repo, result):
         return
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),
-                           rating_type=_rating_type(effect), statement=statement, notes=_ctx(effect, "notes"))
+                           rating_type=_rating_type(effect), statement=statement,
+                           notes=_ctx(effect, "notes"), parent=parent,
+                           order=_opt_int(effect, "order"), enabled=_opt_bool(effect, "enabled"))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
     _queue_entity_revert(repo, subject, effect, target=target)

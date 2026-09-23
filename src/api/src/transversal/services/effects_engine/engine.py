@@ -428,6 +428,11 @@ class EffectsEngine:
                 effect = _effects_applier.resolve_effect_result(
                     effect, event.entity_id, repo, effect_context,
                 )
+                # And its owner path, when the action has one — the edge a tie is
+                # anchored to, or the instance a facet hangs under.
+                effect = _effects_applier.resolve_effect_owner(
+                    effect, event.entity_id, repo, effect_context,
+                )
                 if effect.timing == EffectTiming.IMMEDIATE:
                     blocked = False
                     if effect.refs:

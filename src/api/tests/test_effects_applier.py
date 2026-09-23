@@ -2643,16 +2643,30 @@ def test_gain_or_step_up_and_cortex_gain_report_the_missing_edge_too():
     assert "no relationship to fac-1" in apply_effects(_entity(), [effect2], repo).applied[0].summary
 
 
-def test_the_relationship_fields_are_authorable():
-    """`relationship_type` beside `relationship`, and the label no longer claims
-    the anchor is a faction (it was 'Faction (relationship)')."""
+def test_the_relationship_anchor_is_its_own_verb():
+    """A tie is a different *owner*, so it is a different verb.
+
+    `Gain Trait` used to carry "Relationship with" + "Relationship type" beside its
+    entity targeting — two context fields that asked for an entity id in a text
+    box and anchored the trait somewhere other than the field you were reading.
+    The anchor is a **path** now, declared by the verb that means it, and `Gain
+    Trait` no longer offers it at all.
+    """
     from transversal.services.effects_registry import get_action_meta
-    meta = get_action_meta("gain_trait")
-    names = [f.name for f in meta.context_fields]
-    assert "relationship" in names and "relationship_type" in names
-    labels = {f.name: f.label for f in meta.context_fields}
-    assert labels["relationship"] == "Relationship with"
-    assert labels["relationship_type"] == "Relationship type"
+
+    names = [f.name for f in get_action_meta("gain_trait").context_fields]
+    assert "relationship" not in names and "relationship_type" not in names
+
+    tie = get_action_meta("gain_relationship_trait")
+    assert tie.owner_elements == ("relationship",)
+    assert tie.effect_action == "gain_relationship"
+
+    facet = get_action_meta("gain_subtrait")
+    assert facet.owner_elements == ("traitsetting",)
+    assert facet.effect_action == "gain_subtrait"
+    # The agenda fields belong to the verb that creates a nested instance.
+    facet_fields = [f.name for f in facet.context_fields]
+    assert "order" in facet_fields and "enabled" in facet_fields
 
 
 # ── Gain: "create only if missing" ───────────────────

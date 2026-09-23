@@ -30,6 +30,7 @@ from transversal.services.effects_registry.cards import EFFECT_ACTION_CARDS  # n
 from transversal.services.effects_registry.lookup import (  # noqa: F401
     effect_card,
     get_action_meta,
+    owner_elements_for,
     get_actions_by_category,
     get_inverse,
     output_element_for,

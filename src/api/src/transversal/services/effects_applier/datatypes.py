@@ -21,6 +21,15 @@ BINDINGS_CONTEXT_KEY = "_bindings"
 #: rule, and a *manual* activation's untimed undos are booked as holds.
 ACTIVATION_CONTEXT_KEY = "_activation"
 
+#: Where a gained trait is *anchored*, when that is not the plain entity: the
+#: ``(owner_kind, owner_id)`` pair the engine resolved from ``Effect.owner_spec``.
+#: It lives in the effect context — the ``_``-prefixed convention the source uses
+#: — because it is engine-resolved rather than authored: the author writes a path,
+#: and the handler reads the thing it landed on.
+OWNER_KIND_CONTEXT_KEY = "_owner_kind"
+
+OWNER_ID_CONTEXT_KEY = "_owner_id"
+
 @dataclass
 class AppliedEffect:
     """Record of one successfully applied mutation."""

@@ -44,6 +44,12 @@ class Effect(BaseModel):
     # Structured subject resolution (who the effect applies to). None means the
     # effect still uses the legacy ``entity`` string.
     entity_spec: Optional[TargetSpec] = None
+    # Where the thing this effect makes is *anchored*, when that is not the
+    # subject entity: a relationship edge (a tie to someone) or another trait
+    # instance (a facet of it). A path, because which edge or which parent is a
+    # fact you pick from the world; the action declares what it may land on
+    # (``EffectActionMeta.owner_elements``). None = the subject entity.
+    owner_spec: Optional[TargetSpec] = None
     # Die-valued effects take ``result`` as a literal (``d6``) or a ``{variable}``
     # token. Some dice are *facts in the world* rather than a number anyone knows
     # while authoring — an agenda's next capacity slot — so they are named by a

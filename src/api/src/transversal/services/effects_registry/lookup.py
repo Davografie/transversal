@@ -36,6 +36,19 @@ def output_element_for(effect_type: str, effect_action: str) -> str:
     return ""
 
 
+def owner_elements_for(effect_type: str, effect_action: str) -> tuple[str, ...]:
+    """The catalog elements an action's owner path may land on (empty = none).
+
+    The handler reads this back rather than guessing a kind from the resolved
+    value's shape: one declaration, so a value can never be interpreted as the
+    wrong collection.
+    """
+    for meta in EFFECT_ACTION_REGISTRY:
+        if meta.effect_type == effect_type and meta.effect_action == effect_action:
+            return meta.owner_elements
+    return ()
+
+
 def get_inverse(effect_type: str, effect_action: str) -> tuple[tuple[str, str] | None, bool]:
     """Return ``(inverse, captures_prior)`` for an effect (type, action)."""
     for meta in EFFECT_ACTION_REGISTRY:

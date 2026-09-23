@@ -41,6 +41,16 @@ def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
     Returns ``("missing", target)`` when a relationship was asked for but no such
     edge exists, so the caller can say so instead of guessing.
     """
+    from transversal.services.effects_applier.datatypes import OWNER_ID_CONTEXT_KEY
+    from transversal.services.effects_registry.lookup import owner_elements_for
+
+    # A resolved owner path wins: the action declared what it may land on, so the
+    # kind is read from that declaration rather than guessed from the value.
+    resolved_owner = (effect.context or {}).get(OWNER_ID_CONTEXT_KEY)
+    declared = owner_elements_for(effect.type, effect.action)
+    if resolved_owner and declared:
+        return (declared[0], resolved_owner)
+
     rel_target = (effect.context or {}).get("relationship")
     if rel_target == "{term_faction}":
         # Shared tables can't hardcode a faction; resolve to the faction the
@@ -56,11 +66,14 @@ def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
 
 def _find_traitsetting(owner: tuple[str, str], repo, trait_id: str) -> Optional[TraitSetting]:
     from_type, owner_id = owner
-    settings = (
-        repo.get_relationship_traitsettings(owner_id)
-        if from_type == "relationship"
-        else repo.get_traitsettings_for_entity(owner_id)
-    )
+    if from_type == "relationship":
+        settings = repo.get_relationship_traitsettings(owner_id)
+    elif from_type == "traitsetting":
+        # A nested instance's "already here?" is asked of its *parent*, not of the
+        # entity — the entity's own settings deliberately exclude them.
+        settings = repo.get_sub_traitsettings(owner_id)
+    else:
+        settings = repo.get_traitsettings_for_entity(owner_id)
     for ts in settings:
         if ts.trait_id == trait_id:
             return ts
@@ -89,7 +102,7 @@ def _allow_duplicates(trait_id: str, repo) -> bool:
     traitset = get_traitset(traitset_id) if traitset_id and get_traitset else None
     return bool(getattr(traitset, "allow_duplicates", False))
 
-def _resolve_new_traitsetting_id(owner: tuple[str, str], trait_id: str, statement: str, repo, *, negative: bool = False) -> str:
+def _resolve_new_traitsetting_id(owner: tuple[str, str], trait_id: str, statement: str, repo, *, negative: bool = False, parent=None) -> str:
     """The key a new instance lands under, honouring the set's duplicate rule.
 
     A set that allows duplicates distinguishes same-trait instances by their
@@ -103,6 +116,16 @@ def _resolve_new_traitsetting_id(owner: tuple[str, str], trait_id: str, statemen
     registry trait on the same owner cannot take its place — one live row
     (``gmc-40729203:trait-148427798:complication``) depends on the old shape.
     """
+    if parent is not None:
+        # A nested instance is scoped to its **parent container**, not the entity:
+        # one registry trait legitimately appears many times under one parent (every
+        # portent is a setting of the same generic trait), so the key is
+        # parent-scoped and the statement disambiguates — the repository owns that
+        # convention, and the collision check asks the same question.
+        resolve_sub = getattr(repo, "resolve_subtrait_id", None)
+        if resolve_sub is not None:
+            return resolve_sub(getattr(parent, "id", ""), trait_id, statement)
+
     owner_id = owner[1]
     resolve = getattr(repo, "resolve_traitsetting_id", None)
     base = (resolve(owner_id, trait_id, statement, _allow_duplicates(trait_id, repo))
@@ -182,6 +205,31 @@ def _steps(effect: Effect) -> int:
     except (TypeError, ValueError):
         return 1
 
+def _opt_int(effect: Effect, key: str) -> Optional[int]:
+    """An optional integer context value, or None when unauthored.
+
+    ``None`` matters: an order of 0 and "no order given" are different answers, and
+    the model treats an unordered instance as unranked rather than first.
+    """
+    raw = (effect.context or {}).get(key)
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _opt_bool(effect: Effect, key: str) -> Optional[bool]:
+    """An optional boolean context value, or None when unauthored."""
+    raw = (effect.context or {}).get(key)
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() in ("true", "1", "yes", "on")
+
+
 def _has_steps(effect: Effect) -> bool:
     """True when ``steps`` was explicitly provided in the effect's context."""
     return "steps" in (effect.context or {})
@@ -246,10 +294,20 @@ def _rating_type(effect: Effect) -> RatingType:
     except ValueError:
         return RatingType.STATIC
 
-def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo, *, negative: bool = False, statement: str = "", notes: str = "", rating_type: RatingType = RatingType.STATIC) -> TraitSetting:
+def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo, *, negative: bool = False, statement: str = "", notes: str = "", rating_type: RatingType = RatingType.STATIC, parent=None, order=None, enabled=None) -> TraitSetting:
+    """Build a new instance, on an owner or nested under ``parent``.
+
+    ``parent`` is the facet case: the instance hangs under another *instance*
+    (an agenda's step under its container) rather than off the entity, so it takes
+    the parent's entity, ``from_type='traitsetting'`` and the parent-scoped key
+    scheme. ``order``/``enabled`` are the fields that only mean anything there —
+    an agenda rule creating the next step needs both.
+    """
     from transversal.services.polarity import default_polarity
 
     from_type, owner_id = owner
+    if parent is not None:
+        from_type, owner_id = "traitsetting", getattr(parent, "entity_id", "") or owner_id
     traitset_id = _resolve_traitset_id(trait_id, repo)
     trait = repo.get_trait(trait_id)
     get_traitset = getattr(repo, "get_traitset_by_id", None)
@@ -267,11 +325,15 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
             projection_id = entity.current_projection
     return TraitSetting(
         id=_resolve_new_traitsetting_id(owner, trait_id, statement, repo,
-                                       negative=polarity == Polarity.NEGATIVE),
+                                       negative=polarity == Polarity.NEGATIVE,
+                                       parent=parent),
         entity_id=owner_id,
         trait_id=trait_id,
         traitset_id=traitset_id,
         from_type=from_type,
+        parent_traitsetting_id=getattr(parent, "id", None),
+        **({"order": order} if order is not None else {}),
+        **({"enabled": enabled} if enabled is not None else {}),
         projection_id=projection_id,
         dice=[die],
         rating_type=rating_type,

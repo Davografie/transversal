@@ -77,6 +77,11 @@ from transversal.services.effects_applier.handlers_world import (
 )
 _MUTATION_HANDLERS = {
     ("modify_trait", "gain"): _apply_gain,
+    # Same applier, three declared owners (see `EffectActionMeta.owner_elements`):
+    # the subject entity, a relationship edge, or another trait instance. The
+    # verbs differ in where they anchor, not in what gaining means.
+    ("modify_trait", "gain_relationship"): _apply_gain,
+    ("modify_trait", "gain_subtrait"): _apply_gain,
     ("modify_trait", "remove"): _apply_remove,
     ("modify_trait", "gain_or_step_up"): _apply_gain_or_step_up,
     ("modify_trait", "cortex_gain"): _apply_cortex_gain,
@@ -169,6 +174,9 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
         # reason: this entry point is reached directly (a life-path entry) as well
         # as through the engine, and an unread die silently means "no die".
         effect = resolve_effect_result(effect, entity.id, repo, context)
+        # And its *owner*, when the action anchors what it makes somewhere other
+        # than the subject: a relationship edge, or another trait instance.
+        effect = resolve_effect_owner(effect, entity.id, repo, context)
         if effect.target_spec is not None and effect.target_spec.steps:
             _apply_spec_effect(effect, entity, repo, result, bindings)
             continue
@@ -301,6 +309,61 @@ def _die_from_spec_value(value) -> str | None:
         raw = value  # a bare die value, e.g. an aggregate over a die field
     size = getattr(raw, "value", raw)
     return str(size) if size else None
+
+
+def resolve_effect_owner(effect: Effect, entity_id: str, repo,
+                         context: dict | None = None,
+                         collections: dict | None = None) -> Effect:
+    """Resolve ``effect.owner_spec`` to the ``(kind, id)`` the effect anchors to.
+
+    The owner is *where what the effect makes lives*: the subject entity by
+    default, a relationship edge for a tie to someone, or another trait instance
+    for a facet of it. Only the first is implicit — the other two are facts you
+    pick out of the world, so they travel as a path and land here.
+
+    The pair is written into the effect **context** rather than onto two new
+    domain fields: it is engine-resolved, not authored (the ``_``-prefixed
+    convention ``_source`` already uses), and the handler is the only reader.
+
+    A path that names nothing leaves the effect as authored, so the subject
+    entity stays the owner — the same fail-open the other specs take, because
+    "no owner path resolved" and "no owner path authored" are the same state.
+    """
+    if effect.owner_spec is None or not effect.owner_spec.steps:
+        return effect
+    from transversal.services.effects_applier.datatypes import (
+        OWNER_ID_CONTEXT_KEY,
+        SOURCE_CONTEXT_KEY, SOURCE_ELEMENT_CONTEXT_KEY,
+    )
+    from transversal.services.target_resolver import TargetContext, event_collections, resolve
+
+    entity = repo.get_entity(entity_id) if repo is not None else None
+    bindings = (context or {}).get(BINDINGS_CONTEXT_KEY) or {}
+    source = (context or {}).get(SOURCE_CONTEXT_KEY)
+    source_element = (context or {}).get(SOURCE_ELEMENT_CONTEXT_KEY)
+    seeds = event_collections(context, getattr(source, "id", None), source_element)
+    seeds.update(collections or {})
+
+    resolution = resolve(
+        effect.owner_spec,
+        TargetContext(subject=entity, repo=repo, bindings=bindings,
+                      collections=seeds, source=source, source_element=source_element),
+    )
+    for value in resolution.values:
+        rid = value.get("id") if isinstance(value, dict) else getattr(value, "id", None)
+        if not rid:
+            continue
+        # The *kind* is not guessed here: the action declares what this path may
+        # land on (`owner_elements`), and the handler reads that declaration back.
+        # One truth, so a value can never be interpreted as the wrong collection.
+        return effect.model_copy(update={
+            "owner_spec": None,
+            "context": {
+                **(effect.context or {}),
+                OWNER_ID_CONTEXT_KEY: str(rid),
+            },
+        })
+    return effect
 
 def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict,
                          collections: dict | None = None,
