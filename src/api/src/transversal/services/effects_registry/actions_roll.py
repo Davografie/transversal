@@ -362,6 +362,10 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="What to Convert", field_type="text",
                           required=True, default="botch_to_hitch"),
         ],
+        # Superseded by Invert Polarity (`modify_trait/invert_polarity`), on the
+        # author's call 2026-09-23: flipping the polarity flag is enough, and a
+        # definition change is a separate *Change Trait* when it is wanted.
+        retired=True,
     ),
     EffectActionMeta(
         action_id="reroll_highest",

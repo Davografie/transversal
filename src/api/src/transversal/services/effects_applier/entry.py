@@ -58,6 +58,7 @@ from transversal.services.effects_applier.handlers_traits import (
     _apply_discover,
     _apply_gain,
     _apply_gain_or_step_up,
+    _apply_invert_polarity,
     _apply_move_trait,
     _apply_remove,
     _apply_reveal,
@@ -117,6 +118,7 @@ _MUTATION_HANDLERS = {
     # The undo of a change-die effect, from the prior dice the handler recorded.
     ("modify_roll", "restore_die"): _apply_restore_die,
     ("modify_trait", "change"): _apply_change_trait,
+    ("modify_trait", "invert_polarity"): _apply_invert_polarity,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

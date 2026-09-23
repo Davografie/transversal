@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from transversal.domain import Effect
 from transversal.domain import Entity
+from transversal.domain import Polarity
 from transversal.domain import TraitSetting
 from transversal.services.trait_change import (
     TraitChangeError,
@@ -125,6 +126,36 @@ def _apply_copy_trait(entity, effect, repo, result):
         return
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"copied {src.trait_id} to {subject.id}", ts.id))
+
+def _apply_invert_polarity(entity, effect, repo, result):
+    """Flip a trait instance's polarity — a complication becomes an asset, or back.
+
+    The author's call (2026-09-23): **flipping the flag is enough**. The instance
+    keeps its id, its traitset and its grants; only ``polarity`` moves. It is
+    expected to be paired with a *Change Trait* when the flip should also re-point
+    the instance at a different definition, which is why this action does not try
+    to rename or re-home anything.
+
+    The undo is this action again: a polarity has exactly two values, so the
+    inverse of a flip is the same flip.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, repo)
+    if target is None:
+        return
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
+    if existing is None:
+        result.applied.append(AppliedEffect(effect, f"no trait instance {target} to invert"))
+        return
+    was = existing.polarity
+    existing.polarity = Polarity.POSITIVE if was == Polarity.NEGATIVE else Polarity.NEGATIVE
+    result.updated_trait_settings.append(existing)
+    result.applied.append(AppliedEffect(
+        effect, f"{was.value} → {existing.polarity.value} on {target}", existing.id))
+    _queue_trait_revert(repo, existing, effect, prior_result=was.value)
 
 def _apply_change_trait(entity, effect, repo, result):
     """Point a trait instance at a different registry trait.

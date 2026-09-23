@@ -245,6 +245,26 @@ ACTIONS: list[EffectActionMeta] = [
         path_element=("traitsetting",),
     ),
     EffectActionMeta(
+        action_id="invert_polarity",
+        label="Invert Polarity",
+        description=(
+            "Flip a trait instance between complication and asset. The instance keeps "
+            "its id, traitset and grants; only its polarity moves — pair it with "
+            "*Change Trait* when it should also become a different definition"
+        ),
+        category="either",
+        effect_type="modify_trait",
+        effect_action="invert_polarity",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+        ],
+        supports_duration=True,
+        # A polarity has two values, so the inverse of a flip is the same flip.
+        inverse=("modify_trait", "invert_polarity"),
+        path_element=("traitsetting",),
+    ),
+    EffectActionMeta(
         action_id="disable_trait",
         label="Disable Trait",
         description="Disable a trait so it contributes no dice (until re-enabled or the duration ends)",

@@ -2516,3 +2516,60 @@ def test_play_as_rating_declares_a_traitsetting_path_not_an_implicit_target():
     assert meta.implicit_target is None
     assert meta.path_element == ("traitsetting",)
     assert meta.inverse == ("modify_roll", "restore_die")
+
+
+# ── Invert Polarity ──────────────────────────────────
+
+def test_invert_polarity_flips_a_complication_to_an_asset():
+    """The author's call: flipping the flag is enough — the instance keeps its id,
+    its traitset and its grants, and only `polarity` moves."""
+    ts = _ts("hazard", [DieType.D6], traitset_id="ts-1", polarity=Polarity.NEGATIVE)
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-1")], traitsettings=[ts])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="invert_polarity", target="char-1:hazard")
+    result = apply_effects(_entity(), [effect], repo)
+    assert ts.polarity == Polarity.POSITIVE
+    assert result.updated_trait_settings == [ts]
+    assert "negative → positive" in result.applied[0].summary
+
+
+def test_invert_polarity_flips_back():
+    """Two values, so the inverse of a flip is the same flip."""
+    ts = _ts("hazard", [DieType.D6], traitset_id="ts-1", polarity=Polarity.POSITIVE)
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-1")], traitsettings=[ts])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="invert_polarity", target="char-1:hazard")
+    apply_effects(_entity(), [effect], repo)
+    assert ts.polarity == Polarity.NEGATIVE
+
+
+def test_invert_polarity_keeps_the_instances_identity():
+    """Explicitly *not* a re-home: the id, traitset and dice are untouched, which is
+    why a definition change is a separate Change Trait."""
+    ts = _ts("hazard", [DieType.D8], traitset_id="ts-1", polarity=Polarity.NEGATIVE,
+             statement="Twisted ankle")
+    ts.sfx_ids = ["sfx-legacy"]
+    before = (ts.id, ts.traitset_id, [d.value for d in ts.dice], ts.statement)
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-1")], traitsettings=[ts])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="invert_polarity", target="char-1:hazard")
+    apply_effects(_entity(), [effect], repo)
+    assert (ts.id, ts.traitset_id, [d.value for d in ts.dice], ts.statement) == before
+    assert ts.sfx_ids == ["sfx-legacy"]
+
+
+def test_invert_polarity_without_an_instance_says_so():
+    repo = FakeRepo()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="invert_polarity", target="char-1:nope")
+    result = apply_effects(_entity(), [effect], repo)
+    assert "no trait instance" in result.applied[0].summary
+
+
+def test_invert_polarity_replaced_convert_complication():
+    from transversal.services.effects_registry import get_action_meta
+    assert get_action_meta("convert_complication").retired is True
+    meta = get_action_meta("invert_polarity")
+    assert meta.retired is False
+    assert meta.path_element == ("traitsetting",)
+    assert meta.inverse == ("modify_trait", "invert_polarity")
