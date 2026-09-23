@@ -39,6 +39,20 @@ def _resolve_activation_source(sfx: SFX, event: GameEvent, repo):
         resolved = resolve_source(sfx.source_kind, raw_source_id, repo)
         if resolved:
             return resolved[0], resolved[1], raw_source_id
+    # An event can be *about* one instance: `challenge_completed` names the
+    # instance that finished. When that instance grants this rule, it is the
+    # activation's context — and it must be, because **ownership cannot tell
+    # apart several instances carrying the same rule**. An agenda's four portents
+    # all carry the escalator, so the ownership walk returned whichever came
+    # first and the rule's own position (`{order}`) was always 1.
+    named = (event.context or {}).get("trait_setting_id") if event.context else None
+    if sfx.source_kind and named and repo is not None:
+        from transversal.services.target_resolver import resolve_source
+        named_ts = repo.get_traitsetting(named)
+        if named_ts is not None and sfx.id in (named_ts.sfx_ids or []):
+            resolved = resolve_source(sfx.source_kind, named, repo)
+            if resolved:
+                return resolved[0], resolved[1], named
     if sfx.source_kind and repo is not None:
         from transversal.services.sfx_owner import resolve_sfx_source
         resolved = resolve_sfx_source(repo, event.entity_id, event.universe, sfx.id, sfx.source_kind)

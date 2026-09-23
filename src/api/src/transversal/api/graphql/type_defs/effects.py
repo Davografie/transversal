@@ -48,6 +48,7 @@ class Effect:
     duration: Optional[EffectDuration] = None
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
+    result_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
     output: Optional[str] = None  # the author's name for this step's result
     conditions: list[Condition] = strawberry.field(default_factory=list)
@@ -66,6 +67,7 @@ class EffectInput:
     duration: Optional[EffectDurationInput] = None
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
+    result_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
     output: Optional[str] = None  # the author's name for this step's result
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)

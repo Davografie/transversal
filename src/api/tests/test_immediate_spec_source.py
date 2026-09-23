@@ -70,6 +70,9 @@ class PortentsRepo:
                 id="iron-roots:portents", trait_id="trait-portents",
                 traitset_id="ts-agenda", entity_id="iron-roots",
                 parent_traitsetting_id=None, enabled=True,
+                # The agenda's slots, **in order** — and deliberately not the
+                # portents' own pacing dice, so a wrong index is visible.
+                capacity=["d10", "d6", "d8", "d4"],
                 sfx_ids=["sfx-activate-next-portent"],
             ),
             # Portent 1 is the one this event just finished: enabled.
@@ -77,19 +80,29 @@ class PortentsRepo:
                 id="iron-roots:portent-1", trait_id="trait-portent",
                 traitset_id="ts-agenda", entity_id="iron-roots",
                 parent_traitsetting_id="iron-roots:portents",
-                enabled=True, order=1,
+                enabled=True, order=1, capacity=["d4"],
+                sfx_ids=["sfx-portents-escalator"],
             ),
             "iron-roots:portent-2": NS(
                 id="iron-roots:portent-2", trait_id="trait-portent",
                 traitset_id="ts-agenda", entity_id="iron-roots",
                 parent_traitsetting_id="iron-roots:portents",
-                enabled=False, order=2,
+                enabled=False, order=2, capacity=["d8"],
+                sfx_ids=["sfx-portents-escalator"],
             ),
             "iron-roots:portent-3": NS(
                 id="iron-roots:portent-3", trait_id="trait-portent",
                 traitset_id="ts-agenda", entity_id="iron-roots",
                 parent_traitsetting_id="iron-roots:portents",
-                enabled=False, order=3,
+                enabled=False, order=3, capacity=["d6"],
+                sfx_ids=["sfx-portents-escalator"],
+            ),
+            "iron-roots:portent-4": NS(
+                id="iron-roots:portent-4", trait_id="trait-portent",
+                traitset_id="ts-agenda", entity_id="iron-roots",
+                parent_traitsetting_id="iron-roots:portents",
+                enabled=False, order=4, capacity=["d10"],
+                sfx_ids=["sfx-portents-escalator"],
             ),
         }
 
@@ -105,6 +118,9 @@ class PortentsRepo:
     def get_sub_traitsettings(self, parent_id):
         return [ts for ts in self.traitsettings.values()
                 if ts.parent_traitsetting_id == parent_id]
+
+    def get_sub_traitsettings_for_parents(self, parent_ids):
+        return {pid: self.get_sub_traitsettings(pid) for pid in parent_ids}
 
     def get_effective_traitsettings(self, entity_id, universes=None):
         return [ts for ts in self.traitsettings.values()
@@ -154,5 +170,79 @@ def test_the_explicit_source_id_still_wins():
     """The manual shape already worked, which is what hid the bug: when the event
     carries a source id the path resolves, so only the automatic triggers broke."""
     targets = _fire(PortentsRepo(), context={"source_id": "iron-roots:portents"})
+
+    assert targets == ["iron-roots:portent-2"]
+
+
+# ── The escalator: the die is the container's slot for *this* portent ──
+
+TO_THE_CONTAINER = TargetSpec(steps=[
+    {"kind": "select", "collection": "source"},
+    {"kind": "navigate", "edge": "parent"},
+])
+
+CAPACITY_SLOT_FOR_MY_ORDER = TargetSpec(steps=[
+    {"kind": "select", "collection": "source"},
+    {"kind": "navigate", "edge": "parent"},
+    {"kind": "navigate", "edge": "capacity_dice"},
+    {"kind": "filter", "field": "index", "operator": "==", "value": "{order}"},
+])
+
+
+def escalator_sfx() -> SFX:
+    return SFX(
+        id="sfx-portents-escalator", name="Escalate the Agenda",
+        trigger="on_challenge_completed", source_kind="trait_setting",
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="testdie",
+                        action="noop", target="",
+                        target_spec=TO_THE_CONTAINER,
+                        result_spec=CAPACITY_SLOT_FOR_MY_ORDER)],
+    )
+
+
+def _fire_escalator(repo, completed: str):
+    """Fire the escalator for the portent the event names, recording
+    ``(target, die)`` — the container, and the slot *this* portent fills."""
+    from transversal.services.effects_applier import effect_registry
+
+    seen = []
+    effect_registry.register("testdie", "noop",
+                             lambda a, _e, _u, _c: seen.append((a.target, a.result)))
+    engine = EffectsEngine()
+    engine.register(escalator_sfx())
+    engine.process_event_outcome(
+        GameEvent(type="challenge_completed", entity_id="iron-roots",
+                  universe="earth", context={"trait_setting_id": completed}),
+        ["sfx-portents-escalator"], 0, repo=repo,
+    )
+    return seen
+
+
+def test_the_escalator_adds_the_containers_slot_for_the_portent_that_finished():
+    """The whole chain in one test: a rule on a *nested* portent, whose source is
+    that portent (not the first one that happens to carry the rule), reading the
+    die from the container's ordered capacity by the portent's own position."""
+    # Portent 2 (order 2) fills the container's 2nd slot; portent 4 the 4th.
+    assert _fire_escalator(PortentsRepo(), "iron-roots:portent-2") == [
+        ("iron-roots:portents", "d6")]
+    assert _fire_escalator(PortentsRepo(), "iron-roots:portent-4") == [
+        ("iron-roots:portents", "d4")]
+
+
+def test_the_escalator_reads_the_portent_that_finished_not_the_first_one():
+    """Ownership alone returns whichever portent is walked first, so `{order}`
+    would always be 1 and every completion would fill the first slot. The event
+    names the instance it is about; that instance is the source."""
+    seen = _fire_escalator(PortentsRepo(), "iron-roots:portent-3")
+
+    assert seen == [("iron-roots:portents", "d8")], (
+        "portent 3 must fill the container's 3rd slot (d8), not the 1st (d10)")
+
+
+def test_a_rule_the_named_instance_does_not_grant_falls_back_to_ownership():
+    """`sfx-activate-next-portent` lives on the container. The event names a
+    portent that does not carry it, so ownership still decides — the new
+    preference only applies when the named instance actually grants the rule."""
+    targets = _fire(PortentsRepo(), context={})
 
     assert targets == ["iron-roots:portent-2"]
