@@ -275,6 +275,8 @@
           :definition-options="definitionOptions"
           :can-redeclare="editingTrait?.fromType !== 'relationship'"
           :definition-pending="definitionPending"
+          :show-definition-picker="showDefinitionPicker"
+          :definition-filter="definitionFilter"
           @update:dice="editDice = $event"
           @update:capacity="editCapacity = $event"
           @update:statement="editStatement = $event"
@@ -293,7 +295,8 @@
           @select-projection="selectProjection"
           @add-subtrait="addSubTrait"
           @remove-subtrait="removeSubTrait"
-          @request-definitions="fetchDefinitionOptions"
+          @toggle-definition-picker="toggleDefinitionPicker"
+          @update:definitionFilter="definitionFilter = $event"
           @change-definition="changeDefinition"
         />
 
@@ -1375,11 +1378,29 @@ function openTraitDetail(t) {
 // universe and the entity refresh — the panel is deliberately presentational.
 const definitionOptions = ref(null)
 const definitionPending = ref(false)
+// Open/closed and the filter text are the sheet's, not the panel's — the panel
+// is re-created whenever the sheet re-renders, which is exactly what happens
+// when the option list arrives. Held in the panel, the first click opened the
+// list and the re-render wiped it, so the dropdown never appeared. Same reason
+// `showProjectionPicker` lives in `useTraitEditor`.
+const showDefinitionPicker = ref(false)
+const definitionFilter = ref('')
 
 // A different instance may hold different things already, so the candidate list
 // is per-instance: drop it when the editor moves to another trait rather than
 // reusing a list built for the one before.
-watch(editingTraitId, () => { definitionOptions.value = null })
+watch(editingTraitId, () => {
+  definitionOptions.value = null
+  showDefinitionPicker.value = false
+  definitionFilter.value = ''
+})
+
+/** Open or close the definition list, loading its options the first time. */
+function toggleDefinitionPicker() {
+  showDefinitionPicker.value = !showDefinitionPicker.value
+  definitionFilter.value = ''
+  if (showDefinitionPicker.value) fetchDefinitionOptions()
+}
 
 /**
  * What this instance could become.
@@ -1391,9 +1412,9 @@ watch(editingTraitId, () => { definitionOptions.value = null })
  * become another container, and a definition the entity already holds is not a
  * legal destination (its one instance is not this one).
  *
- * ``isContainer`` unions the instance's own tags with the definition's, which is
- * the same predicate the rows use — hence "the instance *or* its definition" on
- * the left-hand side of the comparison.
+ * ``tags`` must be selected here: ``isContainer`` reads them, and a query that
+ * omitted them would make every candidate look like a non-container — which
+ * passes by accident for an ordinary trait and empties the list for a container.
  */
 async function fetchDefinitionOptions() {
   if (definitionOptions.value) return
@@ -1401,7 +1422,7 @@ async function fetchDefinitionOptions() {
   if (!t) return
   const u = entity.value?.currentUniverse || props.universe
   const data = await graphql(
-    `query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId } }`, { u },
+    `query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId tags } }`, { u },
   )
   const alreadyHeld = new Set(
     ((showAllTraits.value ? allTraitSettings.value : effectiveSettings.value) || [])
@@ -1427,6 +1448,8 @@ async function changeDefinition(traitId) {
       return
     }
     definitionOptions.value = null
+    showDefinitionPicker.value = false
+    definitionFilter.value = ''
     // The instance keeps its id, so re-open the same one — the panel remounts
     // with the new name, set and possible SFX/sub-traits, and `startEdit`
     // re-seeds every draft field from it.

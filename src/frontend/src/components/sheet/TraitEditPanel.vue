@@ -10,18 +10,19 @@
       <span class="edit-label">Definition</span>
       <template v-if="canRedeclare">
         <div class="edit-definition">
-          <button type="button" class="definition-chip" @click="toggleDefinitionPicker">
+          <button type="button" class="definition-chip" @click="$emit('toggle-definition-picker')">
             {{ displayName(trait.name) }}
           </button>
           <span v-if="definitionPending" class="edit-definition-note">saving…</span>
         </div>
         <div v-if="showDefinitionPicker" class="definition-dropdown">
           <input
-            v-model="definitionFilter"
+            :value="definitionFilter"
             class="definition-filter"
             type="search"
             placeholder="Filter traits…"
             aria-label="Filter trait definitions"
+            @input="$emit('update:definitionFilter', $event.target.value)"
           />
           <button
             v-for="opt in filteredDefinitions"
@@ -209,6 +210,18 @@ const props = defineProps({
   canRedeclare: { type: Boolean, default: true },
   /** True while the repoint mutation is in flight. */
   definitionPending: { type: Boolean, default: false },
+  /**
+   * Whether the definition list is open, and its filter text.
+   *
+   * These are the *sheet's* state, not the panel's, for the same reason
+   * `showProjectionPicker` lives in `useTraitEditor`: this panel is re-created
+   * when the sheet re-renders, so anything held locally here is lost the moment
+   * the option list arrives. Owning it in the panel made the first click on the
+   * chip open the list and then silently wipe it — the sheet's update landed,
+   * the panel was replaced, and the dropdown never appeared.
+   */
+  showDefinitionPicker: { type: Boolean, default: false },
+  definitionFilter: { type: String, default: '' },
 })
 
 const emit = defineEmits([
@@ -216,31 +229,20 @@ const emit = defineEmits([
   'rating-type', 'change', 'field-blur', 'recover-die',
   'back', 'delete', 'toggle-sfx', 'toggle-ego', 'toggle-polarity',
   'toggle-projection-picker', 'select-projection', 'add-subtrait', 'remove-subtrait',
-  'request-definitions', 'change-definition',
+  'toggle-definition-picker', 'update:definitionFilter', 'change-definition',
 ])
-
-// The definition picker is local UI state: which option list the sheet should
-// load is the sheet's business, but whether the list is open is not.
-const showDefinitionPicker = ref(false)
-const definitionFilter = ref('')
 
 const filteredDefinitions = computed(() => {
   const opts = props.definitionOptions || []
-  const q = definitionFilter.value.trim().toLowerCase()
+  const q = props.definitionFilter.trim().toLowerCase()
   if (!q) return opts
   return opts.filter(o => String(o.name || '').toLowerCase().includes(q))
 })
 
-function toggleDefinitionPicker() {
-  showDefinitionPicker.value = !showDefinitionPicker.value
-  definitionFilter.value = ''
-  if (showDefinitionPicker.value) emit('request-definitions')
-}
-
 function pickDefinition(opt) {
-  showDefinitionPicker.value = false
-  definitionFilter.value = ''
   if (opt.id === props.trait.traitId) return
+  // The picker's open state belongs to the sheet, so closing it is the sheet's
+  // job too (`changeDefinition` does it) — the panel only reports the choice.
   emit('change-definition', opt.id)
 }
 
