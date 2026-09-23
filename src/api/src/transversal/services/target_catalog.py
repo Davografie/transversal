@@ -356,6 +356,13 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
                                         label="starter location"),
     },
     "relationship": {
+        # The edge's own key. The data always had one — a resolver read
+        # (`list_relationships_for_entity` hands out ```{"id": …}```) — but the
+        # catalog never declared it, so no path could filter a specific edge and
+        # the owner path had to pick one by its contact. `references` makes it
+        # pickable, the same as every other registry identity.
+        "id": ScalarField("relationship", "id", "string",
+                          references="relationship", label="relationship"),
         # The edge's own type ("membership", "agency", …) — content, not schema,
         # so it is a plain string rather than an enum.
         "type": ScalarField("relationship", "type", "string"),

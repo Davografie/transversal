@@ -21,9 +21,11 @@ from transversal.domain import TargetSpec
 
 #: The registry elements whose identity is pickable. `sfx` is deliberately
 #: absent: there is no `sfx` picker kind, so `references="sfx"` would render a
-#: picker whose candidate lookup errors — worse than a text box.
+#: picker whose candidate lookup errors — worse than a text box. `relationship`
+#: is here because its data always carried a key and the catalog simply never
+#: said so, which meant an owner path had to name an edge by its *contact*.
 PICKABLE = ("trait", "traitset", "entity", "location", "universe",
-            "life_path", "roll_table", "scheduled_event")
+            "life_path", "roll_table", "scheduled_event", "relationship")
 
 
 def test_every_pickable_registry_element_is_typed_and_labelled():

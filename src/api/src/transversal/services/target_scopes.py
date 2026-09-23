@@ -264,6 +264,11 @@ def _default_trait(value: str, subject: Any) -> list[TargetStep]:
     return _narrowed("traits", "universes", value, subject, "contains")
 
 
+def _default_relationship(value: str, subject: Any) -> list[TargetStep]:
+    """The actor's own relationship edges — the tie an anchored trait hangs on."""
+    return [*_lead_actor(subject), _select("self"), _nav("relationships")]
+
+
 def _default_traitset(value: str, subject: Any) -> list[TargetStep]:
     return _narrowed("traitsets", "universes", value, subject, "contains")
 
@@ -392,6 +397,7 @@ TARGET_SCOPES: tuple[TargetScope, ...] = (
             ScopeSelection("location", "location", _default_location),
             ScopeSelection("occupant", "entity", _default_occupant),
             ScopeSelection("entity", "entity", _default_entity),
+            ScopeSelection("relationship", "relationship", _default_relationship),
             ScopeSelection("trait", "trait", _default_trait),
             ScopeSelection("traitset", "traitset", _default_traitset),
             ScopeSelection("life_path", "life_path", _default_life_path),

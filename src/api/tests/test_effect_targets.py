@@ -63,8 +63,14 @@ class TargetRepo:
         self.traitsettings_by_entity = {}  # entity_id -> [TraitSetting]
         self.traitsets = []               # TraitSet-ish objects
         self.entity_factions = {}         # entity_id -> [faction ids]
+        self.relationships = {}           # entity_id -> [edge dicts]
 
     # ── repo surface ─────────────────────────────────
+    def list_relationships_for_entity(self, entity_id):
+        """Outgoing edges the entity holds about others — the same orientation the
+        real read has, which is what lets a path name an edge by its contact."""
+        return list(self.relationships.get(entity_id, []))
+
     def list_entities_by_type(self, entity_type, universe=None):
         if entity_type == EntityType.LOCATION:
             return [e for e in self.locations if not universe or e.current_universe == universe]
