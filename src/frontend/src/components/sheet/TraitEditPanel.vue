@@ -16,6 +16,15 @@
           <span v-if="definitionPending" class="edit-definition-note">saving…</span>
         </div>
         <div v-if="showDefinitionPicker" class="definition-dropdown">
+          <select
+            class="definition-set-filter"
+            :value="effectiveTraitsetFilter"
+            aria-label="Filter trait definitions by trait set"
+            @change="$emit('update:definitionTraitsetFilter', $event.target.value)"
+          >
+            <option value="">All trait sets</option>
+            <option v-for="ts in definitionTraitsets" :key="ts.id" :value="ts.id">{{ ts.name }}</option>
+          </select>
           <input
             :value="definitionFilter"
             class="definition-filter"
@@ -32,7 +41,9 @@
             :class="{ selected: opt.id === trait.traitId }"
             @click="pickDefinition(opt)"
           >{{ displayName(opt.name) }}</button>
-          <span v-if="!filteredDefinitions.length" class="edit-sfx-none">No trait matches.</span>
+          <!-- Say which filter is doing the hiding: "nothing matches" is wrong and
+               unhelpful when the set filter alone is the reason the list is bare. -->
+          <span v-if="!filteredDefinitions.length" class="edit-sfx-none">{{ emptyDefinitionNote }}</span>
         </div>
       </template>
       <!-- A relationship's traits are the substance of the relationship itself,
@@ -222,6 +233,21 @@ const props = defineProps({
    */
   showDefinitionPicker: { type: Boolean, default: false },
   definitionFilter: { type: String, default: '' },
+  /**
+   * The trait sets the candidate definitions live in — `[{ id, name }]`, already
+   * narrowed to sets that actually hold a candidate, so the filter never offers a
+   * set that would come back empty. Empty until the list is fetched.
+   */
+  definitionTraitsets: { type: Array, default: () => [] },
+  /**
+   * The chosen trait set, or `null` for "wherever this instance already lives".
+   *
+   * `null` rather than the id so the default is *derived*: the picker then opens
+   * on the instance's own set without anything having to keep a stored id in step
+   * with the edited trait, which is the class of bug that broke this picker in the
+   * first place.
+   */
+  definitionTraitsetFilter: { type: String, default: null },
 })
 
 const emit = defineEmits([
@@ -230,13 +256,26 @@ const emit = defineEmits([
   'back', 'delete', 'toggle-sfx', 'toggle-ego', 'toggle-polarity',
   'toggle-projection-picker', 'select-projection', 'add-subtrait', 'remove-subtrait',
   'toggle-definition-picker', 'update:definitionFilter', 'change-definition',
+  'update:definitionTraitsetFilter',
 ])
 
+/** The set actually being filtered on: the chosen one, else the instance's own. */
+const effectiveTraitsetFilter = computed(
+  () => props.definitionTraitsetFilter ?? props.trait.traitsetId ?? '',
+)
+
 const filteredDefinitions = computed(() => {
-  const opts = props.definitionOptions || []
+  const set = effectiveTraitsetFilter.value
+  const opts = (props.definitionOptions || []).filter(o => !set || o.traitsetId === set)
   const q = props.definitionFilter.trim().toLowerCase()
   if (!q) return opts
   return opts.filter(o => String(o.name || '').toLowerCase().includes(q))
+})
+
+const emptyDefinitionNote = computed(() => {
+  const named = props.definitionTraitsets.some(ts => ts.id === effectiveTraitsetFilter.value)
+  if (named) return 'Nothing else in this trait set — try “All trait sets”.'
+  return 'No trait matches.'
 })
 
 function pickDefinition(opt) {
@@ -344,6 +383,15 @@ function displayName(name) {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px;
+}
+.definition-set-filter {
+  margin-bottom: 4px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--overlay-10);
+  background: var(--overlay-4);
+  color: var(--text);
+  font-size: 12px;
 }
 .definition-filter {
   margin-bottom: 4px;

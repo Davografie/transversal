@@ -162,14 +162,14 @@ export async function ensureTraitRowsVisible(page) {
   throw new Error(`no trait set on this sheet rendered a trait row (tried: ${names.join(', ')})`)
 }
 
-/** Right-click a trait row to open its editor, and return the editing panel. */
+/** Right-click a trait row to open its editor; returns the setting id it opened. */
 export async function openTraitEditor(page, { settingId } = {}) {
   const row = settingId
     ? page.locator(`[data-ts-id="${settingId}"]`).first()
     : page.locator('.trait-row').first()
   await row.waitFor({ state: 'visible', timeout: 10_000 })
+  const opened = await row.getAttribute('data-ts-id')
   await row.click({ button: 'right' })
-  const panel = page.locator('.trait-edit-panel').first()
-  await panel.waitFor({ state: 'visible', timeout: 10_000 })
-  return panel
+  await page.locator('.trait-edit-panel').first().waitFor({ state: 'visible', timeout: 10_000 })
+  return opened
 }

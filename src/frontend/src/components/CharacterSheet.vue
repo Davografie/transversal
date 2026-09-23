@@ -277,6 +277,8 @@
           :definition-pending="definitionPending"
           :show-definition-picker="showDefinitionPicker"
           :definition-filter="definitionFilter"
+          :definition-traitsets="definitionTraitsets"
+          :definition-traitset-filter="definitionTraitsetFilter"
           @update:dice="editDice = $event"
           @update:capacity="editCapacity = $event"
           @update:statement="editStatement = $event"
@@ -297,6 +299,7 @@
           @remove-subtrait="removeSubTrait"
           @toggle-definition-picker="toggleDefinitionPicker"
           @update:definitionFilter="definitionFilter = $event"
+          @update:definitionTraitsetFilter="definitionTraitsetFilter = $event"
           @change-definition="changeDefinition"
         />
 
@@ -1385,12 +1388,20 @@ const definitionPending = ref(false)
 // `showProjectionPicker` lives in `useTraitEditor`.
 const showDefinitionPicker = ref(false)
 const definitionFilter = ref('')
+// The trait sets the candidates live in — `[{ id, name }]`, narrowed to sets that
+// actually hold one. `null` on the filter means "the instance's own set": the
+// panel derives the default from the trait rather than this holding an id that
+// would have to be kept in step with it.
+const definitionTraitsets = ref([])
+const definitionTraitsetFilter = ref(null)
 
 // A different instance may hold different things already, so the candidate list
 // is per-instance: drop it when the editor moves to another trait rather than
 // reusing a list built for the one before.
 watch(editingTraitId, () => {
   definitionOptions.value = null
+  definitionTraitsets.value = []
+  definitionTraitsetFilter.value = null
   showDefinitionPicker.value = false
   definitionFilter.value = ''
 })
@@ -1399,6 +1410,10 @@ watch(editingTraitId, () => {
 function toggleDefinitionPicker() {
   showDefinitionPicker.value = !showDefinitionPicker.value
   definitionFilter.value = ''
+  // Each open starts on the trait's own set, which is the answer most of the
+  // time — a repoint within a set is the common case, and the set is what the
+  // player recognises the trait by.
+  definitionTraitsetFilter.value = null
   if (showDefinitionPicker.value) fetchDefinitionOptions()
 }
 
@@ -1421,9 +1436,15 @@ async function fetchDefinitionOptions() {
   const t = editingTrait.value
   if (!t) return
   const u = entity.value?.currentUniverse || props.universe
-  const data = await graphql(
-    `query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId tags } }`, { u },
-  )
+  const [data, setData] = await Promise.all([
+    graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId tags } }`, { u }),
+    // Only for the set *names* and their order — the candidates below decide which
+    // sets are worth offering. Deliberately the whole registry rather than
+    // `traitsetsByUniverse`: a trait can sit in a set that universe does not list
+    // (25 of 36 sets, in three_realms), and then the filter would label it with a
+    // raw id.
+    graphql(`query { traitsets { id name order } }`),
+  ])
   const alreadyHeld = new Set(
     ((showAllTraits.value ? allTraitSettings.value : effectiveSettings.value) || [])
       .filter(s => s.id !== t.id)
@@ -1437,6 +1458,15 @@ async function fetchDefinitionOptions() {
     // no-op, not a mutation.
     .filter(o => isContainer(o) === wantContainer
       && (o.id === t.traitId || !alreadyHeld.has(o.id)))
+
+  // The sets to offer are the ones the candidates actually landed in, so the
+  // filter can never send the player to an empty list. Ordered as the sheet
+  // orders its own sets, so the picker's list and the sheet's agree.
+  const sets = new Map((setData?.traitsets || []).map(s => [s.id, s]))
+  const orderOf = (id) => sets.get(id)?.order ?? 999
+  definitionTraitsets.value = [...new Set(definitionOptions.value.map(o => o.traitsetId))]
+    .map(id => ({ id, name: sets.get(id)?.name || id }))
+    .sort((a, b) => (orderOf(a.id) - orderOf(b.id)) || a.name.localeCompare(b.name))
 }
 
 /** Repoint the edited instance at another definition, keeping it open. */
@@ -1453,8 +1483,10 @@ async function changeDefinition(traitId) {
       return
     }
     definitionOptions.value = null
+    definitionTraitsets.value = []
     showDefinitionPicker.value = false
     definitionFilter.value = ''
+    definitionTraitsetFilter.value = null
     // The instance keeps its id, so re-open the same one — the panel remounts
     // with the new name, set and possible SFX/sub-traits, and `startEdit`
     // re-seeds every draft field from it.

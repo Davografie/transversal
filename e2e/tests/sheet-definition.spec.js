@@ -39,6 +39,38 @@ test('the definition picker opens on the first click', async ({ page, request })
   await expect(page.locator('.definition-option.selected')).toHaveText(new RegExp(current, 'i'))
 })
 
+test('the traitset filter opens on the instance’s own set, and can widen', async ({ page, request }) => {
+  const character = await findPlayableCharacter(request)
+  await openSheet(page, character)
+  await ensureTraitRowsVisible(page)
+  const settingId = await openTraitEditor(page)
+  const setting = character.traitSettings.find((s) => s.id === settingId)
+  expect(setting, `the edited setting ${settingId} is in the fetched list`).toBeTruthy()
+
+  await page.locator('.definition-chip').click()
+  const setFilter = page.locator('.definition-set-filter')
+  await expect(setFilter, 'the picker offers a trait set filter').toBeVisible()
+
+  // The default is the set the instance already lives in — not "all", and not the
+  // first set in the list by accident.
+  await expect(setFilter).toHaveValue(setting.traitsetId)
+  const inSet = await page.locator('.definition-option').count()
+  expect(inSet, 'the instance’s own set must offer at least its current definition').toBeGreaterThan(0)
+
+  // Widening to every set can only add candidates, never remove one. `selectOption('')`
+  // is the "All trait sets" option.
+  await setFilter.selectOption('')
+  await expect
+    .poll(async () => page.locator('.definition-option').count(), { timeout: 5_000 })
+    .toBeGreaterThanOrEqual(inSet)
+
+  // Narrowing back restores exactly the set's candidates.
+  await setFilter.selectOption(setting.traitsetId)
+  await expect
+    .poll(async () => page.locator('.definition-option').count(), { timeout: 5_000 })
+    .toBe(inSet)
+})
+
 test('the picker filters, and closing it leaves the editor open', async ({ page, request }) => {
   const character = await findPlayableCharacter(request)
   await openSheet(page, character)
