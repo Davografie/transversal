@@ -2573,3 +2573,82 @@ def test_invert_polarity_replaced_convert_complication():
     assert meta.retired is False
     assert meta.path_element == ("traitsetting",)
     assert meta.inverse == ("modify_trait", "invert_polarity")
+
+
+# ── Anchoring a trait to a relationship edge (B153) ───
+
+class TypedRelationshipRepo(RelationshipFakeRepo):
+    """Only serves an edge of the requested type — the hardcoded-type bug cannot
+    hide behind a permissive double."""
+
+    def __init__(self, edges):
+        super().__init__()
+        self.edges = edges            # {(to_id, type): key}
+
+    def get_relationship(self, entity_id, other_id, rel_type):
+        key = self.edges.get((other_id, rel_type))
+        return {"_key": key} if key else None
+
+
+def _rel_effect(action="gain", **context):
+    return Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action=action,
+                  target="trait-rel-rank", result="d4", context=context)
+
+
+def test_a_trait_can_anchor_to_a_non_membership_edge():
+    """`relation` edges are the majority of live relationship-anchored traits
+    (264 vs 43 membership), so the type has to be readable rather than assumed."""
+    repo = TypedRelationshipRepo({("fac-1", "relation"): "edge:char-1:fac-1:relation"})
+    effect = _rel_effect(relationship="fac-1", relationship_type="relation")
+    result = apply_effects(_entity(), [effect], repo)
+    ts = result.new_trait_settings[0]
+    assert ts.from_type == "relationship"
+    assert ts.entity_id == "edge:char-1:fac-1:relation"
+
+
+def test_membership_stays_the_default():
+    repo = TypedRelationshipRepo({("fac-1", "membership"): "edge:char-1:fac-1:membership"})
+    effect = _rel_effect(relationship="fac-1")   # no relationship_type
+    result = apply_effects(_entity(), [effect], repo)
+    assert result.new_trait_settings[0].entity_id == "edge:char-1:fac-1:membership"
+
+
+def test_a_missing_edge_is_an_error_not_an_entity_trait():
+    """The bug: a `relationship` naming an edge that does not exist fell through to
+    the entity, so the die landed on the character and nothing said so."""
+    repo = TypedRelationshipRepo({})
+    effect = _rel_effect(relationship="fac-1", relationship_type="relation")
+    result = apply_effects(_entity(), [effect], repo)
+    assert result.new_trait_settings == []
+    assert "no relationship to fac-1 (relation)" in result.applied[0].summary
+    assert "create it first" in result.applied[0].summary
+
+
+def test_a_wrong_type_is_reported_with_the_type_asked_for():
+    """Asking for membership when only a relation exists is the *same* silent-miss
+    class, so it reports too."""
+    repo = TypedRelationshipRepo({("fac-1", "relation"): "edge:char-1:fac-1:relation"})
+    effect = _rel_effect(relationship="fac-1", relationship_type="membership")
+    result = apply_effects(_entity(), [effect], repo)
+    assert result.new_trait_settings == []
+    assert "(membership)" in result.applied[0].summary
+
+
+def test_gain_or_step_up_and_cortex_gain_report_the_missing_edge_too():
+    repo = TypedRelationshipRepo({})
+    effect = _rel_effect(action="gain_or_step_up", relationship="fac-1")
+    assert "no relationship to fac-1" in apply_effects(_entity(), [effect], repo).applied[0].summary
+    effect2 = _rel_effect(action="cortex_gain", relationship="fac-1")
+    assert "no relationship to fac-1" in apply_effects(_entity(), [effect2], repo).applied[0].summary
+
+
+def test_the_relationship_fields_are_authorable():
+    """`relationship_type` beside `relationship`, and the label no longer claims
+    the anchor is a faction (it was 'Faction (relationship)')."""
+    from transversal.services.effects_registry import get_action_meta
+    meta = get_action_meta("gain_trait")
+    names = [f.name for f in meta.context_fields]
+    assert "relationship" in names and "relationship_type" in names
+    labels = {f.name: f.label for f in meta.context_fields}
+    assert labels["relationship"] == "Relationship with"
+    assert labels["relationship_type"] == "Relationship type"

@@ -117,9 +117,25 @@ class EffectActionMeta:
 
 _RELATIONSHIP_CONTEXT_FIELD = EffectFieldDef(
     name="relationship",
-    label="Faction (relationship)",
+    label="Relationship with",
     field_type="text",
     required=False,
+    description=(
+        "Anchor the trait to the edge to this entity instead of to you — a tie to "
+        "someone. The edge must already exist: create it first (Create Relationship), "
+        "then gain the trait onto it."
+    ),
+)
+
+#: Which edge the anchor above means. Previously hardcoded to `membership`, which
+#: made every other edge type unreachable and landed the trait on the character.
+_RELATIONSHIP_TYPE_FIELD = EffectFieldDef(
+    name="relationship_type",
+    label="Relationship type",
+    field_type="text",
+    required=False,
+    default="membership",
+    description="The edge type to anchor to (membership, relation, agency, …).",
 )
 
 _STEPS_CONTEXT_FIELD = EffectFieldDef(

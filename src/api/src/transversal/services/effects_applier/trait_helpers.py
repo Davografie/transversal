@@ -19,10 +19,27 @@ def _resolve_traitset_id(trait_id: str, repo) -> str:
     return trait.traitset_id if trait else ""
 
 def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
-    """Return (from_type, owner_id) for the trait targeted by an effect.
+    """Return ``(from_type, owner_id)`` for the trait targeted by an effect.
 
-    Defaults to the entity; if ``effect.context.relationship`` names a faction,
-    target the character↔faction relationship edge instead.
+    Defaults to the entity. When ``effect.context.relationship`` names another
+    entity, the trait is anchored to the **relationship edge** between them
+    instead — that is how a tie *to* someone is stored (a rank on a membership, a
+    bond on a relation).
+
+    ``effect.context.relationship_type`` says *which* edge, defaulting to
+    ``"membership"`` so nothing authored before this moves. It exists because the
+    type used to be hardcoded, which made every other edge type unreachable — and
+    the miss then fell through to the entity, so a trait aimed at a bond quietly
+    landed on the character instead. Live data has **264** relationship-anchored
+    traits on ``relation`` edges against **43** on ``membership``, so both kinds
+    are real content.
+
+    An absent edge is **not** created here: ``create_relationship`` takes its key
+    from Arango and a trait setting stores its owner by that key, so the edge must
+    be committed first. Effects commit one at a time within an activation, so the
+    working shape is *two* effects — a Create Relationship, then the gain.
+    Returns ``("missing", target)`` when a relationship was asked for but no such
+    edge exists, so the caller can say so instead of guessing.
     """
     rel_target = (effect.context or {}).get("relationship")
     if rel_target == "{term_faction}":
@@ -30,9 +47,11 @@ def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
         # entity is currently in a term with.
         rel_target = entity.pending_term.faction_id if entity.pending_term else ""
     if rel_target:
-        rel = repo.get_relationship(entity.id, rel_target, "membership")
+        rel_type = (_ctx(effect, "relationship_type") or "membership").strip() or "membership"
+        rel = repo.get_relationship(entity.id, rel_target, rel_type)
         if rel and rel.get("_key"):
             return ("relationship", rel["_key"])
+        return ("missing", f"{rel_target} ({rel_type})")
     return ("entity", entity.id)
 
 def _find_traitsetting(owner: tuple[str, str], repo, trait_id: str) -> Optional[TraitSetting]:

@@ -50,6 +50,12 @@ def _apply_gain(entity, effect, repo, result):
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
+    if owner[0] == "missing":
+        result.applied.append(AppliedEffect(
+            effect,
+            f"no relationship to {owner[1]} — create it first (Create Relationship), "
+            f"then gain the trait onto it"))
+        return
     statement = _ctx(effect, "statement")
     if _find_conflicting_traitsetting(subject, effect, repo, target, statement):
         result.applied.append(AppliedEffect(effect, f"trait {target} already present"))
@@ -260,6 +266,10 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
+    if owner[0] == "missing":
+        result.applied.append(AppliedEffect(
+            effect, f"no relationship to {owner[1]} — create it first"))
+        return
     statement = _ctx(effect, "statement")
     existing = _find_conflicting_traitsetting(subject, effect, repo, target, statement)
     steps = _steps(effect)
@@ -296,6 +306,10 @@ def _apply_cortex_gain(entity, effect, repo, result):
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
+    if owner[0] == "missing":
+        result.applied.append(AppliedEffect(
+            effect, f"no relationship to {owner[1]} — create it first"))
+        return
     die = _die(effect.result)
     negative = bool(effect.negative)
     statement = _ctx(effect, "statement")

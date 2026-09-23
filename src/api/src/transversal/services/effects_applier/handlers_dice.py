@@ -63,8 +63,13 @@ def _apply_add_die(entity, effect, repo, result):
         return
     existing = _find_traitsetting_by_target(subject, effect, repo, target)
     if not existing:
+        owner = _trait_owner(subject, effect, repo)
+        if owner[0] == "missing":
+            result.applied.append(AppliedEffect(
+                effect, f"no relationship to {owner[1]} — create it first"))
+            return
         ts = _new_traitsetting(
-            _trait_owner(subject, effect, repo), target, die, repo,
+            owner, target, die, repo,
             negative=bool(effect.negative),
             rating_type=_rating_type(effect),
             statement=_ctx(effect, "statement"),
