@@ -1643,12 +1643,13 @@ def test_resolve_choice_can_be_reapplied():
 # ── Random target mode ───────────────────────────────
 
 def test_unknown_effect_is_passthrough():
-    # `reroll_die` is still resolver-context only; the step-die pair is not any
-    # more (it changes the scene store — see test_step_die.py).
+    # An action with no mutation handler passes through to resolver context.
+    # (`reroll_die` used to be the example here; it now mutates the scene store, so
+    # the example is an outcome action that has no applier of its own.)
     entity = _entity()
-    result = apply_effects(entity, [_effect("modify_roll", "reroll_die", "the_hitch_die")], FakeRepo())
+    result = apply_effects(entity, [_effect("modify_outcome", "reroll_highest", "")], FakeRepo())
     assert len(result.passthrough) == 1
-    assert result.passthrough[0].type == "modify_roll"
+    assert result.passthrough[0].type == "modify_outcome"
     assert len(result.applied) == 0
 
 
@@ -2717,3 +2718,89 @@ def test_gain_if_not_exists_is_authorable_only_on_gain_trait():
     # Not on the step-up variants: a "don't touch it" flag would contradict them.
     for aid in ("gain_or_step_up_trait", "cortex_gain_trait"):
         assert "if_not_exists" not in [f.name for f in get_action_meta(aid).context_fields]
+
+
+# ── Reroll Die ───────────────────────────────────────
+
+def _pool_with(dice):
+    """Put dice in the scene store and return (store, effect target for index 0)."""
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "char-1", list(dice))
+    return store
+
+
+def _pool_die(ts_id="ts-hinder", die="d8", result=None):
+    return {"die": die, "source_kind": "trait", "source_id": ts_id,
+            "label": "Hinder", "ts_id": ts_id, "result": result}
+
+
+def _reroll_effect(result=""):
+    eff = Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll", action="reroll_die",
+                 target="die:loc-1:char-1:0")
+    eff.result = result or None
+    return eff
+
+
+def test_reroll_die_rolls_the_targeted_die_again():
+    store = _pool_with([_pool_die(result=3)])
+    repo = FakeRepo(entities=[_entity(current_location="loc-1")])
+    result = apply_effects(_entity(current_location="loc-1"), [_reroll_effect()], repo)
+    entry = store.get_pool("loc-1", "char-1")[0]
+    assert 1 <= entry["result"] <= 8          # a d8 came back
+    assert entry["tier"] in ("fail", "marginal", "success", "exceptional", "perfect")
+    assert "rerolled" in result.applied[0].summary
+    store.clear_all()
+
+
+def test_reroll_die_touches_only_the_targeted_die():
+    """The author's brief: only the targeted dice re-roll."""
+    store = _pool_with([_pool_die(result=3), _pool_die(ts_id="other", die="d6", result=6)])
+    repo = FakeRepo(entities=[_entity(current_location="loc-1")])
+    apply_effects(_entity(current_location="loc-1"), [_reroll_effect()], repo)
+    pool = store.get_pool("loc-1", "char-1")
+    assert pool[1]["result"] == 6              # untouched
+    assert pool[0]["die"] == "d8"              # size unchanged — this rerolls a result
+    store.clear_all()
+
+
+def test_reroll_die_stays_in_the_picking_phase():
+    """It fires while the results are on screen, so it does not send the pool back
+    to assembly."""
+    from transversal.services.scene_state import get_scene_store
+
+    store = _pool_with([_pool_die(result=3)])
+    store.set_phase("loc-1", "char-1", "picking")
+    repo = FakeRepo(entities=[_entity(current_location="loc-1")])
+    apply_effects(_entity(current_location="loc-1"), [_reroll_effect()], repo)
+    assert store.get_phase("loc-1", "char-1") == "picking"
+    store.clear_all()
+
+
+def test_reroll_die_restores_the_prior_result_when_it_is_the_revert():
+    """The inverse is this action carrying the prior result."""
+    store = _pool_with([_pool_die(result=7)])
+    repo = FakeRepo(entities=[_entity(current_location="loc-1")])
+    apply_effects(_entity(current_location="loc-1"), [_reroll_effect(result="2")], repo)
+    assert store.get_pool("loc-1", "char-1")[0]["result"] == 2
+    store.clear_all()
+
+
+def test_reroll_die_refuses_a_rating_die():
+    """A rating die has no result to reroll, and says so rather than doing nothing."""
+    repo = FakeRepo()
+    eff = Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll", action="reroll_die",
+                 target="rating:0:char-1:medicine")
+    result = apply_effects(_entity(), [eff], repo)
+    assert "needs a pool die" in result.applied[0].summary
+
+
+def test_reroll_die_is_pool_only_and_has_an_inverse():
+    from transversal.services.effects_registry import get_action_meta, get_inverse
+    meta = get_action_meta("reroll_die")
+    assert meta.path_element == ("die",)
+    assert meta.supports_duration is False   # a pool is rebuilt every roll
+    assert meta.inverse == ("modify_roll", "reroll_die")
+    assert get_inverse("modify_roll", "reroll_die") == (("modify_roll", "reroll_die"), True)

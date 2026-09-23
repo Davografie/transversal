@@ -297,7 +297,7 @@ def _register_core_handlers(em, raz):
     # scene store's pool — so these go through the mutation dispatch above rather
     # than the resolver passthrough.
     for action in ("set_die", "step_up_die", "step_down_die", "double_die",
-                   "split_die", "remove_die", "restore_die", "play_as_rating"):
+                   "split_die", "remove_die", "restore_die", "play_as_rating", "reroll_die"):
         effect_registry.register("modify_roll", action, _commit)
     # Outcome effects are state changes too (they rewrite the committed result),
     # so they commit rather than passing through.

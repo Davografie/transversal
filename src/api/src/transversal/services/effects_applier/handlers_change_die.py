@@ -332,6 +332,75 @@ def _apply_change_remove(entity, effect, repo, result):
     _apply_change(entity, effect, repo, result, "remove")
 
 
+# ── Reroll Die ────────────────────────────────────────────────
+
+def _apply_reroll_die(entity, effect, repo, result):
+    """Roll one die in the assembled pool again and keep the new result.
+
+    Fires **during picking** (the author's brief, 2026-09-23): the results are on
+    screen, so a reroll is worth something, and only the die the path names is
+    rolled again. The new result is written into the assembled pool and
+    broadcast, so the client can animate that one die and carry on picking.
+
+    The roll itself borrows the resolver's single-die helper
+    (:func:`dice_resolver._roll_die`) rather than reimplementing a die — one place
+    decides what a die roll is, and hitches/tiers come from the same mapping as
+    every other roll.
+
+    Pool-only: a rating die has no *result* to reroll (its size is the fact), so
+    the action declares `path_element=("die",)` and a rating reference is
+    reported rather than silently doing nothing.
+    """
+    from transversal.services.contest_tracker import broadcast_pool_change
+    from transversal.services.dice_resolver import _roll_die
+    from transversal.services.scene_state import get_scene_store
+    from transversal.domain import DieSpec
+
+    ref = _parse_die_ref(effect.target or "")
+    if ref is None:
+        result.applied.append(AppliedEffect(
+            effect, f"die target not resolved: {effect.target!r} (a reroll needs a pool die)"))
+        return
+    location_id, owner_id, index = ref
+
+    store = get_scene_store()
+    pool = store.get_pool(location_id, owner_id)
+    if index < 0 or index >= len(pool):
+        result.applied.append(AppliedEffect(
+            effect, f"no die at {effect.target} (pool has {len(pool)})"))
+        return
+
+    entry = pool[index]
+    die = _die_opt(entry.get("die") or "")
+    if die is None:
+        result.applied.append(AppliedEffect(effect, f"not a die in the pool: {entry.get('die')!r}"))
+        return
+
+    # A revert carries the result to put back (`inverse_captures_prior`); a forward
+    # reroll rolls. One action, because the undo of "roll again" is "be the number
+    # you were" — the same shape `set` uses for the prior rating.
+    prior = entry.get("result")
+    restore = _die_opt(effect.result) is None and str(effect.result or "").strip() != ""
+    if restore:
+        new_result, new_tier = int(effect.result), entry.get("tier")
+    else:
+        rolled = _roll_die(DieSpec(die=die, source_kind=entry.get("source_kind") or "manual",
+                                   label=entry.get("label") or die.value))
+        new_result, new_tier = rolled.result, rolled.tier.value
+    updated = (pool[:index]
+               + [{**entry, "result": new_result, "tier": new_tier}]
+               + pool[index + 1:])
+    store.save_pool(location_id, owner_id, updated)
+    # Stay in the picking phase: the results are what is being looked at, and only
+    # this die changed. The client animates it and continues picking.
+    broadcast_pool_change(location_id, owner_id, dice=updated, phase="picking")
+    verdict = "restored" if restore else "rerolled"
+    result.applied.append(AppliedEffect(
+        effect, f"{verdict} {owner_id}'s die {index}: {prior} → {new_result}"))
+    if not restore:
+        # A duration puts the original result back (the inverse is this action).
+        _queue_entity_revert(repo, entity, effect, target=effect.target, prior_result=str(prior))
+
 # ── Play as Rating ────────────────────────────────────────────
 
 def _apply_play_as_rating(entity, effect, repo, result):

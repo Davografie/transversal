@@ -177,9 +177,17 @@ ACTIONS: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Target", field_type="text", required=True),
         ],
-        # A rating die has no result to reroll, so this one stays pool-only — the
-        # destination set is what says so, rather than a runtime refusal.
+        # A rating die has no *result* to reroll (its size is the fact), so this
+        # stays pool-only — the destination set says so rather than a runtime
+        # refusal.
         path_element=("die",),
+        # Fires while the player is looking at the results, and only the die the
+        # path names is rolled again. Deliberately **no duration**: a pool is
+        # rebuilt every roll, so there is nothing to revert on a timer — the undo
+        # only matters inside a manual activation's take-back window, which is
+        # what `inverse` alone gives.
+        inverse=("modify_roll", "reroll_die"),
+        inverse_captures_prior=True,
     ),
 
     # ── Dice Pool ─────────────────────────────────────
