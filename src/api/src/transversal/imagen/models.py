@@ -89,6 +89,23 @@ PRIMITIVE_UNIVERSES = {"three_realms", "stone_age"}
 # Additional negative prompt for primitive universes
 PRIMITIVE_NEGATIVE = "technology, electronics, metal armor, guns, robots, screens, holograms, cybernetics, modern clothing, vehicles, city"
 
-# Default negative
-DEFAULT_NEGATIVE = "cgi, watermark, signature, text, low quality, blurry, deformed, disfigured"
+# Default negative.
+#
+# The caption/inscription vocabulary is here because `watermark, signature, text`
+# alone was NOT enough to stop a style LoRA from writing on the image: a
+# `ChineseScrollPainting` LoRA (applied automatically to `three_realms`
+# locations) is trained on scroll paintings, which carry calligraphic
+# inscriptions and red seal stamps, and it reproduced them over an explicit
+# "text, watermark, signature" negative. Adding the vocabulary below removed
+# them for the same prompt, seed and LoRA weight.
+#
+# Do NOT move any of this into the positive prompt. Tested: a positive clause
+# reading "no text, no calligraphy, no seal stamps" produced *more* calligraphy
+# than the baseline — Flux/T5 does not negate, so naming the thing summons it.
+DEFAULT_NEGATIVE = (
+    "cgi, watermark, signature, text, low quality, blurry, deformed, disfigured, "
+    "caption, captions, lettering, writing, calligraphy, inscription, "
+    "seal, seal stamp, red seal, stamp, logo, title, subtitle, signage, "
+    "chinese characters, kanji, border, frame, ui"
+)
 
