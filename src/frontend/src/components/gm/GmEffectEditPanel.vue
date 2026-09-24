@@ -47,8 +47,10 @@ const sourceElement = computed(() => {
 })
 
 // Typed names available to `select variable` in this effect's paths: the
-// activation's own (the trigger's declared variables and the source token),
-// the SFX's conditions, and the effects *before* the one being edited.
+// activation's own (the trigger's declared variables and the source token), the
+// rule's **declared** bound variables (bound before the conditions, so before
+// every effect), the SFX's conditions, and the effects *before* the one being
+// edited.
 const outputVariables = ref({})
 
 function priorEffects() {
@@ -57,11 +59,12 @@ function priorEffects() {
 }
 
 watch(
-  () => [draft.effects, draft.conditions, draft.trigger, draft.source_kind, props.index, sourceElement.value],
+  () => [draft.effects, draft.conditions, draft.trigger, draft.source_kind, draft.bound_variables, props.index, sourceElement.value],
   async () => {
     outputVariables.value = await collectVariables(
       priorEffects(), sourceElement.value || null, draft.conditions || null,
       draft.trigger || null, draft.source_kind || null,
+      draft.bound_variables || null,
     )
   },
   { immediate: true, deep: true },

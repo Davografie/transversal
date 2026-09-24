@@ -177,7 +177,27 @@
           <select v-else-if="item.f.fieldType === 'die_select' || item.f.fieldType === 'select'" v-model="valueStore(item.f)[item.f.name]">
             <option v-for="(o, i) in (item.f.options || [])" :key="o" :value="o">{{ (item.f.optionLabels || [])[i] || o }}</option>
           </select>
-          <input v-else-if="item.f.fieldType === 'number'" v-model.number="valueStore(item.f)[item.f.name]" type="number" />
+          <!-- An amount can be a *value the rule named* rather than a literal —
+               "increase the limit by the tier of this rating". A `type="number"`
+               input cannot hold `{name}` at all, so a variable is its own mode.
+               Only names bound to a number are offered: a die binding
+               substitutes as "d8", which the handler cannot parse and would fall
+               back to 1 for — a wrong amount that looks like a right one. -->
+          <template v-else-if="item.f.fieldType === 'number'">
+            <div v-if="numberVariables.length" class="ee-result-mode">
+              <button type="button" :class="{ active: numberMode(item.f) === 'number' }" @click="setNumberMode(item.f, 'number')">Number</button>
+              <button type="button" :class="{ active: numberMode(item.f) === 'variable' }" @click="setNumberMode(item.f, 'variable')">Variable</button>
+            </div>
+            <select
+              v-if="numberMode(item.f) === 'variable'"
+              :value="valueStore(item.f)[item.f.name] || ''"
+              @change="valueStore(item.f)[item.f.name] = $event.target.value"
+            >
+              <option value="">— variable —</option>
+              <option v-for="o in numberChoices(item.f)" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </select>
+            <input v-else v-model.number="valueStore(item.f)[item.f.name]" type="number" />
+          </template>
           <input v-else v-model="valueStore(item.f)[item.f.name]" type="text" :placeholder="item.f.default || ''" />
         </template>
       </div>
@@ -361,6 +381,54 @@ const dieVariables = computed(() => {
   if (isRollTiming.value) for (const v of ROLL_CONTEXT_VARIABLES) if (!out.includes(v)) out.push(v)
   return out
 })
+
+// ── A numeric field may read a *named* value ──────────────────
+// The value carries its own mode (a bare `{name}` is a variable, digits are a
+// number), so nothing about it depends on UI state surviving a save — the same
+// reading the die field's `result`/`{variable}` split uses.
+const NUMBER_ELEMENTS = ['int', 'number']
+
+function normalizeVar(entry) {
+  if (!entry) return { element: '', cardinality: 'one' }
+  if (typeof entry === 'string') return { element: entry, cardinality: 'one' }
+  return { element: entry.element || '', cardinality: entry.cardinality || 'one' }
+}
+
+// Only the names bound to a number. A die would substitute as "d8" and reach the
+// handler unparseable, where it falls back to 1. The type is not shown because
+// there is only one kind here — a list of names is the whole answer.
+const numberVariables = computed(() =>
+  Object.entries(scopedVariables.value || {})
+    .map(([name, entry]) => ({ name, ...normalizeVar(entry) }))
+    .filter(v => NUMBER_ELEMENTS.includes(v.element))
+    .map(v => v.name)
+)
+
+/** What a given field's variable picker offers, plus its own stored value when
+ *  that names something no longer bound — an editor never rewrites a value it
+ *  cannot represent (the rule the placement and arming-scope selects follow). */
+function numberChoices(f) {
+  const out = numberVariables.value.map(name => ({ value: `{${name}}`, label: name }))
+  const current = String(valueStore(f)[f.name] || '')
+  if (current && !out.some(o => o.value === current)) {
+    out.push({ value: current, label: `${current} (not a bound number)` })
+  }
+  return out
+}
+
+function numberMode(f) {
+  return /^\{[^{}]+\}$/.test(String(valueStore(f)[f.name] ?? '')) ? 'variable' : 'number'
+}
+
+function setNumberMode(f, mode) {
+  const store = valueStore(f)
+  if (mode === 'variable') {
+    const first = numberVariables.value[0]
+    store[f.name] = first ? `{${first}}` : ''
+  } else {
+    store[f.name] = ''
+  }
+}
 
 // The chips the author reads. A roll-timed effect gets the roll context too:
 // `{triggered_die_*}` resolves per die inside an effect with a die filter (the

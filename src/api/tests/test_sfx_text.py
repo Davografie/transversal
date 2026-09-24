@@ -764,3 +764,52 @@ def test_set_die_says_the_size_and_reroll_names_its_die():
     assert effect_text(_change("set_die", result="d12")) == (
         "set the rating die with the highest rating to d12")
     assert effect_text(_change("reroll_die")).startswith("reroll the rating die")
+
+
+# ── Declared bound variables read as what they mean ───────────
+
+def _tier_of_the_rating():
+    return TargetSpec(steps=[
+        {"kind": "select", "collection": "source"},
+        {"kind": "aggregate", "fn": "tier", "field": "rating"},
+    ])
+
+
+def test_a_declared_variable_is_stated_and_then_named():
+    """The author's *Cultivation Stage*: the card has to say what the tier *is*
+    (a reader cannot see the declaration) and then use the author's own name for
+    it. Both halves matter — the definition alone leaves the use unexplained, the
+    use alone leaves a bare noun."""
+    from transversal.domain import BoundVariable
+
+    sfx = SFX(
+        id="sfx-qi", name="Cultivation Stage", trigger="on_roll",
+        source_kind="trait_setting",
+        bound_variables=[BoundVariable(name="cultivation_tier", spec=_tier_of_the_rating())],
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+            result="{cultivation_tier}", context={"limit": "total"},
+        )],
+    )
+
+    text = sfx_text(sfx)
+    assert "the cultivation tier is the tier of the rating" in text
+    assert "increase the dice limit by the cultivation tier" in text
+    # Not the raw token, and not the section's absence.
+    assert "{" not in text
+
+
+def test_a_declared_variable_with_a_broken_path_is_not_stated():
+    """A path that does not type-check binds nothing, so the card must not claim
+    it does — the effect still names it, and the validator says why."""
+    from transversal.domain import BoundVariable
+
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="on_roll", source_kind="trait_setting",
+        bound_variables=[BoundVariable(
+            name="stage_tier",
+            spec=TargetSpec(steps=[{"kind": "aggregate", "fn": "tier", "field": "rating"}]),
+        )],
+        effects=[],
+    )
+    assert "stage tier is" not in sfx_text(sfx)

@@ -539,3 +539,75 @@ def test_every_name_the_editor_offers_is_a_name_the_validator_knows():
             )],
         )
         assert validate_sfx(sfx) == [], name
+
+
+# ── Declared bound variables (B97's section) ──────────────────
+
+def _tier_spec():
+    from transversal.services.target_spec import TargetSpec
+    return TargetSpec(steps=[
+        {"kind": "select", "collection": "source"},
+        {"kind": "aggregate", "fn": "tier", "field": "rating"},
+    ])
+
+
+def _cultivation(tier_name="cultivation_tier", result="{cultivation_tier}"):
+    from transversal.domain import BoundVariable
+    return SFX(
+        id="sfx-qi", name="Cultivation Stage", trigger="on_roll",
+        source_kind="trait_setting",
+        bound_variables=[BoundVariable(name=tier_name, spec=_tier_spec())],
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+            result=result, context={"limit": "total"},
+        )],
+    )
+
+
+def test_a_declared_variable_is_known_to_every_effect():
+    """The engine binds these before the gate, so a use below is not an unknown
+    variable — the whole point of stating them above the conditions."""
+    assert validate_sfx(_cultivation()) == []
+
+
+def test_a_declared_variable_may_not_shadow_an_activation_name():
+    """`bind_declared` refuses to overwrite a name the activation owns, so a
+    warning now is the difference between "this silently did nothing" and a real
+    message."""
+    warnings = validate_sfx(_cultivation(tier_name="order"))
+    assert any("already a name this activation binds" in w for w in warnings), warnings
+
+
+def test_a_declared_variable_with_no_path_is_named():
+    from transversal.domain import BoundVariable
+    sfx = _cultivation()
+    sfx.bound_variables = [BoundVariable(name="stage_tier", spec=TargetSpec(steps=[]))]
+    warnings = validate_sfx(sfx)
+    assert any("no path" in w for w in warnings), warnings
+
+
+def test_a_duplicate_declaration_is_named():
+    from transversal.domain import BoundVariable
+    sfx = _cultivation()
+    sfx.bound_variables = [
+        BoundVariable(name="stage_tier", spec=_tier_spec()),
+        BoundVariable(name="stage_tier", spec=_tier_spec()),
+    ]
+    sfx.effects = [Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+        result="{stage_tier}", context={"limit": "total"},
+    )]
+    warnings = validate_sfx(sfx)
+    assert any("already declared above" in w for w in warnings), warnings
+
+
+def test_an_effects_output_may_not_shadow_a_declared_variable():
+    """An output name (the 💡) would bind *after* the declarations, so a collision
+    is a name whose meaning depends on where you read it."""
+    sfx = _cultivation()
+    sfx.effects = [Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="trait-1", output="cultivation_tier", result="d6",
+    )]
+    warnings = validate_sfx(sfx)
+    assert any("shadows the rule's own" in w for w in warnings), warnings

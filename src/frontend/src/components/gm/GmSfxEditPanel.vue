@@ -70,13 +70,29 @@
           <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>). Resolved once, when the rule arms.</p>
         </div>
       </template>
+
+      <!-- Values the rule is about, named *before* anything is checked. Above the
+           conditions on purpose: the engine binds these before the gate, so a
+           condition may read them — which an inline 💡 on a path step cannot do,
+           because that binds as a side effect of a path authored for another
+           purpose. -->
+      <h5 class="sfx-slot">What it's about</h5>
+      <label>Bound variables</label>
+      <BoundVariablesEditor
+        v-model="draft.bound_variables"
+        :source-element="sourceElement"
+        :variables="activationVariables"
+        :types="declaredTypes"
+      />
+      <p class="hint">Resolved once per activation, in order, before the conditions. Refer to one by name — <code>{name}</code> — and a later row may start from an earlier one.</p>
+
       <!-- Where this may be *taken*, not where it works. It sits at the end of
            the panel (below) rather than here, because it answers a question
            about the rule's *history* — how it came to be attached — and the
            fields above answer what it does. -->
       <h5 class="sfx-slot">When it applies</h5>
       <label>Conditions</label>
-      <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" :variables="activationVariables" />
+      <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" :variables="allVariables" />
     </div>
 
     <!-- Effects: list inline; each effect's form opens in a child panel -->
@@ -150,6 +166,7 @@ import DangerButton from '@/components/ui/DangerButton.vue'
 import GmEffectEditPanel from './GmEffectEditPanel.vue'
 import EffectList from './EffectList.vue'
 import ConditionEditor from './ConditionEditor.vue'
+import BoundVariablesEditor from './BoundVariablesEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import TargetSpecBuilder from './TargetSpecBuilder.vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
@@ -233,22 +250,45 @@ const sourceElement = computed(() => {
 // declaration throws, and a `catch` here would swallow it into an empty map
 // (which is exactly how this shipped broken the first time).
 const activationVariables = ref({})
+
+// The scope *after* the declared variables — the activation's own names plus
+// each declaration, in declaration order. This is what the conditions may read
+// (they run after the gate) and what an effect's paths start from; the rows
+// themselves get `activationVariables` plus only their *earlier* siblings.
+const allVariables = ref({})
+
 watch(
-  () => [draft.trigger, draft.source_kind, sourceElement.value],
+  () => [draft.trigger, draft.source_kind, sourceElement.value, draft.bound_variables],
   async () => {
     try {
       activationVariables.value = await collectVariables(
         [], sourceElement.value || null, null,
         draft.trigger || null, draft.source_kind || null,
       )
+      allVariables.value = await collectVariables(
+        [], sourceElement.value || null, null,
+        draft.trigger || null, draft.source_kind || null,
+        draft.bound_variables || null,
+      )
     } catch (e) {
       // Never let a trace failure break the panel — but say so, rather than
       // leaving an empty picker with no explanation (this shipped once).
       console.warn('[sfx] activation variables unavailable:', e)
       activationVariables.value = {}
+      allVariables.value = {}
     }
   },
-  { immediate: true },
+  { immediate: true, deep: true },
+)
+
+// Each declared row's resolved type, **in declaration order** — what the row
+// itself reads as, and what the rows below it may start from. Derived from the
+// backend's own trace, so the section never types a path by itself.
+const declaredTypes = computed(() =>
+  (draft.bound_variables || []).map(row => {
+    const name = (row.name || '').trim()
+    return name ? (allVariables.value[name] || null) : null
+  })
 )
 
 const { load: loadActions, summarize: summarizeEffect } = useEffectActions()

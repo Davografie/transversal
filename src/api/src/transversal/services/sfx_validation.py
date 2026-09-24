@@ -171,6 +171,33 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     # source scalar, until this line. One declaration, both readers.
     known |= set(scope_seed_names(sfx.trigger, sfx.source_kind))
 
+    # The rule's **declared** bound variables are bound before the condition gate
+    # (`effects_engine.firing.bind_declared`), so a condition's path and every
+    # effect may name them, and a later declaration may start from an earlier one.
+    # A name the activation already owns is *refused* by the engine rather than
+    # overwritten, so say it here instead of letting a declaration look effective.
+    declared_names: list[str] = []
+    for i, bv in enumerate(getattr(sfx, "bound_variables", None) or []):
+        name = (getattr(bv, "name", "") or "").strip()
+        spec = getattr(bv, "spec", None)
+        if not name:
+            warnings.append(f"Bound variable {i + 1} has no name — nothing can refer to it")
+            continue
+        if not (spec is not None and getattr(spec, "steps", None)):
+            warnings.append(f"Bound variable '{name}' has no path — it will never bind")
+            continue
+        if name in declared_names:
+            warnings.append(f"Bound variable {i + 1} '{name}' is already declared above")
+            continue
+        if name in known:
+            warnings.append(
+                f"Bound variable '{name}' is already a name this activation binds — "
+                f"the earlier one wins"
+            )
+            continue
+        declared_names.append(name)
+        known.add(name)
+
     # A trigger that is *about its source* can never pass for a source kind that
     # has no such thing: "when this trait is added" needs a trait instance to be
     # about. Named here rather than left to a log line at fire time.
@@ -232,7 +259,7 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     # An effect's output name must not shadow a name the activation already binds,
     # and two steps cannot share one name — the later binding would silently win.
     from transversal.services.target_catalog import scope_seed_names
-    reserved = set(scope_seed_names(sfx.trigger, sfx.source_kind))
+    reserved = set(scope_seed_names(sfx.trigger, sfx.source_kind)) | set(declared_names)
     seen_names: set[str] = set()
     for i, effect in enumerate(sfx.effects):
         name = (getattr(effect, "output", "") or "").strip()

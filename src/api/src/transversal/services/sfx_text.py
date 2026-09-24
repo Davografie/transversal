@@ -1203,6 +1203,30 @@ def sfx_text(sfx: SFX, *, resolve: NameResolver | None = None,
         name: ValueType(element, "one")
         for name, element in tc.scope_seed_names(sfx.trigger or "", sfx.source_kind).items()
     }
+
+    # The rule's **declared** variables, named and said out loud. A card that reads
+    # "increase the limit by the cultivation tier" has to state what that tier is
+    # somewhere, so each declaration contributes "«name» is «what its path reads»"
+    # — built from the declaration's own path with the same phrase builder every
+    # other path uses. Each one is seeded as it is declared, in order, so a later
+    # declaration and every use below read the types the engine will bind.
+    definitions: list[str] = []
+    for bv in (getattr(sfx, "bound_variables", None) or []):
+        name = (getattr(bv, "name", "") or "").strip()
+        spec = getattr(bv, "spec", None)
+        if not name or spec is None or not getattr(spec, "steps", None) or name in seeds:
+            continue
+        types, errors = trace(spec, source_element, seeds)
+        if errors or not types or types[-1] is None or not types[-1].element:
+            continue
+        meaning = render_phrase(
+            path_phrase(spec, source_element=source_element, variables=seeds, resolve=resolve)
+        )
+        if not meaning:
+            continue
+        seeds[name] = types[-1]
+        definitions.append(f"the {humanize(name)} is {meaning}")
+
     rules: list[str] = []
     narrative: list[str] = []
 
@@ -1215,6 +1239,8 @@ def sfx_text(sfx: SFX, *, resolve: NameResolver | None = None,
     effects = _effects_text(sfx.effects, resolve=resolve, source_element=source_element, variables=seeds)
 
     head = mc.trigger_card(sfx.trigger)
+    if definitions:
+        head = f"{head}, where {', and '.join(definitions)}"
     if rules:
         head = f"{head}, if {' and '.join(rules)}"
     text = f"{head}: {effects}." if effects else f"{head}."

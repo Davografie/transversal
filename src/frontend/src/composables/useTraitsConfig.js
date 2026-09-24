@@ -37,6 +37,7 @@ export function useTraitsConfig() {
           placement armingScope
           duration { timers { event remaining } combine }
           listenerSpec acquireSpec
+          boundVariables { name spec }
           conditions { type subject target targets value operator narrative spec }
           effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } }
         }

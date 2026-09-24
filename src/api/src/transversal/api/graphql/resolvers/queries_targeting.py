@@ -2,6 +2,7 @@
 
 import strawberry
 
+from transversal.api.graphql.types import BoundVariableInput
 from transversal.api.graphql.types import ConditionInput
 from transversal.api.graphql.types import ConditionTypeOption
 from transversal.api.graphql.types import ConsequenceOption
@@ -41,6 +42,7 @@ from transversal.api.graphql.resolvers.converters import (
     _em,
     _gql_field_def,
     _target_spec_input_to_domain,
+    _target_spec_from_input,
 )
 
 
@@ -402,6 +404,7 @@ class QueriesTargeting:
         conditions: Optional[list[ConditionInput]] = None,
         trigger: Optional[str] = None,
         source_kind: Optional[str] = None,
+        bound_variables: Optional[list[BoundVariableInput]] = None,
     ) -> list[EffectVariable]:
         """The typed output variables exposed to a list of effects (in order).
 
@@ -416,6 +419,10 @@ class QueriesTargeting:
         names (``{contest_entity_opponent}``, ``{trait_setting}``, …) — declared
         on the trigger and the source, and bound by the engine when the rule
         fires, so a path can *start* from them and not only join to an output.
+
+        ``bound_variables`` are the SFX's *declared* names, traced first and in
+        declaration order — the same order and the same seed the engine uses
+        (``firing.bind_declared``), so what the editor offers is what will bind.
         """
         from transversal.services import target_spec as ts
         from transversal.services.target_catalog import scope_seed_names
@@ -424,6 +431,23 @@ class QueriesTargeting:
             name: ts.ValueType(element, "one")
             for name, element in scope_seed_names(trigger, source_kind).items()
         }
+        # The rule's own declared variables come before the conditions: the engine
+        # binds them before the gate, so a condition may name them. A declaration
+        # that shadows a name already in scope is skipped, because the engine
+        # refuses to overwrite it — offering it would promise a value that never
+        # arrives.
+        for bv in (bound_variables or []):
+            name = (getattr(bv, "name", "") or "").strip()
+            spec = _target_spec_from_input(getattr(bv, "spec", None))
+            if not name or spec is None or name in scope:
+                continue
+            types, errors = ts.trace(spec, source_element, scope)
+            if errors or not types or types[-1] is None or not types[-1].element:
+                continue
+            # A step's own `output` inside a declared path lands in the same scope
+            # the engine would put it in, so a later step can read it either way.
+            scope = ts.spec_variables(spec, source_element, scope)
+            scope[name] = types[-1]
         for c in (conditions or []):
             cd = _condition_input_to_domain(c)
             if cd.spec is not None:
