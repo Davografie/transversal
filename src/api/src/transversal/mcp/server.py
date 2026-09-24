@@ -1200,6 +1200,292 @@ def read_conversation(args: dict) -> dict:
     return {"count": len(entries), "results": entries}
 
 
+# ── Play-time: travel, bodies, rolls, economy ────────
+#
+# The layer above *authors* the world; this one *plays* it — where an entity is,
+# which body it wakes up in, what a roll resolved to, and what it cost. It exists
+# because the human invited the testing character in-world and there was no correct
+# way to go ([[ui-ux]]'s request, relayed by the human 2026-09-24).
+#
+# **Prefer these over `update_entity.current_location`.** That is a bare field
+# assignment in the resolver: it skips the travel effect and its arrival semantics,
+# writes no transversal record, and applies no body policy — so it will happily
+# stand an `earth` NATIVE body in a `three_realms` location.
+
+_MUT_INAPPOSITE_TRAVEL = """
+mutation($entityId: ID!, $location: ID!, $arrivalKind: String) {
+  inappositeTravel(entityId: $entityId, location: $location, arrivalKind: $arrivalKind) {
+    id name type currentUniverse currentLocation
+  }
+}
+"""
+
+_MUT_ADD_PROJECTION = """
+mutation($entityId: ID!, $universe: String!, $type: TransversalType!, $location: ID) {
+  addProjection(entityId: $entityId, universe: $universe, type: $type, location: $location) {
+    id name currentUniverse currentLocation
+  }
+}
+"""
+
+_MUT_UPDATE_PROJECTION = """
+mutation($projectionId: ID!, $name: String, $backgroundImage: String,
+         $currentLocation: ID, $transversalType: TransversalType) {
+  updateProjection(projectionId: $projectionId, name: $name,
+                   backgroundImage: $backgroundImage, currentLocation: $currentLocation,
+                   transversalType: $transversalType) {
+    id entityId universe name currentLocation transversalType
+  }
+}
+"""
+
+_MUT_REMOVE_PROJECTION = """
+mutation($projectionId: ID!) {
+  removeProjection(projectionId: $projectionId) {
+    id name currentUniverse currentLocation
+  }
+}
+"""
+
+_MUT_ACTIVATE_PROJECTION = """
+mutation($entityId: ID!, $projectionId: ID!, $location: ID) {
+  activateProjection(entityId: $entityId, projectionId: $projectionId, location: $location) {
+    id name currentUniverse currentLocation
+  }
+}
+"""
+
+_MUT_RESOLVE_STEP = """
+mutation($entityId: ID!, $roll: Int, $tier: OutcomeTier, $index: Int) {
+  resolveStep(entityId: $entityId, roll: $roll, tier: $tier, index: $index) {
+    done applied pendingChoices mustered mishapMuster scheduled error tableId entryLabel
+  }
+}
+"""
+
+_MUT_APPLY_EFFECTS = """
+mutation($entityId: ID!, $effects: [EffectInput!]!) {
+  applyEffects(entityId: $entityId, effects: $effects) {
+    applied
+    structured
+    pendingChoices { index kind scope field }
+  }
+}
+"""
+
+_MUT_APPLY_ROLL_TABLE_ENTRY = """
+mutation($entityId: ID!, $tableId: ID!, $index: Int!) {
+  applyRollTableEntry(entityId: $entityId, tableId: $tableId, index: $index) {
+    applied
+    structured
+    pendingChoices { index kind scope field }
+  }
+}
+"""
+
+_MUT_EARN_RAZMERIT = """
+mutation($entityId: ID!, $amount: Int!, $reason: String!) {
+  earnRazmerit(entityId: $entityId, amount: $amount, reason: $reason) {
+    fromId fromBalance amount reason
+  }
+}
+"""
+
+_MUT_SPEND_RAZMERIT = """
+mutation($entityId: ID!, $amount: Int!, $reason: String!) {
+  spendRazmerit(entityId: $entityId, amount: $amount, reason: $reason) {
+    fromId fromBalance amount reason
+  }
+}
+"""
+
+_MUT_TRANSFER_RAZMERIT = """
+mutation($fromId: ID!, $toId: ID!, $amount: Int!, $reason: String!) {
+  transferRazmerit(fromId: $fromId, toId: $toId, amount: $amount, reason: $reason) {
+    fromId fromBalance toId toBalance amount reason
+  }
+}
+"""
+
+_MUT_SET_AGENCY_MAIN = """
+mutation($input: SetAgencyMainInput!) {
+  setAgencyMain(input: $input) {
+    id name role lastMainEntityId mainEntity { id name }
+  }
+}
+"""
+
+
+def _rest_post_step(path: str, payload: dict, dry_run: bool) -> Any:
+    """POST a body, or (dry-run) return the request that would be sent.
+
+    The REST half of the dry-run contract the GraphQL tools get from
+    ``_call_mutation``.
+    """
+    if dry_run:
+        return {"dry_run": True, "POST": path, "body": payload}
+    return _rest_post(path, payload)
+
+
+def move_entity(args: dict) -> dict:
+    """Place an entity at a location through the API's own move path.
+
+    A same-universe move with no body change (``EntityManager.move_to``) — unlike
+    writing ``current_location`` directly, it applies the arrival semantics. For
+    anything crossing a universal boundary use ``consciousness_travel`` or
+    ``inapposite_travel`` instead.
+    """
+    body = {"location": args["location"]}
+    for key in ("universe", "arrival_kind"):
+        if args.get(key) is not None:
+            body[key] = args[key]
+    return _rest_post_step(f"/api/v1/entities/{args['entity_id']}/move", body,
+                           args.get("dry_run", True))
+
+
+def consciousness_travel(args: dict) -> dict:
+    """Send an entity's *mind* to a location, arriving in one of its bodies.
+
+    The cross-universe path: the consciousness crosses and a vessel is taken at the
+    far end, leaving the origin body where it lies. ``projection_policy`` chooses the
+    body — ``{last_projection}`` (the default, and the behaviour every existing caller
+    already gets), ``{closest_projection}`` (nearest the destination), or a literal
+    projection id. ``seek`` re-enters a point already in the entity's history without
+    writing a new transversal record.
+
+    **This is the tool for a destination in another universe, and the reason it
+    exists:** writing ``current_location`` instead leaves the wrong body standing in
+    the wrong world.
+    """
+    body = {"location": args["location"], "seek": bool(args.get("seek", False))}
+    for key in ("projection_policy", "universe", "arrival_kind"):
+        if args.get(key) is not None:
+            body[key] = args[key]
+    return _rest_post_step(f"/api/v1/entities/{args['entity_id']}/consciousness-travel",
+                           body, args.get("dry_run", True))
+
+
+def inapposite_travel(args: dict) -> dict:
+    """Take an entity *bodily* to a location — the full-physical transversal path."""
+    return _call_mutation("inappositeTravel", _MUT_INAPPOSITE_TRAVEL,
+                          {"entityId": args["entity_id"], "location": args["location"],
+                           "arrivalKind": args.get("arrival_kind")},
+                          args.get("dry_run", True), "inappositeTravel")
+
+
+def add_projection(args: dict) -> dict:
+    """Give an entity another body in a universe.
+
+    ``type`` is NATIVE | CONSCIOUSNESS | INAPPOSITE and the API requires it, so it
+    defaults to CONSCIOUSNESS here rather than being demanded of every caller.
+    """
+    return _call_mutation("addProjection", _MUT_ADD_PROJECTION,
+                          {"entityId": args["entity_id"], "universe": args["universe"],
+                           "type": _enum(args.get("type") or "CONSCIOUSNESS"),
+                           "location": args.get("location")},
+                          args.get("dry_run", True), "addProjection")
+
+
+def update_projection(args: dict) -> dict:
+    """Move or re-describe a body — its name, background, location, transversal type."""
+    variables = {"projectionId": args["projection_id"]}
+    for key, gql_key in (("name", "name"), ("background_image", "backgroundImage"),
+                         ("current_location", "currentLocation")):
+        if args.get(key) is not None:
+            variables[gql_key] = args[key]
+    if args.get("transversal_type") is not None:
+        variables["transversalType"] = _enum(args["transversal_type"])
+    return _call_mutation("updateProjection", _MUT_UPDATE_PROJECTION, variables,
+                          args.get("dry_run", True), "updateProjection")
+
+
+def remove_projection(args: dict) -> dict:
+    """Retire a body outright."""
+    return _call_mutation("removeProjection", _MUT_REMOVE_PROJECTION,
+                          {"projectionId": args["projection_id"]},
+                          args.get("dry_run", True), "removeProjection")
+
+
+def activate_projection(args: dict) -> dict:
+    """Make one of an entity's bodies the active one it is played through.
+
+    The other half of travel: without it a client cannot *choose* a body, which is
+    what a travel tool needs in order to land somewhere sensible.
+    """
+    return _call_mutation("activateProjection", _MUT_ACTIVATE_PROJECTION,
+                          {"entityId": args["entity_id"], "projectionId": args["projection_id"],
+                           "location": args.get("location")},
+                          args.get("dry_run", True), "activateProjection")
+
+
+def resolve_step(args: dict) -> dict:
+    """Resolve one life-path step against a roll — the play-time roll result.
+
+    ``tier`` is FAIL | MARGINAL | SUCCESS | EXCEPTIONAL | PERFECT; give ``index`` to
+    pick a specific table entry, or let the resolver choose.
+    """
+    return _call_mutation("resolveStep", _MUT_RESOLVE_STEP,
+                          {"entityId": args["entity_id"], "roll": args.get("roll"),
+                           "tier": _enum(args["tier"]) if args.get("tier") else None,
+                           "index": args.get("index")},
+                          args.get("dry_run", True), "resolveStep")
+
+
+def apply_effects(args: dict) -> dict:
+    """Apply an authored effect list to an entity — the effect system's write path.
+
+    ``effects`` is a list of ``EffectInput`` documents: the same hand-written JSON
+    the roll tables carry. Returns what was applied plus any ``pendingChoices`` the
+    caller still has to resolve. *(The pending choices carry index/kind/scope/field
+    but not the full effect body, so read the effect back from its source if you need
+    to present it.)*
+    """
+    return _call_mutation("applyEffects", _MUT_APPLY_EFFECTS,
+                          {"entityId": args["entity_id"], "effects": args["effects"]},
+                          args.get("dry_run", True), "applyEffects")
+
+
+def apply_roll_table_entry(args: dict) -> dict:
+    """Apply one entry of a roll table to an entity, by index."""
+    return _call_mutation("applyRollTableEntry", _MUT_APPLY_ROLL_TABLE_ENTRY,
+                          {"entityId": args["entity_id"], "tableId": args["table_id"],
+                           "index": args["index"]},
+                          args.get("dry_run", True), "applyRollTableEntry")
+
+
+def earn_razmerit(args: dict) -> dict:
+    """Credit razmerit to an entity. ``reason`` is required on the wire and defaults to empty."""
+    return _call_mutation("earnRazmerit", _MUT_EARN_RAZMERIT,
+                          {"entityId": args["entity_id"], "amount": args["amount"],
+                           "reason": args.get("reason", "")},
+                          args.get("dry_run", True), "earnRazmerit")
+
+
+def spend_razmerit(args: dict) -> dict:
+    """Debit razmerit from an entity — the cost side of a transversal or an SFX."""
+    return _call_mutation("spendRazmerit", _MUT_SPEND_RAZMERIT,
+                          {"entityId": args["entity_id"], "amount": args["amount"],
+                           "reason": args.get("reason", "")},
+                          args.get("dry_run", True), "spendRazmerit")
+
+
+def transfer_razmerit(args: dict) -> dict:
+    """Move razmerit between two entities in one transaction."""
+    return _call_mutation("transferRazmerit", _MUT_TRANSFER_RAZMERIT,
+                          {"fromId": args["from_id"], "toId": args["to_id"],
+                           "amount": args["amount"], "reason": args.get("reason", "")},
+                          args.get("dry_run", True), "transferRazmerit")
+
+
+def set_agency_main(args: dict) -> dict:
+    """Flag (or unflag) an entity as a player's main — the agency ``main`` flag."""
+    return _call_mutation("setAgencyMain", _MUT_SET_AGENCY_MAIN,
+                          {"input": {"playerId": args["player_id"],
+                                     "entityId": args["entity_id"],
+                                     "main": args.get("main", True)}},
+                          args.get("dry_run", True), "setAgencyMain")
+
+
 def get_entity(args: dict) -> dict:
     data = _graphql(_QUERY_ENTITY, {"id": args["entity_id"]})
     return data.get("entity")
@@ -1881,6 +2167,20 @@ TOOLS = {
     "read_journal": read_journal,
     "read_timeline": read_timeline,
     "read_conversation": read_conversation,
+    "move_entity": move_entity,
+    "consciousness_travel": consciousness_travel,
+    "inapposite_travel": inapposite_travel,
+    "add_projection": add_projection,
+    "update_projection": update_projection,
+    "remove_projection": remove_projection,
+    "activate_projection": activate_projection,
+    "resolve_step": resolve_step,
+    "apply_effects": apply_effects,
+    "apply_roll_table_entry": apply_roll_table_entry,
+    "earn_razmerit": earn_razmerit,
+    "spend_razmerit": spend_razmerit,
+    "transfer_razmerit": transfer_razmerit,
+    "set_agency_main": set_agency_main,
     "roll_dice": roll_dice,
     "pick_total": pick_total,
     "pick_effect_die": pick_effect_die,
@@ -2707,6 +3007,206 @@ TOOL_SCHEMAS = {
             "type": "object",
             "properties": {"entity_a": {"type": "string"}, "entity_b": {"type": "string"}},
             "required": ["entity_a", "entity_b"],
+        },
+    },
+    "move_entity": {
+        "name": "move_entity",
+        "description": "Place an entity at a location through the API's move path (same universe, no body change). Arrival semantics applied. For a destination in ANOTHER universe use consciousness_travel or inapposite_travel instead — writing current_location directly leaves the wrong body in the wrong world.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "location": {"type": "string"},
+                "universe": {"type": "string", "description": "optional"},
+                "arrival_kind": {"type": "string", "description": "MOVE|HIERARCHY|TRANSVERSAL (optional)"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "location"],
+        },
+    },
+    "consciousness_travel": {
+        "name": "consciousness_travel",
+        "description": "Send an entity's MIND to a location, arriving in one of its bodies — the cross-universe path. projection_policy picks the body: '{last_projection}' (default), '{closest_projection}', or a literal projection id. seek re-enters a place already in the entity's history without writing a new transversal record.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "location": {"type": "string", "description": "destination location id"},
+                "projection_policy": {"type": "string", "description": "{last_projection} | {closest_projection} | a projection id"},
+                "seek": {"type": "boolean", "description": "re-enter without recording a transversal (default false)"},
+                "universe": {"type": "string", "description": "optional"},
+                "arrival_kind": {"type": "string", "description": "optional"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "location"],
+        },
+    },
+    "inapposite_travel": {
+        "name": "inapposite_travel",
+        "description": "Take an entity BODILY to a location — the full-physical transversal path (not consciousness).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "location": {"type": "string"},
+                "arrival_kind": {"type": "string", "description": "optional"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "location"],
+        },
+    },
+    "add_projection": {
+        "name": "add_projection",
+        "description": "Give an entity another body in a universe. type is NATIVE|CONSCIOUSNESS|INAPPOSITE and the API requires it, so it defaults to CONSCIOUSNESS here.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "universe": {"type": "string"},
+                "type": {"type": "string", "description": "NATIVE|CONSCIOUSNESS|INAPPOSITE (default CONSCIOUSNESS)"},
+                "location": {"type": "string", "description": "optional starting location"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "universe"],
+        },
+    },
+    "update_projection": {
+        "name": "update_projection",
+        "description": "Move or re-describe a body: its name, background image, current location, or transversal type. Omitted fields are left alone.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "projection_id": {"type": "string"},
+                "name": {"type": "string"},
+                "background_image": {"type": "string"},
+                "current_location": {"type": "string"},
+                "transversal_type": {"type": "string", "description": "NATIVE|CONSCIOUSNESS|INAPPOSITE"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["projection_id"],
+        },
+    },
+    "remove_projection": {
+        "name": "remove_projection",
+        "description": "Retire a body outright.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"projection_id": {"type": "string"}, "dry_run": _dry_run_property()},
+            "required": ["projection_id"],
+        },
+    },
+    "activate_projection": {
+        "name": "activate_projection",
+        "description": "Make one of an entity's bodies the active one it is played through — how a client CHOOSES a body, which is the other half of travel.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "projection_id": {"type": "string"},
+                "location": {"type": "string", "description": "optional landing location"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "projection_id"],
+        },
+    },
+    "resolve_step": {
+        "name": "resolve_step",
+        "description": "Resolve one life-path step against a roll — the play-time roll result. tier is FAIL|MARGINAL|SUCCESS|EXCEPTIONAL|PERFECT; index picks a specific table entry.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "roll": {"type": "integer"},
+                "tier": {"type": "string", "description": "FAIL|MARGINAL|SUCCESS|EXCEPTIONAL|PERFECT"},
+                "index": {"type": "integer", "description": "specific table entry, optional"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id"],
+        },
+    },
+    "apply_effects": {
+        "name": "apply_effects",
+        "description": "Apply an authored effect list to an entity — the effect system's write path. effects is a list of EffectInput documents (the same hand-written JSON roll tables carry). Returns what applied plus any pendingChoices still to resolve.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "effects": {"type": "array", "items": {"type": "object"},
+                            "description": "list of EffectInput documents"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "effects"],
+        },
+    },
+    "apply_roll_table_entry": {
+        "name": "apply_roll_table_entry",
+        "description": "Apply one entry of a roll table to an entity, by index — the play-time counterpart of read_journal's tables.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "table_id": {"type": "string"},
+                "index": {"type": "integer"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "table_id", "index"],
+        },
+    },
+    "earn_razmerit": {
+        "name": "earn_razmerit",
+        "description": "Credit razmerit to an entity. reason is required on the wire and defaults to empty.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "amount": {"type": "integer"},
+                "reason": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "amount"],
+        },
+    },
+    "spend_razmerit": {
+        "name": "spend_razmerit",
+        "description": "Debit razmerit from an entity — the cost side of a transversal or an SFX.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "amount": {"type": "integer"},
+                "reason": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "amount"],
+        },
+    },
+    "transfer_razmerit": {
+        "name": "transfer_razmerit",
+        "description": "Move razmerit between two entities in one transaction.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "from_id": {"type": "string"},
+                "to_id": {"type": "string"},
+                "amount": {"type": "integer"},
+                "reason": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["from_id", "to_id", "amount"],
+        },
+    },
+    "set_agency_main": {
+        "name": "set_agency_main",
+        "description": "Flag (or unflag) an entity as a player's main — the agency 'main' flag. main defaults to true.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "player_id": {"type": "string"},
+                "entity_id": {"type": "string"},
+                "main": {"type": "boolean", "description": "default true"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["player_id", "entity_id"],
         },
     },
     "add_owner_sfx": {
