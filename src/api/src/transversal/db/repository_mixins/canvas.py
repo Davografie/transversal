@@ -83,6 +83,19 @@ class RepositoryCanvas:
             if parent_id not in locations:
                 locations[parent_id] = {"id": parent_id, "name": parent_id, "current_universe": ""}
 
+        def by_name(ids: list[str]) -> list[str]:
+            """Those ids in alphabetical order by display name.
+
+            Casefolded, so `the Dreamlands` files with the other T's instead of
+            after every capitalised name, and ties break on id so the order is
+            total — it must not depend on the order Arango happened to return,
+            which is what sorting on the id alone was really doing.
+            """
+            return sorted(
+                ids,
+                key=lambda lid: ((locations.get(lid, {}).get("name") or lid).casefold(), lid),
+            )
+
         def build_node(loc_id: str) -> dict:
             loc = locations.get(loc_id, {"id": loc_id, "name": loc_id, "current_universe": ""})
             children = children_of.get(loc_id, [])
@@ -91,7 +104,7 @@ class RepositoryCanvas:
                 "name": loc["name"],
                 "node_type": "location",
                 "universe": loc.get("current_universe", ""),
-                "children": [build_node(c) for c in sorted(children)],
+                "children": [build_node(c) for c in by_name(children)],
             }
 
         # Root locations: locations with no parent super edge
@@ -109,19 +122,22 @@ class RepositoryCanvas:
 
         # Build universe nodes
         result: list[dict] = []
-        for ukey, uni in sorted(universes.items(), key=lambda kv: kv[1]["name"]):
+        for ukey, uni in sorted(
+            universes.items(),
+            key=lambda kv: ((kv[1]["name"] or kv[0]).casefold(), kv[0]),
+        ):
             loc_roots = uni_roots.get(ukey, [])
             result.append({
                 "id": uni["id"],
                 "name": uni["name"],
                 "node_type": "universe",
                 "universe": ukey,
-                "children": [build_node(r) for r in sorted(loc_roots)],
+                "children": [build_node(r) for r in by_name(loc_roots)],
             })
 
         # Orphan locations (no matching universe entity) still appear as
         # top-level nodes so nothing is silently dropped.
-        for lid in sorted(orphans):
+        for lid in by_name(orphans):
             result.append(build_node(lid))
 
         return result
