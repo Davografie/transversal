@@ -1395,6 +1395,19 @@ def _life_path_roll_tables(lp: Any, ctx: TargetContext) -> list[Any]:
     return [t for t in ctx.repo.list_roll_tables() if t.life_path == lid]
 
 
+def _roll_table_life_path(table: Any, ctx: TargetContext) -> list[Any]:
+    """The life path a roll table belongs to ([[B164]]).
+
+    A table is the *source* of its entries' effects, so this is how an effect reads
+    the path it is being played in — and from the path, via the entity's
+    enrollment, the faction the term is being served in.
+    """
+    if ctx.repo is None:
+        return []
+    lid = getattr(table, "life_path", None)
+    return _maybe(ctx.repo.get_lifepath(lid) if lid else None)
+
+
 def _entity_scheduled_events(e: Any, ctx: TargetContext) -> list[Any]:
     """Every timer counting down on this entity.
 
@@ -1683,6 +1696,7 @@ def register_default_edges() -> None:
     register_edge("entity", "factions", _entity_factions)
     register_edge("entity", "life_paths", _entity_life_paths)
     register_edge("life_path", "roll_tables", _life_path_roll_tables)
+    register_edge("roll_table", "life_path", _roll_table_life_path)
     register_edge("entity", "scheduled_events", _entity_scheduled_events)
 
 
