@@ -8,23 +8,35 @@
 // clicks. It also pins the *reason* on failure: the reader is told why.
 //
 // Kael Drift is the testing character (AGENTS.md § Player characters & the testing
-// character) and is owned as a main by the `Tester` player, so this drives Kael and
-// never a player's PC. Travelling it is deliberate — it is the project's character,
-// and a run leaves it with one more Blue Book entry to click.
+// character); this drives Kael and never a player's PC. Its owning player is
+// *discovered* rather than pinned — that identity has already been renamed once.
+// Clicking it is deliberate: a seek moves Kael, and a run leaves it with a leg to
+// have clicked.
 
 import { test, expect } from '@playwright/test'
 
 const KAEL = 'character-kael-drift-e555ccde'
-const TESTER = 'player-75a410'
+
+const gql = (request, query) => request.post('/api/v1/graphql', { data: { query } })
+  .then(async (r) => (await r.json()).data)
+
+/** The player who holds Kael Drift as a main — discovered, not pinned: the test
+ *  identity has already been renamed once, and its id could move with it. */
+async function kaelOwner(request) {
+  const { players } = await gql(request, '{ players { id name agency { entityId main } } }')
+  const owner = players.find((p) => (p.agency || []).some((e) => e.entityId === KAEL))
+  if (!owner) throw new Error('no player holds Kael Drift — see Overseer Operations')
+  return owner
+}
 
 /** Open Kael's Blue Book and return the locator for its clickable locations. */
-async function openKaelBlueBook(page) {
+async function openKaelBlueBook(page, owner) {
   await page.goto('/')
-  await page.evaluate(([pid, eid]) => {
+  await page.evaluate(([pid, pname, eid]) => {
     localStorage.setItem('playerId', pid)
-    localStorage.setItem('playerName', 'Tester')
+    localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
-  }, [TESTER, KAEL])
+  }, [owner.id, owner.name, KAEL])
   await page.goto('/')
 
   const self = page.locator('button.map-dot.self').first()
@@ -39,7 +51,7 @@ async function openKaelBlueBook(page) {
   return page.locator('.bb-location-img, .bb-location-missing')
 }
 
-test('clicking a location really requests a travel, and reports why if refused', async ({ page }) => {
+test('clicking a location really requests a travel, and reports why if refused', async ({ page, request }) => {
   test.setTimeout(120_000)
 
   const responses = []
@@ -47,7 +59,7 @@ test('clicking a location really requests a travel, and reports why if refused',
     if (r.url().includes('consciousness-travel')) responses.push(r.status())
   })
 
-  const locations = await openKaelBlueBook(page)
+  const locations = await openKaelBlueBook(page, await kaelOwner(request))
   test.skip(!(await locations.count()), 'Kael Drift has no transversal chain to click yet')
 
   await locations.first().click()
@@ -58,7 +70,7 @@ test('clicking a location really requests a travel, and reports why if refused',
   expect(await page.locator('.bb-travel-error').count(), 'no failure is reported').toBe(0)
 })
 
-test('a refusal is shown with its reason', async ({ page }) => {
+test('a refusal is shown with its reason', async ({ page, request }) => {
   test.setTimeout(120_000)
 
   // Stubbed so nothing travels: this pins the message, not the mechanism.
@@ -68,7 +80,7 @@ test('a refusal is shown with its reason', async ({ page }) => {
     body: JSON.stringify({ detail: "Location 'loc-gone' not found" }),
   }))
 
-  const locations = await openKaelBlueBook(page)
+  const locations = await openKaelBlueBook(page, await kaelOwner(request))
   test.skip(!(await locations.count()), 'Kael Drift has no transversal chain to click yet')
 
   await locations.first().click()

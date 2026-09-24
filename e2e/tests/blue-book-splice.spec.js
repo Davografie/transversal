@@ -9,13 +9,12 @@
 // this run's own seam.
 //
 // Kael Drift is the testing character (AGENTS.md § Player characters & the testing
-// character) and is owned as a main by the `Tester` player, so this drives Kael and
-// never a player's PC. It travels Kael, which is the point: the chain it reads is the
-// one it just made.
+// character); this drives Kael and never a player's PC, and its owning player is
+// *discovered* rather than pinned — that identity has already been renamed once. It
+// travels Kael, which is the point: the chain it reads is the one it just made.
 import { test, expect } from '@playwright/test'
 
 const KAEL = 'character-kael-drift-e555ccde'
-const TESTER = 'player-75a410'
 const A = { id: 'loc-148649253', name: 'Ardennes' }
 const B = { id: 'loc-148699243', name: 'Kremlin' }
 const C = { id: 'loc-155592996', name: 'Beijing' }
@@ -24,6 +23,15 @@ const E = { id: 'loc-155571988', name: 'JFK Airport' }
 
 const gql = (request, query) => request.post('/api/v1/graphql', { data: { query } })
   .then(async (r) => (await r.json()).data)
+
+/** The player who holds Kael Drift as a main — discovered, not pinned: the test
+ *  identity has already been renamed once, and its id could move with it. */
+async function kaelOwner(request) {
+  const { players } = await gql(request, '{ players { id name agency { entityId main } } }')
+  const owner = players.find((p) => (p.agency || []).some((e) => e.entityId === KAEL))
+  if (!owner) throw new Error('no player holds Kael Drift — see Overseer Operations')
+  return owner
+}
 const records = async (request) =>
   (await gql(request, '{ historicalRecords(entityId: "' + KAEL + '") { id data afterIds } }')).historicalRecords
 const travel = (request, loc) => request.post('/api/v1/entities/' + KAEL + '/consciousness-travel',
@@ -49,10 +57,11 @@ test('a seek records nothing, and the next travel splices in at that point', asy
   const before = await records(request)
   console.log('records before the click:', before.length)
 
+  const owner = await kaelOwner(request)
   await page.goto('/')
-  await page.evaluate(([pid, eid]) => {
-    localStorage.setItem('playerId', pid); localStorage.setItem('playerName', 'Tester'); localStorage.setItem('entityId', eid)
-  }, [TESTER, KAEL])
+  await page.evaluate(([pid, pname, eid]) => {
+    localStorage.setItem('playerId', pid); localStorage.setItem('playerName', pname); localStorage.setItem('entityId', eid)
+  }, [owner.id, owner.name, KAEL])
   await page.goto('/')
   await page.locator('button.map-dot.self').first().waitFor({ state: 'visible', timeout: 30_000 })
   await page.locator('button.map-dot.self').first().click()
