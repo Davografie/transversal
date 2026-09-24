@@ -95,6 +95,17 @@ console.log('\nauth gate — wired in\n')
     /import UnauthorizedNotice from '@\/components\/app\/UnauthorizedNotice\.vue'/.test(app), true)
   ok('App.vue renders it while unauthorized',
     /<UnauthorizedNotice v-if="unauthorized"\s*\/>/.test(app), true)
+
+  // The copy must not teach the token route. The magic link is the only thing that
+  // carries `t=`, and the QR that encodes it is not shown in the app — naming the
+  // shape of the perimeter here would hand it to exactly the audience that reached
+  // the app *without* a token. Checked against the rendered template only, so a
+  // source comment may still explain the mechanism to the next reader.
+  const noticeSource = readFileSync('src/components/app/UnauthorizedNotice.vue', 'utf8')
+  const renderedCopy = (noticeSource.match(/<template>([\s\S]*?)<\/template>/) || [, ''])[1]
+    .replace(/<!--[\s\S]*?-->/g, '')
+  ok('the notice copy does not name the token route',
+    /\/enter\b|access_token|\bt=|token=/i.test(renderedCopy), false)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

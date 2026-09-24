@@ -13,8 +13,7 @@
         link you came through has expired, or was never used here.
       </p>
       <p class="name-hint">
-        Ask an architect for a fresh link and open it. It looks like
-        <code>/enter?t=…</code>, and signs this device in for a month.
+        Ask an architect for a fresh link and open it.
       </p>
       <button class="continue-btn" @click="retry">Try again</button>
     </div>
@@ -38,5 +37,4 @@ function retry() {
   color: var(--text);
 }
 .unauthorized-why strong { color: var(--warn); }
-code { font-family: monospace; font-size: 12px; color: var(--text-dim); }
 </style>
