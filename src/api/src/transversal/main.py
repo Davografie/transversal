@@ -188,6 +188,7 @@ async def _startup():
         remove_legacy_contest_complication_sfx,
         remove_legacy_buy_hitch_sfx,
         backfill_trait_default_sfx,
+        backfill_support_default_sfx,
         backfill_source_kinds,
         backfill_play_as_rating_targets,
     )
@@ -213,6 +214,11 @@ async def _startup():
     remove_legacy_contest_complication_sfx(repo)
     remove_legacy_buy_hitch_sfx(repo)
     backfill_trait_default_sfx(repo)
+    # The support character's way home ([[B61]]). Wired on the author's call
+    # (2026-09-24): the live 7 support characters are player-owned, so provisioning
+    # them was a decision rather than a migration — with it made, a rule exists on
+    # every SC whether it was created through the flow or before the rule did.
+    backfill_support_default_sfx(repo)
     backfill_source_kinds(repo)
     backfill_play_as_rating_targets(repo)
     repo.collapse_legacy_personal_relationship_types()
