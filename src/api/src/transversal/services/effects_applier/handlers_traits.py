@@ -5,6 +5,7 @@ from __future__ import annotations
 from transversal.domain import Effect
 from transversal.domain import Entity
 from transversal.domain import Polarity
+from transversal.domain import RatingType
 from transversal.domain import TraitSetting
 from transversal.services.trait_change import (
     TraitChangeError,
@@ -231,7 +232,12 @@ def _apply_set_polarity(entity, effect, repo, result):
     if existing is None:
         result.applied.append(AppliedEffect(effect, f"no trait instance {target} to set polarity on"))
         return
-    wanted = (_ctx(effect, "polarity") or "positive").lower()
+    # `result` carries the **pre-apply** value when this effect *is* a revert (the
+    # inverse captures the prior — see `build_revert`); the authored value lives in
+    # the context. Reading only the context made a duration revert re-apply the
+    # polarity it was supposed to undo, so the trait kept the temporary value for
+    # good.
+    wanted = (effect.result or _ctx(effect, "polarity") or "positive").lower()
     was = existing.polarity
     existing.polarity = Polarity.NEGATIVE if wanted == "negative" else Polarity.POSITIVE
     result.updated_trait_settings.append(existing)
@@ -241,6 +247,49 @@ def _apply_set_polarity(entity, effect, repo, result):
         return
     result.applied.append(AppliedEffect(
         effect, f"{was.value} → {existing.polarity.value} on {target}", existing.id))
+    _queue_trait_revert(repo, existing, effect, prior_result=was.value)
+
+
+def _apply_set_rating_type(entity, effect, repo, result):
+    """Change what a trait instance's rating *is* ([[B100]]).
+
+    `rating_type` is what a trait instance *does* with its dice — a single static
+    die, a resource pool that spends and recovers, a challenge that fills toward a
+    capacity, or nothing at all — and nothing could change it after the fact, so
+    "this technique becomes a static d4 once you have trained it up" was not
+    authorable. The author names the value outright (like *Set Trait Rating*), so
+    the same effect is idempotent, and its inverse captures the prior so a
+    duration restores it.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, repo)
+    if target is None:
+        return
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
+    if existing is None:
+        result.applied.append(AppliedEffect(
+            effect, f"no trait instance {target} to set the rating type on"))
+        return
+    # Same convention as polarity: the revert's captured prior arrives in `result`.
+    raw = (effect.result or _ctx(effect, "rating_type") or "static").lower()
+    try:
+        wanted = RatingType(raw)
+    except ValueError:
+        result.applied.append(AppliedEffect(
+            effect, f"'{raw}' is not a rating type ({', '.join(r.value for r in RatingType)})"))
+        return
+    was = existing.rating_type
+    if was == wanted:
+        result.applied.append(AppliedEffect(
+            effect, f"{target} is already a {was.value} trait", existing.id))
+        return
+    existing.rating_type = wanted
+    result.updated_trait_settings.append(existing)
+    result.applied.append(AppliedEffect(
+        effect, f"{target}: {was.value} → {wanted.value}", existing.id))
     _queue_trait_revert(repo, existing, effect, prior_result=was.value)
 
 def _apply_change_trait(entity, effect, repo, result):

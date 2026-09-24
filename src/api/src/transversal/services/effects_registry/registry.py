@@ -65,6 +65,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "copy_trait": "Trait", "move_trait": "Trait", "change_trait": "Trait",
     "delete_trait": "Trait", "enable_trait": "Trait",
     "invert_polarity": "Trait", "set_polarity": "Trait",
+    "set_trait_rating_type": "Trait",
     "gain_relationship_trait": "Trait", "gain_subtrait": "Trait",
     "earn_razmerit": "Razmerit", "spend_razmerit": "Razmerit",
     "transfer_razmerit": "Razmerit",

@@ -3231,3 +3231,96 @@ def test_a_result_spec_reads_the_unchosen_source_dies_effect_die():
     chosen_only = dict(context, rolls=[dict(dice[0], role="effect"), dice[1]])
     cleared = resolve_effect_result(effect, "char-2", Repo(), chosen_only)
     assert cleared.result is None
+
+
+def test_a_polarity_revert_restores_the_prior_value():
+    """A duration's undo arrives in `result` (the inverse captures the prior), and
+    reading only the context made the revert re-apply the polarity it was undoing —
+    so the trait kept the temporary value for good."""
+    ts = _ts("hazard", [DieType.D6], traitset_id="ts-1", polarity=Polarity.POSITIVE)
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-1")], traitsettings=[ts])
+    forward = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                     action="set_polarity", target="char-1:hazard",
+                     context={"polarity": "negative"})
+    apply_effects(_entity(), [forward], repo)
+    assert ts.polarity == Polarity.NEGATIVE
+
+    # The revert `build_revert` produces: same action, the prior in `result`.
+    revert = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="set_polarity", target="char-1:hazard", result="positive",
+                    context={"polarity": "negative"})
+    result = apply_effects(_entity(), [revert], repo)
+    assert ts.polarity == Polarity.POSITIVE
+    assert "negative → positive" in result.applied[0].summary
+
+
+# ── Rating type (B100) ───────────────────────
+
+def _rating_type_effect(value, ts_id="char-1:technique"):
+    return Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                  action="set_rating_type", target=ts_id, result=value)
+
+
+def test_change_rating_type_sets_what_the_author_named():
+    ts = _ts("technique", [DieType.D4], traitset_id="ts-1",
+             rating_type=RatingType.CHALLENGE)
+    repo = FakeRepo(traits=[FakeTrait("technique", "ts-1")], traitsettings=[ts])
+    result = apply_effects(_entity(), [_rating_type_effect("static")], repo)
+    assert ts.rating_type == RatingType.STATIC
+    assert "challenge → static" in result.applied[0].summary
+
+
+def test_change_rating_type_is_idempotent():
+    ts = _ts("technique", [DieType.D4], traitset_id="ts-1", rating_type=RatingType.RESOURCE)
+    repo = FakeRepo(traits=[FakeTrait("technique", "ts-1")], traitsettings=[ts])
+    for _ in range(2):
+        result = apply_effects(_entity(), [_rating_type_effect("resource")], repo)
+    assert ts.rating_type == RatingType.RESOURCE
+    assert "already a resource trait" in result.applied[0].summary
+
+
+def test_a_rating_type_revert_restores_the_prior_type():
+    """The reason the value lives in `result`, not the context: a duration's undo
+    arrives there, so restoring needs no second mechanism."""
+    ts = _ts("technique", [DieType.D4], traitset_id="ts-1", rating_type=RatingType.CHALLENGE)
+    repo = FakeRepo(traits=[FakeTrait("technique", "ts-1")], traitsettings=[ts])
+    apply_effects(_entity(), [_rating_type_effect("static")], repo)
+    assert ts.rating_type == RatingType.STATIC
+
+    revert = _rating_type_effect("challenge")
+    apply_effects(_entity(), [revert], repo)
+    assert ts.rating_type == RatingType.CHALLENGE
+
+
+def test_an_unknown_rating_type_is_refused_not_guessed():
+    ts = _ts("technique", [DieType.D4], traitset_id="ts-1", rating_type=RatingType.STATIC)
+    repo = FakeRepo(traits=[FakeTrait("technique", "ts-1")], traitsettings=[ts])
+    result = apply_effects(_entity(), [_rating_type_effect("legendary")], repo)
+    assert ts.rating_type == RatingType.STATIC
+    assert "not a rating type" in result.applied[0].summary
+
+
+def test_a_missing_trait_reports_rather_than_creating_one():
+    repo = FakeRepo()
+    result = apply_effects(_entity(), [_rating_type_effect("static", "char-1:absent")], repo)
+    assert result.updated_trait_settings == []
+    assert "no trait instance" in result.applied[0].summary
+
+
+def test_change_rating_type_is_registered_on_the_engine_registry():
+    """A duration fires its inverse through ``effect_registry``, so the action has
+    to be there and not only in ``_MUTATION_HANDLERS``."""
+    from types import SimpleNamespace
+    import transversal.services.effects_applier as applier
+    from transversal.services.effects_applier import EffectRegistry
+
+    original = applier.effect_registry
+    applier.effect_registry = EffectRegistry()
+    try:
+        raz = SimpleNamespace(spend=lambda *a, **k: None, earn=lambda *a, **k: None,
+                              transfer=lambda *a, **k: None)
+        em = SimpleNamespace(repo=None, create=lambda *a, **k: None)
+        applier._register_core_handlers(em, raz)
+        assert ("modify_trait", "set_rating_type") in applier.effect_registry._handlers
+    finally:
+        applier.effect_registry = original

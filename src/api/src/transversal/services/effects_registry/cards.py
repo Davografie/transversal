@@ -25,6 +25,10 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_trait", "gain_subtrait"): "gain {target} under {owner}",
     ("modify_trait", "remove"): "remove {target}",
     ("modify_trait", "cortex_gain"): "gain {target} as a complication at {result}",
+    # "a {result} trait" reads wrong for `empty` ("a empty trait"), and the
+    # template cannot pick an article per value; naming the rating type
+    # outright reads correctly for all four.
+    ("modify_trait", "set_rating_type"): "change the rating type of {target} to {result}",
     ("modify_trait", "add_die"): "add a {result} die to {target}",
     ("modify_trait", "change"): "change {target} into {result}",
     ("modify_trait", "copy"): "give {target} a copy of {result}",

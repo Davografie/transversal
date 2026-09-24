@@ -164,6 +164,40 @@ ACTIONS: list[EffectActionMeta] = [
         # Superseded by the change-die family, on a rating die.
         retired=True,
     ),
+    # ── Rating type (B100) ─────────────────────────────
+    # What a trait instance *does* with its dice, which nothing could change after
+    # the fact: a challenge filling toward its capacity could never become the
+    # static technique it turns into once trained. The author names the value, so
+    # the effect is idempotent, and the inverse captures the prior so a duration
+    # restores it — the same shape as Set Trait Rating and Set Polarity.
+    EffectActionMeta(
+        action_id="set_trait_rating_type",
+        label="Change Rating Type",
+        description=(
+            "Change what the trait instance's rating is: a static die, a spendable "
+            "resource, a challenge filling toward its capacity, or empty"
+        ),
+        category="either",
+        effect_type="modify_trait",
+        effect_action="set_rating_type",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION",
+                       "ON_ROLL", "ON_SET", "ON_RESULT"],
+        fields=[
+            EffectFieldDef(name="target", label="Target Trait", field_type="text",
+                          required=True),
+            # The value is the **result**, like Set Trait Rating's die: that is the
+            # field a revert's captured prior arrives in, so a duration can restore
+            # the old type without a second mechanism (the mistake `set_polarity`
+            # made — see its handler).
+            EffectFieldDef(name="result", label="Rating Type", field_type="select",
+                          required=True, default="static",
+                          options=["static", "resource", "challenge", "empty"]),
+        ],
+        supports_duration=True,
+        inverse=("modify_trait", "set_rating_type"),
+        inverse_captures_prior=True,
+        path_element=("traitsetting",),
+    ),
     EffectActionMeta(
         action_id="delete_trait",
         label="Remove Trait",
