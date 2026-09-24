@@ -15,25 +15,40 @@ status: implemented
 
 # Effect Output Variables
 
-An effect can **expose a resolved value as a named variable**, readable by
-*subsequent* steps in the same path and *later* effects in the same SFX
-activation. Outputs are declared **on a targeting step** (a list of names); the
-step's resolved value is bound under each name, typed by the step's resolved
-element (no manual element entry).
+A value can be **exposed under a name** and read by later steps. There are two
+declarations, and the difference is *when the name exists*:
 
-One shared scope per activation holds all of it — written by **conditions**
-first, then by **effects** in order.
+- **A step's `output`** (the 💡 on a path step) binds a name as a **side effect** of
+  a path authored for another purpose. It exists from that step onward, so it can
+  be read by later steps in the same path and by later effects — but **not by a
+  condition**, because the condition gate runs before any effect.
+- **A `BoundVariable` on the SFX** (the *Bound variables* section) states the name
+  and its path up front. It is resolved **before the condition gate**, so a
+  condition's path may read it and a later declaration may start from an earlier
+  one. This is the one to reach for when the rule *is about* a value; the 💡 is for
+  "remember this while I walk".
+
+Both write the **same per-activation scope**. One shared scope per activation holds
+all of it — declared bound variables first (in declaration order), then written by
+**conditions**, then by **effects** in order.
 
 ## Shape
 
 - `TargetStep.output: Optional[str]` — the single variable name bound at that step.
-- The resolver binds the step's resolved value(s) into the per-activation scope
-  (`Binding {value, values, element, cardinality}`): a `many` step binds the full
-  list (`cardinality="many"`), a `one` step binds a single id (`cardinality="one"`).
+- `SFX.bound_variables: list[BoundVariable]` — `{name, spec}`, resolved in order by
+  `effects_engine.firing.bind_declared`, before the gate.
+- The resolver binds a resolved value into the per-activation scope
+  (`Binding {value, values, element, cardinality}`) through **one** function,
+  `target_resolver.bind_named`: a `many` result binds the full list
+  (`cardinality="many"`), a `one` result binds a single id (`cardinality="one"`).
+  Both callers read it, so they cannot disagree about cardinality or about which id
+  a value carries.
 - Later steps reference `{name}` via `select variable` (typed); a `many` binding
   re-seeds a `many` collection and fans out. Later effects reference `{name}` in
   the flat `target`/`entity`/`result`/`refs.<name>.value` fields via string
   substitution (scalar `one` bindings only).
+- An **unbound** name is the honest state for "resolved to nothing": it is never
+  bound empty, so a downstream path resolves to nobody rather than to a blank id.
 
 ## Why this (vs resolve-once-by-identity)
 
@@ -104,6 +119,27 @@ machinery rather than adding a parallel system.
     otherwise. Before this, an armed effect's subject was silently dropped and
     the effect landed on the acting entity — e.g. a hazard authored for the
     die's owner's location landed on the roller.
+12. **Declared bound variables** — `SFX.bound_variables` (a `BoundVariable`:
+    `name` + `spec`), resolved by `firing.bind_declared` in declaration order,
+    immediately after `_activation_bindings` and **before the condition gate**, so
+    a condition's path may read them. The editor's *Bound variables* section
+    authors them; `effectVariables` takes a `boundVariables` argument and traces
+    them first, from the same seed the engine uses, so what the editor offers is
+    what will bind. A declaration that would shadow a name the activation already
+    owns is **refused** by the engine and warned about by `validate_sfx`; a
+    declaration whose path resolves to nothing stays unbound.
+13. **A numeric field can read a bound number** — an effect's *Amount* / *Steps*
+    offers Number or Variable, because an `<input type="number">` cannot hold
+    `{name}` at all. The **value carries the mode**; only `int`/`number` bindings
+    are offered (a die would substitute as `d8`, which the handler cannot parse).
+14. **The `tier` cast** — an `Aggregation` (`fn="tier"`, `accepts=("die",)`,
+    `needs_single=True`) that reads a die-typed field as its **ladder position**
+    (d4 → 1 … d12 → 5), distinct from the side-count reading `_to_number` already
+    gives the ordering/mean functions. It lives in `AGGREGATIONS` rather than as
+    its own step kind because reading a field off an element is what an aggregate
+    does, and `min`/`max` would have converted the die before a later cast step
+    could see it. `needs_single` refuses a collection rather than casting its first
+    element.
 
 ## Open / deferred
 

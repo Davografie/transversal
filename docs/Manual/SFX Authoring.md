@@ -166,6 +166,47 @@ activator.
 You only need this for cross-entity listening (a curse that binds two entities,
 say). Normal rules leave it on the trigger. See [[SFX Activation Model Plan]].
 
+### Bound variables (named before the conditions)
+
+A place to **name a value the rule is about**, before anything is checked. Each row
+is a name plus the same targeting path every other field uses, and the name is then
+readable everywhere below it: in a condition's path, in any effect's paths, and as a
+plain `{name}` in a field.
+
+```
+name: cultivation_tier
+path: select source → aggregate (tier of the rating)
+```
+
+That single declaration is what makes this writable as one effect instead of five:
+
+> **Worked example — *Cultivation Stage***
+>
+> *Bound variable*: `cultivation_tier` = `select source → aggregate tier (rating)`.
+>
+> *Effect*: **Increase Dice Limit**, limit `total`, Amount → **Variable** →
+> `{cultivation_tier}`.
+>
+> The card reads: *"Whenever a roll happens, where the cultivation tier is the tier
+> of the rating: increase the dice limit by the cultivation tier."* At d8 the
+> increase is **3** — the die's position on the ladder (d4 = 1 … d12 = 5), not its
+> side count.
+
+Two things the section buys you over naming a step inside a path (the 💡, below):
+
+- **Conditions can read it.** The engine resolves these *before* the condition gate,
+  so a gate may be written in terms of them. A 💡 inside a path cannot be, because
+  it binds only once that path runs.
+- **The name is the reason the path exists**, so the card can say what it *is*
+  ("the cultivation tier is …") instead of leaving a bare noun.
+
+Rows resolve **in order**, and a later row may start from an earlier one
+(`select variable`). A name the activation already binds (`{trait_setting}`,
+`{order}`) cannot be redeclared — the engine keeps the earlier one, and the editor
+warns. A path that matches nothing leaves the name unbound, so anything using it
+resolves to nobody; the editor says "this path resolves to nothing yet" and the
+validator names it.
+
 ### Conditions
 
 SFX-level conditions must **all** pass for the SFX to fire. They gate *when the SFX is allowed*, not what it does. See [[#Condition reference]].
@@ -320,6 +361,12 @@ Who the effect applies to. Default `self`. Either a literal id or a targeting pa
 
 Action-specific inputs — a die rating, an amount, a pool, `{variable}` tokens, and context fields like `steps`, `rating_type`, `statement`, `notes`, `relationship`. The editor renders the right controls per action.
 
+A **numeric** field (an *Amount*, a *Steps* count) offers **Number** or **Variable**.
+Pick Variable to use a bound name — `{cultivation_tier}` — instead of a literal.
+Only names that resolve to a number are offered there: a die would arrive as `d8`,
+which the amount cannot use. The value itself carries the mode, so nothing about it
+depends on the editor's state.
+
 ### Polarity (negative toggle)
 
 For trait-granting effects, toggles whether the granted trait is a **complication** (negative) vs a benefit.
@@ -349,7 +396,7 @@ A path is the **bridge between the trigger and the effect**: the trigger says *w
 | **Select** | Seed the working set from a collection (`self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`), the SFX `source`, or a bound `variable`. |
 | **Filter** | Keep items whose field matches a predicate (`polarity == negative`, `rating_type == static`, `traitset_id == …`). Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not in`, `contains`. Two take one value or several: `in` (*is one of them*) and `not in` (*is none of them*) — several arrive as a list. Values show as **names**; an id never appears in the editor. **A type test narrows the path**: `entity.type == location` means the rest of the path may use location-only steps (→ `occupants`). |
 | **Navigate** | Hop an edge to related elements (a trait instance → its entity, an entity → its current location, …). `dedup` collapses duplicates by identity. |
-| **Aggregate** | Pick a **field** first, then a function — the field's type decides which functions are offered, so a timestamp is never offered an average. **No field** (over the whole collection): `count`, or `random` (a sample — a count of 1 picks one element, more keeps a subset). **An orderable field** (a number, a die, or a timestamp): `min`/`max` give the **value**, while `top`/`bottom` give the **element** carrying the highest/lowest value, so the path keeps walking from the thing itself. **A numeric field** also offers `mean`, `avg_floor`, `avg_ceil`. For a timestamp, top/bottom read as *the most recently used* / *least recently used* — this is how you ask for *the body you were last in*: `select self → navigate projections → aggregate (last used at) → Highest element`. |
+| **Aggregate** | Pick a **field** first, then a function — the field's type decides which functions are offered, so a timestamp is never offered an average. **No field** (over the whole collection): `count`, or `random` (a sample — a count of 1 picks one element, more keeps a subset). **An orderable field** (a number, a die, or a timestamp): `min`/`max` give the **value**, while `top`/`bottom` give the **element** carrying the highest/lowest value, so the path keeps walking from the thing itself. **A numeric field** also offers `mean`, `avg_floor`, `avg_ceil`. **A die field** also offers **`tier`** — a *cast*, not a selection: it reads where that die sits on the ladder (d4 = 1 … d12 = 5), which is what makes a rating usable as an *amount*. It reads one value, so narrow a collection first (`top`/`bottom`); `min`/`max` would have already turned the die into its side count (d8 → 8, not 3). For a timestamp, top/bottom read as *the most recently used* / *least recently used* — this is how you ask for *the body you were last in*: `select self → navigate projections → aggregate (last used at) → Highest element`. |
 | **Literal** | Name one object by id directly. |
 | **Evaluate** | Terminal boolean test — `exists` (non-empty), or compare `count` / a scalar field against a value. Produces true/false (used by **Targeting path** conditions). |
 
@@ -572,6 +619,13 @@ is `source_kind == trait`). And an opponent who has not assembled yet is an
 ### Output variables
 
 Any step can declare an `output` name, binding its resolved value into the activation scope so a later effect references it as `{name}` (scalar) or `select variable {name}` (a `many` collection). This is how one effect hands a result to the next.
+
+> The 💡 on a step and a **Bound variable** row do the same job from opposite ends.
+> A 💡 names something *while you are already there* — a side effect of a path you
+> were writing anyway — so nothing before it can use the name. A Bound variable
+> exists *because* you needed the name, so it is stated up front and the conditions
+> can read it too. Reach for the 💡 for "and remember this for the next step"; reach
+> for the section for "this rule is about this value".
 
 **The activation's own names are in that scope too**, before anything runs: the source token and whatever the trigger declares. So a path can *start* from what the rule is about rather than only joining to a name an earlier step produced —
 
