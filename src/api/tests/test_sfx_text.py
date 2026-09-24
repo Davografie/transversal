@@ -456,7 +456,7 @@ class TestTwoPathAttune:
         )
         text = effect_text(effect)
         # The who (path 1) renders as the effect's target...
-        assert text.startswith("attune one of the entities here")
+        assert text.startswith("attune one of the occupants here")
         # ...and the capability (path 2) is what it attunes them to, not a universe.
         assert "their counterpart" in text
         assert "three_realms" not in text
@@ -549,7 +549,7 @@ class TestTwoPathAttune:
             ))},
         )
         assert effect_text(effect) == (
-            "give one of the entities here a copy of one of the trait instances"
+            "give one of the occupants here a copy of one of the trait instances"
         )
 
     def test_the_universe_fallback_still_reads(self):

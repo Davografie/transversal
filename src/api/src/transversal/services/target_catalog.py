@@ -743,8 +743,12 @@ COLLECTIONS: tuple[Collection, ...] = (
     # changed.
     Collection("added_dice", "die", "Dice just added to the pool",
                noun="die", plural="dice", origin="just added", card_origin="you added"),
+    # The catalog's word for the far end here is **occupant** (the `occupants`
+    # hop below uses the same noun): "learn each occupant here" is what a rule
+    # about who is present actually says, where "each entity here" reads as a
+    # type rather than a crowd.
     Collection("occupants", "entity", "Entities at the current location",
-               noun="entity", origin="here"),
+               noun="occupant", plural="occupants", origin="here"),
     Collection("locations", "location", "All locations", noun="location"),
     Collection("entities", "entity", "All entities", noun="entity"),
     # The two whole-world seeds: every trait *definition* in the registry, and
