@@ -527,8 +527,12 @@ EDGES: tuple[Edge, ...] = (
     # is the counterpart of `entity` (the near end, the holding entity): one edge,
     # two ends. Outgoing-only, like `relationships` itself, so "my rival" is
     # someone *I* hold an edge about.
+    #
+    # The card noun is **counterpart**, not "other entity": the phrase is built as
+    # "…of each <noun> of your relationships…", where "each other entity" reads as
+    # if it were qualifying a different entity rather than naming the far end.
     Edge("contact", "relationship", ("entity",), "one", "Other party",
-         noun="other entity", plural="other entities"),
+         noun="counterpart", plural="counterparts"),
     Edge("relationship", "traitsetting", ("relationship",), "one", "Owning relationship",
          noun="relationship"),
 
