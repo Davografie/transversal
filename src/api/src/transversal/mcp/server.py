@@ -1063,33 +1063,31 @@ query($id: ID!) {
   entity(id: $id) {
     id
     name
-    zones { name x y backgroundImage locationId }
+    zones { x y backgroundImage locationId }
   }
 }
 """
 
 
 def set_zones(args: dict) -> dict:
-    """Replace a location's zones — the labelled pins drawn on its background image.
+    """Replace a location's zones — the pins drawn on its background image.
 
-    Zones are a **REST** surface (`PUT /api/v1/locations/{id}/zones`), not GraphQL,
-    and nothing in this tool layer touched them until now — which is how a location
-    ends up with zone labels that disagree with its children. Each zone is
-    ``{name, x, y, location_id?, background_image?}`` with ``x``/``y`` as percentages
-    (0-100) of the background image; ``location_id`` points at the **child location**
-    the pin opens, which is what makes it navigable rather than decorative.
+    Zones are a **REST** surface (`PUT /api/v1/locations/{id}/zones`), not GraphQL.
+    Each zone is ``{location_id, x, y, background_image?}`` with ``x``/``y`` as
+    percentages (0-100) of the background image; ``location_id`` points at the
+    **child location** the pin opens. A zone carries **no label** — the dot renders
+    the linked child's name, so renaming a child can never leave a pin stale.
 
     **The call replaces the whole list** — pass every zone the location should end
     up with, not just the ones being changed. Note that creating a child location
-    already appends a default zone for it at (50, 50) — and takes the name *at that
-    moment*, so renaming the child afterwards leaves the parent's label stale. Read
-    first, adjust, then write. Returns the zones as they are after the write, so the
-    result is the read-back rather than the request.
+    already appends a default zone for it at (50, 50). Read first, adjust, then
+    write. Returns the zones as they are after the write, so the result is the
+    read-back rather than the request.
     """
     zones = args["zones"]
     payload = [
-        {"name": z["name"], "x": float(z.get("x", 50.0)), "y": float(z.get("y", 50.0)),
-         "background_image": z.get("background_image"), "location_id": z.get("location_id")}
+        {"location_id": z["location_id"], "x": float(z.get("x", 50.0)),
+         "y": float(z.get("y", 50.0)), "background_image": z.get("background_image")}
         for z in zones
     ]
     if args.get("dry_run", True):
@@ -1873,7 +1871,7 @@ TOOL_SCHEMAS = {
     },
     "set_zones": {
         "name": "set_zones",
-        "description": "Replace a location's zones — the labelled pins on its background image. Each zone is {name, x, y, location_id?, background_image?}; x/y are percentages 0-100 and location_id points at the child location the pin opens. REPLACES THE WHOLE LIST, so read the current zones first and pass them all. Creating a child location already appends a default zone for it at (50,50). Returns the zones as they are after the write.",
+        "description": "Replace a location's zones — the pins on its background image. Each zone is {location_id, x, y, background_image?}; x/y are percentages 0-100 and location_id points at the child location the pin opens, which is also where the pin's label comes from (the label is not stored). REPLACES THE WHOLE LIST, so read the current zones first and pass them all. Creating a child location already appends a default zone for it at (50,50). Returns the zones as they are after the write.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1881,13 +1879,12 @@ TOOL_SCHEMAS = {
                 "zones": {"type": "array", "items": {
                     "type": "object",
                     "properties": {
-                        "name": {"type": "string"},
+                        "location_id": {"type": "string", "description": "child location this pin opens; its name is the pin's label"},
                         "x": {"type": "number", "description": "percent 0-100 across the background image"},
                         "y": {"type": "number", "description": "percent 0-100 down the background image"},
-                        "location_id": {"type": "string", "description": "child location this pin opens"},
                         "background_image": {"type": "string"},
                     },
-                    "required": ["name", "x", "y"],
+                    "required": ["location_id", "x", "y"],
                 }},
                 "dry_run": _dry_run_property(),
             },

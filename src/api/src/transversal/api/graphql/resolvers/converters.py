@@ -101,7 +101,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         sfx_ids=e.sfx_ids,
         _background_image=e.background_image, overlay=e.overlay,
         starter_location=e.starter_location,
-        zones=[Zone(name=z.name, background_image=z.background_image, location_id=z.location_id, x=z.x, y=z.y) for z in e.zones],
+        zones=[Zone(background_image=z.background_image, location_id=z.location_id, x=z.x, y=z.y) for z in e.zones],
         map_x=e.map_x, map_y=e.map_y,
         nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
         node_ids=e.node_ids, owned_by=e.owned_by,

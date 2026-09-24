@@ -374,11 +374,11 @@ from transversal.domain import Zone
 
 
 class ZoneUpdate(BaseModel):
-    name: str
+    # The label is derived from the linked child; a zone is always a link.
+    location_id: str
     x: float
     y: float
     background_image: str | None = None
-    location_id: str | None = None
 
 
 @router.put("/locations/{location_id}/zones")
@@ -390,7 +390,7 @@ async def update_zones(location_id: str, zones: list[ZoneUpdate]):
         raise HTTPException(status_code=404, detail=f"Location '{location_id}' not found")
 
     entity.zones = [
-        Zone(name=z.name, x=z.x, y=z.y, background_image=z.background_image, location_id=z.location_id)
+        Zone(location_id=z.location_id, x=z.x, y=z.y, background_image=z.background_image)
         for z in zones
     ]
     repo.update_entity(entity)

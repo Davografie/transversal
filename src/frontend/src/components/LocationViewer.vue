@@ -14,10 +14,10 @@
         type="zone"
         :x="z.x" :y="z.y"
         :image="childImage(z)"
-        :label="z.name"
+        :label="zoneLabel(z)"
         :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.id === zoneId(z, i)) || (expandLevels['zone-' + zoneId(z, i)] || 0) > 0"
         :draggable="editZones"
-        :title="z.name"
+        :title="zoneLabel(z)"
         :hole-style="zoneHoleStyle(z)"
         :expand-level="expandLevels['zone-' + zoneId(z, i)] || 0"
         :class="{ armed: armedDot === 'zone-' + zoneId(z, i), dimmed: !!armedDot && armedDot !== 'zone-' + zoneId(z, i) }"
@@ -591,9 +591,8 @@ async function onDragEnd() {
       // PUT replaces the whole zone list: send every field back, or a drag
       // silently strips the zone→child link (`location_id`) and its image.
       body: JSON.stringify(zones.value.map(z => ({
-        name: z.name, x: z.x, y: z.y,
+        location_id: z.location_id, x: z.x, y: z.y,
         background_image: z.background_image ?? null,
-        location_id: z.location_id ?? null,
       }))),
     })
   } catch { /* silent */ }
@@ -1203,6 +1202,13 @@ function childForZone(zone) {
   return (nav.value.children || []).find(c => c._key === zone.location_id) || null
 }
 
+// A zone's label is the linked child's name — derived, never stored, so renaming
+// a child can never leave the pin stale. An unresolvable child renders unlabelled
+// rather than borrowing a copy that can drift.
+function zoneLabel(zone) {
+  return childForZone(zone)?.name || ''
+}
+
 // Identity for a zone: the linked child's ID, else its position in the current
 // list (stable per fetch). Used for dot keys and proximity state — a rename
 // must not re-key, re-arm, or re-target anything.
@@ -1334,7 +1340,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
   }
 
   // Keep dot expanded during animation
-  activeElement.value = { type: 'zone', name: zone.name }
+  activeElement.value = { type: 'zone', name: child.name }
 
   // Warm the destination before the portal opens. `new Image()` is not enough:
   // it cannot decode a .webm at all, and even a cached still has to be decoded

@@ -249,9 +249,9 @@ class RepositoryRelationships:
         if parent.type != EntityType.LOCATION or child.type != EntityType.LOCATION:
             return
         for zone in parent.zones:
-            if zone.location_id == child_id or (not zone.location_id and zone.name == child.name):
+            if zone.location_id == child_id:
                 return  # already registered
-        parent.zones.append(Zone(name=child.name, x=50.0, y=50.0, location_id=child_id))
+        parent.zones.append(Zone(x=50.0, y=50.0, location_id=child_id))
         self.update_entity(parent)
 
     def _ensure_parent_nav_position(self, child_id: str) -> None:

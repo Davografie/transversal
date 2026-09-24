@@ -66,9 +66,14 @@ class Projection(BaseModel):
     last_used_at: Optional[str] = None  # ISO timestamp of when this body was last active
 
 class Zone(BaseModel):
-    name: str
+    """A pin on a location's background image that opens a **child location**.
+
+    The label is **derived** — the dot renders the linked child's name, which is
+    not stored here. A stored copy used to live on this model and went stale the
+    moment the child was renamed (2026-09-23 cleanup).
+    """
+    location_id: str  # _key of the child location this zone links to
     background_image: Optional[str] = None
-    location_id: Optional[str] = None  # _key of the child location this zone links to
     x: float = 50.0   # percentage position on background image (0–100)
     y: float = 50.0   # percentage position on background image (0–100)
 

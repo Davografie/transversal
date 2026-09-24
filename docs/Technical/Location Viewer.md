@@ -101,7 +101,8 @@ currentImage        // active background URL (image or video)
 imageAspect         // width/height of currentImage, or null if unknown
 isVideoBg           // computed — isVideoUrl(currentImage)
 nav                 // raw GET /navigate response (location, parent, children, transversal, occupants)
-zones               // nav.location.zones (name, x, y, location_id, background_image)
+zones               // nav.location.zones (location_id, x, y, background_image) — the dot's
+                    //   label is the *linked child's* name, never stored on the zone
 occupants           // nav.occupants (name, type, id, image, map_x, map_y)
 activeElement       // { type, name?, id?, key? } — which dot is currently expanded/pop-out
 travelAnim          // { active, x, y, image, bgX, bgY } — portal overlay state
@@ -120,7 +121,7 @@ Drag state is kept separately:
 dragging          // zone drag: { index, startX, startY, origX, origY }
 occDragging       // occupant drag: { index, startX, startY, origX, origY }
 dragTarget        // non-reactive — nearest travel target during self-drag
-expandLevels      // reactive — 'zone-<name>'/'nav-<key>' → 0..1 proximity level (multi-bubble)
+expandLevels      // reactive — 'zone-<zoneId>'/'nav-<key>' → 0..1 proximity level (multi-bubble)
 armedDot          // reactive — which dot is within travelProximity (drop → travel)
 occDragMoved      // pointer passed the 6px tap threshold
 occSuppressClick  // suppress the synthesized click after a real drag
@@ -199,6 +200,12 @@ gotchas).
 | `occupant` | `gmc` | amber | A GMC here |
 | `occupant` | `asset` | (base) | An asset here — currently no dedicated color |
 | `self` | `character` | pulsing blue | The player's own character |
+
+A **zone** is a pin that links to a **child location** via `location_id` — and that
+link supplies both its identity (`zoneId`) and its **label**: the dot renders the
+child's *current* name (`zoneLabel`), so renaming a child can never leave a pin
+stale. Nothing about the zone's name is stored on the zone itself. A zone is always
+a link — there are no decorative pins.
 
 Zones and nav dots show the destination's background as their expanded image
 (the `navdot_image` role) — the "hole": an inner `<img>` sized as the

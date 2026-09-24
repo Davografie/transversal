@@ -45,9 +45,9 @@ class Projection:
 
 @strawberry.type
 class Zone:
-    name: str
+    # No label: the dot renders the linked child's name (derived, never stored).
+    location_id: strawberry.ID
     background_image: Optional[str] = None
-    location_id: Optional[str] = None
     x: float = 50.0
     y: float = 50.0
 

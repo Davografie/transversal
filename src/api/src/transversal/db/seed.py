@@ -12,7 +12,6 @@ from transversal.domain import (
     SFX,
     Trait,
     TraitSetting,
-    Zone,
 )
 from transversal.services.target_spec import SelectStep, TargetSpec
 
@@ -239,41 +238,9 @@ def seed_locations(em) -> None:
             except Exception:
                 pass
 
-    # ── Seed zones on locations ──────────────────────
-
-    location_zones = {
-        "loc-krasnoyarsk": [
-            Zone(name="Control Room", x=40, y=30),
-            Zone(name="Holding Cells", x=70, y=60),
-            Zone(name="Extraction Point", x=20, y=75),
-        ],
-        "loc-platform": [
-            Zone(name="Landing Pad", x=50, y=60),
-            Zone(name="Observation Deck", x=30, y=25),
-        ],
-        "loc-valley": [
-            Zone(name="The Gate", x=50, y=20),
-            Zone(name="Training Grounds", x=25, y=65),
-            Zone(name="Meditation Stones", x=75, y=70),
-        ],
-        "loc-mistwood": [
-            Zone(name="The Clearing", x=45, y=55),
-            Zone(name="Deep Woods", x=15, y=30),
-            Zone(name="Elder Tree", x=80, y=40),
-        ],
-        "loc-sect": [
-            Zone(name="Main Hall", x=50, y=35),
-            Zone(name="Training Courtyard", x=25, y=70),
-            Zone(name="Elder's Pavilion", x=75, y=20),
-            Zone(name="Herb Garden", x=60, y=80),
-        ],
-    }
-
-    for loc_id, zones in location_zones.items():
-        loc = repo.get_entity(loc_id)
-        if loc and not loc.zones:
-            loc.zones = list(zones)
-            repo.update_entity(loc)
+    # Zones are not seeded: a zone is a link to a child location, and the real
+    # ones are appended by `_ensure_child_zone` when a `super` edge is created.
+    # (Hand-written test zones used to live here; removed 2026-09-23.)
     # ── Seed challenge traits on locations ────────────
     # A location's doom pool (negative challenge trait) lives in the location
     # trait set. Each entry: (location_id, trait_id, trait_name, dice, polarity).
