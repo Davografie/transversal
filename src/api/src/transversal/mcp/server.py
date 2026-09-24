@@ -102,6 +102,13 @@ def _rest_delete(path: str) -> Any:
     return resp.json()
 
 
+def _rest_put(path: str, payload: Any) -> Any:
+    """PUT a JSON body to a REST endpoint. Raises on any error."""
+    resp = httpx.put(f"{API_URL}{path}", json=payload, timeout=30.0)
+    resp.raise_for_status()
+    return resp.json()
+
+
 # ── GraphQL documents ────────────────────────────────
 
 _MUT_CREATE_ENTITY = """
@@ -1051,6 +1058,50 @@ def gmc_web(args: dict) -> dict:
     return _rest(f"/api/v1/gmcs/{args['gmc_id']}/web")
 
 
+_QUERY_ZONES = """
+query($id: ID!) {
+  entity(id: $id) {
+    id
+    name
+    zones { name x y backgroundImage locationId }
+  }
+}
+"""
+
+
+def set_zones(args: dict) -> dict:
+    """Replace a location's zones — the labelled pins drawn on its background image.
+
+    Zones are a **REST** surface (`PUT /api/v1/locations/{id}/zones`), not GraphQL,
+    and nothing in this tool layer touched them until now — which is how a location
+    ends up with zone labels that disagree with its children. Each zone is
+    ``{name, x, y, location_id?, background_image?}`` with ``x``/``y`` as percentages
+    (0-100) of the background image; ``location_id`` points at the **child location**
+    the pin opens, which is what makes it navigable rather than decorative.
+
+    **The call replaces the whole list** — pass every zone the location should end
+    up with, not just the ones being changed. Note that creating a child location
+    already appends a default zone for it at (50, 50) — and takes the name *at that
+    moment*, so renaming the child afterwards leaves the parent's label stale. Read
+    first, adjust, then write. Returns the zones as they are after the write, so the
+    result is the read-back rather than the request.
+    """
+    zones = args["zones"]
+    payload = [
+        {"name": z["name"], "x": float(z.get("x", 50.0)), "y": float(z.get("y", 50.0)),
+         "background_image": z.get("background_image"), "location_id": z.get("location_id")}
+        for z in zones
+    ]
+    if args.get("dry_run", True):
+        return {"dry_run": True, "method": "PUT",
+                "path": f"/api/v1/locations/{args['location_id']}/zones",
+                "count": len(payload), "zones": payload}
+    _rest_put(f"/api/v1/locations/{args['location_id']}/zones", payload)
+    read_back = _graphql(_QUERY_ZONES, {"id": args["location_id"]}).get("entity") or {}
+    return {"location": read_back.get("name"), "count": len(read_back.get("zones") or []),
+            "zones": read_back.get("zones") or []}
+
+
 #: The order a sheet reads in — who you are, what you can do, what you have, what
 #: is wrong, who you know. Trait sets outside this list sort after it, by name, so
 #: a new scene's sets still appear without a code change here.
@@ -1508,6 +1559,7 @@ TOOLS = {
     "location_tree": location_tree,
     "location_neighborhood": location_neighborhood,
     "gmc_web": gmc_web,
+    "set_zones": set_zones,
     "character_build": character_build,
     "draft_entity": draft_entity,
     "draft_relationship": draft_relationship,
@@ -1817,6 +1869,29 @@ TOOL_SCHEMAS = {
             "type": "object",
             "properties": {"gmc_id": {"type": "string"}},
             "required": ["gmc_id"],
+        },
+    },
+    "set_zones": {
+        "name": "set_zones",
+        "description": "Replace a location's zones — the labelled pins on its background image. Each zone is {name, x, y, location_id?, background_image?}; x/y are percentages 0-100 and location_id points at the child location the pin opens. REPLACES THE WHOLE LIST, so read the current zones first and pass them all. Creating a child location already appends a default zone for it at (50,50). Returns the zones as they are after the write.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "location_id": {"type": "string"},
+                "zones": {"type": "array", "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "x": {"type": "number", "description": "percent 0-100 across the background image"},
+                        "y": {"type": "number", "description": "percent 0-100 down the background image"},
+                        "location_id": {"type": "string", "description": "child location this pin opens"},
+                        "background_image": {"type": "string"},
+                    },
+                    "required": ["name", "x", "y"],
+                }},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["location_id", "zones"],
         },
     },
     "character_build": {
