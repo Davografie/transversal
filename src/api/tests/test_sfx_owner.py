@@ -1774,3 +1774,78 @@ def test_the_declaring_traits_read_names_both_kinds_of_nomination():
     # A trait that does not nominate it is absent, not merely empty.
     assert [t.id for t in RepositoryTraits.list_traits_declaring_sfx(repo, "sfx-y")] == ["trait-c"]
     assert RepositoryTraits.list_traits_declaring_sfx(repo, "sfx-none") == []
+
+
+# ── Arrival rules for a place (B8) ─────────────
+#
+# `get_place_sfx_rules` deliberately leaves out the rules that fire *as you
+# arrive* (they are spent, not held), so nothing listed them. The GM inspecting a
+# place wants exactly those, and only those.
+
+def _arrival_world():
+    from transversal.services.menu_contexts import trigger_fires_on_arrival
+
+    class PlaceRepo:
+        def __init__(self):
+            self.locations = {
+                "loc-room": SimpleNamespace(id="loc-room", name="Back Room",
+                                            sfx_ids=["sfx-arrive", "sfx-stand"]),
+                "loc-hall": SimpleNamespace(id="loc-hall", name="Great Hall",
+                                            sfx_ids=["sfx-arrive-parent"]),
+            }
+            self.parents = {"loc-room": "loc-hall"}
+            self.sfxs = {
+                "sfx-arrive": SimpleNamespace(id="sfx-arrive", trigger="on_location_change"),
+                "sfx-arrive-parent": SimpleNamespace(id="sfx-arrive-parent", trigger="on_location_change"),
+                "sfx-stand": SimpleNamespace(id="sfx-stand", trigger="manual"),
+            }
+
+        def list_ancestor_locations_with_sfx(self, location_id, max_depth=8):
+            out, seen, cur = [], set(), location_id
+            while cur and cur not in seen and len(seen) < max_depth:
+                seen.add(cur)
+                loc = self.locations.get(cur)
+                if loc is not None and (loc.sfx_ids or []):
+                    out.append(loc)
+                cur = self.parents.get(cur)
+            return out
+
+        def get_sfx(self, sfx_id):
+            return self.sfxs.get(sfx_id)
+
+    assert trigger_fires_on_arrival("on_location_change")  # the premise of the test
+    return PlaceRepo()
+
+
+def test_a_place_reports_the_rules_that_fire_on_arrival():
+    from transversal.services.sfx_owner import get_arrival_sfx_rules
+
+    groups = get_arrival_sfx_rules("loc-room", _arrival_world())
+    assert [g["location_name"] for g in groups] == ["Back Room", "Great Hall"]
+    assert groups[0]["sfx_ids"] == ["sfx-arrive"]
+    assert groups[1]["sfx_ids"] == ["sfx-arrive-parent"]
+
+
+def test_a_standing_rule_is_not_an_arrival_rule():
+    """The two reads partition the place's rules; neither shows the other's."""
+    from transversal.services.sfx_owner import get_arrival_sfx_rules
+
+    ids = {sid for g in get_arrival_sfx_rules("loc-room", _arrival_world()) for sid in g["sfx_ids"]}
+    assert "sfx-stand" not in ids
+
+
+def test_an_ancestors_arrival_rule_is_attributed_once():
+    """Nearest place wins, so a rule on a parent room is not shown twice."""
+    from transversal.services.sfx_owner import get_arrival_sfx_rules
+
+    repo = _arrival_world()
+    repo.locations["loc-hall"].sfx_ids.append("sfx-arrive")   # same rule, both places
+    groups = get_arrival_sfx_rules("loc-room", repo)
+    assert [g["sfx_ids"] for g in groups] == [["sfx-arrive"], ["sfx-arrive-parent"]]
+
+
+def test_a_place_with_no_arrival_rules_reports_nothing():
+    from transversal.services.sfx_owner import get_arrival_sfx_rules
+
+    assert get_arrival_sfx_rules("loc-none", _arrival_world()) == []
+    assert get_arrival_sfx_rules("", _arrival_world()) == []

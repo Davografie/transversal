@@ -1031,6 +1031,40 @@ def get_place_sfx_rules(entity_id: str, universe: str, repo) -> list[dict]:
     return groups
 
 
+def get_arrival_sfx_rules(location_id: str, repo) -> list[dict]:
+    """The rules that fire as an audience **arrives** at a place, by place.
+
+    The deliberate counterpart of :func:`get_place_sfx_rules`, which leaves exactly
+    these out: the strip a sheet shows is what the place *lends you while you stand
+    there*, and an arrival rule has already done its work by then — an instant, not
+    a permanent. So no surface ever listed one, and "what happens when someone
+    walks in here?" was invisible from the place itself ([[B8]]).
+
+    The GM inspecting a place needs the opposite question, so this keeps only the
+    arrival rules and drops the rest. No availability filter, because the audience
+    is not known: this is a fact about the place, not about what one occupant may
+    use. The same ancestors-with-rules walk as the standing read, deduped
+    nearest-first, so a rule on a parent room shows only against the nearer place
+    that carries it.
+    """
+    if not location_id:
+        return []
+    groups: list[dict] = []
+    claimed: set[str] = set()
+    for place in repo.list_ancestor_locations_with_sfx(location_id):
+        owned = sorted({sid for sid in (place.sfx_ids or [])
+                        if sid not in claimed and _spent_on_arrival(repo, sid)})
+        if not owned:
+            continue
+        claimed.update(owned)
+        groups.append({
+            "location_id": place.id,
+            "location_name": getattr(place, "name", None) or place.id,
+            "sfx_ids": owned,
+        })
+    return groups
+
+
 def _spent_on_arrival(repo, sfx_id: str) -> bool:
     """Whether this rule fires as its audience arrives (so it isn't held).
 

@@ -193,6 +193,30 @@ class QueriesSfx:
         ]
 
     @strawberry.field
+    def arrival_sfx_rules(
+        self, info: strawberry.Info, location_id: strawberry.ID,
+    ) -> list[PlaceSfxRules]:
+        """The rules that fire as someone arrives **at this place** ([[B8]]).
+
+        The GM's side of the same fact ``placeSfxRules`` reports for a sheet. An
+        arrival rule is never *held* — it has done its work by the time anyone is
+        standing there — so ``placeSfxRules`` leaves it out by design and nothing
+        else listed it: from the place itself, "what happens when you walk in?"
+        had no answer anywhere in the UI. Asked of the location rather than of an
+        occupant, because that is who the GM is looking at.
+        """
+        from transversal.services.sfx_owner import get_arrival_sfx_rules
+
+        return [
+            PlaceSfxRules(
+                location_id=strawberry.ID(g["location_id"]),
+                location_name=g["location_name"],
+                sfx_ids=[strawberry.ID(s) for s in g["sfx_ids"]],
+            )
+            for g in get_arrival_sfx_rules(str(location_id), _em(info).repo)
+        ]
+
+    @strawberry.field
     def sfxs(self, info: strawberry.Info) -> list[SfxRef]:
         # Prefer DB-persisted SFXs; fall back to in-memory engine
         repo = _em(info).repo
