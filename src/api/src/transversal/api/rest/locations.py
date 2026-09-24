@@ -151,6 +151,13 @@ class MoveRequest(BaseModel):
     # How they got there. Omitted → "move"; navigation sends "hierarchy" when
     # entering/leaving a sub-location, so a rule can tell the two apart.
     arrival_kind: str | None = None
+    # Consciousness travel only: which body the mind arrives in. Omitted →
+    # "{last_projection}", the behaviour every existing caller already got.
+    # "{closest_projection}" takes the body nearest the destination instead (the
+    # Blue Book's click-a-place-to-go-there gesture). An unknown value is treated
+    # as a literal projection id by the travel handler, so nothing here has to
+    # police the vocabulary.
+    projection_policy: str | None = None
 
 
 class EdgeRequest(BaseModel):
@@ -186,7 +193,11 @@ async def consciousness_travel(entity_id: str, body: MoveRequest):
     """Transfer an entity's consciousness to a projection at the target location."""
     em = _em()
     repo = _repo()
-    result = em.travel(entity_id, body.location, transversal_type="consciousness", projection_policy="{last_projection}")
+    result = em.travel(
+        entity_id, body.location,
+        transversal_type="consciousness",
+        projection_policy=body.projection_policy or "{last_projection}",
+    )
 
     loc = repo.get_entity(body.location)
     location_name = loc.name if loc else body.location

@@ -46,6 +46,10 @@ class InMemoryRepository(EntityRepository):
         self._sfx_owners: dict[str, dict] = {}
         self._scheduled_events: dict[str, dict] = {}
         self._historical_records: dict[str, dict] = {}
+        # The location graph the {closest_projection} policy walks. Declared per
+        # test; the real metric is ArangoDB-backed and pinned separately in
+        # tests/test_location_distances.py.
+        self.location_graph: dict[str, list[str]] = {}
         self.db = None
 
     def _store(self, coll: dict, key: str, doc: dict) -> dict:
@@ -105,6 +109,22 @@ class InMemoryRepository(EntityRepository):
     def update_projection(self, p: Projection) -> Projection:
         self._store(self._projections, p.id, p.model_dump())
         return p
+
+    # location distances: an unweighted walk over the test's declared graph.
+    # Unreachable targets are absent, like the real read.
+    def get_location_distances_from(self, origin: str, targets: set[str]) -> dict[str, int]:
+        found: dict[str, int] = {}
+        seen = {origin}
+        frontier = [(origin, 0)]
+        while frontier:
+            node, dist = frontier.pop(0)
+            if node in targets:
+                found[node] = dist
+            for nxt in self.location_graph.get(node, ()):
+                if nxt not in seen:
+                    seen.add(nxt)
+                    frontier.append((nxt, dist + 1))
+        return found
 
     # historical records
     def add_historical_record(self, entity_id, record_type, data, universe="", session_id="", after_ids=None):
@@ -511,6 +531,89 @@ class TestLocation:
         assert proj is not None
         assert proj.transversal_type == TransversalType.CONSCIOUSNESS
         assert proj.origin_universe == "three_realms"
+
+    def test_closest_projection_moves_the_nearest_body_to_the_target(self, em, repo, kael):
+        # The Blue Book's "click a place and go there" (2026-09-24): the mind uses
+        # the body nearest the destination, and *that body comes to the place* —
+        # so the entity lands where it asked to go, not wherever the body sat.
+        target = em.create(name="Cloud-Soaked Bazaar", entity_type=EntityType.LOCATION, universe="three_realms")
+        near = em.create(name="First Gate", entity_type=EntityType.LOCATION, universe="three_realms")
+        mid = em.create(name="Long Road", entity_type=EntityType.LOCATION, universe="three_realms")
+        far = em.create(name="Deep Vault", entity_type=EntityType.LOCATION, universe="three_realms")
+        repo.location_graph = {
+            target.id: [near.id, mid.id],
+            near.id: [target.id],
+            mid.id: [target.id, far.id],
+            far.id: [mid.id],
+        }
+        em.add_projection(kael, "three_realms", location=near.id)
+        em.add_projection(kael, "fourth", location=far.id)
+
+        result = em.travel(kael.id, target.id, transversal_type="consciousness",
+                           projection_policy="{closest_projection}")
+
+        assert result.current_projection == f"{kael.id}:three_realms"  # the near body, not the far one
+        assert result.current_location == target.id
+        assert result.current_universe == "three_realms"
+        assert repo.get_projection(f"{kael.id}:three_realms").current_location == target.id
+        assert repo.get_projection(f"{kael.id}:fourth").current_location == far.id  # untouched
+
+    def test_closest_projection_ranks_bodies_outside_the_destination_universe(self, em, repo, kael):
+        # The reuse policies pool bodies from the *destination universe*, which
+        # would find nothing here. This policy is place-driven: a body in another
+        # universe is still a candidate, and the graph metric is what decides.
+        target = em.create(name="Cloud-Soaked Bazaar", entity_type=EntityType.LOCATION, universe="three_realms")
+        step = em.create(name="First Gate", entity_type=EntityType.LOCATION, universe="three_realms")
+        away = em.create(name="Distant Post", entity_type=EntityType.LOCATION, universe="fourth")
+        repo.location_graph = {
+            target.id: [step.id],
+            step.id: [target.id, away.id],
+            away.id: [step.id],
+        }
+        em.add_projection(kael, "fourth", location=away.id)
+
+        result = em.travel(kael.id, target.id, transversal_type="consciousness",
+                           projection_policy="{closest_projection}")
+
+        assert result.current_projection == f"{kael.id}:fourth"
+        assert result.current_location == target.id
+        body = repo.get_projection(f"{kael.id}:fourth")
+        assert body.current_location == target.id
+        assert body.universe == "three_realms"   # the body follows the destination
+        # NATIVE means *home* — it is what `is_transversal` counts, so a body
+        # standing in a foreign universe is there by consciousness, the same label
+        # the inapposite branch puts on its own crossing.
+        assert body.origin_universe == "fourth"
+        assert body.transversal_type == TransversalType.CONSCIOUSNESS
+
+    def test_closest_projection_with_no_placed_body_spawns_at_the_target(self, em, kael):
+        # The `kael` fixture's first body has no location, so it cannot be ranked.
+        # A transversal must never silently do nothing: a fresh body appears at
+        # the destination and the entity lands on it.
+        target = em.create(name="Cloud-Soaked Bazaar", entity_type=EntityType.LOCATION, universe="three_realms")
+
+        result = em.travel(kael.id, target.id, transversal_type="consciousness",
+                           projection_policy="{closest_projection}")
+
+        assert result.current_location == target.id
+        spawned = em.repo.get_projection(result.current_projection)
+        assert spawned.current_location == target.id
+        assert spawned.transversal_type == TransversalType.CONSCIOUSNESS
+
+    def test_closest_projection_with_only_unreachable_bodies_spawns_at_the_target(self, em, repo, kael):
+        # Unreachable candidates are omitted by the distance read rather than
+        # scored, so they are not chosen — the stranded body stays where it is and
+        # the entity still arrives.
+        target = em.create(name="Cloud-Soaked Bazaar", entity_type=EntityType.LOCATION, universe="three_realms")
+        island = em.create(name="Cut-Off Isle", entity_type=EntityType.LOCATION, universe="fourth")
+        repo.location_graph = {}   # nothing is connected to anything
+        em.add_projection(kael, "fourth", location=island.id)
+
+        result = em.travel(kael.id, target.id, transversal_type="consciousness",
+                           projection_policy="{closest_projection}")
+
+        assert result.current_location == target.id
+        assert repo.get_projection(f"{kael.id}:fourth").current_location == island.id
 
     def test_travel_inapposite(self, em, kael):
         loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")

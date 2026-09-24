@@ -229,6 +229,10 @@ def _apply_travel(entity, effect, repo, result):
     body via ``{last_projection}`` / ``{random_projection}`` / ``{choose_projection}``
     (reuse an existing body in the destination universe, falling back to a fresh
     body when there is none) or ``{new_projection}`` (always spawn).
+    ``{closest_projection}`` is the one policy that is *place*-driven rather than
+    *universe*-driven: it takes the body nearest the destination by the weighted
+    location graph, moves that body to the destination, and arrives in it — so the
+    entity lands where it asked to go, on the nearest body it had.
     """
     from transversal.domain import Projection, TransversalType
     from transversal.services.entity_manager import touch_projection
@@ -309,13 +313,69 @@ def _apply_travel(entity, effect, repo, result):
             return
         _spawn_body(dest_universe, location_id, TransversalType.CONSCIOUSNESS)
 
+    def _closest_body():
+        """The subject's body nearest the destination, by the location-graph metric.
+
+        The pool is **every** placed body the subject has, not the destination
+        universe's — that is the scope the *reuse* policies want, and it answers
+        the wrong question here. The metric already prices a universe boundary at
+        ``CROSS_UNIVERSE_WEIGHT``, so a body on the near side beats a far one on
+        distance rather than by being the only candidate, and a body in another
+        universe is still the right answer when it is the closest thing the
+        entity has.
+
+        A body with no location cannot be ranked, and one whose location is
+        unreachable from the destination is not a candidate at all (the read omits
+        unreachable targets). Either way this returns None and the caller falls
+        back to a fresh body at the destination, so a transversal never silently
+        does nothing. Ties break on body id, so the pick is deterministic.
+        """
+        location_id = _resolve_target(subject, effect, result, repo)
+        if location_id is None:
+            return None  # a pending choice was recorded instead
+        bodies = [p for p in repo.get_projections_for_entity(subject.id) if p.current_location]
+        distances = repo.get_location_distances_from(
+            location_id, {p.current_location for p in bodies}
+        )
+        ranked = [
+            (distances[p.current_location], p)
+            for p in bodies if p.current_location in distances
+        ]
+        if not ranked:
+            return None
+        _distance, proj = min(ranked, key=lambda pair: (pair[0], pair[1].id))
+        # The body comes to the location. A consciousness transversal is the mind
+        # moving into a body, and ``_arrive_in_body`` aligns the entity with
+        # wherever that body sits — so the body is placed first, and the mind then
+        # lands on the spot that was asked for rather than wherever the nearest
+        # body happened to be.
+        proj.current_location = location_id
+        proj.universe = dest_universe
+        # ``NATIVE`` means *home*: it is what ``is_transversal`` counts, and what
+        # makes a universe live for the entity. A body back in its origin universe
+        # is native again; one standing in a foreign universe is there by
+        # consciousness, exactly as the inapposite branch labels its own crossing.
+        proj.transversal_type = (
+            TransversalType.NATIVE
+            if dest_universe == proj.origin_universe
+            else TransversalType.CONSCIOUSNESS
+        )
+        return proj
+
     # A literal projection id is a resolved ``{choose_projection}``.
-    if projection_policy not in ("{last_projection}", "{new_projection}", "{random_projection}", "{choose_projection}"):
+    if projection_policy not in ("{last_projection}", "{new_projection}", "{random_projection}", "{choose_projection}", "{closest_projection}"):
         proj = repo.get_projection(projection_policy)
         if proj is not None:
             _arrive_in_body(proj)
             return
         projection_policy = "{new_projection}"
+
+    if projection_policy == "{closest_projection}":
+        proj = _closest_body()
+        if proj is not None:
+            _arrive_in_body(proj)
+            return
+        projection_policy = "{new_projection}"  # no ranked body → spawn at the destination
 
     if projection_policy in ("{last_projection}", "{random_projection}", "{choose_projection}"):
         body_ids = _body_pool(effect, subject, dest_universe, repo)

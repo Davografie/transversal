@@ -657,6 +657,89 @@ class RepositoryCanvas:
                 found["in_tie_type"] = row["in_tie_type"]
         return sorted(merged.values(), key=lambda r: (r["entity_id"], r["name"]))
 
+    def _location_adjacency(self) -> dict[str, list[tuple[str, int]]]:
+        """The location graph as an undirected adjacency map.
+
+        ``super`` **and** ``transversal`` edges, each step costing 1 — except a
+        ``transversal`` that crosses a universe boundary, which costs
+        ``CROSS_UNIVERSE_WEIGHT``. A ``super`` edge is a hierarchy link, never a
+        boundary crossing, so it always costs one step.
+
+        One definition, shared by every distance read — the faction ranking
+        (:meth:`get_faction_distances_for_location`) and the point-to-point read
+        (:meth:`get_location_distances_from`) — so "how far" cannot come to mean
+        two different things.
+        """
+        edge_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type IN ['super', 'transversal']
+            LET f = PARSE_IDENTIFIER(r._from)
+            LET t = PARSE_IDENTIFIER(r._to)
+            FILTER f.collection == 'entities' AND t.collection == 'entities'
+            LET fe = DOCUMENT(r._from)
+            LET te = DOCUMENT(r._to)
+            FILTER fe != null AND te != null
+            FILTER fe.type == 'location' AND te.type == 'location'
+            RETURN {{
+                type: r.type,
+                from: f.key,
+                to: t.key,
+                cross: fe.current_universe != te.current_universe,
+            }}
+        """
+        adjacency: dict[str, list[tuple[str, int]]] = {}
+        for row in self.db.aql.execute(edge_query):
+            # Only a *portal* can cross a boundary; a `super` edge is a hierarchy
+            # link and always costs one step.
+            cost = (
+                CROSS_UNIVERSE_WEIGHT
+                if row["type"] == "transversal" and row["cross"]
+                else 1
+            )
+            adjacency.setdefault(row["from"], []).append((row["to"], cost))
+            adjacency.setdefault(row["to"], []).append((row["from"], cost))
+        return adjacency
+
+    def get_location_distances_from(self, origin: str, targets: set[str]) -> dict[str, int]:
+        """Weighted distance from ``origin`` to each **reachable** target location.
+
+        The point-to-point sibling of :meth:`get_faction_distances_for_location`,
+        over the same graph and weights (:meth:`_location_adjacency`): ``super``
+        and ``transversal`` edges walked undirected, a step costing 1 unless a
+        portal crosses a universe boundary (``CROSS_UNIVERSE_WEIGHT``).
+
+        Unreachable targets are **absent** from the result rather than present as
+        a sentinel, so the caller decides what "nowhere near" means for its own
+        candidates. The graph is fragmentary in practice (195 of 410 locations
+        unreachable from the single authored control point), so a caller ranking
+        candidates must not read a sentinel as a number. ``origin`` itself scores
+        ``0`` when it is one of the targets.
+
+        Dijkstra, settling nearest-first, stopping once every target is settled —
+        so an unreachable target costs walking its component, not the whole graph.
+        """
+        remaining = {t for t in targets if t}
+        found: dict[str, int] = {}
+        if not remaining:
+            return found
+        adjacency = self._location_adjacency()
+        seen: set[str] = set()
+        heap: list[tuple[int, str]] = [(0, origin)]
+        while heap:
+            dist, node = heapq.heappop(heap)
+            if node in seen:
+                continue
+            seen.add(node)
+            if node in remaining:
+                found[node] = dist
+                remaining.discard(node)
+                if not remaining:
+                    break
+            for neighbour, cost in adjacency.get(node, ()):
+                if neighbour not in seen:
+                    heapq.heappush(heap, (dist + cost, neighbour))
+        return found
+
     def get_faction_distances_for_location(self, location_id: str) -> list[dict]:
         """Every faction with its weighted distance to this location, nearest first.
 
@@ -699,34 +782,7 @@ class RepositoryCanvas:
         nothing it controls is reachable — those are kept so a caller can show
         the whole faction list with the near ones at the top.
         """
-        edge_query = f"""
-            FOR r IN {RELATIONSHIPS}
-            FILTER r.type IN ['super', 'transversal']
-            LET f = PARSE_IDENTIFIER(r._from)
-            LET t = PARSE_IDENTIFIER(r._to)
-            FILTER f.collection == 'entities' AND t.collection == 'entities'
-            LET fe = DOCUMENT(r._from)
-            LET te = DOCUMENT(r._to)
-            FILTER fe != null AND te != null
-            FILTER fe.type == 'location' AND te.type == 'location'
-            RETURN {{
-                type: r.type,
-                from: f.key,
-                to: t.key,
-                cross: fe.current_universe != te.current_universe,
-            }}
-        """
-        adjacency: dict[str, list[tuple[str, int]]] = {}
-        for row in self.db.aql.execute(edge_query):
-            # Only a *portal* can cross a boundary; a `super` edge is a hierarchy
-            # link and always costs one step.
-            cost = (
-                CROSS_UNIVERSE_WEIGHT
-                if row["type"] == "transversal" and row["cross"]
-                else 1
-            )
-            adjacency.setdefault(row["from"], []).append((row["to"], cost))
-            adjacency.setdefault(row["to"], []).append((row["from"], cost))
+        adjacency = self._location_adjacency()
 
         control_query = f"""
             FOR ts IN {TRAITSETTINGS}
