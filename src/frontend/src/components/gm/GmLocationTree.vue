@@ -42,7 +42,9 @@
       <span v-else-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
       <span v-else class="entity-type-badge" :class="'type-' + node.entityType">{{ shortType(node.entityType) }}</span>
       <span class="entity-name">{{ node.name }}</span>
-      <span v-if="node.kind === 'occupant' && node.entity?.unpublished" class="draft-badge" title="Unpublished — GM-only">draft</span>
+      <!-- Drafts are not occupant-only: 30 locations, 6 factions and a universe
+           are unpublished too, and that flag is what the filter narrows on. -->
+      <span v-if="node.unpublished" class="draft-badge" title="Unpublished — GM-only">draft</span>
       <span
         class="tree-drag-handle"
         :class="{ inactive: !isDraggable(node) }"

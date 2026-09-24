@@ -70,7 +70,8 @@
               @mousedown.prevent="selectSuggestion(s)"
               @mousemove="filterHighlighted = i"
             >
-              <span class="entity-type-badge" :class="'type-' + (s.entityType || s.type || '')">{{ s.entityType || s.type || '' }}</span><span>{{ s.name }}</span>
+              <!-- A status chip has no entity type to badge. -->
+              <span v-if="s.entityType || s.type" class="entity-type-badge" :class="'type-' + (s.entityType || s.type)">{{ s.entityType || s.type }}</span><span>{{ s.name }}</span>
               <span class="suggestion-hint">{{ s.hint }}</span>
             </div>
           </div>
@@ -107,6 +108,7 @@
           >
             <template #item="{ item: e }">
               <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
+              <span v-if="e.unpublished" class="draft-badge" title="Unpublished — GM-only">draft</span>
               <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
               <Button class="faction-canvas-btn" variant="ghost" size="sm" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</Button>
             </template>

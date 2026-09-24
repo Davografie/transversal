@@ -1,5 +1,6 @@
 /**
- * Executable check for "filter the tree by a place".
+ * Executable check for the tree's filter chips — a **place** by name, and the
+ * **unpublished** status.
  *
  * The frontend has no test runner, so this is a plain node script with
  * assertions — no dependency added. Run it against the frontend image:
@@ -52,7 +53,8 @@ const ok = (name, got, want) => {
 
 const U = (id, name, universe, children = []) => ({ id, name, kind: 'universe', universe, children })
 const L = (id, name, universe, children = []) => ({ id, name, kind: 'location', universe, children })
-const E = (id, name, type, currentLocation, currentUniverse) => ({ id, name, type, currentLocation, currentUniverse })
+const E = (id, name, type, currentLocation, currentUniverse, unpublished = false) =>
+  ({ id, name, type, currentLocation, currentUniverse, unpublished })
 
 // Shaped like the real data: a location's `currentLocation` is its parent, and
 // the occupants sit one and two levels under Scotland.
@@ -69,21 +71,25 @@ const TREE = [
     L('loc-iron-roots', 'Iron Roots', 'three_realms'),
     L('loc-yinling', 'Yinling Creek', 'three_realms'),
   ]),
+  // An unpublished universe with nothing unpublished inside it: the status chip
+  // still has to reach it.
+  U('universe-emberline', 'The Emberline', 'emberline'),
 ]
 
 const ENTITIES = [
   E('universe-earth', 'Earth', 'UNIVERSE', null, 'earth'),
   E('universe-three_realms', 'Three Realms', 'UNIVERSE', null, 'three_realms'),
+  E('universe-emberline', 'The Emberline', 'UNIVERSE', null, 'emberline', true),        // a draft universe
   E('loc-uk', 'United Kingdom', 'LOCATION', 'universe-earth', 'earth'),
   E('loc-scotland', 'Scotland', 'LOCATION', 'loc-uk', 'earth'),
   E('location-craigmuir', 'Craigmuir', 'LOCATION', 'loc-scotland', 'earth'),
-  E('location-stag', "The Stag's Head", 'LOCATION', 'loc-scotland', 'earth'),
+  E('location-stag', "The Stag's Head", 'LOCATION', 'loc-scotland', 'earth', true),   // a draft
   E('loc-unrelated', 'Somewhere Else', 'LOCATION', 'universe-earth', 'earth'),
   E('loc-iron-roots', 'Iron Roots', 'LOCATION', 'universe-three_realms', 'three_realms'),
   E('loc-yinling', 'Yinling Creek', 'LOCATION', 'universe-three_realms', 'three_realms'),
   E('gmc-moira', 'Moira McCoy', 'GMC', 'location-craigmuir', 'earth'),
   E('gmc-alastair', 'Alastair Rennie', 'GMC', 'location-craigmuir', 'earth'),
-  E('gmc-tam', 'Tam Dodd', 'GMC', 'location-stag', 'earth'),
+  E('gmc-tam', 'Tam Dodd', 'GMC', 'location-stag', 'earth', true),                     // a draft occupant
   E('gmc-direct', 'Someone In Scotland', 'GMC', 'loc-scotland', 'earth'),
   E('gmc-elsewhere', 'Someone Else', 'GMC', 'loc-unrelated', 'earth'),
   E('char-ir', 'Rhys Iron Roots', 'CHARACTER', 'loc-iron-roots', 'three_realms'),
@@ -205,6 +211,39 @@ function scopedTree(entities, filters, { focus = 'loc-iron-roots', universe = 't
   const { flat } = scopedTree(ENTITIES, [{ type: 'universe', value: 'earth', label: 'Earth' }])
   ok('a universe chip shows its universe, with no root stub',
     [flatIds(flat), stubs(flat)], [['universe-earth'], []])
+}
+
+// ── 3. the status chip: "what needs attention" ──────────────────────────
+console.log('\nstatus — filter by "unpublished"\n')
+
+const CHIP_UNPUBLISHED = [{ type: 'unpublished', value: 'true', label: 'Unpublished' }]
+
+{
+  const f = filter(ENTITIES, [])
+  f.filterInput.value = 'unp'
+  ok('typing "unp" offers the status chip',
+    f.suggestions.value.some((s) => s.filterType === 'unpublished'), true)
+  f.filterInput.value = 'draft'
+  ok('…and "draft" finds it too, since that is what the rows call it',
+    f.suggestions.value.some((s) => s.filterType === 'unpublished'), true)
+}
+
+{
+  const f = filter(ENTITIES, CHIP_UNPUBLISHED)
+  ok('the chip keeps only drafts', ids(f.filteredEntities.value), ['gmc-tam', 'location-stag', 'universe-emberline'])
+}
+
+{
+  const { flat } = scopedTree(ENTITIES, CHIP_UNPUBLISHED)
+  const got = flatIds(flat)
+  ok('a draft place is drawn', got.includes('location-stag'), true)
+  ok('a draft occupant is drawn', got.includes('gmc-tam'), true)
+  ok('…and a published place only as the path to them',
+    ['loc-scotland', 'loc-uk', 'universe-earth'].every((id) => got.includes(id)), true)
+  ok('a published place with no drafts under it is not drawn', got.includes('loc-iron-roots'), false)
+  // The seed matters here: nothing unpublished is *inside* the Emberline, so only
+  // a universe that matched can put it on the populated path.
+  ok('a draft universe with no draft descendants draws itself', got.includes('universe-emberline'), true)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

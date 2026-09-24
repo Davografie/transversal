@@ -66,6 +66,15 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       .map((e) => e.id)
   ))
 
+  // The GM's drafts, so a row can say so. Unpublished is not occupant-only — 30
+  // locations, 6 factions and a universe carry it too — and the tree nodes come
+  // from the location endpoint, which does not carry the flag.
+  const unpublishedIds = computed(() => new Set(
+    (entities?.value ?? filteredEntities?.value ?? [])
+      .filter((e) => e.unpublished)
+      .map((e) => e.id)
+  ))
+
   // Both rosters are needed. `occupantsByLocation` is what the filter matches,
   // and is what a level reveals on its own; `allOccupantsByLocation` is everyone
   // who is actually there, which is what tells the chevron whether the filter is
@@ -106,8 +115,13 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
     _groupOccupants(entities?.value ?? filteredEntities?.value ?? [], false))
 
   // ── Filter-aware location helpers ──────────────────
-  const hasOccupantFilter = computed(() =>
-    (activeFilters?.value ?? []).some(f => f.type === 'entityType' || f.type === 'name')
+  // A chip that names entities or their status, as opposed to a universe chip.
+  // The distinction is what the tree's pruning keys off: these chips mean "show
+  // the paths to whatever matched" (`filterMode`), while universe chips prune by
+  // universe instead, and the two combine as a union.
+  const hasEntityChip = computed(() =>
+    (activeFilters?.value ?? []).some(f =>
+      f.type === 'entityType' || f.type === 'name' || f.type === 'unpublished')
   )
 
   const activeUniverseFilters = computed(() => {
@@ -121,14 +135,15 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
   const populatedLocations = computed(() => {
     const occ = occupantsByLocation.value
     const set = new Set(Object.keys(occ))
-    // A place that matched the filter by name must draw itself even when nobody
-    // is standing in it. Occupants are the only other seed and a LOCATION entity
-    // is not an occupant, so a place holding nobody directly (only nested towns)
-    // had no populated node on its path at all — filter mode then skipped every
-    // row and the tree came back empty.
-    if (hasOccupantFilter.value) {
+    // A place — or a universe — that matched must draw itself even when nothing
+    // *inside* it did. Occupants are the only other seed, and a place holding
+    // nobody directly (only nested towns) had no populated node on its path at
+    // all, so filter mode skipped every row and the tree came back empty. A
+    // universe needs it too: filtering for "unpublished" has to reach an
+    // unpublished universe with no unpublished descendants.
+    if (hasEntityChip.value) {
       for (const e of (filteredEntities?.value ?? [])) {
-        if (e.type === 'LOCATION') set.add(e.id)
+        if (e.type === 'LOCATION' || e.type === 'UNIVERSE') set.add(e.id)
       }
     }
     // A universe holding matching universe-level occupants is on the populated
@@ -212,7 +227,7 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
   // list shows a curated subset, so "the end of the collection" is not a
   // stable place to put them.
   const showAddRows = computed(() =>
-    !hasOccupantFilter.value && !activeUniverseFilters.value.size && focusPathIds.value.size === 0
+    !hasEntityChip.value && !activeUniverseFilters.value.size && focusPathIds.value.size === 0
   )
 
   // `occupants` / `allOccupants` are the matched and the full rosters; the
@@ -224,7 +239,7 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
   // it recursed into were pruned one frame later.
   function flattenTree(nodes, occupants, allOccupants, depth = 0, forced = false) {
     const result = []
-    const filterMode = hasOccupantFilter.value
+    const filterMode = hasEntityChip.value
     const populated = populatedLocations.value
     const curUniverse = currentUniverse?.value || ''
     const focusSet = focusPathIds.value
@@ -251,7 +266,7 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       // occupant chip (name/type) is in play the chips are a union (OR), so
       // pruning by universe would hide exactly what the other chips bring in;
       // the populated-path prune below already shows the right paths.
-      if (activeUniverseFilters.value.size > 0 && !hasOccupantFilter.value) {
+      if (activeUniverseFilters.value.size > 0 && !hasEntityChip.value) {
         if (kind === 'universe' && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
         if (kind === 'location' && depth === 0 && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
       }
@@ -339,6 +354,7 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       result.push({
         id: node.id, name: node.name, universe: node.universe,
         depth, hasChildren, kind, reveal,
+        unpublished: unpublishedIds.value.has(node.id),
       })
       // In filter mode the matched roster of any place on the path is listed. In
       // focus mode only the focused place itself (and levels the GM expanded by
@@ -349,7 +365,7 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
           result.push({
             id: e.id, name: e.name, universe: e.currentUniverse || '',
             depth: depth + 1, hasChildren: false, kind: 'occupant',
-            entityType: e.type, entity: e,
+            entityType: e.type, entity: e, unpublished: !!e.unpublished,
           })
         }
         // Occupants live in locations, so the row trails each location's roster.
@@ -366,7 +382,7 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
           result.push({
             id: e.id, name: e.name, universe: e.currentUniverse || '',
             depth: depth + 1, hasChildren: false, kind: 'occupant',
-            entityType: e.type, entity: e,
+            entityType: e.type, entity: e, unpublished: !!e.unpublished,
           })
         }
       }

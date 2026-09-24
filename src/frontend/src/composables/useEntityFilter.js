@@ -81,6 +81,7 @@ export function useEntityFilter(entities) {
     return activeFilters.value.some((f) => {
       if (f.type === 'universe') return e.currentUniverse === f.value
       if (f.type === 'entityType') return e.type === f.value
+      if (f.type === 'unpublished') return !!e.unpublished
       if (f.type === 'name') {
         if (fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value)) return true
         const scope = matchedScope.value
@@ -104,14 +105,27 @@ export function useEntityFilter(entities) {
   // chips and the location/universe scope match are what this filter means, not
   // how a suggestion list behaves.
   //
-  // Candidates are the whole entity list plus the universe keys and the entity
-  // types: chips are additive (OR), so an active chip must not narrow what can
-  // be picked — otherwise a name outside the current matches could never be
-  // added. Nothing is excluded for already being a chip, which is the long-
-  // standing behaviour.
+  // Candidates are the whole entity list plus the universe keys, the entity
+  // types and the status chip: chips are additive (OR), so an active chip must
+  // not narrow what can be picked — otherwise a name outside the current matches
+  // could never be added. Nothing is excluded for already being a chip, which is
+  // the long-standing behaviour.
   const candidates = computed(() => {
     const out = []
     const seen = new Set()
+    // A **status** chip rather than a name or a type: it narrows to the GM's
+    // drafts, which is what "what needs attention" means. Offered first so it is
+    // reachable without scrolling past every entity, and searchable as "draft"
+    // too, since that is what the tree calls them.
+    out.push({
+      id: 'status:unpublished',
+      name: 'Unpublished',
+      hint: 'status',
+      filterType: 'unpublished',
+      filterValue: 'true',
+      filterLabel: 'Unpublished',
+      terms: ['unpublished', 'draft', 'drafts'],
+    })
     for (const u of universes.value) {
       if (!u.key || seen.has('uni:' + u.key)) continue
       seen.add('uni:' + u.key)
