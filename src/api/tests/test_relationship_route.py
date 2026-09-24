@@ -128,6 +128,53 @@ def test_a_relationship_navigates_back_to_the_entity_that_holds_it():
     assert [v.id for v in res.values] == ["kael"]
 
 
+SUPPORT = {"id": "edge-support", "type": "support", "owner_id": "sc-1",
+           "contact_id": "main-1", "contact_name": "Kael Drift"}
+
+
+def test_a_path_reaches_the_other_party_of_an_edge():
+    """The far end of my own edge: "the main I support".
+
+    `contact_id` was a dead-end scalar — a path could *filter* on who the other
+    side is but never arrive at them, so no path could say "the entity I support"
+    and walk on from there. `contact` is the counterpart of `entity`.
+    """
+    assert tc.edge("relationship", "contact").target == ("entity",)
+    assert tc.validate() == []
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="relationships"),
+             FilterStep(field="type", value="support"),
+             NavigateStep(edge="contact"))
+    types, errors = trace(s)
+    assert errors == []
+    assert final_type(s).element == "entity"
+    # The path is many (several edges, several contacts); the hop itself is one.
+    assert tc.edge("relationship", "contact").cardinality == "one"
+
+    subject = NS(id="sc-1", type="character", current_location="loc-1", current_universe="earth")
+    res = resolve(s, TargetContext(subject=subject, repo=Repo(relationships=[SUPPORT])))
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["main-1"]
+
+
+def test_the_contact_hop_walks_on_to_where_they_are():
+    """The whole route [[B61]] needs: me → the main I support → where they are."""
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="relationships"),
+             FilterStep(field="type", value="support"),
+             NavigateStep(edge="contact"), NavigateStep(edge="location"))
+
+    class PlacedRepo(Repo):
+        def get_entity(self, eid):
+            loc = "loc-emberline" if eid == "main-1" else None
+            return NS(id=eid, type="character", current_location=loc,
+                      current_universe="earth")
+
+    subject = NS(id="sc-1", type="character", current_location="loc-1", current_universe="earth")
+    res = resolve(s, TargetContext(subject=subject,
+                                  repo=PlacedRepo(relationships=[SUPPORT])))
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["loc-emberline"]
+
+
 def test_a_trait_instance_anchored_to_a_relationship_can_hop_back_to_it():
     """Only when it *is* relationship-anchored: an entity's own trait instance has
     no relationship to name, so the hop resolves to nobody rather than guessing."""

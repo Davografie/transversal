@@ -1642,6 +1642,12 @@ def register_default_edges() -> None:
                   lambda r, ctx: list(ctx.repo.get_relationship_traitsettings(r.get("id"))))
     register_edge("relationship", "entity",
                   lambda r, ctx: _maybe(ctx.repo.get_entity(r.get("owner_id"))))
+    # The far end of the same edge: the other party. `list_relationships_for_entity`
+    # already resolves the contact alongside the owner (one read, so a path need
+    # not look it up again) — this is the hop that lets "the main I support" and
+    # "my rival" be written as a path instead of a dead-end scalar read.
+    register_edge("relationship", "contact",
+                  lambda r, ctx: _maybe(ctx.repo.get_entity(r.get("contact_id"))))
     register_edge("traitsetting", "relationship",
                   lambda ts, ctx: _maybe(ctx.repo.get_relationship_by_key(ts.entity_id))
                   if getattr(ts, "from_type", "") == "relationship" else [])

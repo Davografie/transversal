@@ -520,6 +520,15 @@ EDGES: tuple[Edge, ...] = (
     Edge("traitsettings", "relationship", ("traitsetting",), "many", "Trait instances",
          noun="trait instance", plural="trait instances"),
     Edge("entity", "relationship", ("entity",), "one", "Holding entity", noun="owner"),
+    # The **other party**. `contact_id` was declared as a scalar referencing an
+    # entity, so a path could *filter* by who the other side is but could never
+    # walk to them — so there was no way to say "the main I support" ([[B61]]),
+    # "my rival", or anything else that needs the far end of my own edge. The hop
+    # is the counterpart of `entity` (the near end, the holding entity): one edge,
+    # two ends. Outgoing-only, like `relationships` itself, so "my rival" is
+    # someone *I* hold an edge about.
+    Edge("contact", "relationship", ("entity",), "one", "Other party",
+         noun="other entity", plural="other entities"),
     Edge("relationship", "traitsetting", ("relationship",), "one", "Owning relationship",
          noun="relationship"),
 
