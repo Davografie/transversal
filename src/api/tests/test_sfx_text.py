@@ -963,3 +963,56 @@ def test_starting_a_contest_reads_the_opponent_token():
     """A contest-triggered rule names the other side with the event's own token."""
     effect = Effect(type="contest", action="start", target="{contest_entity_opponent}")
     assert effect_text(effect) == "start a contest with the opposing entity"
+
+
+class _ResolverRepo:
+    """Just enough repository for the name resolver (it is duck-typed)."""
+
+    def __init__(self, settings=None, traits=None):
+        self._settings = settings or {}
+        self._traits = traits or {}
+
+    def get_traitsetting(self, ts_id):
+        return self._settings.get(ts_id)
+
+    def get_trait(self, trait_id):
+        return self._traits.get(trait_id)
+
+
+class _Named:
+    def __init__(self, name):
+        self.name = name
+
+
+class _Setting:
+    def __init__(self, trait_id, statement=""):
+        self.trait_id = trait_id
+        self.statement = statement
+
+
+def _resolver(repo):
+    from transversal.services.sfx_text import repo_name_resolver
+    return repo_name_resolver(repo)
+
+
+def test_a_trait_instance_reads_as_its_statement():
+    """A copy/move card's whole subject is the referenced instance; a raw
+    `char-1:trait-9` is the least readable thing the renderer can print."""
+    repo = _ResolverRepo(
+        settings={"char-1:medicine": _Setting("trait-med", statement="Field surgery")},
+        traits={"trait-med": _Named("Medicine")},
+    )
+    assert _resolver(repo)("char-1:medicine") == "Field surgery"
+
+
+def test_a_trait_instance_without_a_statement_reads_as_its_trait():
+    repo = _ResolverRepo(
+        settings={"char-1:medicine": _Setting("trait-med")},
+        traits={"trait-med": _Named("Medicine")},
+    )
+    assert _resolver(repo)("char-1:medicine") == "Medicine"
+
+
+def test_an_unknown_id_still_falls_back_to_itself():
+    repo = _ResolverRepo()
+    assert _resolver(repo)("char-1:medicine") is None

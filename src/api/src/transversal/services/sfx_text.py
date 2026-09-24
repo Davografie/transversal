@@ -1395,8 +1395,32 @@ def repo_name_resolver(repo) -> NameResolver:
                 key = getattr(candidate, "current_universe", "") or candidate.id
                 universes.setdefault(key, candidate.name or candidate.id)
             name = universes.get(ident)
+        if name is None:
+            name = _traitsetting_name(repo, ident, resolve)
 
         cache[ident] = name
         return name
 
     return resolve
+
+
+def _traitsetting_name(repo, ident: str, resolve: NameResolver) -> str | None:
+    """Name a trait **instance** the way the sheet does: statement first.
+
+    A trait setting has no ``name`` of its own, so it cannot ride the
+    ``_NAME_LOOKUPS`` protocol that names every other element. That left a *teach*
+    card reading "give Dmitri a copy of ``char-1:three_realms:trait-129471191``" —
+    and the referenced instance is the entire subject of a copy/move card, so the
+    raw id was the least readable place in the whole renderer. Falls back to the
+    registry trait's name, then to the id.
+    """
+    get_ts = getattr(repo, "get_traitsetting", None)
+    if not callable(get_ts):
+        return None
+    ts = get_ts(ident)
+    if ts is None:
+        return None
+    statement = (getattr(ts, "statement", "") or "").strip()
+    if statement:
+        return statement
+    return resolve(getattr(ts, "trait_id", "") or "")
