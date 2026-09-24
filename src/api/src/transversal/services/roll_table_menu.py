@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from transversal.domain import RollTableEntry
-from transversal.services.roll_table import resolve_table
+from transversal.services.roll_table import entry_applies, resolve_table
 
 if TYPE_CHECKING:
     from transversal.domain import Entity
@@ -65,6 +65,10 @@ def pick_roll_table_entry(
     entry = resolve_table(table, index=index)
     if entry is None:
         raise ValueError(f"no entry at index {index} in '{table_id}'")
+    # A *chosen* row is not steered to another one: if its conditions do not hold,
+    # say so rather than run something the player did not pick ([[B179]]).
+    if not entry_applies(entry, entity, repo, source=table, source_element="roll_table"):
+        raise ValueError(f"'{entry.label}' is not available right now")
 
     raz_cost = entry_razmerit_cost(entry)
     if entity.razmerit < raz_cost:

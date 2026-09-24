@@ -244,3 +244,61 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
             bind_named(name, resolution.values, ValueType(last.element, last.cardinality), ctx)
         bindings = dict(ctx.bindings)
     return bindings
+
+def entry_applies(entry, entity, repo, bindings: dict | None = None, *,
+                  source=None, source_element: str | None = None) -> bool:
+    """Whether a table entry's own conditions hold for this entity.
+
+    The conditions read the entry scope ([[B164]]): the ambient facts — the term's
+    faction, *this table's* path faction, the table, the roll and tier that reached
+    the entry — plus whatever the table declares. An entry with no conditions
+    always applies, which is every entry today (see [[B179]]).
+    """
+    conditions = list(getattr(entry, "conditions", None) or [])
+    if not conditions:
+        return True
+    if repo is None:
+        return False
+    from transversal.services.conditions import evaluate_conditions
+
+    return evaluate_conditions(entity, conditions, repo, {}, source=source,
+                               source_element=source_element,
+                               out_bindings=dict(bindings or {}))
+
+
+def resolve_applicable_entry(table, entity, repo, *, roll=None, tier=None, index=None,
+                             bindings: dict | None = None, source=None,
+                             source_element: str | None = None):
+    """The entry to run: the one the roll picked, or the previous one that applies.
+
+    **Fall back, don't re-roll** (the author's call, 2026-09-25): when the selected
+    entry's conditions do not hold, the nearest entry *before it in the table* whose
+    conditions do hold is used. Walking back over the list is what keeps a RANGE
+    table predictable — a roll keeps its row, and an excluded row hands over to the
+    one below it rather than redistributing the die — and it cannot invent an entry
+    that no roll could reach. When nothing applies the answer is ``None``: the
+    caller reports it rather than running a row that does not fit.
+
+    A **deliberate** pick (``index``, the menu path) is not steered this way: the
+    caller refuses it instead, because silently running a different row than the one
+    someone chose is a worse surprise than being told it is not available.
+    """
+    entry = resolve_table(table, roll=roll, tier=tier, index=index)
+    if entry is None:
+        return None
+    if entry_applies(entry, entity, repo, bindings, source=source,
+                     source_element=source_element):
+        return entry
+    entries = list(getattr(table, "entries", None) or [])
+    try:
+        position = entries.index(entry)
+    except ValueError:  # a resolved entry not in the list: nothing to walk back over
+        return None
+    for candidate in reversed(entries[:position]):
+        if entry_applies(candidate, entity, repo, bindings, source=source,
+                         source_element=source_element):
+            log.info("[resolve_applicable_entry] table=%s: entry %r does not apply — "
+                     "fell back to %r", getattr(table, "id", ""), entry.label,
+                     candidate.label)
+            return candidate
+    return None
