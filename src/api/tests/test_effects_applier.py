@@ -3324,3 +3324,17 @@ def test_change_rating_type_is_registered_on_the_engine_registry():
         assert ("modify_trait", "set_rating_type") in applier.effect_registry._handlers
     finally:
         applier.effect_registry = original
+
+
+def test_setting_a_rating_from_an_unresolved_path_does_not_write_d4():
+    """A `result_spec` that resolves nothing used to *overwrite* the rating with a
+    d4 and report success, because `_die` answers d4 for an empty value. The author
+    named a die; if the world produced none, saying so is the only honest answer."""
+    ts = _ts("technique", [DieType.D8], traitset_id="ts-1")
+    repo = FakeRepo(traits=[FakeTrait("technique", "ts-1")], traitsettings=[ts])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="set",
+                    target="char-1:technique", result=None)
+    result = apply_effects(_entity(), [effect], repo)
+    assert ts.dice == [DieType.D8]          # untouched
+    assert result.updated_trait_settings == []
+    assert "no die rating to set" in result.applied[0].summary

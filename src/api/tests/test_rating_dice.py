@@ -201,3 +201,35 @@ def test_a_destination_may_accept_either_locus():
     ok, errors = check(nowhere, both)
     assert ok is False
     assert "die/one or rating_die/one" in errors[0].message
+
+
+# ── Naming the instance (B100) ─────────────────────────────────
+#
+# A character can hold two instances of one generic trait — an agenda's steps, two
+# techniques from the same school. `trait_id` names the definition, so a path could
+# say "one of my grim portents" but never *which*; the instance's own key was the
+# one field the catalog had not declared.
+
+def test_a_path_can_narrow_to_one_trait_instance():
+    assert tc.field("traitsetting", "id") is not None
+    assert tc.validate() == []
+
+    chosen = _world(dice=[DieType.D8], ts_id="kael:portent-3")
+    other = _world(dice=[DieType.D6], ts_id="kael:portent-1")
+
+    class Repo:
+        def get_traitsettings_for_entity(self, eid):
+            return [other, chosen]
+
+    ctx = TargetContext(subject=NS(id="kael"), repo=Repo())
+    s = spec(
+        SelectStep(collection="self_traitsettings"),
+        FilterStep(field="id", operator="==", value="kael:portent-3"),
+        NavigateStep(edge="rating_dice"),
+        AggregateStep(fn="max", field="rating"),
+    )
+    types, errors = trace(s)
+    assert errors == []
+    # The highest die *of the instance I named* — the B100 ask ("set the rating to
+    # the highest die from its rating") written as one path.
+    assert [getattr(v, "id", v) for v in resolve(s, ctx).values] == [8]

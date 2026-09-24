@@ -155,7 +155,16 @@ def _apply_set(entity, effect, repo, result):
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to set"))
         return
-    die = _die(effect.result)
+    # An unreadable rating **skips** rather than defaulting. `_die` answers d4 for
+    # an empty value, so a `result_spec` path that resolved nothing (a typo, or a
+    # field the catalog does not declare) silently *overwrote* the trait's rating
+    # with a d4 and reported success. The author named a die; if the world did not
+    # produce one, saying so is the only honest answer.
+    die = _die_opt(effect.result)
+    if die is None:
+        result.applied.append(AppliedEffect(
+            effect, f"no die rating to set on {target} (got {effect.result!r})"))
+        return
     prior = existing.dice[0].value if existing.dice else None
     existing.dice = [die]
     result.updated_trait_settings.append(existing)

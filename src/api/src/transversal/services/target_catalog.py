@@ -198,6 +198,14 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
                              references="traitsetting", label="challenge"),
     },
     "traitsetting": {
+        # The instance's own key. A character legitimately holds two instances of
+        # one generic trait — an agenda's steps, two techniques from the same
+        # school — and `trait_id` names only the *definition*, so a path could say
+        # "one of my grim portents" but never which. Declared with `references`, the
+        # same as every other registry identity (see `relationship.id`, which was
+        # missing for exactly this reason).
+        "id": ScalarField("traitsetting", "id", "string", references="traitsetting",
+                          label="trait instance"),
         "rating": ScalarField("traitsetting", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
         "rating_type": ScalarField("traitsetting", "rating_type", "string", ("static", "resource", "challenge", "empty")),
         "polarity": ScalarField("traitsetting", "polarity", "string", ("positive", "negative")),
