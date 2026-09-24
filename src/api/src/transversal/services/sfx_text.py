@@ -1067,12 +1067,25 @@ def _die_scope(effect: Effect) -> str:
     """
     if not effect.die_filter:
         return ""
+    filt = effect.die_filter
     parts = []
-    for key, value in effect.die_filter.items():
-        if key == "role":
-            parts.append("unchosen die" if value is None else f"{value} die")
+    if "role" in filt:
+        parts.append("unchosen die" if filt["role"] is None else f"{filt['role']} die")
+    if "ts_id" in filt:
+        # *Whose* die, and it belongs to the noun rather than beside it: a rule
+        # that works from its own die says `{trait_setting}` here, and the reading
+        # is "for each unchosen die **from this trait**" — not "…and from this
+        # trait", which is what a separate part would join it with. Read in a fixed
+        # order so the phrase cannot depend on the order the keys were authored.
+        who = f"from {display_value(filt['ts_id'])}"
+        if parts:
+            parts[-1] = f"{parts[-1]} {who}"
         else:
-            parts.append(f"{key.replace('_', ' ')} {display_value(value)}")
+            parts.append(who)
+    for key, value in filt.items():
+        if key in ("role", "ts_id"):
+            continue
+        parts.append(f"{key.replace('_', ' ')} {display_value(value)}")
     return f"for each {' and '.join(parts)}"
 
 

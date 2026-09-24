@@ -331,15 +331,36 @@ def test_substitute_effect_context_covers_every_field_that_holds_a_token():
         timing=EffectTiming.IMMEDIATE, type="travel", action="move",
         target="{destination}", entity="{traveller}", result="{outcome}",
         refs={"body": TargetRef(value="{body}")},
+        # A per-die effect names *whose* die it runs for, and that is a token too.
+        # Leaving it literal meant "for each unchosen die of mine" matched nothing
+        # (or, worse for a rule that creates a hazard, every unchosen die).
+        die_filter={"role": None, "ts_id": "{source}"},
     )
     out = _substitute_effect_context(
         effect, {"destination": "krasnoyarsk", "traveller": "char-9",
-                 "outcome": "d10", "body": "char-9:earth"},
+                 "outcome": "d10", "body": "char-9:earth", "source": "ts-scar"},
     )
     assert out.target == "krasnoyarsk"
     assert out.entity == "char-9"
     assert out.result == "d10"
     assert out.refs["body"].value == "char-9:earth"
+    assert out.die_filter == {"role": None, "ts_id": "ts-scar"}
+
+
+def test_die_filter_substitution_keeps_a_null_predicate_null():
+    """"Not chosen" is expressed as a `null`, so the substitution must pass
+    non-strings through rather than stringifying them into a value no die has."""
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                    target="trait-x", die_filter={"role": None, "ts_id": "{source}"})
+    out = _substitute_effect_context(effect, {"source": "ts-scar"})
+    assert out.die_filter == {"role": None, "ts_id": "ts-scar"}
+    # And the substitution is what makes the per-die select match the right die.
+    from transversal.services.roll_deferral import _die_matches
+
+    assert _die_matches({"ts_id": "ts-scar", "role": None}, out.die_filter)
+    assert not _die_matches({"ts_id": "ts-other", "role": None}, out.die_filter)
 
 
 def test_substitute_effect_context_leaves_an_unmatched_token():

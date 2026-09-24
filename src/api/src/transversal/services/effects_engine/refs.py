@@ -78,6 +78,24 @@ def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | N
     if context_changed:
         updates["context"] = new_context
 
+    # And the dice a per-die effect runs for. `die_filter` names the dice by their
+    # own fields, and the one an author most needs is *whose* die it is — "for each
+    # unchosen die **from this rule's source**" is `{"role": null, "ts_id":
+    # "{trait_setting}"}`, and leaving the token literal matched nothing (a rule
+    # that creates a hazard from its own die instead created one for every
+    # unchosen die in the pool). Only string values can carry a token; a `null`
+    # is the whole point of "not chosen", so non-strings pass through untouched.
+    if effect.die_filter:
+        new_filter = {}
+        filter_changed = False
+        for k, v in effect.die_filter.items():
+            nv = _sub(v) if isinstance(v, str) else v
+            if nv != v:
+                filter_changed = True
+            new_filter[k] = nv
+        if filter_changed:
+            updates["die_filter"] = new_filter
+
     if not updates:
         return effect
     return effect.model_copy(update=updates)

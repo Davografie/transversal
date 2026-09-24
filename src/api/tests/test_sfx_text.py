@@ -1016,3 +1016,21 @@ def test_a_trait_instance_without_a_statement_reads_as_its_trait():
 def test_an_unknown_id_still_falls_back_to_itself():
     repo = _ResolverRepo()
     assert _resolver(repo)("char-1:medicine") is None
+
+
+def test_a_per_die_scope_can_say_whose_die_it_is():
+    """A rule that works from its *own* die says so in the filter (`{trait_setting}`
+    → "this trait"), and it reads as part of the noun, not as a second predicate."""
+    effect = Effect(type="modify_trait", action="gain", target="trait-scar", result="d6",
+                    die_filter={"role": None, "ts_id": "{trait_setting}"})
+    assert "for each unchosen die from this trait" in effect_text(effect)
+    # The phrase cannot depend on the order the keys were authored in.
+    flipped = effect.model_copy(
+        update={"die_filter": {"ts_id": "{trait_setting}", "role": None}})
+    assert effect_text(flipped) == effect_text(effect)
+
+
+def test_a_lone_die_filter_reads_exactly_as_before():
+    effect = Effect(type="modify_trait", action="gain", target="trait-scar", result="d6",
+                    die_filter={"role": None})
+    assert "for each unchosen die," in effect_text(effect)
