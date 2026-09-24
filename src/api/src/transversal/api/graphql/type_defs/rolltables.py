@@ -11,6 +11,10 @@ from transversal.api.graphql.type_defs.effects import (
     Effect,
     EffectInput,
 )
+from transversal.api.graphql.type_defs.sfx import (
+    BoundVariable,
+    BoundVariableInput,
+)
 from transversal.api.graphql.type_defs.enums import (
     DieType,
     OutcomeTier,
@@ -52,6 +56,10 @@ class RollTable:
     die: DieType
     check: Optional[RollTableCheck] = None
     entries: list[RollTableEntry]
+    # Names the table resolves for itself before an entry's effects run — the
+    # declaration an SFX already has (B164, route 2). Ambient facts (the term's
+    # faction, this table's path faction, the roll) exist without declaring anything.
+    bound_variables: list[BoundVariable] = strawberry.field(default_factory=list)
     canvas_x: Optional[float] = None
     canvas_y: Optional[float] = None
 
@@ -85,3 +93,4 @@ class RollTableInput:
     die: DieType = DieType.D6
     check: Optional[RollTableCheckInput] = None
     entries: list[RollTableEntryInput] = strawberry.field(default_factory=list)
+    bound_variables: list[BoundVariableInput] = strawberry.field(default_factory=list)

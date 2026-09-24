@@ -7,6 +7,7 @@ from transversal.domain.effects import (
     Condition,
     Effect,
 )
+from transversal.domain.sfx import BoundVariable
 from transversal.domain.enums import (
     DieType,
     OutcomeTier,
@@ -57,6 +58,12 @@ class RollTable(BaseModel):
     die: DieType = DieType.D6  # die size for range/index rolls (FIXED_DIE)
     check: Optional[RollTableCheck] = None  # legacy dice-pool check; unused
     entries: list[RollTableEntry] = Field(default_factory=list)
+    # Values this table names and resolves *for itself* before an entry's effects
+    # run — the declaration an SFX already has, so "the rival this table is about"
+    # is written once rather than in every entry that acts on them. Ambient facts
+    # (the term's faction, this table's path faction, the roll) are in scope
+    # whether or not anything is declared.
+    bound_variables: list[BoundVariable] = Field(default_factory=list)
     # Canvas layout persistence (GM manual arrangement of life-path nodes).
     canvas_x: Optional[float] = None
     canvas_y: Optional[float] = None

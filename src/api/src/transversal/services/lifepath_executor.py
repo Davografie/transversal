@@ -93,11 +93,22 @@ def resolve_step(
     old_razmerit = entity.razmerit
     scheduled = 0
 
+    # The names this entry's effects may use: the ambient facts (the term's
+    # faction, this table's *path* faction from the enrollment, the roll) plus
+    # whatever the table declares for itself. Sealed before the effects, so a
+    # condition or effect reads the same scope.
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
+    from transversal.services.roll_table import table_bindings
+
+    effect_context = {
+        BINDINGS_CONTEXT_KEY: table_bindings(table, entity, repo, roll=roll, tier=tier, index=index)
+    }
+
     if engine is not None:
         immediate = [e for e in mutation_effects if e.timing == EffectTiming.IMMEDIATE]
         deferred = [e for e in mutation_effects if e.timing != EffectTiming.IMMEDIATE]
 
-        result: EffectsResult = apply_effects(entity, immediate, repo)
+        result: EffectsResult = apply_effects(entity, immediate, repo, effect_context)
         flow = _process_flow(entity, flow_effects, repo)
         _persist(entity, result, repo, old_razmerit)
 
@@ -108,7 +119,7 @@ def resolve_step(
             scheduled += 1
     else:
         # No scheduler available (e.g. direct unit tests) — apply everything now.
-        result: EffectsResult = apply_effects(entity, mutation_effects, repo)
+        result: EffectsResult = apply_effects(entity, mutation_effects, repo, effect_context)
         flow = _process_flow(entity, flow_effects, repo)
         _persist(entity, result, repo, old_razmerit)
 

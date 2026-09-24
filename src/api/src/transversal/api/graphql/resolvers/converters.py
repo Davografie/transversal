@@ -273,6 +273,13 @@ def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
             else None
         ),
         entries=[_entry_to_gql(e) for e in t.entries],
+        bound_variables=[
+            BoundVariable(
+                name=bv.name,
+                spec=(bv.spec.model_dump(mode="json", exclude_none=True) if bv.spec else None),
+            )
+            for bv in (t.bound_variables or [])
+        ],
         canvas_x=t.canvas_x,
         canvas_y=t.canvas_y,
     )
@@ -538,12 +545,21 @@ def _entry_input_to_domain(e: RollTableEntryInput) -> DomainRollTableEntry:
     )
 
 def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
+    from transversal.domain import BoundVariable as DomainBoundVariable
+
     return DomainRollTable(
         id=t.id, name=t.name, universe=t.universe, life_path=t.life_path,
         scheme=t.scheme, roll_source=t.roll_source, trait_dice_count=t.trait_dice_count,
         die=t.die,
         check=(_check_input_to_domain(t.check) if t.check is not None else None),
         entries=[_entry_input_to_domain(e) for e in t.entries],
+        bound_variables=[
+            DomainBoundVariable(
+                name=bv.name,
+                spec=_target_spec_from_input(bv.spec) if bv.spec else None,
+            )
+            for bv in (t.bound_variables or [])
+        ],
     )
 
 def _historical_record_to_gql(r: DomainHistoricalRecord) -> HistoricalRecord:
