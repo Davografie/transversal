@@ -1,5 +1,8 @@
 <template>
   <SseIndicator :connected="connected" :pulse="ssePulse" :error="error" />
+  <!-- Nothing else on screen can work without the archive, so this sits over the
+       whole app — not inside the login flow, which cannot fix a missing cookie. -->
+  <UnauthorizedNotice v-if="unauthorized" />
   <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
   <!-- Login / Settings overlay -->
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
@@ -232,6 +235,8 @@ import { useMobileBands } from '@/composables/useMobileBands.js'
 import { useThemeMode } from '@/composables/useThemeMode.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
 import LoginPrompt from '@/components/app/LoginPrompt.vue'
+import UnauthorizedNotice from '@/components/app/UnauthorizedNotice.vue'
+import { unauthorized } from '@/composables/useAuthGate.js'
 import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
 import ModeAndMediaBlock from '@/components/app/ModeAndMediaBlock.vue'
