@@ -549,7 +549,11 @@ function chainTitle(group) {
   return names.join(' → ')
 }
 
-async function fetch() {
+// Deliberately not named `fetch`: a function of that name inside this component
+// shadows `window.fetch` for every plain `fetch(...)` in the file, which is exactly
+// how the transverse click silently called this loader instead of the network and
+// reported "Could not travel there." with no request ever leaving the browser.
+async function loadEntries() {
   if (!props.visible) return
   loading.value = true
   try {
@@ -653,7 +657,7 @@ async function reorder(srcIdx, target) {
   }
 
   if (updates.length) await Promise.all(updates)
-  await fetch()
+  await loadEntries()
 }
 
 const { source: dragIndex, over: dragTarget, touchStart, dragStart, dragOver, drop, dragEnd } = useDragDrop({
@@ -706,7 +710,7 @@ async function send() {
   } finally {
     sending.value = false
     cancelCompose()
-    await fetch()
+    await loadEntries()
   }
 }
 
@@ -753,21 +757,42 @@ function viewImage(src) { window.open(src, '_blank') }
 const transversingId = ref('')
 const travelError = ref('')
 
+// The API's failures are not all shaped alike: a refusal this endpoint raises
+// carries a `detail`, an unhandled one is FastAPI's bare "Internal Server Error",
+// and a failure to reach the server has no response at all. Say whichever of those
+// actually happened — a bare "Could not travel there." told the reader nothing, and
+// it is what hid the shadowed-`fetch` bug behind a plausible-looking message.
+async function failureReason(r) {
+  const body = (await r.text().catch(() => '')).trim()
+  try {
+    const detail = JSON.parse(body)?.detail
+    if (typeof detail === 'string' && detail) return `${detail} (HTTP ${r.status})`
+    if (Array.isArray(detail)) {
+      return `${detail.map((d) => d.msg || JSON.stringify(d)).join('; ')} (HTTP ${r.status})`
+    }
+  } catch { /* not JSON — fall through to the raw body */ }
+  return body ? `${body.slice(0, 200)} (HTTP ${r.status})` : `HTTP ${r.status} ${r.statusText}`
+}
+
 async function transverseTo(locId) {
   if (!locId || transversingId.value) return  // one in flight at a time
   transversingId.value = locId
   travelError.value = ''
   try {
-    const r = await fetch(`/api/v1/entities/${props.entityId}/consciousness-travel`, {
+    // `window.fetch`, spelled out: this component used to define its own `fetch`
+    // (now `loadEntries`), which shadowed the global here and made this call run
+    // the loader instead of the request. Nothing shadows it now; the explicit
+    // global is so a future name in this file cannot reintroduce that.
+    const r = await window.fetch(`/api/v1/entities/${props.entityId}/consciousness-travel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ location: locId, projection_policy: '{closest_projection}' }),
     })
-    if (!r.ok) throw new Error(await r.text())
+    if (!r.ok) throw new Error(await failureReason(r))
     // No local refresh: the move publishes `location_changed`, which the app
     // answers by re-anchoring the view and refreshing this book.
   } catch (e) {
-    travelError.value = 'Could not travel there.'
+    travelError.value = `Could not travel there — ${e.message}`
     console.error('[BB] transverse failed', e)
   } finally {
     transversingId.value = ''
@@ -809,7 +834,7 @@ function openCompose(mode, recipient) {
   nextTick(() => bodyEl.value?.focus())
 }
 
-defineExpose({ openCompose, refresh: fetch })
+defineExpose({ openCompose, refresh: loadEntries })
 
 function cancelCompose() {
   showCompose.value = false
@@ -839,7 +864,7 @@ function formatTime(iso) {
   catch { return iso }
 }
 
-watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
+watch(() => props.visible, (v) => { if (v) loadEntries() }, { immediate: true })
 </script>
 
 <style scoped>

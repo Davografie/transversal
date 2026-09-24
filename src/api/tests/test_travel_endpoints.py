@@ -25,21 +25,24 @@ class _FakeRepo:
 
 
 class _FakeEM:
-    def __init__(self, result):
+    def __init__(self, result, raises=None):
         self.result = result
+        self.raises = raises
         self.calls = []
 
     def travel(self, entity_id, location, **kwargs):
         self.calls.append((entity_id, location, kwargs))
+        if self.raises is not None:
+            raise self.raises
         return self.result
 
 
-def _post(monkeypatch, body):
+def _post(monkeypatch, body, raises=None):
     mover = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael",
                    current_location="loc-b", current_universe="three_realms")
     destination = Entity(id="loc-b", type=EntityType.LOCATION, name="Aviary Peak",
                          current_universe="three_realms")
-    em = _FakeEM(mover)
+    em = _FakeEM(mover, raises=raises)
     monkeypatch.setattr(locations_module, "_em", lambda: em)
     monkeypatch.setattr(locations_module, "_repo", lambda: _FakeRepo([mover, destination]))
     app = FastAPI()
@@ -63,3 +66,22 @@ def test_consciousness_travel_defaults_to_the_last_projection(monkeypatch):
     r, em = _post(monkeypatch, {"location": "loc-b"})
     assert r.status_code == 200, r.text
     assert em.calls[0][2]["projection_policy"] == "{last_projection}"
+
+
+def test_consciousness_travel_reports_a_missing_entity_as_404(monkeypatch):
+    """A refusal has to reach the reader as a *reason*: the Blue Book prints the
+    detail, and an unhandled exception gave it only "Internal Server Error"."""
+    from transversal.services.entity_manager import EntityNotFoundError
+
+    r, _em = _post(monkeypatch, {"location": "loc-b"},
+                   raises=EntityNotFoundError("Entity 'char-1' not found"))
+    assert r.status_code == 404, r.text
+    assert "char-1" in r.json()["detail"]
+
+
+def test_consciousness_travel_reports_an_unknown_destination_as_400(monkeypatch):
+    """A Blue Book entry outlives the location it names, so this is routine."""
+    r, _em = _post(monkeypatch, {"location": "loc-gone"},
+                   raises=ValueError("Location 'loc-gone' not found"))
+    assert r.status_code == 400, r.text
+    assert "loc-gone" in r.json()["detail"]

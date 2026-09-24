@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.db.repository import EntityRepository
 from transversal.domain import ArrivalKind
-from transversal.services.entity_manager import EntityManager
+from transversal.services.entity_manager import EntityManager, EntityNotFoundError
 
 logger = logging.getLogger("transversal.locations")
 
@@ -190,14 +190,27 @@ async def move_entity(entity_id: str, body: MoveRequest):
 
 @router.post("/entities/{entity_id}/consciousness-travel")
 async def consciousness_travel(entity_id: str, body: MoveRequest):
-    """Transfer an entity's consciousness to a projection at the target location."""
+    """Transfer an entity's consciousness to a projection at the target location.
+
+    Failures are mapped instead of left to become a bare 500. The Blue Book's
+    click-a-place gesture reports the reason to the reader, and "Internal Server
+    Error" is not one — while a missing destination is a routine case there, since
+    a Blue Book entry outlives the location it names.
+    """
     em = _em()
     repo = _repo()
-    result = em.travel(
-        entity_id, body.location,
-        transversal_type="consciousness",
-        projection_policy=body.projection_policy or "{last_projection}",
-    )
+    try:
+        result = em.travel(
+            entity_id, body.location,
+            transversal_type="consciousness",
+            projection_policy=body.projection_policy or "{last_projection}",
+        )
+    except EntityNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        # `travel` raises this only for input it cannot resolve — an unknown
+        # destination location, or a projection id that no longer exists.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     loc = repo.get_entity(body.location)
     location_name = loc.name if loc else body.location
