@@ -288,10 +288,56 @@ class ImagenOrchestrator:
         )
         self.repo.create_entity_image(entity_image)
 
+        # 5. First image for a projection → also cut it out (B129). A cutout
+        # needs a source, so this hangs off the first *generated image* rather
+        # than off entity creation, which has no image yet.
+        if owner and not existing:
+            await self._auto_cutout_for_projection(entity, entity_image)
+
         await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
                            f"/media/imagen/{output_subpath}/{variants['large']}", 100)
 
         return entity_image
+
+    async def _auto_cutout_for_projection(self, entity: Entity, source: EntityImage) -> None:
+        """Cut out a projection's first image and tag the pair background/cutout.
+
+        The generated image becomes the ``background``; the transparent cutout
+        becomes both the ``navdot`` and the ``sheet`` portrait, which is what
+        lets a body show a floating cutout rather than a cropped circle.
+
+        Best-effort by design: the generation that triggered this has already
+        succeeded and its image is recorded, so a missing BiRefNet model or a
+        busy ComfyUI must not fail the job. On failure the source keeps the
+        roles auto-select gave it (all three), so the body still has an image
+        for every role — strictly better than stripping them with no cutout to
+        put in their place.
+
+        No sibling cleanup is needed: this only runs when the owner had no
+        images at all, so there is nothing holding ``background``/``sheet``/
+        ``navdot`` to strip.
+        """
+        entity_id = entity.id
+        try:
+            await self._report(entity_id, GenerationType.IMAGEN,
+                               GenerationStatus.SAVING, "Cutting out navdot...", 90)
+            cutout = await self.run_remove_background(
+                entity, source.id, report_gen_type=GenerationType.IMAGEN
+            )
+        except Exception:
+            logger.exception(
+                f"Auto-cutout failed for {source.id} (projection {source.projection_id}); "
+                "keeping the generated image with all three roles"
+            )
+            return
+
+        self.repo.update_entity_image(source.id, {"roles": ["background"]})
+        self.repo.update_entity_image(cutout.id, {"roles": ["navdot", "sheet"]})
+        source.roles = ["background"]
+        logger.info(
+            f"Auto-cutout for projection {source.projection_id}: "
+            f"{source.id} → background, {cutout.id} → navdot+sheet"
+        )
 
     # ── Animate (video loop) ───────────────────────────
 
@@ -555,14 +601,24 @@ class ImagenOrchestrator:
 
     # ── Remove background (static image cutout) ────────
 
-    async def run_remove_background(self, entity: Entity, image_id: str) -> EntityImage:
+    async def run_remove_background(
+        self,
+        entity: Entity,
+        image_id: str,
+        report_gen_type: GenerationType | None = None,
+    ) -> EntityImage:
         """Remove the background from an existing static image via BiRefNet.
 
         Produces a new transparent cutout image owned by the same entity or
         projection as the source. Non-destructive: the source is untouched.
+
+        ``report_gen_type`` lets a caller that is already running a job of its
+        own (the auto-cutout under imagen, B129) report under *that* type —
+        otherwise the progress stream would flip back to a second job type
+        mid-generation.
         """
         entity_id = entity.id
-        gen_type = GenerationType.REMOVE_BG
+        gen_type = report_gen_type or GenerationType.REMOVE_BG
 
         src = self.repo.get_entity_image(image_id)
         if not src:
