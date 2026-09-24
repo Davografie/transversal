@@ -221,6 +221,12 @@ async def _startup():
     backfill_support_default_sfx(repo)
     backfill_source_kinds(repo)
     backfill_play_as_rating_targets(repo)
+    # Roll-table tie anchors move off the legacy context pair onto the owner path
+    # ([[B164]]). Idempotent; the one `{term_faction}` rule in the shared tables is
+    # skipped and logged, since a runtime token is not a literal filter.
+    from transversal.services.roll_table import backfill_rolltable_anchor_paths
+
+    backfill_rolltable_anchor_paths(repo)
     repo.collapse_legacy_personal_relationship_types()
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:
