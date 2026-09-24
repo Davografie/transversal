@@ -132,13 +132,13 @@
               </template>
             </div>
             <Button v-if="!gmMode && !isForeignSheet" variant="ghost" size="icon" title="Player settings" @click.stop="$emit('openSettings')">↩</Button>
-            <!-- Not for a GM: this one-click tie runs from `viewerEntityId` (who you
-                 are acting as) to the entity you are viewing, so it authors a
-                 character's social tie rather than GM content — and in free-roam
-                 `viewerEntityId` is null, which makes it a dead button. The
-                 deliberate path ("+ Add relationship trait", beside "+ Add Trait")
-                 stays available. -->
-            <Button v-if="isForeignSheet && !relationship && !gmMode" variant="ghost" size="icon" title="Add relationship" @click.stop="createImmediateRelationship()">+</Button>
+            <!-- This tie runs from `viewerEntityId` (who you are acting as) to the
+                 entity you are viewing, so it needs someone to be acting as. A
+                 roaming GM has no acting entity, which is the one case where the
+                 one-click would be dead — `createImmediateRelationship` returns
+                 early. A GM *acting as* an entity still gets it: the tie belongs to
+                 that entity, not to the GM. -->
+            <Button v-if="isForeignSheet && !relationship && viewerEntityId" variant="ghost" size="icon" title="Add relationship" @click.stop="createImmediateRelationship()">+</Button>
           </div>
         </div>
         <div v-if="entitySfxIds.length || projectionSfxIds.length" class="entity-sfx-cards">

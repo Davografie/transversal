@@ -370,15 +370,15 @@ Navigation lives in the header **pills**: 👤 profile · 🎲 traits · 📘 bl
 - **Next set**: a `Next: <name> →` button sits under the trait list (right-aligned), jumping to the next set without picking. When a set fills to its limit, the view **auto-advances to the next set** (and returns to the list on the last set).
 - **Own vs foreign sheet**: your own sheet always shows the pills; a foreign sheet hides
   them and swaps in the relationship widget + "add relationship" affordance.
-- **…but a GM does not get the one-click tie.** The header `+` runs
+- **The one-click tie needs someone to be acting as.** The header `+` runs
   `createRelationship(from: viewerEntityId, to: the entity you are viewing)` — a *character's*
-  social tie toward the person you are looking at, not GM content. A GM acting as someone
-  would author that character's relationship, and in free-roam `viewerEntityId` is null so
-  the handler early-returns and the button is simply **dead**. So it is `isForeignSheet &&
-  !relationship && !gmMode`. The **deliberate** path stays: "+ Add relationship trait"
-  (beside "+ Add Trait", which is explicitly GM-enabled) picks which relationship from the
-  set, which is authoring rather than acting. Consequence: a GM sees the widget for a tie
-  that already exists but cannot create one from the header.
+  social tie toward the person you are looking at. So it is `isForeignSheet && !relationship
+  && viewerEntityId`: not a GM rule but the handler's own precondition. A **roaming GM** has
+  no acting entity, and there the handler early-returns — the button was simply **dead** — so
+  it is hidden. A **GM acting as an entity** keeps it, because the tie belongs to the entity
+  they are acting as, not to the GM. (First cut gated on `!gmMode`, which was wrong: it took
+  the button from a GM who *was* acting as someone.) Reading the precondition instead of the
+  role also covers any other no-acting-entity case for free.
 
 ### Sub-traits and containers
 
