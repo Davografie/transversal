@@ -58,10 +58,21 @@ _ACTION_GROUPS: dict[str, str] = {
     "disable_trait": "Trait", "toggle_trait": "Trait", "set_traitset_limit": "Trait",
     "gain_trait": "Trait", "gain_or_step_up_trait": "Trait",
     "cortex_gain_trait": "Trait", "reveal_trait": "Trait",
+    # The rest of the trait family: the actions that move, copy, re-point or
+    # switch an instance off were falling into "Other" — the junkyard group the
+    # picker sorts last — which is where B105 sends an author looking for the
+    # transfer verbs.
+    "copy_trait": "Trait", "move_trait": "Trait", "change_trait": "Trait",
+    "delete_trait": "Trait", "enable_trait": "Trait",
+    "invert_polarity": "Trait", "set_polarity": "Trait",
+    "gain_relationship_trait": "Trait", "gain_subtrait": "Trait",
     "earn_razmerit": "Razmerit", "spend_razmerit": "Razmerit",
     "transfer_razmerit": "Razmerit",
-    "create_asset": "Entity", "end_active_effect": "Entity", "create_projection": "Entity", "attune": "Attunement",
-    "travel": "Travel", "set_location": "Travel",
+    "create_asset": "Entity", "end_active_effect": "Entity", "create_projection": "Entity",
+    # `suppress` is the removal half of `attune` (see actions_world), and
+    # `set_destination` is how a rule grants travel directions.
+    "attune": "Attunement", "suppress": "Attunement",
+    "travel": "Travel", "set_location": "Travel", "set_destination": "Travel",
     "discover_life_path": "Life Path", "next_step": "Life Path",
     "open_roll_table": "Roll Table",
     "draft_life_path": "Life Path", "force_muster": "Life Path",
