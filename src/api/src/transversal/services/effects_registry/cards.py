@@ -22,7 +22,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_trait", "gain_or_step_up"): "gain or step up {target}",
     ("modify_trait", "disable"): "disable {target}",
     ("modify_trait", "gain"): "gain {target}",
-    ("modify_trait", "gain_relationship"): "gain {target} on your tie to {owner}",
+    ("modify_trait", "gain_relationship"): "gain {target} on {owner}",
     ("modify_trait", "gain_subtrait"): "gain {target} under {owner}",
     ("modify_trait", "remove"): "remove {target}",
     ("modify_trait", "cortex_gain"): "gain {target} as a complication at {result}",
@@ -70,4 +70,33 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     # The granted rule reads as its own name (resolved from the registry), and
     # whoever receives it is the clause's subject — see ``_effects_text``.
     ("sfx", "grant"): "gain {target}",
+
+    # ── The rest of the catalog ─────────────────────────────────────────
+    # Every action the vocabulary had never covered fell back to its own label,
+    # and the fallback has no slots: an authored target or result vanished from
+    # the card. Banish and Advance the Agenda were the two *live* victims (each
+    # read as its bare verb); these are the rest of the catalog, closed together
+    # so the next action an author picks cannot be one of them. A guard test now
+    # refuses a new action that declares a target and has no template.
+    ("modify_pool", "roll"): "roll the dice pool",
+    ("modify_outcome", "step_up_effect"): "step up the effect die",
+    ("modify_outcome", "step_up_outcome"): "step up the outcome tier",
+    ("modify_trait", "set"): "set {target} to {result}",
+    ("modify_trait", "invert_polarity"): "invert the polarity of {target}",
+    # Which polarity is the whole effect; ``_effect_core`` appends it, like the
+    # dice limit above ("set the polarity of X to negative").
+    ("modify_trait", "set_polarity"): "set the polarity of {target}",
+    ("modify_trait", "toggle"): "toggle {target}",
+    ("modify_trait", "reveal"): "reveal {target}",
+    ("create_entity", "create_asset"): "create the asset {target}",
+    ("entity", "cancel_scheduled_event"): "end the active effect {target}",
+    ("projection", "create"): "create the temporary projection {target}",
+    ("modify_traitset", "set_limit"): "set the limit of {target} to {result}",
+    # ``next_step`` with no target *is* "continue", and the placeholder reads it
+    # that way; a table named on the card is the authored case.
+    ("life_path", "next_step"): "advance to {target}",
+    ("life_path", "draft"): "draft into {target}",
+    ("life_path", "enroll"): "enroll in the life path",
+    ("life_path", "muster"): "muster out",
+    ("life_path", "force_muster"): "muster out dishonorably",
 }

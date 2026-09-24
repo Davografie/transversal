@@ -1108,3 +1108,75 @@ def test_the_traveller_leads_the_clause():
     text = effect_text(effect)
     assert "travels to" in text
     assert not text.startswith("travel")
+
+
+def test_every_action_that_declares_a_target_has_a_card_template():
+    """The class behind the Banish card: an action with no template falls back to
+    its own label, which has no slots, so an authored target or result is dropped
+    from the card. Two live rules read as their bare verb because of it ("Activated:
+    travel."). This refuses a *new* action that could do the same."""
+    from transversal.services import effects_registry as reg
+    from transversal.services.effects_registry.cards import EFFECT_ACTION_CARDS
+
+    missing = []
+    for meta in reg.EFFECT_ACTION_REGISTRY:
+        if getattr(meta, "retired", False):
+            continue
+        declares_target = ("target" in {f.name for f in meta.fields}) or bool(meta.path_element)
+        if not declares_target:
+            continue
+        if (meta.effect_type, meta.effect_action) not in EFFECT_ACTION_CARDS:
+            missing.append(f"{meta.effect_type}/{meta.effect_action} ({meta.label})")
+    assert not missing, "actions whose target would vanish from the card: " + ", ".join(sorted(missing))
+
+
+def test_each_actions_target_path_reaches_its_card():
+    """And the guard is not satisfied by a template that ignores the slot: for
+    every action declaring a target, an effect carrying a target *path* names it."""
+    from transversal.services import effects_registry as reg
+
+    unnamed = []
+    for meta in reg.EFFECT_ACTION_REGISTRY:
+        if getattr(meta, "retired", False):
+            continue
+        if "target" not in {f.name for f in meta.fields} and not meta.path_element:
+            continue
+        effect = Effect(
+            type=meta.effect_type, action=meta.effect_action, result="d4",
+            target_spec=TargetSpec(steps=[
+                {"kind": "literal", "element": "traitsetting", "value": "ts-fire-kael"}]),
+        )
+        text = effect_text(effect, resolve=resolve)
+        if "Fire" not in text:
+            unnamed.append(f"{meta.effect_type}/{meta.effect_action}: {text!r}")
+    assert not unnamed, "target path dropped from the card: " + "; ".join(unnamed)
+
+
+def test_set_polarity_says_which_polarity():
+    """The polarity is a context choice with a default, so a card that omits it
+    hides a decision — the `positive`/`negative` flip is the whole effect."""
+    positive = Effect(type="modify_trait", action="set_polarity", target="ts-fire-kael")
+    assert effect_text(positive, resolve=resolve) == "set the polarity of the Fire trait to positive"
+    negative = Effect(type="modify_trait", action="set_polarity", target="ts-fire-kael",
+                      context={"polarity": "negative"})
+    assert effect_text(negative, resolve=resolve) == "set the polarity of the Fire trait to negative"
+
+
+def test_the_anchor_of_a_gained_trait_reads_when_it_has_one():
+    """"Gain a rank on the tie to that faction" is the whole point of the
+    relationship/subtrait verbs, and their `{owner}` slot was never filled — the
+    card raised ``KeyError: 'owner'`` instead of rendering. Nothing live used
+    them, which is how it stayed hidden."""
+    edge = TargetSpec(steps=[
+        {"kind": "select", "collection": "self"},
+        {"kind": "navigate", "edge": "relationships"},
+        {"kind": "filter", "field": "contact_id", "operator": "==", "value": "trait-fire"},
+    ])
+    effect = Effect(type="modify_trait", action="gain_relationship", target="ts-fire-kael",
+                    result="d4", owner_spec=edge)
+    text = effect_text(effect, resolve=resolve)
+    assert "on your relationships with Fire" in text
+    # With no anchor path the trait anchors to the entity, so the clause goes
+    # rather than dangling ("gain the Fire trait on").
+    unanchored = effect.model_copy(update={"owner_spec": None})
+    assert effect_text(unanchored, resolve=resolve) == "gain the Fire trait (d4)"
