@@ -97,6 +97,12 @@ class Entity(BaseModel):
     current_universe: str
     current_location: Optional[str] = None
     current_projection: Optional[str] = None  # active projection id (occupant types)
+    # The objective this character is being *guided* to: a location id, written by
+    # the effects system's "set destination" action and read by the viewer to light
+    # the next hop ([[Location Viewer]]). Null = no directions. Only the id is
+    # stored — the destination's name and the route are both derived, so a rename
+    # or a graph change can never leave a stale label or a stale route behind.
+    destination_location: Optional[str] = None
     hidden: bool = False
     unpublished: bool = False  # GM draft: real in-world but not yet revealed to players
     support_eligible: bool = False  # GMC may be taken over as a support character (B86)

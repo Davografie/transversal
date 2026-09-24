@@ -36,10 +36,23 @@ async def location_graph():
 
 
 @router.get("/locations/{location_id}/navigate")
-async def navigate(location_id: str):
+async def navigate(location_id: str, entity_id: str | None = None):
     """Return navigation options from a location.
 
     Returns parent (up), children (down), and transversal destinations (lateral).
+
+    Pass ``entity_id`` to also get that character's **guided route**: when it
+    carries a ``destination_location`` — written by the effects system's "set
+    destination" action, which an SFX grants in the fiction — the response adds
+    ``destination`` (the objective) and ``next_hop`` (the neighbouring location
+    that is the first step toward it). The viewer lights that single navdot; see
+    [[Location Viewer]]. ``next_hop`` is null when the character is already there
+    or nothing connects the two, and ``destination`` is absent when the character
+    has no directions at all.
+
+    The hop is measured **from the location being viewed**, not from the
+    character's own ``current_location``, so every location shows its own next
+    step — which is what "each location highlights the next hop" means.
     """
     logger.info(f"[init] navigate loc={location_id}")
     repo = _repo()
@@ -92,6 +105,21 @@ async def navigate(location_id: str):
     # and it is served verbatim. Identity is never resolved by comparing
     # display names: they are editable labels, so a rename must not retarget
     # or orphan a zone.
+
+    # The guided route (optional, per-character — the destination lives on the
+    # entity). ``next_hop`` is present-but-null rather than absent when there is
+    # no way through, so the viewer can tell "no directions" from "directions
+    # with no route" — though authoring is supposed to refuse the latter.
+    if entity_id:
+        subject = repo.get_entity(entity_id)
+        destination_id = subject.destination_location if subject else None
+        if destination_id:
+            dest = repo.get_entity(destination_id)
+            result["destination"] = {
+                "location_id": destination_id,
+                "name": dest.name if dest else destination_id,
+            }
+            result["next_hop"] = repo.get_route_next_hop(location_id, destination_id)
 
     return result
 

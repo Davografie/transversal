@@ -657,7 +657,7 @@ class RepositoryCanvas:
                 found["in_tie_type"] = row["in_tie_type"]
         return sorted(merged.values(), key=lambda r: (r["entity_id"], r["name"]))
 
-    def _location_adjacency(self) -> dict[str, list[tuple[str, int]]]:
+    def _location_adjacency(self, exclude_hidden: bool = False) -> dict[str, list[tuple[str, int]]]:
         """The location graph as an undirected adjacency map.
 
         ``super`` **and** ``transversal`` edges, each step costing 1 — except a
@@ -666,9 +666,16 @@ class RepositoryCanvas:
         boundary crossing, so it always costs one step.
 
         One definition, shared by every distance read — the faction ranking
-        (:meth:`get_faction_distances_for_location`) and the point-to-point read
-        (:meth:`get_location_distances_from`) — so "how far" cannot come to mean
-        two different things.
+        (:meth:`get_faction_distances_for_location`), the point-to-point read
+        (:meth:`get_location_distances_from`) and the guided route
+        (:meth:`get_route_next_hop`) — so "how far" cannot come to mean two
+        different things.
+
+        ``exclude_hidden`` drops every edge touching a location flagged
+        ``hidden``, which removes that node from the graph (a node with no edges
+        is unreachable, and one that is unreachable can never be stepped through).
+        The guided route uses it to keep concealed places concealed — see
+        :meth:`get_route_next_hop`.
         """
         edge_query = f"""
             FOR r IN {RELATIONSHIPS}
@@ -685,10 +692,14 @@ class RepositoryCanvas:
                 from: f.key,
                 to: t.key,
                 cross: fe.current_universe != te.current_universe,
+                from_hidden: fe.hidden == true,
+                to_hidden: te.hidden == true,
             }}
         """
         adjacency: dict[str, list[tuple[str, int]]] = {}
         for row in self.db.aql.execute(edge_query):
+            if exclude_hidden and (row["from_hidden"] or row["to_hidden"]):
+                continue
             # Only a *portal* can cross a boundary; a `super` edge is a hierarchy
             # link and always costs one step.
             cost = (
@@ -700,7 +711,9 @@ class RepositoryCanvas:
             adjacency.setdefault(row["to"], []).append((row["from"], cost))
         return adjacency
 
-    def get_location_distances_from(self, origin: str, targets: set[str]) -> dict[str, int]:
+    def get_location_distances_from(
+        self, origin: str, targets: set[str], exclude_hidden: bool = False
+    ) -> dict[str, int]:
         """Weighted distance from ``origin`` to each **reachable** target location.
 
         The point-to-point sibling of :meth:`get_faction_distances_for_location`,
@@ -717,12 +730,16 @@ class RepositoryCanvas:
 
         Dijkstra, settling nearest-first, stopping once every target is settled —
         so an unreachable target costs walking its component, not the whole graph.
+
+        ``exclude_hidden`` walks the graph with every ``hidden`` location removed
+        (:meth:`_location_adjacency`), for callers that must not route through
+        concealed places.
         """
         remaining = {t for t in targets if t}
         found: dict[str, int] = {}
         if not remaining:
             return found
-        adjacency = self._location_adjacency()
+        adjacency = self._location_adjacency(exclude_hidden=exclude_hidden)
         seen: set[str] = set()
         heap: list[tuple[int, str]] = [(0, origin)]
         while heap:
@@ -739,6 +756,53 @@ class RepositoryCanvas:
                 if neighbour not in seen:
                     heapq.heappush(heap, (dist + cost, neighbour))
         return found
+
+    def get_route_next_hop(self, origin: str, destination: str) -> str | None:
+        """The next location to step to when walking from ``origin`` toward ``destination``.
+
+        The read behind the guided route ([[Location Viewer]]): given where a
+        character stands and the destination they were handed, which neighbouring
+        location is the first step? The viewer lights **that one** navdot and
+        nothing else, so following directions still means travelling — one hop at
+        a time — instead of reading the whole route off the map.
+
+        **Hidden locations stay hidden unless they are unavoidable.** The search
+        runs twice: first over a graph with every ``hidden`` location removed, and
+        only if that leaves ``origin`` unreachable does it fall back to the full
+        graph. So a concealed place is never given away while a way around it
+        exists, and a destination behind one is still reachable rather than
+        silently out of reach. That is the requested rule exactly, not a weighted
+        approximation: a cheap hidden shortcut versus a long open detour is a
+        different answer from "avoid it if you can".
+
+        Returns the neighbour's location id, or ``None`` when ``origin`` already
+        *is* the destination or nothing connects the two.
+
+        Reuses :meth:`get_location_distances_from` rather than a second Dijkstra:
+        the graph is undirected, so ``dist(destination → neighbour)`` is the same
+        number as ``dist(neighbour → destination)``, which is exactly the quantity
+        the choice needs. The cost of the step out of ``origin`` is added back on
+        top of it.
+        """
+        if not origin or not destination or origin == destination:
+            return None
+        for exclude_hidden in (True, False):
+            adjacency = self._location_adjacency(exclude_hidden=exclude_hidden)
+            steps = adjacency.get(origin) or []
+            if not steps:
+                continue
+            to_destination = self.get_location_distances_from(
+                destination, {n for n, _ in steps}, exclude_hidden=exclude_hidden
+            )
+            if not to_destination:
+                continue
+            # Cheapest total walk out of the origin: this step, plus the rest of
+            # the way from the neighbour. Ties break on id, so the hop is stable.
+            _total, nxt = min(
+                (cost + to_destination[n], n) for n, cost in steps if n in to_destination
+            )
+            return nxt
+        return None
 
     def get_faction_distances_for_location(self, location_id: str) -> list[dict]:
         """Every faction with its weighted distance to this location, nearest first.
