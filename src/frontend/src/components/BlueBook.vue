@@ -125,7 +125,41 @@
               </div>
               <div v-if="g.entry.recordType && g.entry.title" class="bb-entry-title bb-record-title">{{ g.entry.title }}</div>
               <div v-if="g.entry.threads?.length && !g.entry.recordType" class="bb-entry-threads"><span v-for="t in g.entry.threads" :key="t" class="bb-thread">#{{ t }}</span></div>
-              <div class="bb-body" v-html="renderMarkdown(g.entry.body)"></div>
+              <!-- A test or contest (B177): own roll left, opposition right, one row per
+                   round so the push and counter-push read as one entry growing down. -->
+              <div v-if="isRollRecord(g.entry)" class="bb-roll">
+                <div class="bb-roll-head">
+                  <span class="bb-roll-name">{{ rollSides(g.entry).own }}</span>
+                  <span class="bb-roll-vs">vs</span>
+                  <span class="bb-roll-name bb-roll-opp">{{ rollSides(g.entry).opposition }}</span>
+                </div>
+                <div v-for="row in rollRows(g.entry)" :key="row.round" class="bb-roll-round">
+                  <span class="bb-roll-n">{{ row.round }}</span>
+                  <div v-for="cell in row.cells" :key="cell.who" class="bb-roll-cell" :class="`bb-roll-${cell.who}`">
+                    <span v-if="cell.empty" class="bb-roll-none">—</span>
+                    <span v-else-if="cell.standing" class="bb-roll-standing" :title="`total ${cell.total} — no fresh roll this round`">still standing {{ cell.total }}</span>
+                    <template v-else>
+                      <span class="bb-roll-dice">
+                        <!-- No `label`: DieIcon renders a label *inside* the die, where a
+                             trait name would be clipped — the payload's `label` is the trait
+                             a die came from, so it belongs in the title. -->
+                        <DieIcon v-for="(d, di) in cell.dice" :key="di" :die="d.die" :result="d.result" :is-hitch="d.hitch" :class="d.role ? `bb-die-${d.role}` : ''" :title="d.title" />
+                      </span>
+                      <!-- A rolled side shows its total; a test's side is a difficulty at a
+                           place (no dice), and naming its total as well would print one
+                           number twice. -->
+                      <span v-if="cell.dice.length" class="bb-roll-total">{{ cell.total }}<span v-if="cell.effectDie" class="bb-roll-effect"> · {{ cell.effectDie }}</span></span>
+                      <span v-if="cell.difficulty != null" class="bb-roll-diff">difficulty {{ cell.difficulty }}</span>
+                      <span v-else-if="!cell.dice.length" class="bb-roll-total">{{ cell.total }}</span>
+                    </template>
+                  </div>
+                </div>
+                <div class="bb-roll-foot">
+                  <span class="bb-roll-result" :class="`bb-roll-${g.entry.data?.result}`">{{ rollOutcome(g.entry).label }}</span>
+                  <span v-if="rollOutcome(g.entry).effectDie" class="bb-roll-comp">took {{ rollOutcome(g.entry).effectDie }}</span>
+                </div>
+              </div>
+              <div v-else class="bb-body" v-html="renderMarkdown(g.entry.body)"></div>
               <div v-if="g.entry.images?.length" class="bb-images">
                 <img v-for="(img, i) in g.entry.images" :key="i" :src="img" class="bb-image" @click="viewImage(img)" />
               </div>
@@ -143,6 +177,7 @@
 import { ref, watch, nextTick, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import MediaImage from './MediaImage.vue'
+import DieIcon from './DieIcon.vue'
 import TagInput from './ui/TagInput.vue'
 import { useDragDrop } from '../composables/useDragDrop.js'
 import { renderMarkdown } from '../utils/markdown.js'
@@ -216,14 +251,75 @@ const ADD_JOURNAL = `mutation($eid:ID!,$title:String!,$body:String!,$images:[Str
 const MESSAGE_TAGS = `query{messageThreads}`
 const RELATED_ENTITIES = `query($eid:ID!,$q:String!){relatedEntities(entityId:$eid,query:$q){id name sheetPortrait}}`
 
-const RECORD_LABELS = { roll_table: 'Roll table', contest: 'Contest', transversal: 'Transversal' }
-const RECORD_ICONS = { roll_table: '🎲', contest: '⚔️', transversal: '🧭' }
+const RECORD_LABELS = { roll_table: 'Roll table', contest: 'Contest', test: 'Test', transversal: 'Transversal' }
+const RECORD_ICONS = { roll_table: '🎲', contest: '⚔️', test: '🎯', transversal: '🧭' }
 
 function recordLabel(m) { return RECORD_LABELS[m.recordType] || m.recordType }
 function recordIcon(m) { return RECORD_ICONS[m.recordType] || '🎲' }
 
+// A roll-shaped record: the owner's own roll on the left, what they rolled against on
+// the right, one row per round ([[B177]] — the payload contract is in the ticket).
+// Written at resolution holding every round, so this is a static view.
+const isRollRecord = (m) => m.recordType === 'contest' || m.recordType === 'test'
+
+const ROLL_OUTCOMES = {
+  win: 'Won', loss: 'Lost', gave_in: 'Gave in', taken_out: 'Taken out', unopposed: 'Unopposed',
+}
+
+/** The two column headings: the owner, and whoever — or whatever — they rolled against. */
+function rollSides(entry) {
+  const d = entry.data || {}
+  return {
+    own: d.own_name || 'You',
+    // A test rolls against a difficulty at a place, so it carries no opponent name.
+    opposition: d.opposition_name || d.location_name || 'Difficulty',
+  }
+}
+
+/** One row per round, two cells ready to render. */
+function rollRows(entry) {
+  const d = entry.data || {}
+  return (d.rounds || []).map((r) => ({
+    round: r.round,
+    cells: ['own', 'opposition'].map((who) => {
+      const s = r[who]
+      if (!s) return { who, empty: true }
+      return {
+        who,
+        empty: false,
+        // After a push only the pusher re-rolls; the other side's total stands as the
+        // difficulty to beat. Show that as standing — never as a second roll, or the
+        // same dice look thrown twice.
+        standing: !!s.standing,
+        total: s.total,
+        effectDie: s.effect_die || '',
+        difficulty: s.difficulty ?? null,
+        dice: (s.dice || []).map((x) => ({
+          ...x,
+          // The label is the trait a die came from; a hitch is called out rather than
+          // shown as a number; kept/effect dice and resource dice are named.
+          title: `${x.label ? x.label + ' ' : ''}${x.die}${x.result != null ? ' → ' + x.result : ''}`
+            + (x.role === 'total' ? ' (kept for the total)' : x.role === 'effect' ? ' (effect die)' : '')
+            + (x.hitch ? ' (hitch)' : '')
+            + (x.resource ? ' (resource)' : ''),
+        })),
+      }
+    }),
+  }))
+}
+
+function rollOutcome(entry) {
+  const d = entry.data || {}
+  return { label: ROLL_OUTCOMES[d.result] || d.result || '', effectDie: d.effect_die || '' }
+}
+
 function formatRecord(rec) {
   const d = rec.data || {}
+  if (isRollRecord(rec)) {
+    const own = d.own_name || 'You'
+    const other = d.opposition_name || d.location_name || ''
+    return other ? `${own} vs ${other}` : own
+  }
   if (rec.recordType === 'transversal') {
     const from = d.from_name || d.from_location || ''
     const to = d.to_name || d.to_location || ''
@@ -1048,4 +1144,31 @@ watch(() => props.visible, (v) => { if (v) loadEntries() }, { immediate: true })
 .bb-entry-actions{margin-top:4px}
 .bb-reply-btn{background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px}
 .bb-reply-btn:hover{background:var(--bg-hover)}
+/* A test/contest entry: own roll left, opposition right, rounds stacked (B177). */
+.bb-roll{margin:4px 0}
+.bb-roll-head{display:flex;align-items:baseline;gap:6px;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border);padding:0 0 3px 22px}
+.bb-roll-name{font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bb-roll-opp{text-align:right}
+.bb-roll-round{display:grid;grid-template-columns:16px 1fr 1fr;gap:6px;align-items:center;padding:3px 0}
+.bb-roll-round+.bb-roll-round{border-top:1px dashed var(--border)}
+.bb-roll-n{font-size:10px;color:var(--text-dim);text-align:center}
+.bb-roll-cell{display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-height:22px}
+.bb-roll-opposition{justify-content:flex-end}
+.bb-roll-dice{display:flex;align-items:center;gap:1px}
+/* The die component sizes itself; the entry needs them small enough for two columns. */
+.bb-roll-dice :deep(.die-icon){width:24px;height:27px}
+.bb-roll-dice :deep(.bb-die-total){filter:drop-shadow(0 0 2px var(--accent))}
+.bb-roll-dice :deep(.bb-die-effect){filter:drop-shadow(0 0 2px var(--warn))}
+.bb-roll-total{font-size:12px;font-weight:700}
+.bb-roll-effect{font-weight:600;color:var(--accent)}
+.bb-roll-diff{font-size:10px;color:var(--text-dim)}
+.bb-roll-standing{font-size:11px;font-style:italic;color:var(--text-dim)}
+.bb-roll-none{font-size:11px;color:var(--text-dim);opacity:0.5}
+.bb-roll-foot{display:flex;align-items:center;gap:6px;margin-top:3px;padding-top:3px;border-top:1px solid var(--border);font-size:11px}
+.bb-roll-result{font-weight:700}
+.bb-roll-win{color:var(--success)}
+.bb-roll-loss,.bb-roll-taken_out{color:var(--danger)}
+.bb-roll-gave_in{color:var(--warn)}
+.bb-roll-unopposed{color:var(--text-dim)}
+.bb-roll-comp{color:var(--text-dim)}
 </style>
