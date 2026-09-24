@@ -344,6 +344,7 @@
               :phase="phase"
               :limit-reached="limitReachedFor(t)"
               :wrap="activeSheetView === 'profile'"
+              :hide-contact="traitContinuations.has(t.id)"
             />
           <div v-if="activeSheetView === 'traits' && !flatTraitList && (prevSet || nextSet)" class="set-nav">
             <Button
@@ -466,7 +467,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
-import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
+import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, groupRelationRows, relationContinuations, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
 import { splitRefunds } from '../utils/poolSpends.js'
 import { DEFAULT_SHEET_TAB, hasSheetTab, sheetProfileFor } from '../utils/sheetProfile.js'
 import { entityTypeBucket, entityTypeRank } from '../constants/entityTypes.js'
@@ -1073,9 +1074,18 @@ const currentTraits = computed(() => {
   if (activeSheetView.value === 'profile') return profileTraits.value
   // Checked before `currentSet`: a stale `activeSetName` (the count dropped under
   // the limit while drilled in) must not resurrect the set view.
-  if (flatTraitList.value) return flatTraits.value
-  return currentSet.value?.traits || []
+  if (flatTraitList.value) return groupRelationRows(flatTraits.value)
+  // Grouped so a relationship's rows are consecutive — the group is what the
+  // repeated `→ contact` would otherwise be re-stating. A no-op for every other
+  // set, and for a relationship whose rows already share an edge.
+  return groupRelationRows(currentSet.value?.traits || [])
 })
+
+// Rows whose `→ contact` the row above already states. Computed over whatever
+// list is rendering, so the relations set, the flat list and the relation tab all
+// group the same way; the rule itself lives in the model (utils/traitTree.js) so
+// it can be checked without a browser.
+const traitContinuations = computed(() => relationContinuations(currentTraits.value))
 
 // Whether a row's set has used up its picks. The flat list mixes sets, so the
 // answer has to be found per row; drilled into one set, the lookup returns that
@@ -1301,8 +1311,18 @@ const traitsBackPhase = computed(() =>
  * by any edge, structural ones included, so for one character it was 18 entities
  * of which most were locations and factions. `relationship`'s `type` argument
  * defaults to `relation` (the personal type), so a probe that comes back non-null
- * is exactly "I have a relationship with them" — and its entity-level fallback is
- * what makes it find the migrated edges `relatedEntities` already found.
+ * is exactly "I have a relationship with them".
+ *
+ * **`relatedEntities` has a blind spot that matters here, so it cannot be the only
+ * source.** It matches `_from`/`_to` against `entities/<id>` only, so it sees
+ * *entity-anchored* edges and misses every edge anchored to one of the entity's
+ * **projections** — measured: Kael Drift has four relationship traits and
+ * `relatedEntities(Kael)` returns **zero**. `relationship()` finds those edges
+ * because it resolves endpoints through the projection path, so the settings the
+ * sheet already holds are the second source: a relationship-anchored setting names
+ * its contact, and those contacts are known without asking anyone. What is still
+ * missing is a contact you have a *projection-anchored* relationship with but no
+ * trait on yet — that needs a real read and is ticketed.
  *
  * The probes go out together: it is one burst, not a waterfall.
  */
@@ -1323,27 +1343,43 @@ async function loadRelationships() {
       ).catch(() => null)
       return r?.relationship ? p : null
     }))
-    const contacts = probed.filter(Boolean)
+    const contacts = new Map(probed.filter(Boolean).map(c => [c.id, c]))
 
-    // Which of those characters a player actually plays, in *one* read: the
-    // per-contact `agency` edge is what separates a main from a support, and
-    // `relatedEntities` does not carry it. A character with no player edge has no
-    // agency at all, which is how an unclaimed one is told apart from both.
+    // The blind-spot half: every contact the sheet already has a relationship
+    // trait for. Type is filled in by the read below, which knows it authoritatively.
+    for (const s of (allTraitSettings.value || [])) {
+      if (s.fromType !== 'relationship' || !s.relationshipContactId) continue
+      if (contacts.has(s.relationshipContactId)) continue
+      contacts.set(s.relationshipContactId, {
+        id: s.relationshipContactId,
+        name: s.relationshipContactName || s.relationshipContactId,
+        type: '',
+      })
+    }
+
+    // One read for the rest: the type each contact actually is, and which of them
+    // a player plays — `agency`'s `main` flag is what separates a main from a
+    // support, and `relatedEntities` carries neither. A character with no player
+    // edge has no agency at all, which is how an unclaimed one is told apart.
     const agency = new Map()
-    if (contacts.length) {
+    const types = new Map()
+    if (contacts.size) {
       const rows = await graphql(
-        `query($ids: [ID!]!) { entities(ids: $ids) { id agency { main } } }`,
-        { ids: contacts.map(c => c.id) },
+        `query($ids: [ID!]!) { entities(ids: $ids) { id name type agency { main } } }`,
+        { ids: [...contacts.keys()] },
       ).catch(() => null)
-      for (const r of rows?.entities || []) agency.set(r.id, r.agency)
+      for (const r of rows?.entities || []) {
+        agency.set(r.id, r.agency)
+        types.set(r.id, r.type)
+      }
     }
 
     // Grouped by the order an entity list reads in — mains, then supports, then
     // everything else by type — and alphabetical inside each group, because a
     // mixed list of people, places and factions is hard to scan for a particular one.
     const accentFree = { sensitivity: 'base' }
-    relationships.value = contacts
-      .map(c => ({ ...c, bucket: entityTypeBucket(c.type, agency.get(c.id)) }))
+    relationships.value = [...contacts.values()]
+      .map(c => ({ ...c, type: types.get(c.id) || c.type, bucket: entityTypeBucket(types.get(c.id) || c.type, agency.get(c.id)) }))
       .sort((a, b) =>
         (entityTypeRank(a.type, agency.get(a.id)) - entityTypeRank(b.type, agency.get(b.id)))
         || String(a.name || '').localeCompare(String(b.name || ''), undefined, accentFree))

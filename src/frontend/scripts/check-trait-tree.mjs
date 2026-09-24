@@ -25,6 +25,8 @@ import {
   isOpenContainer,
   canPickUp,
   findSetting,
+  groupRelationRows,
+  relationContinuations,
   rootAnchor,
   showsChildren,
   sortSetTraits,
@@ -285,6 +287,64 @@ ok('a sub-trait does not count — it rides its parent',
    ] }]), true)
 ok('an absent list is flat rather than a crash', usesFlatTraitList(undefined), true)
 ok('the limit is overridable', usesFlatTraitList([setOf('a', 5)], 4), false)
+
+// ── `→ contact` repeats only when the relationship changes ──────────────
+// Consecutive rows about one relationship read as a group; the label belongs at
+// the top of it, not on every line (the Blue Book's `entryContinuations` rule).
+const rel = (id, contactId, contactName, type = 'relation') => ({
+  id, fromType: 'relationship', relationshipContactId: contactId,
+  relationshipContactName: contactName, relationshipType: type,
+})
+const plain = (id) => ({ id, fromType: 'entity' })
+
+ok('a lone relationship states its contact',
+   [...relationContinuations([rel('a', 'gmc-1', 'Bai')])], [])
+ok('the second row about the same relationship does not repeat it',
+   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-1', 'Bai')])], ['b'])
+ok('a third row is a continuation too',
+   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-1', 'Bai'), rel('c', 'gmc-1', 'Bai')])],
+   ['b', 'c'])
+ok('a different contact starts a new group',
+   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-2', 'Dvalov')])], [])
+ok('and the row after it continues that new group',
+   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-2', 'Dvalov'), rel('c', 'gmc-2', 'Dvalov')])],
+   ['c'])
+ok('an ordinary trait between two breaks the run',
+   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), plain('x'), rel('c', 'gmc-1', 'Bai')])], [])
+ok('two ordinary traits are never continuations',
+   [...relationContinuations([plain('a'), plain('b')])], [])
+ok('the same contact through a different edge type is a different relationship',
+   [...relationContinuations([rel('a', 'f-1', 'Iron Roots', 'membership'), rel('b', 'f-1', 'Iron Roots', 'relation')])], [])
+ok('a row with no contact id never matches',
+   [...relationContinuations([rel('a', null, ''), rel('b', null, '')])], [])
+ok('an absent list is empty rather than a crash', [...relationContinuations(undefined)], [])
+ok('a single row is empty rather than a crash', [...relationContinuations([rel('a', 'gmc-1', 'Bai')])], [])
+
+// ── a relationship's rows are consecutive ──────────────────────────────
+const keys = (rows) => rows.map(r => r.id)
+const A1 = rel('a1', 'gmc-1', 'Bai'), A2 = rel('a2', 'gmc-1', 'Bai')
+const B1 = rel('b1', 'gmc-2', 'Dvalov'), B2 = rel('b2', 'gmc-2', 'Dvalov')
+const X = plain('x')
+
+ok('a split group is pulled together, keeping first-appearance order',
+   keys(groupRelationRows([A1, B1, A2])), ['a1', 'a2', 'b1'])
+ok('two groups each keep their own rows',
+   keys(groupRelationRows([A1, B1, A2, B2])), ['a1', 'a2', 'b1', 'b2'])
+ok('already-grouped rows are left alone (the no-op case)',
+   keys(groupRelationRows([A1, A2, B1, B2])), ['a1', 'a2', 'b1', 'b2'])
+ok('an ordinary trait keeps its own place between groups',
+   keys(groupRelationRows([A1, X, B1, A2])), ['a1', 'a2', 'x', 'b1'])
+ok('ordinary traits never group with each other',
+   keys(groupRelationRows([plain('p'), plain('q')])), ['p', 'q'])
+ok('a different edge type is a different group',
+   keys(groupRelationRows([rel('a', 'f-1', 'Iron Roots', 'membership'),
+                           rel('b', 'f-1', 'Iron Roots', 'relation')])), ['a', 'b'])
+ok('an absent list is empty rather than a crash', keys(groupRelationRows(undefined)), [])
+ok('a single row survives', keys(groupRelationRows([A1])), ['a1'])
+
+// The two together: grouped, then labelled once.
+ok('after grouping, only the first row of the run states the contact',
+   [...relationContinuations(groupRelationRows([A1, B1, A2]))], ['a2'])
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)

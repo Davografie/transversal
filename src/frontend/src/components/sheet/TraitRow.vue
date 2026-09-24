@@ -24,7 +24,10 @@
       <span class="trait-name" :class="{ disabled: phase !== 'adding' || api.isResourceDepleted(trait) }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
       <span v-if="api.traitTimerLabel(trait)" class="trait-timer" :title="'Re-enables after ' + api.traitTimerLabel(trait)">⏳ {{ api.traitTimerLabel(trait) }}</span>
       <span v-if="trait.enabled === false" class="trait-disabled-badge">disabled</span>
-      <span v-if="trait.fromType === 'relationship' && trait.relationshipContactName" class="trait-contact">→ {{ trait.relationshipContactName }}</span>
+      <!-- The contact is stated once per run of rows about the same relationship
+           (the sheet decides which rows are continuations), so a group reads as a
+           group instead of repeating the name on every line. -->
+      <span v-if="trait.fromType === 'relationship' && trait.relationshipContactName && !hideContact" class="trait-contact">→ {{ trait.relationshipContactName }}</span>
       <span v-if="trait.statement" class="trait-statement">{{ trait.statement }}</span>
       <div v-if="trait.sfxIds?.length" class="sfx-cards">
         <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId, 'chip')"
@@ -281,6 +284,8 @@ const props = defineProps({
   // True when this row sits directly under a container — the only nested rows
   // that may be picked up.
   insideContainer: { type: Boolean, default: false },
+  // The row above states the same relationship, so this row does not repeat it.
+  hideContact: { type: Boolean, default: false },
 })
 
 const children = computed(() => childrenOf(props.trait))

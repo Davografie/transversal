@@ -293,3 +293,60 @@ export function usesFlatTraitList(traitSets, limit = FLAT_TRAIT_LIMIT) {
   const roots = (traitSets || []).reduce((n, ts) => n + (ts?.traits?.length || 0), 0)
   return roots <= limit
 }
+
+/**
+ * Rows whose `→ contact` label a predecessor already states.
+ *
+ * Consecutive rows about the same relationship are one group, so the label is
+ * stated once at the top of it — the rule the Blue Book already applies to
+ * consecutive entries from one sender (`entryContinuations`), where repeating the
+ * name on every line is noise rather than information.
+ *
+ * Returns the ids of the rows that should **not** repeat the label. Only
+ * relationship-anchored rows participate, so an ordinary trait between two of
+ * them breaks the run — which is what makes "consecutive" mean consecutive.
+ *
+ * The relationship's identity is its contact **and** its edge type: one entity can
+ * be both a place you have a `relation` with and a faction you hold `membership`
+ * in, and those are two different relationships that happen to share a contact.
+ */
+export function relationContinuations(traits) {
+  const items = traits || []
+  const repeating = new Set()
+  for (let i = 1; i < items.length; i++) {
+    const prev = items[i - 1]
+    const curr = items[i]
+    if (prev?.fromType !== 'relationship' || curr?.fromType !== 'relationship') continue
+    if (!prev.relationshipContactId) continue
+    if (prev.relationshipContactId !== curr.relationshipContactId) continue
+    if ((prev.relationshipType || '') !== (curr.relationshipType || '')) continue
+    repeating.add(curr.id)
+  }
+  return repeating
+}
+
+/**
+ * Pull rows about the same relationship together, so a group is consecutive.
+ *
+ * Rows are ordered by their setting id, which begins with the edge key — so two
+ * traits on **one** relationship are adjacent, and two on **different edges to the
+ * same contact** are not. That second case is real: the same pair can carry an
+ * entity-level edge and a body-level one, and the reader sees one relationship
+ * either way. Without this, `relationContinuations` would only ever fire on data
+ * that was authored in one go.
+ *
+ * Stable by first appearance: a relationship keeps the place its first row had,
+ * and its remaining rows follow it. Anything that is not a relationship row keeps
+ * its own position, so this is a no-op for every other set.
+ */
+export function groupRelationRows(traits) {
+  const groups = new Map()
+  for (const t of traits || []) {
+    const key = t?.fromType === 'relationship' && t.relationshipContactId
+      ? `rel:${t.relationshipType || ''}:${t.relationshipContactId}`
+      : `row:${t?.id}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(t)
+  }
+  return [...groups.values()].flat()
+}
