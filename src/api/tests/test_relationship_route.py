@@ -12,6 +12,8 @@
 
 from types import SimpleNamespace as NS
 
+import pytest
+
 from transversal.services import target_catalog as tc
 from transversal.services.target_resolver import (
     TargetContext,
@@ -354,3 +356,52 @@ def test_the_support_route_is_guarded_to_my_own_universe():
     other = resolve_route("three_realms")
     assert other.errors == []
     assert other.values == []
+
+
+# ── The membership scope, against the real database (B109) ────
+#
+# The bulk read is an AQL query with a nested roster test, and its *unit* double
+# returned a flat list — so the first live run was the only thing that showed
+# `AGGREGATE UNIQUE` over a list field yields lists-of-lists. These run the query
+# for real (skipped without Arango) and hold the two paths to each other.
+
+try:
+    from transversal.db.repository import EntityRepository
+    _live_repo = EntityRepository()
+    HAVE_DB = True
+except Exception:  # pragma: no cover - environment without Arango
+    _live_repo = None
+    HAVE_DB = False
+
+needs_db = pytest.mark.skipif(not HAVE_DB, reason="needs ArangoDB")
+
+
+@needs_db
+def test_the_bulk_membership_read_runs_and_agrees_with_the_single_read():
+    ids = [e.id for e in _live_repo.list_all_entities()[:40]]
+    bulk = _live_repo.list_member_factions_with_sfx_bulk(ids)
+    # The query parses and returns flat sfx-id lists — the shape the prefetch reads.
+    for member, sfx_ids in bulk.items():
+        assert isinstance(sfx_ids, list)
+        assert all(isinstance(s, str) for s in sfx_ids), (member, sfx_ids)
+    single = {eid: [s for f in _live_repo.list_member_factions_with_sfx(eid)
+                    for s in (f.sfx_ids or [])]
+              for eid in ids}
+    assert {k: sorted(v) for k, v in bulk.items()} == \
+           {k: sorted(v) for k, v in single.items() if v}
+
+
+@needs_db
+def test_faction_rules_only_reach_faction_members():
+    """A `relation` tie to a *person* is not a roster slot: a rule owned by someone
+    must never reach everyone who has a tie to them."""
+    rows = list(_live_repo.db.aql.execute(
+        "FOR d IN traitsets FILTER d.id == 'ts-relations-b114' RETURN 1"))
+    # The relation traitset exists in this deployment, so `relation` ties to
+    # factions are roster slots — but only where the target *is* a faction.
+    if not rows:
+        pytest.skip("the relation vocabulary is not seeded here")
+    for entity in _live_repo.list_all_entities()[:80]:
+        for faction in _live_repo.list_member_factions_with_sfx(entity.id):
+            assert faction.type == "faction", (entity.id, faction.id, faction.type)
+            assert faction.sfx_ids

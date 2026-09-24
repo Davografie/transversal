@@ -318,28 +318,36 @@ class RepositoryRelationships:
         if not entity_ids:
             return {}
         refs = [f"{ENTITIES}/{eid}" for eid in entity_ids]
+        # Two passes rather than one `AGGREGATE`: an aggregate over a *list* field
+        # yields a list of lists (each row's array is one element), which is not
+        # what the caller wants and only the live read showed it. The fan-out below
+        # turns each faction's plist into one row per rule, and the collect dedupes.
         query = f"""
-            FOR r IN {RELATIONSHIPS}
-              FILTER r._from IN @refs
-              FILTER r.type IN ['membership', 'relation']
-              LET f = DOCUMENT({ENTITIES}, PARSE_IDENTIFIER(r._to).key)
-              FILTER f != null AND f.type == 'faction'
-              FILTER LENGTH(f.sfx_ids || []) > 0
-              LET roster = r.type == 'membership' OR LENGTH(
-                  FOR ts IN {TRAITSETTINGS}
-                    FILTER ts._from == CONCAT('relationships/', r._key)
-                    LET t = DOCUMENT({TRAITS}, ts.trait_id)
-                    FILTER t != null AND LOWER(t.name) IN ['role', 'rank']
-                    LIMIT 1 RETURN 1) > 0
-              FILTER roster
-              COLLECT member = PARSE_IDENTIFIER(r._from).key AGGREGATE granted = UNIQUE(f.sfx_ids)
-              RETURN {{ member, granted }}
+            LET hits = (
+                FOR r IN {RELATIONSHIPS}
+                  FILTER r._from IN @refs
+                  FILTER r.type IN ['membership', 'relation']
+                  LET f = DOCUMENT({ENTITIES}, PARSE_IDENTIFIER(r._to).key)
+                  FILTER f != null AND f.type == 'faction'
+                  FILTER LENGTH(f.sfx_ids || []) > 0
+                  LET roster = r.type == 'membership' OR LENGTH(
+                      FOR ts IN {TRAITSETTINGS}
+                        FILTER ts._from == CONCAT('relationships/', r._key)
+                        LET t = DOCUMENT({TRAITS}, ts.trait_id)
+                        FILTER t != null AND LOWER(t.name) IN ['role', 'rank']
+                        LIMIT 1 RETURN 1) > 0
+                  FILTER roster
+                  RETURN {{ member: PARSE_IDENTIFIER(r._from).key, sfx_ids: f.sfx_ids }}
+            )
+            FOR h IN hits
+              FOR sid IN h.sfx_ids
+                FILTER sid != null
+                COLLECT member = h.member, sfx = sid
+                RETURN {{ member, sfx }}
         """
         out: dict[str, list[str]] = {}
         for row in self.db.aql.execute(query, bind_vars={"refs": refs}):
-            ids = [i for i in (row.get("granted") or []) if i]
-            if ids:
-                out[row["member"]] = list(dict.fromkeys(ids))
+            out.setdefault(row["member"], []).append(row["sfx"])
         return out
 
     def list_ancestor_locations_with_sfx(self, location_id: str, max_depth: int = 8) -> list["Entity"]:
