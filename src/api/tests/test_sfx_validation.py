@@ -503,3 +503,39 @@ def test_a_choose_step_in_an_effects_own_condition_is_named():
     warnings = validate_sfx(_sfx(effects=[effect]))
 
     assert any("Effect 1 condition 1" in w for w in warnings), warnings
+
+
+def test_a_source_scalar_is_not_reported_as_unknown():
+    """`{order}` is a trait instance's position, declared in
+    `SOURCE_SCALAR_SEEDS` and offered by `effectVariables` as a typed `int`. The
+    validator read only the source *token*, so it warned about the very name the
+    editor was advertising — confirmed live before the fix (the query returned
+    `order: int` while `validateSfx` answered "unknown variable {order}")."""
+    sfx = _sfx(
+        trigger="on_roll", source_kind="trait_setting",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+            result="{order}", context={"limit": "total"},
+        )],
+    )
+    assert validate_sfx(sfx) == []
+
+
+def test_every_name_the_editor_offers_is_a_name_the_validator_knows():
+    """The gap was two readers of one declaration disagreeing, so the test is
+    written against the declaration rather than a list — a new source scalar
+    cannot reintroduce it without failing here."""
+    from transversal.services.target_catalog import scope_seed_names
+
+    offered = sorted(scope_seed_names("on_roll", "trait_setting"))
+    assert "order" in offered, "the declaration is empty, so this proves nothing"
+
+    for name in offered:
+        sfx = _sfx(
+            trigger="on_roll", source_kind="trait_setting",
+            effects=[Effect(
+                timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+                result="{" + name + "}", context={"limit": "total"},
+            )],
+        )
+        assert validate_sfx(sfx) == [], name

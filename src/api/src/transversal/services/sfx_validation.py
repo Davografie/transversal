@@ -160,10 +160,16 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
         known |= {v.name for vs in MENU_CONTEXT_VARIABLES.values() for v in vs}
     # The declared source kind exposes its typed variable, so the author can
     # reference it in effects/conditions without a false "unknown variable".
-    from transversal.services.target_catalog import source_variable
+    from transversal.services.target_catalog import scope_seed_names, source_variable
     src_var = source_variable(sfx.source_kind or "")
     if src_var:
         known.add(src_var)
+    # ...and so does its **scalar** fields, declared beside it in
+    # ``SOURCE_SCALAR_SEEDS`` (`{order}`). The editor offers those
+    # (`effectVariables` reads `scope_seed_names`), so a validator that did not
+    # would warn about a name it is itself advertising — which it did, for every
+    # source scalar, until this line. One declaration, both readers.
+    known |= set(scope_seed_names(sfx.trigger, sfx.source_kind))
 
     # A trigger that is *about its source* can never pass for a source kind that
     # has no such thing: "when this trait is added" needs a trait instance to be
