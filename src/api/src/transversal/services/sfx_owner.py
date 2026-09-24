@@ -1122,6 +1122,15 @@ def attach_refusal(sfx, owner_type: str, owner_id: str = "", repo=None) -> str |
         return f"belongs on {named}"
     if repo is not None and owner_id and not acquire_gate_holds(sfx, owner_type, owner_id, repo):
         return "can't be acquired here"
+    # Directions have to be *followable* from the place that grants them. Only a
+    # place owner is measured: an entity moves, so what it could tell you depends
+    # on where it stands when the rule fires. [[Guided Route]]
+    if repo is not None and owner_id and owner_type == "location":
+        from transversal.services.guided_route import directions_that_lead_nowhere
+
+        findings = directions_that_lead_nowhere(sfx, repo, [owner_id])
+        if findings:
+            return findings[0]
     return None
 
 

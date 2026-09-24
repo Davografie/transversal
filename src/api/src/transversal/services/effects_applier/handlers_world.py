@@ -401,3 +401,48 @@ def _apply_travel(entity, effect, repo, result):
         projection_policy = "{new_projection}"  # no existing body → spawn a fresh one
 
     _spawn_new()
+
+
+def _apply_set_destination(entity, effect, repo, result):
+    """Grant an entity directions to a place ([[Guided Route]]).
+
+    Only the destination **id** is written: the viewer derives the name and the
+    next hop from the graph, so a renamed location or an edited graph cannot leave
+    a stale label or a stale route behind. The subject is the entity who is being
+    told the way — the target machinery fans out, so a party-wide brief is one
+    effect over several subjects.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    location_id = _resolve_target(subject, effect, result, repo)
+    if location_id is None:
+        return  # pending choice recorded
+
+    prior = getattr(subject, "destination_location", None) or ""
+    subject.destination_location = location_id
+    result.applied.append(AppliedEffect(effect, f"directions to {location_id}"))
+    _queue_entity_revert(repo, subject, effect, prior_result=prior)
+
+
+def _apply_clear_destination(entity, effect, repo, result):
+    """The undo of directions — an expiry, or a decided activation taken back.
+
+    ``effect.result`` carries the pre-apply destination (the action declares
+    ``inverse_captures_prior``), so this **restores** what the guidance replaced
+    rather than always emptying it: re-pointing someone at a new place and then
+    ending that guidance leaves the old objective standing, which is what an
+    expiry of the *second* rule ought to mean.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    prior = (effect.result or "").strip() or None
+    subject.destination_location = prior
+    result.applied.append(
+        AppliedEffect(effect, f"directions restored to {prior}" if prior else "directions cleared")
+    )

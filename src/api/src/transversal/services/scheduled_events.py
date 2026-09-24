@@ -501,6 +501,13 @@ def dispatch_event(
     from transversal.services.roll_deferral import expire_armed
 
     if entity_id is not None:
+        if event_type == "location_changed":
+            # Standing on the destination ends the guidance ([[Guided Route]]).
+            # Cleared *before* the rules run, so a rule that reacts to an arrival
+            # can set a new destination without this wiping it in the same breath.
+            from transversal.services.guided_route import clear_arrived_destination
+
+            clear_arrived_destination(repo, entity_id, (context or {}).get("to_location"))
         expire_armed(entity_id, event_type)
         from transversal.services.state_events import fire_state_sfx
 

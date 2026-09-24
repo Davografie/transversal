@@ -48,6 +48,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("relationship", "create"): "create a relationship with {target}",
     ("attune", "enable"): "attune {target} to {result}",
     ("location", "set"): "move to {target}",
+    ("set_destination", "set"): "grant directions to {target}",
     ("life_path", "discover"): "discover the {target} life path",
     ("roll_table", "menu"): "roll on {target}",
     # The granted rule reads as its own name (resolved from the registry), and

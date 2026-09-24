@@ -68,10 +68,12 @@ from transversal.services.effects_applier.handlers_traits import (
     _apply_step_up,
 )
 from transversal.services.effects_applier.handlers_world import (
+    _apply_clear_destination,
     _apply_cancel_scheduled_event,
     _apply_create_projection,
     _apply_relationship_create,
     _apply_restore_projection,
+    _apply_set_destination,
     _apply_set_location,
     _apply_travel,
 )
@@ -104,6 +106,9 @@ _MUTATION_HANDLERS = {
     ("projection", "create"): _apply_create_projection,
     ("projection", "restore"): _apply_restore_projection,
     ("modify_traitset", "set_limit"): _apply_set_traitset_limit,
+    # Directions: set them, and the inverse that ends them ([[Guided Route]]).
+    ("set_destination", "set"): _apply_set_destination,
+    ("set_destination", "clear"): _apply_clear_destination,
     ("modify_dice_limit", "increase"): _apply_dice_limit,
     ("modify_dice_limit", "decrease"): _apply_dice_limit,
     ("modify_pool", "add_dice"): _apply_add_dice,

@@ -161,4 +161,33 @@ ACTIONS: list[EffectActionMeta] = [
         ],
     ),
 
+    # ── Set Destination (the guided route) ─────────────
+    # An SFX grants **directions in the fiction** — a mayor asks the party to
+    # clear the goblin cave, and the map lights the next hop. Only the
+    # destination *id* is written (`Entity.destination_location`); the name, the
+    # route and the next hop are all derived by the viewer, so renaming a place
+    # or editing the graph cannot leave a stale label behind. See [[Guided Route]].
+    EffectActionMeta(
+        action_id="set_destination",
+        label="Set Destination",
+        description="Grant directions: name the place they are trying to reach, and the map lights the next hop",
+        category="benefit",
+        effect_type="set_destination",
+        effect_action="set",
+        valid_timings=["IMMEDIATE"],
+        target_kind="location",
+        fields=[
+            _ENTITY_FIELD,
+            EffectFieldDef(name="target", label="Destination Location", field_type="text",
+                          required=True, default=""),
+        ],
+        # `clear` is the inverse and is deliberately **not** offered in the
+        # editor: it is how directions expire or are finished, not a verb an
+        # author reaches for. It captures the prior value, so an expiry restores
+        # whatever the guidance replaced rather than always emptying it.
+        supports_duration=True,
+        inverse=("set_destination", "clear"),
+        inverse_captures_prior=True,
+    ),
+
 ]

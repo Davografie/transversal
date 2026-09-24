@@ -941,12 +941,16 @@ def _result_text(effect: Effect, ref_result: str,
     where there is no result field to speak; otherwise the field does.
     """
     field_def = _result_field(effect)
+    stated = _effect_result(effect)
     if field_def is None:
-        return ref_result or display_value(_effect_result(effect), resolve)
+        return ref_result or (display_value(stated, resolve) if stated else "")
     superseding = (getattr(field_def, "hidden_when_ref", "") or "").strip()
     if superseding and superseding in (effect.refs or {}) and ref_result:
         return ref_result
-    return display_value(_effect_result(effect), resolve)
+    # "Nothing stated" is answered here rather than left to the name resolver: an
+    # action with no result field must not have the empty string resolved into
+    # something, however the resolver happens to treat `""`.
+    return display_value(stated, resolve) if stated else ""
 
 
 def _target_element(effect: Effect) -> str:
@@ -955,6 +959,8 @@ def _target_element(effect: Effect) -> str:
         return "trait"
     if effect.type == "modify_pool":
         return "pool"
+    if effect.type == "set_destination":
+        return "location"
     if effect.type in ("entity", "relationship", "attune", "location"):
         return "entity"
     if effect.type == "roll_table":

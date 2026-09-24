@@ -383,4 +383,37 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                     f"Effect {i + 1}: '{_condition_label(condition)}' can never pass — {gap}"
                 )
 
+    # Directions that cannot be followed from the place this rule lives on. Shown
+    # here as well as refused at the attach, because the editor only knows the
+    # owner once it is attached — and a rule can be re-pointed afterwards.
+    if repo is not None and sfx.id:
+        warnings.extend(unreachable_directions(sfx, repo))
+
     return warnings
+
+
+# ── Directions that lead nowhere ──────────────────────────────
+#
+# The predicate lives in `guided_route` because the *attach* refusal needs it too:
+# a rule granting directions is measured from the place that owns it, and that is
+# only known when it is attached (or read back from ownership). See that module
+# for why a location owner is the only origin this refuses on.
+
+
+def unreachable_directions(sfx: SFX, repo) -> list[str]:
+    """Directions on this rule that cannot be followed from the place it lives on."""
+    if repo is None or not sfx.id:
+        return []
+    from transversal.services.guided_route import (
+        declares_literal_directions,
+        directions_that_lead_nowhere,
+    )
+    from transversal.services.sfx_owner import list_owner_refs
+
+    # Guarded *before* the ownership read: that read walks every entity, and the
+    # overwhelming majority of rules grant no directions at all.
+    if not declares_literal_directions(sfx):
+        return []
+    origins = [r["owner_id"] for r in list_owner_refs(repo, "location")
+               if sfx.id in (r.get("sfx_ids") or [])]
+    return directions_that_lead_nowhere(sfx, repo, origins)
