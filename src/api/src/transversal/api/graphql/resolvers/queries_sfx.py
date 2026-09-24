@@ -138,8 +138,13 @@ class QueriesSfx:
         instance's trait offers it, but the chip only appears where the path
         resolves. This is the list the sheet should render — enforcement lives in
         the attach, so this is the honest preview of what would be accepted.
+
+        An **implicit** rule is left out ([[B131]]): it needs no learning, so
+        offering a learn-chip for it would offer to take what the instance already
+        has. Its reach is the acquire path's business, read by availability
+        instead.
         """
-        from transversal.services.sfx_owner import acquire_gate_holds, invalidate_sfx_cache
+        from transversal.services.sfx_owner import acquire_gate_holds
 
         repo = _em(info).repo
         ts = repo.get_traitsetting(str(trait_setting_id))
@@ -150,7 +155,7 @@ class QueriesSfx:
         out: list[strawberry.ID] = []
         for sfx_id in possible:
             sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
-            if sfx is None:
+            if sfx is None or getattr(sfx, "implicit", False):
                 continue
             if acquire_gate_holds(sfx, "trait_instance", ts.id, repo):
                 out.append(strawberry.ID(sfx_id))
