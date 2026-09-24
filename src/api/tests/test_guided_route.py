@@ -256,17 +256,27 @@ def test_an_unreachable_destination_is_refused_at_the_attach():
 
     reason = attach_refusal(_guide(ISLE), "location", AZURE, _route_world())
     assert reason, "directions to a place with no route must be refused"
-    assert "Azure Dawn" in reason and "Lost Isle" in reason
+    # The attach refusal is spliced into `'<name>' <reason>, not <owner type>`, so
+    # it stays a phrase and names what to do rather than the whole story...
+    assert reason == "belongs on a place that can reach Lost Isle"
+    # ...while the editor's warning list has room for the whole story.
+    from transversal.services.sfx_validation import unreachable_directions
+
+    warning = unreachable_directions(_guide(ISLE), _route_world())[0]
+    assert "Azure Dawn" in warning and "Lost Isle" in warning
 
 
-def test_the_refusal_names_the_place_the_guidance_starts_from():
-    """Measuring from the owner is the point: the same destination is fine from a
-    place that can reach it."""
+def test_reachability_is_measured_from_the_owner():
+    """The whole point of measuring from the owner: the same destination is fine
+    from a place that can reach it, and refused from one that cannot."""
     from transversal.services.sfx_owner import attach_refusal
 
     repo = _route_world()
     assert attach_refusal(_guide(ISLE), "location", AZURE, repo)
-    assert attach_refusal(_guide(CAVE), "location", CROSSROADS, repo) is None
+    assert attach_refusal(_guide(CAVE), "location", AZURE, repo) is None
+    # ...and the *same* unreachable destination is still refused from the hub,
+    # because a refusal must never depend on which end you measured.
+    assert attach_refusal(_guide(ISLE), "location", CROSSROADS, repo)
 
 
 def test_a_path_destination_is_not_checked():

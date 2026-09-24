@@ -1126,11 +1126,14 @@ def attach_refusal(sfx, owner_type: str, owner_id: str = "", repo=None) -> str |
     # place owner is measured: an entity moves, so what it could tell you depends
     # on where it stands when the rule fires. [[Guided Route]]
     if repo is not None and owner_id and owner_type == "location":
-        from transversal.services.guided_route import directions_that_lead_nowhere
+        from transversal.services.guided_route import (
+            find_unreachable_directions,
+            refusal_reason,
+        )
 
-        findings = directions_that_lead_nowhere(sfx, repo, [owner_id])
+        findings = find_unreachable_directions(sfx, repo, [owner_id])
         if findings:
-            return findings[0]
+            return refusal_reason(findings[0], repo)
     return None
 
 

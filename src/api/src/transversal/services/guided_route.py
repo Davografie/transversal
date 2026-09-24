@@ -16,6 +16,7 @@ event or three remembered call sites that would drift apart.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -103,25 +104,56 @@ def declares_literal_directions(sfx: "SFX") -> bool:
     return False
 
 
-def directions_that_lead_nowhere(sfx: "SFX", repo, origins: list[str]) -> list[str]:
-    """One message per ``set_destination`` that cannot be followed from ``origins``.
+@dataclass(frozen=True)
+class UnreachableDirections:
+    """A ``set_destination`` effect whose destination nothing leads to.
+
+    Returned structured rather than as a sentence because there are two audiences
+    with different room: the editor's warning list can afford the whole story
+    (which place, which destination, what to do), while the *attach* refusal is
+    spliced into ``'<name>' <reason>, not <owner type>`` and has to stay a phrase.
+    One predicate, two renderings — so they cannot disagree about what is wrong.
+    """
+    effect_index: int
+    destination: str
+    origins: tuple[str, ...]
+
+
+def find_unreachable_directions(sfx: "SFX", repo, origins: list[str]) -> list[UnreachableDirections]:
+    """Every ``set_destination`` that cannot be followed from ``origins``.
 
     Empty when there is nothing to prove: no such effect, no literal destination,
     or no origin to measure from.
     """
     if repo is None or not origins or not declares_literal_directions(sfx):
         return []
-    findings: list[str] = []
+    findings: list[UnreachableDirections] = []
     for i, effect in enumerate(sfx.effects):
         destination = literal_destination(effect, repo)
         if destination is None:
             continue
         if any(repo.get_location_distances_from(origin, {destination}) for origin in origins):
             continue
-        from_names = " or ".join(place_name(repo, o) for o in origins)
-        findings.append(
-            f"nothing leads from {from_names} to {place_name(repo, destination)}, so these "
-            f"directions could never be followed — give one of them a route, or grant them "
-            f"from a place that can reach it"
-        )
+        findings.append(UnreachableDirections(i, destination, tuple(origins)))
     return findings
+
+
+def describe_unreachable(finding: UnreachableDirections, repo) -> str:
+    """The whole story, for the editor's authoring warnings."""
+    from_names = " or ".join(place_name(repo, o) for o in finding.origins)
+    return (
+        f"Effect {finding.effect_index + 1}: nothing leads from {from_names} to "
+        f"{place_name(repo, finding.destination)}, so these directions could never be "
+        f"followed — give one of them a route, or grant them from a place that can reach it"
+    )
+
+
+def refusal_reason(finding: UnreachableDirections, repo) -> str:
+    """The phrase for ``attach_refusal``, whose caller appends ``, not <owner type>``.
+
+    Every other refusal there is a verb phrase ("belongs on Trait", "can't be
+    acquired here") and reads as the answer to *why not here?*; a full sentence
+    left that template trailing.
+    """
+    return (f"belongs on a place that can reach "
+            f"{place_name(repo, finding.destination)}")

@@ -406,7 +406,8 @@ def unreachable_directions(sfx: SFX, repo) -> list[str]:
         return []
     from transversal.services.guided_route import (
         declares_literal_directions,
-        directions_that_lead_nowhere,
+        describe_unreachable,
+        find_unreachable_directions,
     )
     from transversal.services.sfx_owner import list_owner_refs
 
@@ -416,4 +417,4 @@ def unreachable_directions(sfx: SFX, repo) -> list[str]:
         return []
     origins = [r["owner_id"] for r in list_owner_refs(repo, "location")
                if sfx.id in (r.get("sfx_ids") or [])]
-    return directions_that_lead_nowhere(sfx, repo, origins)
+    return [describe_unreachable(f, repo) for f in find_unreachable_directions(sfx, repo, origins)]
