@@ -83,7 +83,14 @@ def pick_roll_table_entry(
         else:
             to_commit.append(eff)
 
-    result = commit_effects(entity, to_commit, repo)
+    # The table's own names, same contract as the life-path executor: ambient facts
+    # plus whatever the table declares. Built from the entity paying/picking, so
+    # "the faction this table is about" is the same answer here.
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
+    from transversal.services.roll_table import table_bindings
+
+    context = {BINDINGS_CONTEXT_KEY: table_bindings(table, entity, repo, index=index)}
+    result = commit_effects(entity, to_commit, repo, context)
     return result, structured, entry.label, raz_cost
 
 
@@ -121,9 +128,16 @@ def create_support_character(
     if main.razmerit < raz_cost:
         raise ValueError(f"insufficient razmerit: need {raz_cost}, have {main.razmerit}")
 
+    # The table's names, built from the main (it holds the enrollments and any
+    # pending term) — the cost and the benefit describe the same table.
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
+    from transversal.services.roll_table import table_bindings
+
+    context = {BINDINGS_CONTEXT_KEY: table_bindings(table, main, repo, index=index)}
+
     # 1. The main pays the cost.
     if entry.cost_effects:
-        commit_effects(main, list(entry.cost_effects), repo)
+        commit_effects(main, list(entry.cost_effects), repo, context)
 
     # 2. Create the SC (a player-playable character) at the main's location.
     sc = em.create(
@@ -147,6 +161,6 @@ def create_support_character(
 
     # 4. The entry's benefit effects land on the new SC.
     if entry.effects:
-        commit_effects(sc, list(entry.effects), repo)
+        commit_effects(sc, list(entry.effects), repo, context)
 
     return sc

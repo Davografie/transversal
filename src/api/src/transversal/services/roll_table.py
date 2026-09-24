@@ -133,3 +133,94 @@ def backfill_rolltable_anchor_paths(repo) -> int:
         if touched:
             repo.update_roll_table(table)
     return changed
+
+# ── The names a table's effects may use ──────────────────────────────
+
+#: The ambient facts every roll-table entry is applied with, in the author's terms.
+#: They are seeded, not declared: the engine holds them, and there is no path that
+#: could express them (``pending_term`` is a checkpoint field, invisible to
+#: targeting), so making an author declare them would be busywork.
+AMBIENT_TABLE_BINDINGS = ("term_faction", "term_path", "path_faction", "path_id",
+                          "table_id", "roll", "entry_tier")
+
+
+def table_bindings(table, entity, repo, *, roll=None, tier=None, index=None) -> dict:
+    """The scope a roll-table entry's conditions and effects resolve against.
+
+    Two kinds of name, one scope:
+
+    * **ambient** — what the engine already knows. ``path_faction`` is the faction
+      of *this table's* path, read from the entity's **enrollment** (which records
+      faction × path), so it does not depend on which term happens to be in
+      progress and answers correctly for an entity enrolled in several paths. A
+      shared table (``life_path=None``) has no path of its own, so it falls back to
+      the term that invoked it; ``term_faction``/``term_path`` are always the
+      invoking term's, and ``table_id``/``roll``/``entry_tier`` describe the roll.
+    * **declared** — ``table.bound_variables``: the author's own names, each a
+      targeting path, resolved in declaration order into the same scope (a later
+      declaration may start from an earlier one, and from any ambient name).
+
+    A name that resolves to nothing is left *unbound*, never bound empty: for every
+    reader, "no value" and "no such name" are the same state, and a downstream path
+    then resolves to nobody rather than to a blank id.
+    """
+    from transversal.services.target_resolver import (
+        Binding, TargetContext, bind_named, resolve,
+    )
+    from transversal.services.target_spec import ValueType
+
+    def one(value, element=""):
+        text = str(value)
+        return Binding(value=text, values=[text], element=element, cardinality="one")
+
+    bindings: dict = {}
+    term = getattr(entity, "pending_term", None)
+    term_faction = (getattr(term, "faction_id", "") or "") if term is not None else ""
+    term_path = (getattr(term, "path_id", "") or "") if term is not None else ""
+
+    table_path = getattr(table, "life_path", "") or ""
+    enrollment = None
+    if table_path:
+        enrollment = next(
+            (e for e in (getattr(entity, "life_paths", None) or [])
+             if (getattr(e, "path_id", "") or "") == table_path),
+            None,
+        )
+    if enrollment is not None and getattr(enrollment, "faction_id", ""):
+        bindings["path_faction"] = one(enrollment.faction_id, "entity")
+        bindings["path_id"] = one(enrollment.path_id or table_path)
+    elif term_faction:
+        # Shared table: the invoking term is the only honest answer.
+        bindings["path_faction"] = one(term_faction, "entity")
+    if term_faction:
+        bindings["term_faction"] = one(term_faction, "entity")
+    if term_path:
+        bindings["term_path"] = one(term_path)
+    if getattr(table, "id", ""):
+        bindings["table_id"] = one(table.id)
+    if roll is not None:
+        bindings["roll"] = one(roll)
+    if tier is not None:
+        bindings["entry_tier"] = one(getattr(tier, "value", tier))
+
+    declared = getattr(table, "bound_variables", None) or []
+    if declared and repo is not None:
+        ctx = TargetContext(subject=entity, repo=repo, bindings=dict(bindings))
+        for declared_var in declared:
+            name = (getattr(declared_var, "name", "") or "").strip()
+            spec = getattr(declared_var, "spec", None)
+            if not name or spec is None or not getattr(spec, "steps", None):
+                continue
+            if name in ctx.bindings:
+                log.info("[table_bindings] table=%s variable '%s' shadows an existing "
+                         "name — refused", table.id, name)
+                continue
+            resolution = resolve(spec, ctx)
+            last = resolution.trace[-1] if resolution.trace else None
+            if resolution.errors or not resolution.values or last is None or not last.element:
+                log.info("[table_bindings] table=%s variable '%s' resolved nothing",
+                         table.id, name)
+                continue
+            bind_named(name, resolution.values, ValueType(last.element, last.cardinality), ctx)
+        bindings = dict(ctx.bindings)
+    return bindings
