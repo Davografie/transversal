@@ -980,7 +980,12 @@
     }
   },
   "521": {
-    "inputs": {},
+    "inputs": {
+      "anything": [
+        "341",
+        0
+      ]
+    },
     "class_type": "easy cleanGpuUsed",
     "_meta": {
       "title": "Clean VRAM Used"

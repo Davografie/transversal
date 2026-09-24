@@ -124,7 +124,8 @@
   },
   "25": {
     "inputs": {
-      "text": "concept art of a vertical spaceship, thrusters, hull, in outer space"
+      "text": "concept art of a vertical spaceship, thrusters, hull, in outer space",
+      "dynamic_prompts": false
     },
     "class_type": "Text Multiline",
     "_meta": {
@@ -133,7 +134,8 @@
   },
   "26": {
     "inputs": {
-      "text": "spacestation"
+      "text": "spacestation",
+      "dynamic_prompts": false
     },
     "class_type": "Text Multiline",
     "_meta": {
@@ -152,6 +154,8 @@
   "28": {
     "inputs": {
       "output_path": "[time(%Y-%m-%d)]",
+      "root": "output",
+      "bit_depth": "8-bit",
       "filename_prefix": "ComfyUI",
       "filename_delimiter": "_",
       "filename_number_padding": 4,
