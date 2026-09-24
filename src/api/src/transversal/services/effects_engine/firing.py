@@ -165,6 +165,54 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
         bindings=bindings if bindings is not None else {},
     )
 
+def bind_declared(sfx: SFX, bindings: dict, event: GameEvent, repo,
+                  source_id: str | None = None,
+                  source_element: str | None = None) -> None:
+    """Resolve the rule's own declared bound variables into the activation scope.
+
+    Called **before the condition gate** (its caller seals the scope there) and in
+    declaration order, so a later binding may start from an earlier one and every
+    later reader — a condition's path, an effect's path, or a flat ``{name}``
+    field — sees one scope. This is the author-facing half of
+    [[Effect Output Variables]]: a path step's 💡 binds a name as a *side effect*
+    of a path authored for another purpose (which is why it cannot be read before
+    the conditions), while a declared variable *is* the reason its path exists.
+
+    A path that matches nothing — or breaks — leaves the name **unbound**, never
+    bound empty. For every reader, "no value" and "no such name" are the same
+    state, and an unbound name makes a downstream path resolve to nobody rather
+    than to a blank id.
+
+    A name the activation already bound is refused rather than overwritten: the
+    engine's own names (``{trait_setting}``, ``{order}``) are what a path's
+    ``select source`` and the source scalars mean, and shadowing them would
+    silently change what an existing path reads.
+    """
+    declared = getattr(sfx, "bound_variables", None) or []
+    if not declared or repo is None:
+        return
+    from transversal.services.target_resolver import bind_named, resolve
+    from transversal.services.target_spec import ValueType
+
+    ctx = _fire_context(event, sfx, repo, bindings=bindings,
+                        source_id=source_id, source_element=source_element)
+    for declared_var in declared:
+        name = (getattr(declared_var, "name", "") or "").strip()
+        spec = getattr(declared_var, "spec", None)
+        if not name or spec is None or not getattr(spec, "steps", None):
+            continue
+        if name in bindings:
+            log.info("[bind_declared] sfx=%s variable '%s' shadows an activation name — refused",
+                     sfx.id, name)
+            continue
+        resolution = resolve(spec, ctx)
+        last = resolution.trace[-1] if resolution.trace else None
+        if resolution.errors or not resolution.values or last is None or not last.element:
+            log.info("[bind_declared] sfx=%s variable '%s' resolved nothing", sfx.id, name)
+            continue
+        bind_named(name, resolution.values, ValueType(last.element, last.cardinality), ctx)
+
+
 def _resolve_primary_targets(effect: Effect, context, structured, sfx: SFX,
                              source_id: str = "") -> tuple[list[str], bool]:
     """Resolve an effect's ``target_spec`` to concrete ids (immediate path).

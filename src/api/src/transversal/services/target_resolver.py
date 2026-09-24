@@ -666,15 +666,20 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
 
 # ── The walker ───────────────────────────────────────────────
 
-def _bind_step_outputs(step, values: list[Any], current_type: ValueType | None, context: TargetContext) -> None:
-    """Bind a step's declared ``output`` into the running scope.
+def bind_named(name: str, values: list[Any], current_type: ValueType | None,
+               context: TargetContext) -> None:
+    """Bind ``name`` to a resolved value in the running scope.
 
-    When the step resolves to ``many``, the full ordered list of ids is bound
-    (``cardinality="many"``); otherwise the first resolved value is bound as a
-    scalar (``cardinality="one"``). No-op when the step has no output or no
-    value/type.
+    The one home for *what a bound name is*: a ``many`` result binds the full
+    ordered list (``cardinality="many"``), a ``one`` result binds a scalar. Two
+    callers read it — a step's inline ``output`` (the 💡) and an SFX-level
+    declared bound variable — so they cannot disagree about cardinality, or about
+    which id a value carries.
+
+    No-op when there is no name, no value, or no type: an *unbound* name is the
+    honest state for "resolved to nothing", and it is what makes a downstream path
+    resolve to nobody rather than to a blank id.
     """
-    name = getattr(step, "output", None)
     if not name or not values or current_type is None or not current_type.element:
         return
     if current_type.cardinality == "many":
@@ -695,6 +700,11 @@ def _bind_step_outputs(step, values: list[Any], current_type: ValueType | None, 
     context.bindings[name] = Binding(
         value=rid, values=[rid], element=current_type.element, cardinality="one",
     )
+
+
+def _bind_step_outputs(step, values: list[Any], current_type: ValueType | None, context: TargetContext) -> None:
+    """Bind a step's declared ``output`` into the running scope (the 💡)."""
+    bind_named(getattr(step, "output", None), values, current_type, context)
 
 
 def _evaluate_step(values: list[Any], current_type: ValueType | None, step: EvaluateStep,

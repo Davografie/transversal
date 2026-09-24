@@ -5,6 +5,7 @@ import strawberry
 
 from transversal.api.graphql.types import AgencyEdge
 from transversal.api.graphql.types import Attunement
+from transversal.api.graphql.types import BoundVariable
 from transversal.api.graphql.types import Condition
 from transversal.api.graphql.types import ConditionInput
 from transversal.api.graphql.types import ConsequenceOption
@@ -346,6 +347,25 @@ def _target_spec_from_input(raw) -> Optional[TargetSpec]:
 
     return TargetSpec.model_validate(raw)
 
+
+def _bound_variables_from_input(raw) -> list:
+    """Validate an SFX's declared bound variables into domain models.
+
+    A nameless or pathless entry is dropped rather than persisted: the editor can
+    hold a half-typed row, and a stored variable that resolves to nothing would
+    look like a live name that never binds.
+    """
+    from transversal.domain import BoundVariable as DomainBoundVariable
+
+    out = []
+    for item in raw or []:
+        name = (getattr(item, "name", "") or "").strip()
+        spec = _target_spec_from_input(getattr(item, "spec", None))
+        if not name or spec is None:
+            continue
+        out.append(DomainBoundVariable(name=name, spec=spec))
+    return out
+
 def _consequence_option_to_gql(o: DomainConsequenceOption) -> ConsequenceOption:
     return ConsequenceOption(
         id=o.id, label=o.label, side=o.side,
@@ -552,6 +572,13 @@ def _sfx_ref(sfx, resolve=None) -> SfxRef:
         placement=sfx.placement, arming_scope=sfx.arming_scope,
         listener_spec=sfx.listener_spec.model_dump() if sfx.listener_spec else None,
         acquire_spec=sfx.acquire_spec.model_dump() if sfx.acquire_spec else None,
+        bound_variables=[
+            BoundVariable(
+                name=bv.name,
+                spec=bv.spec.model_dump() if getattr(bv, "spec", None) else None,
+            )
+            for bv in (getattr(sfx, "bound_variables", None) or [])
+        ],
         conditions=[_condition_to_gql(c) for c in sfx.conditions],
         effects=[_effect_to_gql(e) for e in sfx.effects],
         duration=_duration_to_gql(sfx.duration),

@@ -20,6 +20,24 @@ from transversal.domain.traits import (
 )
 
 
+class BoundVariable(BaseModel):
+    """A named value the rule resolves from the world *before it does anything*.
+
+    The author names a thing once ("their cultivation stage") with the target
+    builder, and every later reader — a condition's path, an effect's path, or a
+    flat ``{name}`` field — reads the same name. Distinct from a step's inline
+    ``output`` (the 💡 on a path): that binds as a *side effect* of a path
+    authored for another purpose, so it cannot exist before the conditions and
+    cannot be read by them.
+
+    ``name`` is the author's; ``spec`` resolves against the resolved activation
+    source, so ``select source`` is the usual seed.
+    """
+
+    name: str
+    spec: TargetSpec
+
+
 class SFX(BaseModel):
     """SFX registry entry.
 
@@ -58,6 +76,13 @@ class SFX(BaseModel):
     # as well as when it is offered, so gating with one would take the rule away
     # again the moment its bearer left the place they learned it.
     acquire_spec: Optional[TargetSpec] = None
+    # Named values resolved from the world **before the condition gate**, in
+    # declaration order — so a condition may read them, a later binding may start
+    # from an earlier one, and a flat `{name}` field means the same thing
+    # everywhere. Resolution lives in
+    # `services.effects_engine.firing.bind_declared`; this is only the
+    # declaration. (The runtime scope it fills is called `bindings`.)
+    bound_variables: list["BoundVariable"] = Field(default_factory=list)
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
     # How long the SFX stays in effect once triggered (the in-memory effective

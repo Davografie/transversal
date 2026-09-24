@@ -33,6 +33,8 @@ from transversal.api.graphql.type_defs.sfx import (  # noqa: F401
     SfxOwnerRef,
     PlaceSfxRules,
     OwnerRefInput,
+    BoundVariable,
+    BoundVariableInput,
 )
 from transversal.api.graphql.type_defs.traits import (  # noqa: F401
     TraitDisplayName,

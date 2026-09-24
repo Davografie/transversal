@@ -23,6 +23,7 @@ from transversal.services.effects_engine.firing import (
     _fire_context,
     _resolve_activation_source,
     _resolve_primary_targets,
+    bind_declared,
 )
 from transversal.services.effects_engine.refs import (
     _substitute_effect_context,
@@ -295,6 +296,13 @@ class EffectsEngine:
             # thing this rule is attached to" or "the opponent in this moment"
             # rather than only joining to a name an earlier step produced.
             bindings: dict = _activation_bindings(sfx, event, source_id, source)
+
+            # ...and then the rule's *own* declared variables, in declaration
+            # order, for exactly the same reason and in the same scope: the author
+            # named a value the rule is about, and both the gate below and every
+            # effect must read it by that name.
+            bind_declared(sfx, bindings, event, repo,
+                          source_id=source_id, source_element=source_element)
 
             # Condition gate (only when a repo is available to evaluate state)
             if sfx.conditions and repo is not None:

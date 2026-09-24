@@ -30,6 +30,22 @@ class SfxOwnerKind(str, Enum):
 SfxOwnerKindGql = strawberry.enum(SfxOwnerKind)
 
 @strawberry.type
+class BoundVariable:
+    """A named value the rule resolves before it does anything (see § Bound Variables).
+
+    ``spec`` is a targeting path as JSON, the same wire shape ``listenerSpec`` /
+    ``acquireSpec`` use. The name is the author's; the path usually starts at
+    ``select source``.
+    """
+    name: str
+    spec: Optional[strawberry.scalars.JSON] = None
+
+@strawberry.input
+class BoundVariableInput:
+    name: str
+    spec: Optional[strawberry.scalars.JSON] = None
+
+@strawberry.type
 class SfxRef:
     """SFX reference returned by queries."""
     id: strawberry.ID
@@ -46,6 +62,8 @@ class SfxRef:
     arming_scope: Optional[str] = None
     listener_spec: Optional[strawberry.scalars.JSON] = None
     acquire_spec: Optional[strawberry.scalars.JSON] = None
+    # Values the rule names and resolves for itself, before the conditions run.
+    bound_variables: list[BoundVariable] = strawberry.field(default_factory=list)
     conditions: list[Condition] = strawberry.field(default_factory=list)
     effects: list[Effect] = strawberry.field(default_factory=list)
     duration: Optional[EffectDuration] = None
@@ -65,6 +83,7 @@ class SfxInput:
     arming_scope: Optional[str] = None
     listener_spec: Optional[strawberry.scalars.JSON] = None
     acquire_spec: Optional[strawberry.scalars.JSON] = None
+    bound_variables: list[BoundVariableInput] = strawberry.field(default_factory=list)
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
     duration: Optional[EffectDurationInput] = None
@@ -82,6 +101,10 @@ class SfxUpdateInput:
     arming_scope: Optional[str] = None
     listener_spec: Optional[strawberry.scalars.JSON] = None
     acquire_spec: Optional[strawberry.scalars.JSON] = None
+    # ``None`` = leave as stored; ``[]`` = the author removed them all. The
+    # distinction matters: a save that cannot express "none left" silently keeps
+    # deleted variables alive.
+    bound_variables: Optional[list[BoundVariableInput]] = None
     conditions: Optional[list[ConditionInput]] = None
     effects: Optional[list[EffectInput]] = None
     duration: Optional[EffectDurationInput] = None

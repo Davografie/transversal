@@ -13,6 +13,7 @@ from transversal.api.graphql.types import PlaceSfxRules
 from transversal.services.sfx_text import repo_name_resolver
 from typing import Optional
 from transversal.api.graphql.resolvers.converters import (
+    _bound_variables_from_input,
     _condition_input_to_domain,
     _duration_input_to_domain,
     _effect_input_to_domain,
@@ -122,6 +123,7 @@ class QueriesSfx:
             trigger=sfx.trigger, limit=sfx.limit,
             source_kind=sfx.source_kind, placement=sfx.placement,
             arming_scope=sfx.arming_scope,
+            bound_variables=_bound_variables_from_input(sfx.bound_variables),
             conditions=[_condition_input_to_domain(c) for c in (sfx.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (sfx.effects or [])],
             duration=_duration_input_to_domain(sfx.duration),
@@ -349,6 +351,7 @@ class QueriesSfx:
             arming_scope=input.arming_scope,
             listener_spec=_target_spec_from_input(input.listener_spec),
             acquire_spec=_target_spec_from_input(input.acquire_spec),
+            bound_variables=_bound_variables_from_input(input.bound_variables),
             conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],
             duration=_duration_input_to_domain(input.duration),
