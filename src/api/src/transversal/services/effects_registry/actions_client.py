@@ -48,6 +48,12 @@ ACTIONS: list[EffectActionMeta] = [
                           required=False),
             EffectFieldDef(name="result", label="Message", field_type="text",
                           required=True, default=""),
+            # The tap target is a **field**, not a context value: that is where
+            # `_resolve_target` reads it, and it is what gives the editor an entity
+            # picker rather than a box for an id. As a context entry it was silently
+            # dropped — the live stream showed `tap: open_sheet` with no target.
+            EffectFieldDef(name="target", label="Tap Target", field_type="text",
+                          required=False),
         ],
         context_fields=[
             # Sticky is the *action's* nature ("sticky toast"), so it defaults on;
@@ -60,8 +66,6 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="tap", label="Tap Opens", field_type="select",
                           required=False, default="none",
                           options=["none", "open_sheet"]),
-            EffectFieldDef(name="target", label="Tap Target", field_type="text",
-                          required=False),
         ],
         target_kind="entity",
     ),

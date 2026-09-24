@@ -144,6 +144,18 @@ def test_a_toast_with_no_message_says_so_instead_of_showing_a_blank(monkeypatch)
     assert "no message to show" in result.applied[0].summary
 
 
+def test_the_toast_declares_the_tap_target_as_a_field(monkeypatch):
+    """It has to be a *field*: `_resolve_target` reads `effect.target`, and a
+    context entry was silently dropped — the live SSE stream showed
+    `tap: open_sheet` with no target at all."""
+    from transversal.services.target_catalog import element  # noqa: F401  (kept for symmetry)
+    from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
+
+    toast = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "show_toast")
+    assert "target" in [f.name for f in toast.fields]
+    assert "target" not in [f.name for f in toast.context_fields]
+
+
 def test_a_toast_only_carries_a_tap_target_when_tapping_opens_something(monkeypatch):
     seen = []
     import transversal.services.client_actions as ca
