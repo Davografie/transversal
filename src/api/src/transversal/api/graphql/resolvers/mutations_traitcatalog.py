@@ -171,6 +171,11 @@ class MutationsTraitCatalog:
             # Re-provision existing instances with the new defaults (#49).
             from transversal.services.sfx_owner import propagate_trait_default_sfx
             propagate_trait_default_sfx(_em(info).repo, str(id))
+        # A trait's declared rules changed: `possible_sfx_ids` decides which
+        # implicit rules its instances carry ([[B131]]), so the availability cache
+        # must not keep serving the pre-edit declaration.
+        from transversal.services.sfx_owner import invalidate_sfx_cache
+        invalidate_sfx_cache()
         return TraitRef(
             id=updated.id, name=updated.name, universes=updated.universes,
             traitset_id=updated.traitset_id,

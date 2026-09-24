@@ -76,6 +76,18 @@ class SFX(BaseModel):
     # as well as when it is offered, so gating with one would take the rule away
     # again the moment its bearer left the place they learned it.
     acquire_spec: Optional[TargetSpec] = None
+    # Whether the rule applies to the surfaces its acquisition path targets
+    # **without being learned first** ([[B131]]).
+    #
+    # `Trait.possible_sfx_ids` is the declaration: it says which trait offers the
+    # rule, and with this flag set every *instance* of that trait simply has it —
+    # no learn-chip, no `sfx_ids` entry on the instance. Unset (the default, and
+    # what every existing rule means) it must be taken before it can be used.
+    #
+    # The acquire gate still bounds *where* it applies when one is declared: "only
+    # in the Verdant Steps" is a fact about the rule's reach, not about learning,
+    # and going implicit must not quietly make it universal.
+    implicit: bool = False
     # Named values resolved from the world **before the condition gate**, in
     # declaration order — so a condition may read them, a later binding may start
     # from an earlier one, and a flat `{name}` field means the same thing

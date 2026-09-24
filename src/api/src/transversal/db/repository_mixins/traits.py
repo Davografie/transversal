@@ -25,6 +25,22 @@ class RepositoryTraits:
         doc = self._traits_index().get(trait_id)
         return Trait.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
+    def list_traits_declaring_sfx(self, sfx_id: str) -> list[Trait]:
+        """The registry traits that nominate this rule, in one read.
+
+        A trait can *provision* a rule onto its instances (`default_sfx_ids`) or
+        merely *offer* it (`possible_sfx_ids`). The editor needs both answers for a
+        rule it is showing — "who hands this out?" is otherwise invisible from the
+        rule's side — and it reads from the cached traits index rather than
+        scanning the collection for a field the caller may not know exists.
+        """
+        out: list[Trait] = []
+        for doc in self._traits_index().values():
+            if sfx_id in (doc.get("default_sfx_ids") or []) \
+                    or sfx_id in (doc.get("possible_sfx_ids") or []):
+                out.append(Trait.model_validate({**doc, "id": doc["_key"]}))
+        return sorted(out, key=lambda t: (t.name or "").lower())
+
     def get_traits_by_universe(self, universe: str) -> list[Trait]:
         query = f"""
             FOR t IN {TRAITS}

@@ -722,11 +722,38 @@ _SFX_CACHE: dict[str, Any] = {}
 _SFX_CACHE_FILLED_AT = 0.0
 
 
+# The other half of the same read: which rules a trait's instances get *without*
+# learning them ([[B131]]). Availability walks an entity's trait instances, and
+# reading each instance's registry trait to find its `possible_sfx_ids` would add
+# a query per instance to the hottest path in the system. Traits change as rarely
+# as rules do, so the declaration is cached by trait id — including the empty
+# answer, which is the common one, so a trait that declares nothing is asked once.
+_POSSIBLE_SFX_CACHE: dict[str, tuple[str, ...]] = {}
+
+
 def invalidate_sfx_cache() -> None:
-    """Drop the cached SFX records (call after any SFX write)."""
+    """Drop the cached SFX records and trait declarations (any rule/trait write)."""
     global _SFX_CACHE_FILLED_AT
     _SFX_CACHE.clear()
+    _POSSIBLE_SFX_CACHE.clear()
     _SFX_CACHE_FILLED_AT = 0.0
+
+
+def possible_sfx_ids(repo, trait_id: str) -> tuple[str, ...]:
+    """The rules a registry trait declares as *possible*, cached by trait id.
+
+    Empty when the trait declares none — the common case, and cached so the walk
+    does not ask twice.
+    """
+    if not trait_id:
+        return ()
+    cached = _POSSIBLE_SFX_CACHE.get(trait_id)
+    if cached is not None:
+        return cached
+    trait = repo.get_trait(trait_id) if hasattr(repo, "get_trait") else None
+    ids = tuple(getattr(trait, "possible_sfx_ids", None) or ()) if trait is not None else ()
+    _POSSIBLE_SFX_CACHE[trait_id] = ids
+    return ids
 
 
 def _load_sfx(repo, sfx_id: str):
@@ -884,6 +911,23 @@ def get_available_sfx_ids(
         for sid in (ts.sfx_ids or []):
             ids.add(sid)
             sfx_sources.setdefault(sid, ts)
+        # …and the rules the trait says every instance simply *has* ([[B131]]).
+        # A trait lists a rule in `possible_sfx_ids` to say "this trait offers
+        # it"; with `implicit` set that offer needs no learning, so the instance
+        # carries it from the moment it exists. An unlearned, non-implicit
+        # declaration is the learn-chip's business, not availability's, so it is
+        # deliberately not added here.
+        for sid in possible_sfx_ids(repo, ts.trait_id):
+            if sid in ids:
+                continue
+            sfx = (prefetch.sfx_by_id.get(sid) if prefetch is not None
+                   else _load_sfx(repo, sid))
+            if sfx is None or not getattr(sfx, "implicit", False):
+                continue
+            # The acquire gate still bounds where it reaches, when one is set.
+            if acquire_gate_holds(sfx, "trait_instance", ts.id, repo):
+                ids.add(sid)
+                sfx_sources.setdefault(sid, ts)
 
     # Trait-set-as-unit grants, universe-gated via effective set settings.
     for tss in traitset_settings:

@@ -26,6 +26,20 @@ class QueriesTraits:
         ]
 
     @strawberry.field
+    def traits_declaring_sfx(self, info: strawberry.Info, sfx_id: strawberry.ID) -> list[TraitRef]:
+        """The registry traits that nominate a rule ([[B131]]).
+
+        Written from the *rule's* side, because that is the side the editor is
+        looking at: a rule's ability to reach every instance of a trait is decided
+        by traits it does not name, so without this read the declaration is
+        invisible exactly where it matters. Both nominations are included —
+        ``defaultSfxIds`` (provisioned onto the instance) and ``possibleSfxIds``
+        (offered, and *granted* on an implicit rule).
+        """
+        return [_trait_to_gql(t) for t in
+                _em(info).repo.list_traits_declaring_sfx(str(sfx_id))]
+
+    @strawberry.field
     def traits_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitRef]:
         traits = _em(info).repo.get_traits_by_universe(universe)
         return [_trait_to_gql(t) for t in traits]

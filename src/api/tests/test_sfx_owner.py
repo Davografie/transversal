@@ -305,7 +305,7 @@ def test_prefetch_matches_per_entity_resolution():
     repo.entity = SimpleNamespace(sfx_ids=["sfx-a"], current_projection="proj-1")
     repo.projection = SimpleNamespace(id="proj-1", sfx_ids=["sfx-proj"])
     repo.owners["table"] = SimpleNamespace(sfx_ids=["sfx-table"])
-    repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-trait"])]
+    repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-trait"], trait_id="trait-none")]
     repo.traitset_settings = [SimpleNamespace(sfx_ids=["sfx-set"])]
 
     without = get_available_sfx_ids("e1", "earth", repo)
@@ -1664,3 +1664,80 @@ def test_the_backfill_gives_the_rule_to_support_holders_only():
     # Idempotent: the second restart changes nothing.
     assert backfill_support_default_sfx(repo) == 0
     assert repo.get_entity("sc-1").sfx_ids == ["sfx-teleport-to-main"]
+
+
+# ── Implicit rules on a trait's declaration (B131) ─────────────
+#
+# `Trait.possible_sfx_ids` says "this trait offers this rule". Marked `implicit`,
+# the offer needs no learning: every instance of the trait simply has the rule.
+# Unmarked, it is the learn-chip's business and availability must not offer it.
+
+def _implicit_world(*, implicit: bool, declared: bool = True, enabled: bool = True,
+                    gate_to: str | None = None, held: str = "sfx-x"):
+    """One entity, one instance of one trait that declares `held` as possible."""
+    from transversal.domain import EntityType
+    from transversal.services.target_spec import FilterStep, NavigateStep, SelectStep, TargetSpec
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()          # the SFX record cache is process-global
+    repo = Repo()
+    character = SimpleNamespace(id="char-1", type=EntityType.CHARACTER, sfx_ids=[],
+                                current_projection="", current_location="loc-1")
+    repo.entity = character
+    instance = SimpleNamespace(id="ts-1", trait_id="trait-x", sfx_ids=[],
+                               enabled=enabled, entity_id="char-1")
+    repo.trait_settings = [instance]
+    repo.traits = {"trait-x": SimpleNamespace(
+        default_sfx_ids=[], possible_sfx_ids=[held] if declared else [])}
+    rule = SimpleNamespace(id=held, trigger="manual", source_kind="trait_setting",
+                           implicit=implicit, conditions=[], acquire_spec=None)
+    if gate_to:
+        rule.acquire_spec = TargetSpec(steps=[
+            SelectStep(collection="source"),
+            NavigateStep(edge="entity"),
+            FilterStep(field="current_location", operator="==", value=gate_to),
+        ])
+    repo.get_sfx = lambda sid: rule if sid == held else None
+    # The gate reads the instance's owner and their location.
+    repo.entities = {"char-1": character, "ts-1": instance,
+                     "loc-1": SimpleNamespace(id="loc-1", name="Azure Dawn",
+                                              type=EntityType.LOCATION)}
+    repo.get_entity = lambda eid: repo.entities.get(eid)
+    repo.get_traitsetting = lambda tid: repo.entities.get(tid)
+    return repo, rule
+
+
+def test_an_implicit_rule_needs_no_learning():
+    repo, _ = _implicit_world(implicit=True)
+    assert get_available_sfx_ids("char-1", "earth", repo) == ["sfx-x"]
+
+
+def test_a_declared_rule_that_is_not_implicit_still_has_to_be_learned():
+    repo, _ = _implicit_world(implicit=False)
+    assert get_available_sfx_ids("char-1", "earth", repo) == []
+
+
+def test_an_implicit_rule_is_still_bound_by_its_acquire_gate():
+    """"Only in the Verdant Steps" is a fact about reach, not about learning —
+    going implicit must not quietly make the rule universal."""
+    repo, _ = _implicit_world(implicit=True, gate_to="loc-1")
+    assert get_available_sfx_ids("char-1", "earth", repo) == ["sfx-x"]
+
+    repo, _ = _implicit_world(implicit=True, gate_to="loc-9")
+    assert get_available_sfx_ids("char-1", "earth", repo) == []
+
+
+def test_a_disabled_instance_offers_its_implicit_rule_to_nobody():
+    repo, _ = _implicit_world(implicit=True, enabled=False)
+    assert get_available_sfx_ids("char-1", "earth", repo) == []
+
+
+def test_an_implicit_rule_on_an_undeclaring_trait_is_not_offered():
+    repo, _ = _implicit_world(implicit=True, declared=False)
+    assert get_available_sfx_ids("char-1", "earth", repo) == []
+
+
+def test_an_implicit_rule_the_instance_already_holds_is_not_doubled():
+    repo, _ = _implicit_world(implicit=True)
+    repo.trait_settings[0].sfx_ids = ["sfx-x"]
+    assert get_available_sfx_ids("char-1", "earth", repo) == ["sfx-x"]

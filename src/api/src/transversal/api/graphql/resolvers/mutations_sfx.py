@@ -48,6 +48,7 @@ class MutationsSfx:
             arming_scope=input.arming_scope,
             listener_spec=_target_spec_from_input(input.listener_spec),
             acquire_spec=_target_spec_from_input(input.acquire_spec),
+            implicit=bool(getattr(input, "implicit", False)),
             bound_variables=_bound_variables_from_input(input.bound_variables),
             effects=[_effect_input_to_domain(e) for e in input.effects],
             duration=_duration_input_to_domain(input.duration),
@@ -98,6 +99,10 @@ class MutationsSfx:
             existing.arming_scope = input.arming_scope
         if input.listener_spec is not None:
             existing.listener_spec = _target_spec_from_input(input.listener_spec)
+        if input.acquire_spec is not None:
+            existing.acquire_spec = _target_spec_from_input(input.acquire_spec)
+        if input.implicit is not None:
+            existing.implicit = bool(input.implicit)
         if input.bound_variables is not None:
             existing.bound_variables = _bound_variables_from_input(input.bound_variables)
         if input.effects is not None:

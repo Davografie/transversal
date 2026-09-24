@@ -572,6 +572,7 @@ def _sfx_ref(sfx, resolve=None) -> SfxRef:
         placement=sfx.placement, arming_scope=sfx.arming_scope,
         listener_spec=sfx.listener_spec.model_dump() if sfx.listener_spec else None,
         acquire_spec=sfx.acquire_spec.model_dump() if sfx.acquire_spec else None,
+        implicit=bool(getattr(sfx, "implicit", False)),
         bound_variables=[
             BoundVariable(
                 name=bv.name,
