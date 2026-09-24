@@ -299,3 +299,58 @@ def test_the_catalog_declares_the_route_and_a_universe_valued_field():
     # The value is a universe, so the wizard offers a universe picker for it.
     assert tc.field("location", "universe").references == "universe"
     assert tc.validate() == []
+
+
+def test_the_support_route_is_guarded_to_my_own_universe():
+    """[[B61]]: me → the main I support → where they are, but only in my world.
+
+    The guard is a **declared bound variable** (`self → universe`) read by a
+    filter, because a filter value may name a bound value. Without it the address
+    is the same and `location/set` would also write the destination's universe —
+    i.e. it would perform the cross-universe jump transversal owns.
+    """
+    from transversal.services.target_resolver import bind_named
+    from transversal.services.target_spec import ValueType
+
+    class Worlds(Repo):
+        def __init__(self, main_universe):
+            super().__init__(relationships=[SUPPORT])
+            self._main_universe = main_universe
+
+        def get_entity(self, eid):
+            if eid == "earth":
+                return NS(id="earth", type="universe", current_universe="earth",
+                          current_location=None)
+            if eid == "main-1":
+                return NS(id="main-1", type="character", current_location="loc-emberline",
+                          current_universe=self._main_universe)
+            return NS(id=eid, type="character", current_location=None,
+                      current_universe="earth")
+
+    route = spec(
+        SelectStep(collection="self"),
+        NavigateStep(edge="relationships"),
+        FilterStep(field="type", value="support"),
+        NavigateStep(edge="contact"),
+        FilterStep(field="current_universe", value="{world}"),
+        NavigateStep(edge="location"),
+    )
+    sc = NS(id="sc-1", type="character", current_location="loc-1", current_universe="earth")
+
+    def resolve_route(main_universe):
+        ctx = TargetContext(subject=sc, repo=Worlds(main_universe))
+        # The declared variable, bound the way `firing.bind_declared` binds it.
+        world = resolve(spec(SelectStep(collection="self"), NavigateStep(edge="universe")), ctx)
+        last = world.trace[-1]
+        bind_named("world", world.values, ValueType(last.element, last.cardinality), ctx)
+        return resolve(route, ctx)
+
+    same = resolve_route("earth")
+    assert same.errors == []
+    assert [v.id for v in same.values] == ["loc-emberline"]
+
+    # Another world: the contact is filtered out, so the whole route resolves to
+    # nobody and the effect is a no-op rather than a transversal.
+    other = resolve_route("three_realms")
+    assert other.errors == []
+    assert other.values == []

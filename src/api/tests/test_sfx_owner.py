@@ -1569,3 +1569,98 @@ def test_the_order_is_stable_for_owners_holding_the_same_count():
         ("e-c", "C", ["sfx-c"]),
     ])
     assert [r["owner_id"] for r in list_owner_refs(repo, "entity")] == ["e-b", "e-a", "e-c"]
+
+
+# ── The support character's way home (B61) ────────────
+
+class _SfxRepo:
+    """The reads/writes the teleport-to-main provisioning touches."""
+
+    def __init__(self, entities=None, edges=None, sfxs=None):
+        self._entities = {e.id: e for e in (entities or [])}
+        self._edges = edges or []
+        self._sfxs = sfxs or {}
+
+    def get_sfx(self, sfx_id):
+        return self._sfxs.get(sfx_id)
+
+    def create_sfx(self, sfx):
+        self._sfxs[sfx.id] = sfx
+        return sfx
+
+    def get_entity(self, entity_id):
+        return self._entities.get(entity_id)
+
+    def list_entities_with_relationship_type(self, rel_type):
+        return [e["from"] for e in self._edges if e["type"] == rel_type]
+
+    def get_sfx_owner(self, owner_id):
+        return None
+
+    def update_entity(self, entity):
+        self._entities[entity.id] = entity
+        return entity
+
+
+def test_the_support_rule_is_a_manual_entity_rule_with_a_guarded_path():
+    """The rule says *how* it is used, and the same-universe guard is the filter
+    on the contact — without it `location/set` would also write the destination's
+    universe, i.e. perform a transversal."""
+    from transversal.services.sfx_owner import ensure_teleport_to_main_sfx
+
+    class Creating(_SfxRepo):
+        def __init__(self):
+            super().__init__()
+            self.created = []
+
+        def create_sfx(self, sfx):
+            self.created.append(sfx)
+            self._sfxs[sfx.id] = sfx
+            return sfx
+
+    repo = Creating()
+    ensure_teleport_to_main_sfx(repo)
+    sfx = repo.created[0]
+    assert sfx.id == "sfx-teleport-to-main"
+    assert sfx.trigger == "manual" and sfx.source_kind == "entity"
+    assert [bv.name for bv in sfx.bound_variables] == ["world"]
+    steps = sfx.effects[0].target_spec.steps
+    assert [getattr(s, "kind") for s in steps] == \
+        ["select", "navigate", "filter", "navigate", "filter", "navigate"]
+    # The guard compares the contact's universe to the *bound* name, not a literal.
+    guard = steps[4]
+    assert (guard.field, guard.value) == ("current_universe", "{world}")
+    assert steps[2].value == "support"
+
+    # Idempotent: a second call creates nothing.
+    ensure_teleport_to_main_sfx(repo)
+    assert len(repo.created) == 1
+
+
+def test_the_backfill_gives_the_rule_to_support_holders_only():
+    """Only the holders of a `support` edge — an SC is a relationship, so that
+    edge is the whole test for who gets the rule."""
+    from transversal.domain import Entity, EntityType
+    from transversal.services.sfx_owner import (
+        backfill_support_default_sfx,
+        ensure_teleport_to_main_sfx,
+    )
+
+    sc = Entity(id="sc-1", type=EntityType.CHARACTER, name="Hanger-on",
+                current_universe="earth")
+    main = Entity(id="main-1", type=EntityType.CHARACTER, name="Kael",
+                  current_universe="earth")
+    other = Entity(id="char-9", type=EntityType.CHARACTER, name="Bystander",
+                   current_universe="earth")
+    repo = _SfxRepo(entities=[sc, main, other],
+                    edges=[{"from": "sc-1", "type": "support"},
+                           {"from": "main-1", "type": "agency"}])
+    ensure_teleport_to_main_sfx(repo)
+
+    assert backfill_support_default_sfx(repo) == 1
+    assert repo.get_entity("sc-1").sfx_ids == ["sfx-teleport-to-main"]
+    assert repo.get_entity("main-1").sfx_ids == []
+    assert repo.get_entity("char-9").sfx_ids == []
+    # Idempotent: the second restart changes nothing.
+    assert backfill_support_default_sfx(repo) == 0
+    assert repo.get_entity("sc-1").sfx_ids == ["sfx-teleport-to-main"]

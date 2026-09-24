@@ -433,6 +433,23 @@ class RepositoryRelationships:
         # Declared order first, then anything content added that the code does not know.
         return declared + [t for t in live if t not in set(declared)]
 
+    def list_entities_with_relationship_type(self, rel_type: str) -> list[str]:
+        """Ids of the entities that **hold** an outgoing edge of this type.
+
+        One read for the "every support character" question: a caller that walked
+        every entity and asked each about its own edges paid N queries for one
+        answer. Outgoing only, matching :meth:`list_relationships_for_entity` — a
+        `support` edge is held by the support character and points at its main, so
+        the holder is whose ids come back.
+        """
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == @rel_type AND STARTS_WITH(r._from, @prefix)
+            RETURN DISTINCT SPLIT(r._from, '/')[1]
+        """
+        return [k for k in self.db.aql.execute(
+            query, bind_vars={"rel_type": rel_type, "prefix": f"{ENTITIES}/"}) if k]
+
     def get_relationship_by_key(self, edge_key: str) -> dict | None:
         """Get a relationship edge by its ArangoDB ``_key``."""
         return self._relationships.get(edge_key)

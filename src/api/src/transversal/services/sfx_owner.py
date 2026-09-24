@@ -1587,3 +1587,93 @@ def ensure_gmc_base_difficulty(repo) -> None:
             default_die_type=DieType.D6,
             default_rating_type=RatingType.STATIC,
         ))
+
+
+# ── The support character's way home (B61) ────────────
+
+#: The rule a support character carries so it can rejoin the main it supports.
+TELEPORT_TO_MAIN_SFX_ID = "sfx-teleport-to-main"
+
+
+def ensure_teleport_to_main_sfx(repo) -> None:
+    """Create/seed the teleport-to-main rule ([[B61]]). Idempotent.
+
+    An SC is a *relationship* to a main, not a separate kind of character
+    ([[Troupe Play]]), so the rule is provisioned onto whoever holds a `support`
+    edge — no new plumbing, and no entity field.
+
+    The route is a **path**, not a lookup: me → the edges I hold → the one typed
+    `support` → its far end (`contact`) → where they are. The declared variable
+    `world` (`self → universe`) is the **same-universe guard**: the contact is
+    kept only when their universe is mine, so in another world the path resolves
+    to nobody and the effect does nothing. That matters because `location/set`
+    also writes the destination's universe — unguarded, this rule would perform
+    the cross-universe jump the design reserves for transversal.
+    """
+    from transversal.domain import BoundVariable, Effect, EffectTiming, SFX
+    from transversal.services.target_spec import (
+        FilterStep,
+        NavigateStep,
+        SelectStep,
+        TargetSpec,
+    )
+
+    if repo.get_sfx(TELEPORT_TO_MAIN_SFX_ID) is not None:
+        return
+
+    repo.create_sfx(SFX(
+        id=TELEPORT_TO_MAIN_SFX_ID,
+        name="Teleport To Main",
+        description=(
+            "Rejoin the main you support — step to where they are, if you are in "
+            "the same world"
+        ),
+        limit="",
+        trigger="manual",
+        source_kind="entity",
+        bound_variables=[
+            BoundVariable(name="world", spec=TargetSpec(steps=[
+                SelectStep(collection="self"),
+                NavigateStep(edge="universe"),
+            ])),
+        ],
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="location",
+                action="set",
+                target_spec=TargetSpec(steps=[
+                    SelectStep(collection="self"),
+                    NavigateStep(edge="relationships"),
+                    FilterStep(field="type", value="support"),
+                    NavigateStep(edge="contact"),
+                    FilterStep(field="current_universe", value="{world}"),
+                    NavigateStep(edge="location"),
+                ]),
+            ),
+        ],
+    ))
+
+
+def provision_support_default_sfx(repo, entity_id: str) -> bool:
+    """Give one support character the way home. Additive: nothing is removed.
+
+    Called when a support character is created (the roll-table-as-menu flow) and
+    by the startup backfill. False when the rule cannot attach — the entity is
+    gone, or its surface does not match the rule's declared ``source_kind``.
+    """
+    return add_sfx_to_owner(repo, "entity", entity_id, TELEPORT_TO_MAIN_SFX_ID)
+
+
+def backfill_support_default_sfx(repo) -> int:
+    """Idempotent startup backfill: every entity holding a `support` edge gets
+    the rule (for support characters created before it existed). Returns how many
+    were actually changed, so a no-op restart logs zero."""
+    updated = 0
+    for entity_id in repo.list_entities_with_relationship_type("support"):
+        ids = _get_owner_sfx_ids(repo, "entity", entity_id)
+        if ids is None or TELEPORT_TO_MAIN_SFX_ID in ids:
+            continue
+        if provision_support_default_sfx(repo, entity_id):
+            updated += 1
+    return updated

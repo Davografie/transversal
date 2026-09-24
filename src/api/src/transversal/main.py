@@ -182,6 +182,7 @@ async def _startup():
         ensure_offer_negative_sfx,
         ensure_starter_location_sfx,
         ensure_support_cast_sfx,
+        ensure_teleport_to_main_sfx,
         ensure_base_move_sfxs,
         ensure_gmc_base_difficulty,
         remove_legacy_contest_complication_sfx,
@@ -206,6 +207,7 @@ async def _startup():
     ensure_offer_negative_sfx(repo)
     ensure_starter_location_sfx(repo)
     ensure_support_cast_sfx(repo)
+    ensure_teleport_to_main_sfx(repo)
     ensure_base_move_sfxs(repo)
     ensure_gmc_base_difficulty(repo)
     remove_legacy_contest_complication_sfx(repo)

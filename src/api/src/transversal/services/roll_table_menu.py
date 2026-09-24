@@ -138,6 +138,12 @@ def create_support_character(
     # never a main, even for a player who owns nothing yet.
     repo.claim_entity(player_id, sc.id, main=False)
     repo.create_relationship(sc.id, main.id, "support")
+    # An SC's way home ([[B61]]): the `support` edge it just got is what the rule
+    # reads, so it is provisioned the moment the edge exists rather than waiting
+    # for the next startup backfill.
+    from transversal.services.sfx_owner import provision_support_default_sfx
+
+    provision_support_default_sfx(repo, sc.id)
 
     # 4. The entry's benefit effects land on the new SC.
     if entry.effects:
