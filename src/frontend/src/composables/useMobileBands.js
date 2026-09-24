@@ -1,9 +1,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 /**
- * The mobile focus stack: phone-width layouts turn the bottom sheet into three
- * first-class bands (location / sheet / dice). This owns which band is focused,
- * which bands are visible at all, and the measured height the dice band needs.
+ * The stage's responsive layout gates. Phone-width layouts turn the bottom
+ * sheet into three first-class bands (location / sheet / dice); wide landscape
+ * layouts instead dock the sheet to the left of the map. This owns which of
+ * those is active, and on mobile which band is focused, which bands are visible
+ * at all, and the measured height the dice band needs.
  *
  * `wrapperEl` is the `.dice-panel-wrapper` template ref — the roller is measured
  * through it, so the caller must pass the real ref, not a copy.
@@ -20,6 +22,23 @@ export function useMobileBands({ wrapperEl, gmMode, entityId, viewingEntityId })
   onUnmounted(() => mobileMq.removeEventListener('change', syncIsMobile))
 
   const mobileStackActive = computed(() => isMobile.value)
+
+  // The landscape dock: where the sheet stops riding in the roller's
+  // bottom-centre column and sits beside it instead. Gated on width AND
+  // orientation, because both conjuncts carry weight — a portrait tablet keeps
+  // the pop-out (its column has height to spare), while orientation alone would
+  // dock an iPhone SE in landscape (667×375) and leave it a 267px map.
+  //
+  // Deliberately NOT keyed on available height: every standard iPad landscape
+  // viewport is ≥744px tall (1133×744 mini, 1180×820, 1194×834, 1366×1024), so
+  // a height ceiling would never fire on a tablet in landscape — it would dock
+  // only the phone-landscape case and refuse the tablet one.
+  const dockMq = window.matchMedia(`(min-width: ${MOBILE_MAX_WIDTH + 1}px) and (orientation: landscape)`)
+  const sheetDock = ref(false)
+  function syncSheetDock() { sheetDock.value = dockMq.matches }
+  syncSheetDock()
+  dockMq.addEventListener('change', syncSheetDock)
+  onUnmounted(() => dockMq.removeEventListener('change', syncSheetDock))
 
   // GM with no acting/viewed entity has an empty sheet band on mobile — it is
   // fully collapsed (peers bar is enough) and the sheet focus is unreachable.
@@ -242,7 +261,7 @@ export function useMobileBands({ wrapperEl, gmMode, entityId, viewingEntityId })
   onUnmounted(() => { if (bandDrag) stopBandDrag(false) })
 
   return {
-    isMobile, mobileFocus, mobileStackActive, sheetEmpty, setMobileFocus,
+    isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobileFocus,
     rollerContentH, syncRollerContentH,
     onBandDragStart, tapBand,
   }

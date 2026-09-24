@@ -124,7 +124,7 @@
     @applied="onSupportCreated"
     @close="supportCastMenu = null"
   />
-  <div class="stage" :style="{ '--roller-h': rollerContentH + 'px' }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '']">
+  <div class="stage" :style="{ '--roller-h': rollerContentH + 'px' }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '', sheetDock ? 'dock-sheet' : '', dockOpen ? 'sheet-open' : '']">
     <ArmedSfxRail
       v-if="playerId && !showLoginOverlay && !fullCanvas"
       :entity-id="entityId"
@@ -154,7 +154,7 @@
       />
       <div v-if="mobileStackActive && mobileFocus !== 'location'" class="band-tap" @touchstart="onBandDragStart($event, 'location')" @click="tapBand('location')"></div>
     </div>
-    <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen, dragging: occupantDragging && !isMobile }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
+    <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen && !sheetDock, dragging: occupantDragging && !isMobile && !sheetDock }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <PeersBar
         v-if="(wrapperOpen || mobileStackActive) && peers.length"
         :peers="peers"
@@ -164,7 +164,7 @@
       />
       <div class="sheet-band">
         <CharacterSheet
-          v-show="(mobileStackActive || (sheetVisible && (phase === 'adding' || forceSheet))) && (!gmMode || entityId || viewingEntityId)"
+          v-show="sheetShown"
           ref="sheetRef"
           class="embedded-sheet"
           :class="{ 'sheet-hidden': !sheetVisible && !mobileStackActive }"
@@ -192,7 +192,7 @@
         />
         <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @touchstart="onBandDragStart($event, 'sheet')" @click="tapBand('sheet')"></div>
       </div>
-      <div class="roller-band">
+      <div ref="rollerBandEl" class="roller-band" :class="{ open: sheetDock && wrapperOpen, dragging: sheetDock && occupantDragging && !isMobile }">
         <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => { mirrorOwnResult({ result: r }); shareRoll(r) }" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
         <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @touchstart="onBandDragStart($event, 'dice')" @click="tapBand('dice')"></div>
       </div>
@@ -1482,6 +1482,13 @@ watch(entityId, seedRemotePools)
 const forceSheet = ref(false)
 
 const wrapperEl = useTemplateRef('wrapperEl')
+const rollerBandEl = useTemplateRef('rollerBandEl')
+// What actually carries the roller's peek: the whole bottom-centre column
+// normally, or the roller band alone once the sheet has docked beside it — the
+// column is the dock then, and a transform on it would both slide the dock and
+// capture the band's `position: fixed`. Only ever read from handlers that run
+// after setup, so the `sheetDock` ref declared further down is initialised.
+function panelEl() { return sheetDock.value ? rollerBandEl.value : wrapperEl.value }
 const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
 let panelResizeObserver = null
 const documentDragging = ref(false)
@@ -1489,7 +1496,8 @@ const documentDragging = ref(false)
 function openPanel() {
   hoverOpen.value = true
   // Drop any inline transform left by a drag so the .open class takes over
-  if (wrapperEl.value) wrapperEl.value.style.transform = ''
+  const el = panelEl()
+  if (el) el.style.transform = ''
   if (sheetTimer) clearTimeout(sheetTimer)
   sheetTimer = setTimeout(() => { sheetVisible.value = true }, 300)
 }
@@ -1502,7 +1510,8 @@ function closePanel() {
   if (sheetTimer) { clearTimeout(sheetTimer); sheetTimer = null }
   if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
   // Drop the drag transform, then re-measure the closed offset after layout
-  if (wrapperEl.value) wrapperEl.value.style.transform = ''
+  const el = panelEl()
+  if (el) el.style.transform = ''
   nextTick(() => syncClosedPosition())
 }
 
@@ -1517,16 +1526,17 @@ const PANEL_DRAG_VELOCITY = 0.5    // px/ms: flick speed that triggers open/clos
 const panelDragState = { active: false, wasOpen: false, startOffset: 0 }
 
 function syncClosedPosition() {
-  if (mobileStackActive.value || !wrapperEl.value) return
-  const h = wrapperEl.value.offsetHeight
+  const el = panelEl()
+  if (mobileStackActive.value || !el) return
+  const h = el.offsetHeight
   // The closed offset lives in a custom property: the `.open` class sets
   // `transform` itself, so opening always wins over a stale closed offset.
-  wrapperEl.value.style.setProperty('--panel-closed-y', `${h - PANEL_CLOSED_PEEK}px`)
+  el.style.setProperty('--panel-closed-y', `${h - PANEL_CLOSED_PEEK}px`)
 }
 
 function onPanelDragStart() {
   if (mobileStackActive.value) return
-  const el = wrapperEl.value
+  const el = panelEl()
   if (!el) return
   panelDragState.wasOpen = wrapperOpen.value
   panelDragState.startOffset = panelDragState.wasOpen ? 0 : Math.max(0, el.offsetHeight - PANEL_CLOSED_PEEK)
@@ -1535,7 +1545,7 @@ function onPanelDragStart() {
 }
 
 function onPanelDrag(dy) {
-  const el = wrapperEl.value
+  const el = panelEl()
   if (!el || !panelDragState.active) return
   const closedOffset = Math.max(0, el.offsetHeight - PANEL_CLOSED_PEEK)
   const offset = Math.max(0, Math.min(closedOffset, panelDragState.startOffset + dy))
@@ -1544,7 +1554,7 @@ function onPanelDrag(dy) {
 }
 
 function onPanelDragEnd({ dy, velocity }) {
-  const el = wrapperEl.value
+  const el = panelEl()
   if (!el || !panelDragState.active) return
   panelDragState.active = false
 
@@ -1573,20 +1583,41 @@ function onPanelDragEnd({ dy, velocity }) {
 // ── Theme (light/dark) — see composables/useThemeMode.js
 const { colorMode } = useThemeMode()
 
-const { isMobile, mobileFocus, mobileStackActive, sheetEmpty, setMobileFocus, rollerContentH, onBandDragStart, tapBand } = useMobileBands({
+const { isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobileFocus, rollerContentH, onBandDragStart, tapBand } = useMobileBands({
   wrapperEl, gmMode, entityId, viewingEntityId,
 })
 
+// Is there actually a sheet to show? One expression, shared by the sheet's own
+// v-show and the dock's open state — a mismatch between the two is exactly how
+// an empty 400px column would end up parked over the map.
+const sheetShown = computed(() =>
+  (mobileStackActive.value || (sheetVisible.value && (phase.value === 'adding' || forceSheet.value)))
+  && (!gmMode.value || entityId.value || viewingEntityId.value))
+
+// A dock with no sheet in it is an empty column, so the dock follows the
+// sheet's content rather than the roller's hover.
+const dockOpen = computed(() => sheetDock.value && sheetShown.value)
+
+// Switching between the pop-out column and the dock moves the peek onto a
+// different element. A drag can leave an inline transform on whichever one no
+// longer carries it, so clear both and re-measure.
+watch(sheetDock, () => {
+  for (const el of [wrapperEl.value, rollerBandEl.value]) if (el) el.style.transform = ''
+  nextTick(() => syncClosedPosition())
+})
+
 // ── Panel geometry diagnostics ─────────────────────
-// The wrapper is position:fixed;bottom:0 and slides via an inline translateY
-// (closed = `translateY(offsetHeight - PANEL_CLOSED_PEEK)`). When it ends up
-// off-screen / half-hidden, these numbers tell us whether it's a stale height,
-// a visual-vs-layout viewport offset, or a stuck transform. Exposed as
+// The panel is position:fixed;bottom:0 and slides via an inline translateY
+// (closed = `translateY(offsetHeight - PANEL_CLOSED_PEEK)`) — the column, or
+// the roller band alone once the sheet has docked. When it ends up off-screen /
+// half-hidden, these numbers tell us whether it's a stale height, a
+// visual-vs-layout viewport offset, or a stuck transform. Exposed as
 // `window.__panelDebug()` for copy-paste from devtools.
 function panelGeometry() {
-  const el = wrapperEl.value
-  const roller = el?.querySelector('.dice-roller')
-  const sheet = el?.querySelector('.embedded-sheet')
+  const host = wrapperEl.value       // the column (or the dock) that holds the sheet
+  const el = panelEl() ?? host       // what actually slides
+  const roller = host?.querySelector('.dice-roller')
+  const sheet = host?.querySelector('.embedded-sheet')
   const vv = window.visualViewport
   const vh = vv?.height ?? window.innerHeight
   const rect = el?.getBoundingClientRect()
@@ -1620,6 +1651,9 @@ function panelGeometry() {
       phase: phase.value,
       gmMode: gmMode.value,
       closedOffset: el ? Math.max(0, el.offsetHeight - PANEL_CLOSED_PEEK) : null,
+      sheetDock: sheetDock.value,
+      sheetShown: sheetShown.value,
+      dockOpen: dockOpen.value,
     },
     flags: {
       wrapperBelowViewport: rect ? rect.bottom > vh + 1 : null,
@@ -1639,7 +1673,7 @@ function logPanelGeometry(label) {
     `wrapper top=${w.top} bottom=${w.bottom} h=${w.height} open=${w.open} inline="${w.inlineTransform}"`,
     `roller top=${r.top ?? '-'} bottom=${r.bottom ?? '-'}`,
     `viewport innerH=${v.innerH} visualH=${v.visualH} vOffsetTop=${v.visualOffsetTop} scale=${v.scale}`,
-    `state hoverOpen=${g.state.hoverOpen} sheetVisible=${g.state.sheetVisible} phase=${g.state.phase} closedOffset=${g.state.closedOffset}`,
+    `state hoverOpen=${g.state.hoverOpen} sheetVisible=${g.state.sheetVisible} phase=${g.state.phase} closedOffset=${g.state.closedOffset} dock=${g.state.sheetDock} dockOpen=${g.state.dockOpen}`,
     `flags belowViewport=${g.flags.wrapperBelowViewport} rollerBelow=${g.flags.rollerBelowViewport} aboveViewport=${g.flags.wrapperAboveViewport} visualShorter=${g.flags.visualViewportShorter}`,
   )
   return g
@@ -1715,11 +1749,15 @@ onMounted(() => {
     window.addEventListener('resize', onViewportResize)
     window.addEventListener('orientationchange', onViewportResize)
     if (window.visualViewport) window.visualViewport.addEventListener('resize', onViewportResize)
-    if (typeof ResizeObserver !== 'undefined' && wrapperEl.value) {
+    if (typeof ResizeObserver !== 'undefined') {
       panelResizeObserver = new ResizeObserver(() => {
         if (!wrapperOpen.value) nextTick(() => syncClosedPosition())
       })
-      panelResizeObserver.observe(wrapperEl.value)
+      // Both carriers: the column's height drives the peek normally, but once
+      // the sheet docks the column is a fixed-height dock and the roller band
+      // is the thing whose height can change.
+      if (wrapperEl.value) panelResizeObserver.observe(wrapperEl.value)
+      if (rollerBandEl.value) panelResizeObserver.observe(rollerBandEl.value)
     }
   }
   document.addEventListener('dragstart', () => { documentDragging.value = true })

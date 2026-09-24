@@ -1091,6 +1091,89 @@ select option {
   body:has(.panel-viewport) .stage.mobile-stack .overlay-switcher { display: none; }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   Landscape dock (desktop + tablet landscape)
+   Above the phone breakpoint AND in landscape, the sheet stops riding in
+   the roller's bottom-centre column and docks to the left of the map. The
+   roller keeps its peek, now carried by the band itself.
+   Gate lives in useMobileBands' `dockMq` (width AND orientation); it can
+   never be true together with `.mobile-stack`, so the two blocks cannot
+   both apply. Portrait tablets keep the pop-out — their column has height
+   to spare — and ≤820px keeps the band stack.
+   ════════════════════════════════════════════════════════════════════ */
+.stage.dock-sheet {
+  --dock-w: 400px;   /* the width the sheet already has in the pop-out */
+}
+
+/* The wrapper becomes the dock: left edge, full height, and deliberately
+   WITHOUT a transform of its own — the sheet band's slide lives on the band,
+   and a transformed ancestor would capture the roller band's `position:
+   fixed` (as well as dragging the dock around with the roller). It also stays
+   inert while closed, so it can never eat clicks meant for the map. */
+.stage.dock-sheet .dice-panel-wrapper {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--dock-w);
+  transform: none;
+  pointer-events: none;
+  z-index: 12;
+}
+
+/* Both dock children slide as one: fully off-screen left is fully closed. */
+.stage.dock-sheet .peers-bar,
+.stage.dock-sheet .sheet-band {
+  transform: translateX(-100%);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.2s ease;
+}
+.stage.dock-sheet.sheet-open .peers-bar,
+.stage.dock-sheet.sheet-open .sheet-band {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;   /* re-arms the wrapper's pointer-events: none */
+}
+
+/* The sheet takes the dock's whole height: no 240px-cap arithmetic now that
+   it is no longer sharing a column with the roller. */
+.stage.dock-sheet .sheet-band {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.stage.dock-sheet .sheet-band .embedded-sheet {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The roller band carries the peek itself, centred on the map area the dock
+   leaves rather than the viewport (hence 50% + half the dock, not 50%). */
+.stage.dock-sheet .roller-band {
+  position: fixed;
+  bottom: 0;
+  left: calc(50% + var(--dock-w) / 2);
+  width: min(400px, calc(100% - var(--dock-w) - 32px));
+  z-index: 9;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(var(--panel-closed-y, 0px));
+  transition: transform 0.3s ease, opacity 0.2s ease;
+}
+.stage.dock-sheet .roller-band.open { transform: translateX(-50%) translateY(0); }
+.stage.dock-sheet .roller-band.dragging { opacity: 0; pointer-events: none; }
+
+/* The map gives up the dock's width while it is out — an inset, not an
+   overlay, so the viewer's own top-left overlay controls ride along at 12px
+   of the remaining map instead of disappearing under the sheet. The viewer
+   is observed by a ResizeObserver, so the camera follows the change. */
+.stage.dock-sheet .location-viewer { transition: left 0.3s ease; }
+.stage.dock-sheet.sheet-open .location-viewer { left: var(--dock-w); }
+
+/* The Active SFX rail owns the left edge; the dock needs it. */
+.stage.dock-sheet .armed-sfx-rail { transition: left 0.3s ease; }
+.stage.dock-sheet.sheet-open .armed-sfx-rail { left: calc(var(--dock-w) + 10px); }
+
 .sfx-cards {
   display: flex;
   flex-direction: column;
