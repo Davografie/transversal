@@ -228,6 +228,32 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
     if condition.type == ConditionType.UNPLACED:
         return subject.current_location in (None, "")
 
+    if condition.type in (ConditionType.CONTEST_CHALLENGER, ConditionType.CONTEST_DEFENDANT):
+        # Which *side* of a contest this entity is on. The tracker models it:
+        # the challenger is the state carrying `opposition_entity_id` (declaring a
+        # challenge is what sets it), and the defendant is whoever that points at.
+        # `get_contestants` answers from either side, so one call covers both.
+        #
+        # The opposition link is what separates a contest from a **test**: a plain
+        # test has a state too, and an entity in one is neither side of anything.
+        from transversal.services.contest_tracker import get_contest_tracker
+
+        location = getattr(subject, "current_location", "") or ""
+        if not location:
+            return False
+        challenger, defendant = get_contest_tracker().get_contestants(location, subject.id)
+        if condition.type == ConditionType.CONTEST_CHALLENGER:
+            return bool(challenger is not None and challenger.entity_id == subject.id
+                        and challenger.opposition_entity_id)
+        return bool(challenger is not None and defendant is not None
+                    and challenger.opposition_entity_id == subject.id)
+
+    if condition.type == ConditionType.SESSION:
+        from transversal.services.session_state import is_active
+
+        wanted = (target or "active").strip().lower()
+        return is_active() is (wanted != "inactive")
+
     if condition.type == ConditionType.IN_UNIVERSE:
         return subject.current_universe == target
 
@@ -539,11 +565,20 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.ENTITY_TYPE.name, "Entity type", needs_target=True, target_placeholder="entity type", target_options=("character", "gmc", "asset"), group=GROUP_CHARACTER),
     ConditionTypeDef(ConditionType.USER_ROLE.name, "User role", needs_target=True, target_placeholder="role", target_options=("player", "architect"), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)", group=GROUP_CHARACTER),
+    # A contest's two sides. Not expressible as a path: the tracker holds the
+    # relation, and a path can reach "a contest" but not "the side I am on".
+    ConditionTypeDef(ConditionType.CONTEST_CHALLENGER.name, "In a contest as the challenger",
+                     group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.CONTEST_DEFENDANT.name, "In a contest as the defendant",
+                     group=GROUP_CHARACTER),
     ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key", target_kind="universe", group=GROUP_CHARACTER),
     ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved"), requires_context_any_of=("phase",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent", "give_in"), requires_context_any_of=("contest_winner", "gave_in"), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.HITCH.name, "Hitch", requires_context_any_of=("hitch",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.HIGH_STAKES.name, "High stakes", needs_target=True, target_placeholder="stakes", target_options=("high", "low"), requires_context_any_of=("high_stakes",), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.SESSION.name, "Session", needs_target=True,
+                     target_placeholder="state", target_options=("active", "inactive"),
+                     group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.ARRIVAL_KIND.name, "Arrival kind", needs_target=True, target_placeholder="arrival", target_options=("transversal", "hierarchy", "move", "effect"), requires_context_any_of=("arrival_kind",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<"), requires_context_any_of=("tier",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail"), requires_context_any_of=("tier",), group=GROUP_MOMENT),

@@ -197,6 +197,9 @@ class ConditionType(str, Enum):
     HIGH_STAKES = "high_stakes"          # target = "high" | "low"; the contest in play is high-stakes
     TARGET_PATH = "target_path"          # a targeting path (spec) resolves non-empty; source-aware predicate
     ARRIVAL_KIND = "arrival_kind"        # target = how they arrived (transversal/hierarchy/move/effect); reads context
+    CONTEST_CHALLENGER = "contest_challenger"  # this entity is the side that declared the contest
+    CONTEST_DEFENDANT = "contest_defendant"    # this entity is the side that was challenged
+    SESSION = "session"                  # target = "active" | "inactive"; is a session running now
 
 class RollTableScheme(str, Enum):
     """How a roll table selects an entry."""

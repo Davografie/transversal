@@ -873,6 +873,13 @@ def condition_text(condition: Condition, *, resolve: NameResolver | None = None,
         if len(values) > 1:
             return f"the contest outcome is {_or_join(values, resolve)}"
         return f'the contest outcome is "{target}"'
+    if ctype == ConditionType.CONTEST_CHALLENGER:
+        return "you are the challenger"
+    if ctype == ConditionType.CONTEST_DEFENDANT:
+        return "you are the defendant"
+    if ctype == ConditionType.SESSION:
+        return "no session is running" if (condition.target or "active").strip() == "inactive" \
+            else "a session is running"
     if ctype == ConditionType.HITCH:
         return "a hitch is being resolved"
     if ctype == ConditionType.HIGH_STAKES:

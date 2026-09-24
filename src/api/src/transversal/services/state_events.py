@@ -323,6 +323,9 @@ def fire_session_start(*, announce: bool = False) -> None:
     came on — and off for the re-arm an SFX edit triggers, which corrects an
     existing state rather than establishing a new one.
     """
+    from transversal.services.session_state import set_active
+    set_active(True)
+
     from transversal.main import _get_repo
     from transversal.services.roll_deferral import (
         DEFERRED_TIMINGS,
@@ -360,6 +363,9 @@ def fire_session_end() -> None:
     fire every entity's matching ``on_session_end`` SFX (e.g. Challenge
     Statement's end-of-session cleanup/reward) as a global boundary event.
     """
+    from transversal.services.session_state import set_active
+    set_active(False)
+
     from transversal.services.roll_deferral import clear_global_armed
 
     clear_global_armed()
