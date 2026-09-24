@@ -28,23 +28,19 @@ const DOCK_SHEET_PAD = 40     // top room the dock gives the sheet's portrait ov
 const SHEET_CHROME = 240      // .embedded-sheet's `calc(100dvh - 240px)` cap
 const PEEK = 56               // PANEL_CLOSED_PEEK
 
-// NEVER a real player character. Kael Drift is the project's testing character,
-// owned as a main by the dedicated test player `Tester` — the only CHARACTER an
-// agent may act as. Driving a real PC makes that player appear online for the
-// human and reads/writes their sheet, so this spec resolves Tester by name and
-// refuses to run without it.
+// NEVER a real player character. Kael Drift is the project's testing character —
+// the only CHARACTER an agent may act as — and it is a *main* of a dedicated test
+// player. That owner is resolved by the RELATIONSHIP, not by name: the player has
+// already been renamed once (`Tester` → `DSH MCP`) and a name lookup broke this
+// suite the moment it happened.
 const KAEL = 'character-kael-drift-e555ccde'
-const TEST_PLAYER = 'Tester'
 
 let character
 test.beforeAll(async ({ request }) => {
   const { players } = await gql(request, `query { players { id name agency { entityId main } } }`)
-  const tester = players.find((p) => p.name === TEST_PLAYER)
-  if (!tester) throw new Error(`no player named ${TEST_PLAYER} — cannot reach the testing character`)
-  if (!(tester.agency || []).some((a) => a.entityId === KAEL)) {
-    throw new Error(`${TEST_PLAYER} does not main ${KAEL}`)
-  }
-  character = { playerId: tester.id, playerName: tester.name, entityId: KAEL }
+  const owner = players.find((p) => (p.agency || []).some((a) => a.entityId === KAEL && a.main))
+  if (!owner) throw new Error(`no player mains ${KAEL} — cannot reach the testing character`)
+  character = { playerId: owner.id, playerName: owner.name, entityId: KAEL }
 })
 
 /** Seed identity and load — deliberately with no further interaction. */
