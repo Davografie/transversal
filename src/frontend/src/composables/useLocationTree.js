@@ -323,20 +323,22 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       const shownUnplaced = revealAll ? allUnplacedHere : (hideAll ? [] : (defaultUnplaced ? unplacedHere : []))
       const contentsOpen = revealAll || (!hideAll && baselineOpen)
 
-      // ▾ means "nothing is left hidden at this level"; ▸ means "press for the
-      // rest". A level that shows only part of its children therefore reads ▸,
-      // and pressing it is what reveals the others.
-      // The universe-level roster counts as content for the chevron: Valhalla has
-      // no child locations at all, and its one occupant would otherwise be
-      // unreachable.
+      // Three states, not two. `expanded` is everything on screen, `collapsed` is
+      // nothing, and the third is the **partial** reveal a filter or the focus
+      // chain puts there on its own. A two-state chevron had to call that partial
+      // case one of the other two, and both were wrong: drawn `▸` while children
+      // were already below it, and pressing it did nothing.
+      // The universe-level roster counts as content too: Valhalla has no child
+      // locations at all, and its one occupant would otherwise be unreachable.
       const hasChildren = kids.length > 0 || allOcc.length > 0 || allUnplacedHere.length > 0
-      const fullyRevealed = revealedKids.length === kids.length &&
-        shownRoster.length === allOcc.length &&
-        shownUnplaced.length === allUnplacedHere.length
+      const totalContent = kids.length + allOcc.length + allUnplacedHere.length
+      const shownContent = revealedKids.length + shownRoster.length + shownUnplaced.length
+      const reveal = shownContent === 0 ? 'collapsed'
+        : shownContent === totalContent ? 'expanded'
+          : 'partial'
       result.push({
         id: node.id, name: node.name, universe: node.universe,
-        depth, hasChildren, kind,
-        expanded: fullyRevealed,
+        depth, hasChildren, kind, reveal,
       })
       // In filter mode the matched roster of any place on the path is listed. In
       // focus mode only the focused place itself (and levels the GM expanded by

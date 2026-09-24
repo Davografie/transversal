@@ -24,11 +24,19 @@
         <span class="entity-name more-name" :title="`Show the other ${node.count} children of this level`">⋯ {{ node.name }}</span>
       </template>
       <template v-else>
-      <!-- The row knows which way it is drawn, so it names the state to move to:
-           a level that is open by default must collapse on the first press. -->
-      <span v-if="node.hasChildren" class="tree-toggle" @click.stop="$emit('toggle-expand', node.id, !node.expanded)">
-        {{ node.expanded ? '▾' : '▸' }}
-      </span>
+      <!-- Three states. `partial` is the reveal a filter or the focus chain puts
+           on screen by itself — some of the level's content, not all of it and not
+           none — drawn as an *outline* of the same triangle: same shape (the
+           children are below), different weight. The row names the state to move
+           to, because a level can be open by default while `expandedNodes[id]` is
+           still undefined, so one press has to collapse it. -->
+      <span
+        v-if="node.hasChildren"
+        class="tree-toggle"
+        :class="'reveal-' + node.reveal"
+        :title="TOGGLE_TITLE[node.reveal]"
+        @click.stop="$emit('toggle-expand', node.id, node.reveal !== 'expanded')"
+      >{{ REVEAL_GLYPH[node.reveal] }}</span>
       <span v-else class="tree-toggle" :class="{ leaf: node.kind === 'location', occupant: node.kind === 'occupant', universe: node.kind === 'universe' }"></span>
       <span v-if="node.kind === 'universe'" class="entity-type-badge type-UNIVERSE">UNI</span>
       <span v-else-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
@@ -61,6 +69,16 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['select-universe', 'select-location', 'select-occupant', 'toggle-expand', 'move-entity', 'select-more', 'add-entity'])
+
+// What the chevron shows for each of the three reveal states, and what pressing
+// it will do. `partial` is the one worth a tooltip: it is not a state the GM set,
+// it is what the filter or the focus chain left on screen.
+const REVEAL_GLYPH = { collapsed: '▸', partial: '▿', expanded: '▾' }
+const TOGGLE_TITLE = {
+  collapsed: 'Collapsed — click to show everything inside',
+  partial: 'Showing matches — click to show everything inside',
+  expanded: 'Expanded — click to collapse',
+}
 
 let preventNextClick = false
 
@@ -141,6 +159,9 @@ const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useD
 }
 .tree-toggle:hover { color: var(--text); background: var(--overlay-8); }
 .tree-toggle:active { background: var(--overlay-12); }
+/* The partial reveal is the filter's doing, not the GM's — a quieter tone than a
+   level they opened themselves, so the outline glyph reads at a glance. */
+.tree-toggle.reveal-partial { color: var(--accent-dim); }
 .tree-toggle.leaf { visibility: hidden; }
 .tree-toggle.occupant { font-size: 8px; width: 32px; min-height: 32px; line-height: 32px; color: var(--text-dim); }
 

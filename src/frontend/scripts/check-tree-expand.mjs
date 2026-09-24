@@ -137,7 +137,10 @@ function world({ chips = [], focus = '', universe = 'three_realms' } = {}) {
 }
 
 const row = (t, id) => t.flatTree.value.find((n) => n.id === id)
-const glyph = (t, id) => { const n = row(t, id); return n ? (n.expanded ? '▾' : '▸') : '—' }
+// Mirrors GmLocationTree's REVEAL_GLYPH on purpose: the three symbols are the
+// deliverable, so the harness should fail if a state's symbol changes.
+const REVEAL_GLYPH = { collapsed: '▸', partial: '▿', expanded: '▾' }
+const glyph = (t, id) => { const n = row(t, id); return n ? REVEAL_GLYPH[n.reveal] : '—' }
 // Rows directly under `id`, in render order: its own occupants and its immediate
 // child locations, but nothing deeper. Scanned to the end of that node's subtree
 // — filtering the whole flat list by depth would also pick up every *other*
@@ -156,23 +159,45 @@ const under = (t, id) => {
 }
 const kids = (t, id) => under(t, id).filter((n) => n.kind === 'location').map((n) => n.name)
 const roster = (t, id) => under(t, id).filter((n) => n.kind === 'occupant').map((n) => n.name)
-// Press the chevron the way the row does: it names the state to move to.
-const press = (t, id) => { const n = row(t, id); t.toggleTreeNode(id, !n.expanded) }
+// Press the chevron the way the row does: it names the state to move to, which is
+// "everything" unless it is already everything.
+const press = (t, id) => { const n = row(t, id); t.toggleTreeNode(id, n.reveal !== 'expanded') }
 const chip = (v) => [{ type: 'name', value: v, label: v }]
 
-// ── 1. a partly-revealed level reveals the rest when pressed ─────────────
-console.log('\nfilter — ▸ brings the rest in\n')
+// ── 0. three states, three symbols ──────────────────────────────────────
+console.log('\nreveal — collapsed · partial · expanded\n')
 
 {
   const t = world({ chips: chip('Alice') })
-  ok('a partly-revealed level reads ▸', glyph(t, 'loc-europe'), '▸')
+  ok('a level the filter partly reveals reads partial', row(t, 'loc-europe').reveal, 'partial')
+  press(t, 'loc-europe')
+  ok('…expanded once pressed', row(t, 'loc-europe').reveal, 'expanded')
+  press(t, 'loc-europe')
+  ok('…back to partial when collapsed to the path again', row(t, 'loc-europe').reveal, 'partial')
+
+  const p = world({})
+  ok('a level showing nothing reads collapsed', row(p, 'u-earth').reveal, 'collapsed')
+  press(p, 'u-earth')
+  ok('…and expanded once pressed', row(p, 'u-earth').reveal, 'expanded')
+
+  ok('the three states are three distinct symbols', new Set(Object.values(REVEAL_GLYPH)).size, 3)
+  ok('— collapsed / partial / expanded',
+    [REVEAL_GLYPH.collapsed, REVEAL_GLYPH.partial, REVEAL_GLYPH.expanded], ['▸', '▿', '▾'])
+}
+
+// ── 1. a partly-revealed level reveals the rest when pressed ─────────────
+console.log('\nfilter — the partial glyph brings the rest in\n')
+
+{
+  const t = world({ chips: chip('Alice') })
+  ok('a partly-revealed level reads the partial glyph', glyph(t, 'loc-europe'), '▿')
   ok('…and shows only the matched child', kids(t, 'loc-europe'), ['France'])
   press(t, 'loc-europe')
   ok('pressing ▸ reveals the other children', kids(t, 'loc-europe'), ['France', 'Germany', 'Spain'])
   ok('…and the glyph becomes ▾', glyph(t, 'loc-europe'), '▾')
   press(t, 'loc-europe')
   ok('pressing ▾ returns to the filter path', kids(t, 'loc-europe'), ['France'])
-  ok('…and the glyph returns to ▸', glyph(t, 'loc-europe'), '▸')
+  ok('…and the glyph returns to partial', glyph(t, 'loc-europe'), '▿')
 }
 
 {
@@ -204,7 +229,7 @@ console.log('\nfilter — a hidden roster makes the level read ▸\n')
   // check vacuously and draw ▾ over a hidden relative.
   const t = world({ chips: chip('Echo One') })
   ok('all children shown', kids(t, 'loc-camp'), ['The Tent'])
-  ok('…but a hidden occupant still reads ▸', glyph(t, 'loc-camp'), '▸')
+  ok('…but a hidden occupant still reads partial', glyph(t, 'loc-camp'), '▿')
   ok('…and neither occupant is listed yet', roster(t, 'loc-camp'), [])
   ok('the matched one is listed where they are', roster(t, 'loc-tent'), ['Echo One'])
   press(t, 'loc-camp')
@@ -212,7 +237,7 @@ console.log('\nfilter — a hidden roster makes the level read ▸\n')
     roster(t, 'loc-camp'), ['Echo Two'])
   ok('…and then it reads ▾', glyph(t, 'loc-camp'), '▾')
   press(t, 'loc-camp')
-  ok('pressing ▾ returns to the filtered view', [glyph(t, 'loc-camp'), roster(t, 'loc-camp')], ['▸', []])
+  ok('pressing ▾ returns to the filtered view', [glyph(t, 'loc-camp'), roster(t, 'loc-camp')], ['▿', []])
 }
 
 // ── 3. when the baseline is already everything, ▾ has to hide ────────────
@@ -234,7 +259,7 @@ console.log('\nfocus — the chain collapses back to the chain\n')
 
 {
   const t = world({ focus: 'loc-iron' })
-  ok('a chain level with off-chain siblings reads ▸', glyph(t, 'loc-swamp'), '▸')
+  ok('a chain level with off-chain siblings reads partial', glyph(t, 'loc-swamp'), '▿')
   ok('…and shows the on-chain child only', kids(t, 'loc-swamp'), ['Iron Roots'])
   ok('…with a "… N more" stub for the rest', !!t.flatTree.value.find((n) => n.id === 'more:loc-swamp'), true)
   press(t, 'loc-swamp')
@@ -242,7 +267,7 @@ console.log('\nfocus — the chain collapses back to the chain\n')
   ok('…and drops the stub', [glyph(t, 'loc-swamp'), !!t.flatTree.value.find((n) => n.id === 'more:loc-swamp')], ['▾', false])
   press(t, 'loc-swamp')
   ok('pressing ▾ collapses back to the chain, not to nothing',
-    [glyph(t, 'loc-swamp'), kids(t, 'loc-swamp')], ['▸', ['Iron Roots']])
+    [glyph(t, 'loc-swamp'), kids(t, 'loc-swamp')], ['▿', ['Iron Roots']])
   ok('the chain itself is still on screen (the old bug lost it)', !!row(t, 'loc-iron'), true)
 }
 
@@ -317,7 +342,7 @@ console.log('\ntoggle contract\n')
   t.toggleTreeNode('loc-europe')
   ok('a caller that passes nothing still toggles', t.expandedNodes.value['loc-europe'], false)
   ok('a default-open row names false as its next state, so one press closes it',
-    !row(t, 'u-three').expanded, false)
+    row(t, 'u-three').reveal !== 'expanded', false)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
