@@ -501,6 +501,17 @@ def _match(element: Any, step: FilterStep, field_type: str | None = None,
 def _aggregate(values: list[Any], fn: str, field_name: str | None) -> list[Any]:
     if fn == "count":
         return [len(values)]
+    if fn == "tier":
+        # A **cast**: read the die itself, because every function below this line
+        # would have already turned it into its side count (`"d8"` → 8) — the
+        # value an ordering/mean wants, not the one an amount wants.
+        from transversal.domain.rating import die_tier
+
+        for v in values:
+            tier = die_tier(_get_field(v, field_name))
+            if tier is not None:
+                return [tier]
+        return []
     nums = [n for n in (_to_number(_get_field(v, field_name)) for v in values) if n is not None]
     if not nums:
         return []
@@ -881,6 +892,10 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 elif agg not in allowed:
                     what = f"a {field.type} field" if field else "a whole collection"
                     errors.append(TraceError(i, f"{step.fn} cannot run on {what}"))
+                    values, current_type = [], None
+                elif agg.needs_single and current_type.cardinality != "one":
+                    errors.append(TraceError(
+                        i, f"{step.fn} reads a single value — narrow the collection first"))
                     values, current_type = [], None
                 elif agg.name == "random":
                     if step.count < 1:

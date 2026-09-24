@@ -283,6 +283,13 @@ def trace(spec: TargetSpec, source_element: str | None = None,
                 what = f"a {field.type} field" if field else "a whole collection"
                 errors.append(TraceError(i, f"{step.fn} cannot run on {what}"))
                 current = None
+            elif agg.needs_single and current.cardinality != "one":
+                # A cast reads one value; over a collection it would have to pick
+                # one, and picking silently is how a wrong number passes for a
+                # right one. Narrow first (`top`/`bottom`, or a filter).
+                errors.append(TraceError(
+                    i, f"{step.fn} reads a single value — narrow the collection first"))
+                current = None
             elif agg.name == "random":
                 if step.count < 1:
                     errors.append(TraceError(i, "random count must be >= 1"))

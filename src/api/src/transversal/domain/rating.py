@@ -43,3 +43,32 @@ def parse_rating(rating: str) -> list[DieType]:
         raise ValueError(f"Could not parse rating: {rating!r}")
 
     return dice
+
+
+def die_tier(value: object) -> int | None:
+    """A die's position on the ladder — ``d4`` → 1 … ``d12`` → 5.
+
+    ``None`` when the value names no die (an empty rating, an unbound variable, a
+    string that is not a size), so a caller can tell *nothing to cast* from *cast
+    to zero*.
+
+    **This is deliberately not how the resolver already reads a die as a number.**
+    ``target_resolver._to_number`` gives the die's **side count** (``"d8"`` → 8),
+    which is what ordering and averaging want; a tier is what an *amount* wants —
+    "increase by the tier of this rating" is +3 at d8, not +8. Same order,
+    different arithmetic, which is why the conversion is a named step and never
+    implicit.
+
+    Named for the author's word for a cultivation stage. Not to be confused with
+    the catalog's ``die.tier`` field, which is the **outcome** tier
+    (fail…perfect).
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, DieType):
+        return value.tier
+    raw = getattr(value, "value", value)
+    try:
+        return DieType(str(raw).strip().lower()).tier
+    except ValueError:
+        return None

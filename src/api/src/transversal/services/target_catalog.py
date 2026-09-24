@@ -609,6 +609,10 @@ class Aggregation:
     card: str = ""  # template with {field} and {src}; "" → derived
     needs_count: bool = False
     accepts: tuple[str, ...] = ()  # field types; () with needs_field = any
+    #: A **cast** reads one value, so a collection has no single answer for it
+    #: (`tier`: which die's tier?). Refused rather than silently casting the first
+    #: element — a wrong number that looks like a right one.
+    needs_single: bool = False
 
 
 #: Ordering needs a comparable field; averaging needs a numeric one.
@@ -629,6 +633,16 @@ AGGREGATIONS: tuple[Aggregation, ...] = (
     Aggregation("count", "Count", "int", False, card="the number of {src}"),
     Aggregation("random", "Random", "element", False, needs_count=True,
                 card="a random {src}"),
+    # A **cast**, not a collapse: it reads one die-typed field off the element(s)
+    # and returns where that die sits on the ladder (d4 → 1 … d12 → 5), so a
+    # rating can be used as a *number* ("increase the limit by the tier of this
+    # rating"). It lives here rather than as its own step kind because reading a
+    # field off an element is what an aggregate already does — there is no way to
+    # reach a field's value otherwise, and `min`/`max`/`mean` would have already
+    # converted the die to its **side count** (`"d8"` → 8, not 3) before a
+    # separate cast step could see it. See ``domain.rating.die_tier``.
+    Aggregation("tier", "Tier", "int", True, accepts=("die",), needs_single=True,
+                card="the tier of the {field}"),
     Aggregation("min", "Lowest value", "same", True, accepts=_ORDERABLE_TYPES,
                 card="the lowest {field} among {src}"),
     Aggregation("max", "Highest value", "same", True, accepts=_ORDERABLE_TYPES,

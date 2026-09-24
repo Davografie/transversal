@@ -15,6 +15,17 @@ class DieType(str, Enum):
     def max_value(self) -> int:
         return int(self.value[1:])
 
+    @property
+    def tier(self) -> int:
+        """Where the die sits on the ladder: ``d4`` → 1 … ``d12`` → 5.
+
+        A *different number* from :attr:`max_value` (the side count): the two
+        order identically and arithmetically disagree, which is exactly why a
+        conversion has to be named rather than assumed. See
+        ``domain.rating.die_tier``.
+        """
+        return list(DieType).index(self) + 1
+
     def step_up(self) -> "DieType":
         order = list(DieType)
         idx = order.index(self)
