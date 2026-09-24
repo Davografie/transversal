@@ -9,7 +9,7 @@
       @click.stop="$emit('select', p.id)"
     >
       <span class="peer-face">
-        <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" :class="{ cutout: p.sheetPortraitTransparent }" alt="" />
+        <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" :class="{ cutout: p.cutout }" alt="" />
         <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
       </span>
       <span class="peer-label">{{ p.name }}</span>

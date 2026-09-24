@@ -263,16 +263,23 @@ test('tablet landscape puts the peer rail between the sheet and the map', async 
 })
 
 // Peer faces render like the navdots and the sheet portrait: a background-removed
-// portrait stands out of its frame rather than being cropped into a circle. No
-// entity at the testing character's location has cutout art, so the flag is stubbed
-// over the wire — which also proves the field actually reaches the component.
+// portrait stands out of its frame rather than being cropped into a circle.
+//
+// The flag is stubbed so the test does not depend on where the testing character
+// happens to be standing (his location is restored by whoever shepherds the suite
+// fixture). It rides the per-peer batch — the active projection's own flag — because
+// the entity-level `sheetPortraitTransparent` is a different resolution and reports
+// `false` for a peer whose served file is a cutout.
 test('a cutout peer face stands out of its frame', async ({ page }) => {
   await page.route('**/api/v1/graphql', async (route) => {
-    if (!(route.request().postData() || '').includes('sheetPortraitTransparent')) return route.continue()
+    if (!(route.request().postData() || '').includes('sheetImageTransparent')) return route.continue()
     const res = await route.fetch()
     const json = await res.json()
-    if (Array.isArray(json?.data?.entities)) {
-      for (const e of json.data.entities) if (e.id !== KAEL) e.sheetPortraitTransparent = true
+    for (const e of json?.data?.entities || []) {
+      if (e.id === KAEL) continue
+      const active = (e.projections || []).find((pr) => pr.id === e.currentProjection)
+      if (active) active.sheetImageTransparent = true
+      else e.sheetPortraitTransparent = true
     }
     await route.fulfill({ response: res, json })
   })

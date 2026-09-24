@@ -31,33 +31,71 @@ export function usePeers({ graphql, currentLocationId, entityId, gmMode, entityN
   async function fetchPeers(force = false) {
     if (!force && peersCache && Date.now() - peersCache.at < PEERS_TTL_MS) {
       applyPeers(peersCache.entities)
-      resolvePeerSheetImages()
+      resolvePeerFaces()
       return
     }
     diag('fetchPeers-start', { currentLocationId: currentLocationId.value })
     const data = await graphql(`query {
-    entities { id type name currentLocation unpublished sheetPortraitTransparent }
+    entities { id type name currentLocation unpublished }
   }`)
     if (data?.entities) {
       peersCache = { entities: data.entities, at: Date.now() }
       entityNames.value = Object.fromEntries(data.entities.map(e => [e.id, e.name]).filter(([id]) => id))
       applyPeers(data.entities)
-      resolvePeerSheetImages()
+      resolvePeerFaces()
       diag('fetchPeers-done', { total: data.entities.length, atLocation: peers.value.length })
     } else {
       diag('fetchPeers-no-data')
     }
   }
 
-  async function resolvePeerSheetImages() {
+  /**
+   * Resolve each peer's face: the sheet image URL, and whether that image is a
+   * background-removed cutout (which renders standing out of its frame instead of
+   * circle-cropped).
+   *
+   * The flag has to come from the SAME resolution as the URL. `/entities/images`
+   * resolves through each entity's **active body** (`_role_urls`: projection
+   * first, then entity-level), so a peer whose file is a cutout still reports
+   * `sheetPortraitTransparent: false` — that field is the deliberate *entity-level*
+   * chain that `sheetPortrait` uses, and it disagrees whenever a body carries the
+   * image. Measured on a live peer: served file `…_cut_….webp`, entity-level flag
+   * `false`, active projection's flag `true` → it rendered as an opaque circle.
+   *
+   * Asked for just these ids, never the whole entity list: every transparency
+   * field costs a DB read, and the list is ~1000 rows (adding it there measured
+   * 0.08s → 0.94s per fetch).
+   */
+  async function resolvePeerFaces() {
     const ids = peers.value.map((p) => p.id).filter(Boolean)
     if (!ids.length) return
     const qs = new URLSearchParams({ role: 'sheet', ids: ids.join(',') })
-    const r = await fetch(`/api/v1/entities/images?${qs}`)
-    if (!r.ok) return
-    const data = await r.json()
-    const images = data?.images || {}
-    peers.value = peers.value.map((p) => ({ ...p, sheetImage: images[p.id] || '' }))
+    const [images, cutouts] = await Promise.all([
+      fetch(`/api/v1/entities/images?${qs}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      graphql(`query($ids: [ID!]!) {
+        entities(ids: $ids) {
+          id
+          currentProjection
+          sheetPortraitTransparent
+          projections { id sheetImageTransparent }
+        }
+      }`, { ids }).catch(() => null),
+    ])
+    const urls = images?.images || {}
+    const byId = new Map((cutouts?.entities || []).map((e) => [e.id, e]))
+    peers.value = peers.value.map((p) => {
+      const e = byId.get(p.id)
+      // The active body's own sheet image decides; an entity with no body falls
+      // back to the entity-level image, exactly as the resolver chain does.
+      const active = (e?.projections || []).find((pr) => pr.id === e.currentProjection)
+      return {
+        ...p,
+        sheetImage: urls[p.id] || '',
+        cutout: active ? !!active.sheetImageTransparent : !!e?.sheetPortraitTransparent,
+      }
+    })
   }
 
   /** Is `id` an entity of `type`? Falls back to the cached full list when the

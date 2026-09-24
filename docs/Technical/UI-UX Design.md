@@ -486,13 +486,21 @@ Two surfaces select a character (see [[System Architecture]] component table), a
 map itself. One `viewingEntityId` (the peek) sits beside `entityId` (who you are).
 
 - **Peer faces follow the image's own nature.** A peer's sheet image is drawn either
-  circle-cropped (a photo bubble) or as a **cutout**: when `sheetPortraitTransparent` is
-  set on the entity, the face loses its circular crop, gains a bottom-only radius and
+  circle-cropped (a photo bubble) or as a **cutout**: when the image is background-removed,
+  the face loses its circular crop, gains a bottom-only radius and
   hairline, and stands out of its own slot — the navdot / sheet-portrait treatment scaled
   to a chip, at the same ~45% overhang the sheet portrait uses (14px on a 20px slot). It
   is *drawn* wider than the slot (24×34 in 20×20) rather than resizing it, so a chip never
   changes size because of its art. Only the dock rail needs anything extra for this: its
   gap is 16px, so one tab's cutout rises into the gap instead of into the tab above it.
+  **The flag must come from the resolution that produced the URL.** The image comes from
+  `/entities/images`, which resolves through each entity's **active body**; the
+  entity-level `sheetPortraitTransparent` is a *different* chain (`sheetPortrait`'s) and
+  reports `false` whenever a body carries the image — which is normal, since sheet images
+  are projection-scoped. So the peers ask for the active projection's own
+  `sheetImageTransparent`, in one batched query for just the peers on screen. Asking the
+  whole ~1000-row entity list for a transparency field measured **0.08s → 0.94s** per fetch,
+  because each field costs a DB read.
 - **Peer chips** (`app/PeersBar.vue` — the strip above the sheet, or the vertical rail
   at the dock's right edge on wide landscape, see *Landscape dock*) — two states, styled
   apart: **`.assumed`** (you *are* it — `entityId`) takes the solid accent fill;
