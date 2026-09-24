@@ -8,8 +8,10 @@
       :title="p.name"
       @click.stop="$emit('select', p.id)"
     >
-      <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" alt="" />
-      <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
+      <span class="peer-face">
+        <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" :class="{ cutout: p.sheetPortraitTransparent }" alt="" />
+        <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
+      </span>
       <span class="peer-label">{{ p.name }}</span>
     </button>
   </div>
@@ -61,12 +63,21 @@ defineEmits(['select'])
 .peer-chip.viewing {
   border-color: var(--accent);
 }
-.peer-img, .peer-avatar {
+/* The frame the face sits in. A background-removed portrait is positioned
+   inside it and made taller than it, so the figure rises out of the frame
+   instead of being cropped into it — the navdot / sheet-portrait treatment,
+   scaled down to a chip. */
+.peer-face {
+  position: relative;
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
+}
+.peer-img, .peer-avatar {
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  flex-shrink: 0;
 }
 .peer-avatar {
   background: var(--accent-dim);
@@ -76,6 +87,23 @@ defineEmits(['select'])
   display: flex;
   align-items: center;
   justify-content: center;
+}
+/* No circular crop: anchored to the bottom of the frame, centred on it, with a
+   bottom-only radius and hairline (the sheet portrait's device) and standing
+   14px above the frame's top edge. It is deliberately drawn wider than the 20px
+   frame rather than resizing it, so a cutout and a circle-cropped face occupy
+   the same slot and a chip never changes size because of its art. */
+.peer-img.cutout {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 34px;
+  object-fit: contain;
+  object-position: bottom center;
+  border-radius: 0 0 10px 10px;
+  border-bottom: 1px solid var(--overlay-12);
 }
 .peer-label {
   font-size: 12px;

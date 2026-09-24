@@ -485,6 +485,14 @@ Two surfaces select a character (see [[System Architecture]] component table), a
 `fb78654` they **deliberately differ** — a chip is a rail you can act from, a dot is the
 map itself. One `viewingEntityId` (the peek) sits beside `entityId` (who you are).
 
+- **Peer faces follow the image's own nature.** A peer's sheet image is drawn either
+  circle-cropped (a photo bubble) or as a **cutout**: when `sheetPortraitTransparent` is
+  set on the entity, the face loses its circular crop, gains a bottom-only radius and
+  hairline, and stands out of its own slot — the navdot / sheet-portrait treatment scaled
+  to a chip, at the same ~45% overhang the sheet portrait uses (14px on a 20px slot). It
+  is *drawn* wider than the slot (24×34 in 20×20) rather than resizing it, so a chip never
+  changes size because of its art. Only the dock rail needs anything extra for this: its
+  gap is 16px, so one tab's cutout rises into the gap instead of into the tab above it.
 - **Peer chips** (`app/PeersBar.vue` — the strip above the sheet, or the vertical rail
   at the dock's right edge on wide landscape, see *Landscape dock*) — two states, styled
   apart: **`.assumed`** (you *are* it — `entityId`) takes the solid accent fill;
@@ -697,7 +705,10 @@ inset to 649, no horizontal overflow); 1194×834 — a tablet in landscape — k
 full 400px dock, which is the boundary; and rotating hands the peek back to the column. The rail is
 pinned as geometry *and* as a working control — a chip click has to land, because
 rotating it moved the chips to a seam the sheet paints across and a dead rail passes a
-pure-geometry check. A separate case pins the `?dockw` knob's contract (sets, persists, resets, and never
+pure-geometry check. A cutout peer face is checked by
+stubbing the transparency flag over the wire — the testing character has no cutout art at
+its location, and the stub has the side benefit of proving the field reaches the
+component. A separate case pins the `?dockw` knob's contract (sets, persists, resets, and never
 touches the desktop dock). The existing sheet-definition suite passes unchanged *inside*
 the dock.
 

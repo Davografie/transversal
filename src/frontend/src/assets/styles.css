@@ -1164,6 +1164,9 @@ select option {
   overflow-y: auto;
   padding: 8px 4px;
   border-right: 1px solid var(--overlay-8);
+  /* Roomier than the strip's 6px: a cutout portrait stands above its own tab, so
+     it needs the gap rather than the tab above it. */
+  gap: 16px;
 }
 /* The sheet takes the rest of the dock's whole height: no 240px-cap arithmetic
    now that it is no longer sharing a column with the roller. The top room is the

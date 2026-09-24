@@ -36,7 +36,7 @@ export function usePeers({ graphql, currentLocationId, entityId, gmMode, entityN
     }
     diag('fetchPeers-start', { currentLocationId: currentLocationId.value })
     const data = await graphql(`query {
-    entities { id type name currentLocation unpublished }
+    entities { id type name currentLocation unpublished sheetPortraitTransparent }
   }`)
     if (data?.entities) {
       peersCache = { entities: data.entities, at: Date.now() }

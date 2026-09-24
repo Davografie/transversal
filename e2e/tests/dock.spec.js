@@ -266,6 +266,46 @@ test('tablet landscape puts the peer rail between the sheet and the map', async 
   await expect(other).toHaveClass(/viewing/)
 })
 
+// Peer faces render like the navdots and the sheet portrait: a background-removed
+// portrait stands out of its frame rather than being cropped into a circle. No
+// entity at the testing character's location has cutout art, so the flag is stubbed
+// over the wire — which also proves the field actually reaches the component.
+test('a cutout peer face stands out of its frame', async ({ page }) => {
+  await page.route('**/api/v1/graphql', async (route) => {
+    if (!(route.request().postData() || '').includes('sheetPortraitTransparent')) return route.continue()
+    const res = await route.fetch()
+    const json = await res.json()
+    if (Array.isArray(json?.data?.entities)) {
+      for (const e of json.data.entities) if (e.id !== KAEL) e.sheetPortraitTransparent = true
+    }
+    await route.fulfill({ response: res, json })
+  })
+
+  await openAt(page, TABLET_LANDSCAPE)
+
+  const face = page.locator('.peers-bar .peer-img.cutout').first()
+  await expect(face).toBeVisible()
+
+  const geom = await face.evaluate((el) => {
+    const img = el.getBoundingClientRect()
+    const frame = el.parentElement.getBoundingClientRect()
+    const chip = el.closest('.peer-chip').getBoundingClientRect()
+    return {
+      riseAboveFrame: Math.round(frame.top - img.top),
+      riseAboveChip: Math.round(chip.top - img.top),
+      imgW: Math.round(img.width),
+      frameW: Math.round(frame.width),
+      chipW: Math.round(chip.width),
+    }
+  })
+  expect(geom.riseAboveFrame).toBeGreaterThan(0)   // it stands OUT of the frame
+  expect(geom.riseAboveChip).toBeGreaterThan(0)    // …and out of its tab
+  expect(geom.imgW).toBeGreaterThan(geom.frameW)   // drawn wider than the slot it shares
+  // The art never resizes the tab: a cutout and a circle-cropped face are the
+  // same layout slot, so a chip cannot jump because of its picture.
+  expect(geom.chipW).toBe(36)
+})
+
 // The peek used to live on the bottom-centre column. Docking moves it onto the
 // roller band, and a transform on the column would both drag the dock around
 // and capture the band's `position: fixed` — so which element carries it is the
