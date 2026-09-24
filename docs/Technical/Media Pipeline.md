@@ -232,6 +232,30 @@ the `imagen_progress` SSE event. Statuses are `prompting` → `generating` →
   (`Entity.prompt_steering`, authored per universe in the GM LoRA panel and
   appended last as `(sentence:0.9)` so it reads as the final style direction).
 
+Every prompt's negative ends with **`DEFAULT_NEGATIVE`** (`imagen/models.py`),
+which suppresses the stock-image and *inscription* artefacts: `watermark,
+signature, text`, plus `caption(s)`, `lettering`, `writing`, `calligraphy`,
+`inscription`, `seal` / `seal stamp` / `red seal`, `logo`, `title`, `subtitle`,
+`signage`, `chinese characters`, `kanji`, `border`, `frame`, `ui`.
+
+> [!warning] Suppression goes in the negative — never in the positive
+> A style LoRA can write on the image: `ChineseScrollPainting`, applied
+> automatically to `three_realms` locations from the universe's `LOCATION` lora
+> config, reproduces the calligraphic inscriptions and red seals that scroll
+> paintings carry, over an explicit `text, watermark, signature` negative. The
+> widened negative above removes them (`B175`).
+>
+> What did **not** work: a *positive* clause reading "no text, no calligraphy, no
+> seal stamps" produced **more** calligraphy than the baseline. Flux/T5 does not
+> negate, so naming the thing summons it. A test guards the positive prompt
+> against that phrasing.
+>
+> When this reappears, remember the LoRA is at weight 0.8
+> (`inject_flux_params` defaults `lora1_weight = 0.8`) — checking the weight is
+> the first move, and the second is whether the prompt *asked* for writing (the
+> injected zone prose can, e.g. "bamboo slips with assignments in chinese
+> writing").
+
 For a **projection** generation, trait selection is scoped by
 `get_prompt_traitsettings(entity_id, universes, projection_id)`: entity traits
 (`from_type == 'entity'`) plus that projection's morph traits
