@@ -25,7 +25,7 @@ import pytest
 
 from transversal.db.repository import EntityRepository
 from transversal.db.repository_mixins.canvas import CROSS_UNIVERSE_WEIGHT
-from transversal.domain import Entity, EntityType
+from transversal.domain import Entity, EntityType, Projection, TransversalType
 
 try:
     _repo = EntityRepository()
@@ -114,4 +114,45 @@ def test_unreachable_and_empty_targets():
         assert repo.get_location_distances_from(L1, set()) == {}
         assert repo.get_location_distances_from(L1, {""}) == {}
     finally:
+        _cleanup(repo)
+
+
+def test_closest_projection_picks_the_nearer_body_through_a_real_repository():
+    """The seam between the two halves above: the travel handler asking the *real*
+    repository for distances, and the relocated body actually persisting.
+
+    L3 sits one step from L4; L1 is across the boundary and two steps beyond it
+    (CROSS_UNIVERSE_WEIGHT + 2), so the near body must win even though the far one
+    shares the destination's universe.
+    """
+    from transversal.services.entity_manager import EntityManager
+
+    repo = _repo
+    _seed(repo)
+    em = EntityManager(repository=repo)
+    carrier = None
+    try:
+        carrier = em.create(name="test-ldist-carrier", entity_type=EntityType.CHARACTER, universe=U1)
+        near = Projection(
+            id=f"{carrier.id}:near", entity_id=carrier.id, universe=U2, origin_universe=U2,
+            current_location=L3, transversal_type=TransversalType.NATIVE,
+        )
+        far = Projection(
+            id=f"{carrier.id}:far", entity_id=carrier.id, universe=U1, origin_universe=U1,
+            current_location=L1, transversal_type=TransversalType.NATIVE,
+        )
+        repo.create_projection(near)
+        repo.create_projection(far)
+
+        result = em.travel(carrier.id, L4, transversal_type="consciousness",
+                           projection_policy="{closest_projection}")
+
+        assert result.current_projection == near.id
+        assert result.current_location == L4
+        # Persisted, not just in-memory: the body came to the place, the other stayed.
+        assert repo.get_projection(near.id).current_location == L4
+        assert repo.get_projection(far.id).current_location == L1
+    finally:
+        if carrier is not None:
+            repo.delete_entity(carrier.id, rmtree=True)
         _cleanup(repo)
