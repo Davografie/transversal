@@ -532,6 +532,18 @@ class TestLocation:
         assert proj.transversal_type == TransversalType.CONSCIOUSNESS
         assert proj.origin_universe == "three_realms"
 
+    def test_seek_moves_without_recording(self, em, kael):
+        # B173: re-entering a point the entity already has in its history is a
+        # *seek* — the body moves and the app follows, but no leg is written,
+        # because the leg that follows it is the one worth recording.
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+
+        result = em.travel(kael.id, loc.id, transversal_type="consciousness",
+                           projection_policy="{closest_projection}", seek=True)
+
+        assert result.current_location == loc.id
+        assert em.repo.list_historical_records(kael.id, "transversal") == []
+
     def test_closest_projection_moves_the_nearest_body_to_the_target(self, em, repo, kael):
         # The Blue Book's "click a place and go there" (2026-09-24): the mind uses
         # the body nearest the destination, and *that body comes to the place* —

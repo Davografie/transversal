@@ -68,6 +68,20 @@ def test_consciousness_travel_defaults_to_the_last_projection(monkeypatch):
     assert em.calls[0][2]["projection_policy"] == "{last_projection}"
 
 
+def test_consciousness_travel_forwards_the_seek_flag(monkeypatch):
+    """A seek re-enters history without writing a leg ([[B173]])."""
+    r, em = _post(monkeypatch, {"location": "loc-b", "seek": True})
+    assert r.status_code == 200, r.text
+    assert em.calls[0][2]["seek"] is True
+
+
+def test_consciousness_travel_is_not_a_seek_by_default(monkeypatch):
+    """Omitted stays a recorded travel — what every older caller had."""
+    r, em = _post(monkeypatch, {"location": "loc-b"})
+    assert r.status_code == 200, r.text
+    assert em.calls[0][2]["seek"] is False
+
+
 def test_consciousness_travel_reports_a_missing_entity_as_404(monkeypatch):
     """A refusal has to reach the reader as a *reason*: the Blue Book prints the
     detail, and an unhandled exception gave it only "Internal Server Error"."""

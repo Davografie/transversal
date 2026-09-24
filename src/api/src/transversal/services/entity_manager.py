@@ -358,6 +358,7 @@ class EntityManager:
         transversal_type: str = "inapposite",
         projection_policy: Optional[str] = None,
         arrival_kind: str = ArrivalKind.TRANSVERSAL.value,
+        seek: bool = False,
     ) -> Entity:
         """Relocate an entity across a boundary through the unified travel effect.
 
@@ -368,6 +369,14 @@ class EntityManager:
         ``{new_projection}``) and is ignored for inapposite travel. Reuse policies
         are scoped to the destination universe and fall back to spawning a fresh
         body when nothing matches.
+
+        ``seek=True`` re-enters a point the entity already has in its history: the
+        body moves and every live-update path still runs (the app re-anchors, the
+        viewers follow), but **no historical record is written**. The seek is not a
+        journey — re-entering an old location is how a character *sets* where the
+        next leg will belong, and the Blue Book splices that next leg in at this
+        point. Logging the seek would put a leg in the record that nobody travelled
+        and turn a path into a branch ([[B173]]).
         """
         entity = self.repo.get_entity(entity_id)
         if entity is None:
@@ -393,13 +402,14 @@ class EntityManager:
 
         commit_effects(entity, [effect], self.repo, arrival_kind=arrival_kind)
 
-        _record_transversal(
-            self.repo, entity.id, entity.name,
-            old_location, entity.current_location, entity.current_universe,
-            from_universe=old_universe or "",
-            transversal_type=transversal_type or "",
-            projection_id=entity.current_projection or "",
-        )
+        if not seek:
+            _record_transversal(
+                self.repo, entity.id, entity.name,
+                old_location, entity.current_location, entity.current_universe,
+                from_universe=old_universe or "",
+                transversal_type=transversal_type or "",
+                projection_id=entity.current_projection or "",
+            )
 
         return entity
 

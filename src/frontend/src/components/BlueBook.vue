@@ -100,8 +100,8 @@
                        it transverses the book's owner here. The image viewer that
                        used to be on this click is gone by decision (2026-09-24) —
                        entry images below keep theirs. -->
-                  <img v-if="locationPortraits[loc.id]" :src="locationPortraits[loc.id]" class="bb-location-img" :class="{ 'bb-drop-target': isLocationDropTarget(loc), 'bb-traveling': transversingId === loc.id }" :data-bb-insert="loc.insertBefore" alt="" draggable="false" :title="'Travel to ' + (locationNames[loc.id] || loc.id)" @click="transverseTo(loc.id)" @dragover.stop="dragOver" @drop.stop="drop" />
-                  <span v-else class="bb-location-missing" :class="{ 'bb-drop-target': isLocationDropTarget(loc), 'bb-traveling': transversingId === loc.id }" :data-bb-insert="loc.insertBefore" :title="'Travel to ' + (locationNames[loc.id] || loc.id)" @click="transverseTo(loc.id)" @dragover.stop="dragOver" @drop.stop="drop">{{ locationNames[loc.id] || loc.id }}</span>
+                  <img v-if="locationPortraits[loc.id]" :src="locationPortraits[loc.id]" class="bb-location-img" :class="{ 'bb-drop-target': isLocationDropTarget(loc), 'bb-traveling': transversingId === loc.id }" :data-bb-insert="loc.insertBefore" alt="" draggable="false" :title="'Travel to ' + (locationNames[loc.id] || loc.id)" @click="transverseTo(loc.id, loc.afterId)" @dragover.stop="dragOver" @drop.stop="drop" />
+                  <span v-else class="bb-location-missing" :class="{ 'bb-drop-target': isLocationDropTarget(loc), 'bb-traveling': transversingId === loc.id }" :data-bb-insert="loc.insertBefore" :title="'Travel to ' + (locationNames[loc.id] || loc.id)" @click="transverseTo(loc.id, loc.afterId)" @dragover.stop="dragOver" @drop.stop="drop">{{ locationNames[loc.id] || loc.id }}</span>
                   <!-- The arrow is part of "after this location" too, so the whole
                        path is a drop target rather than a run of dead gaps. -->
                   <span v-if="li < g.locations.length - 1" class="bb-location-arrow" :data-bb-insert="loc.insertBefore">→</span>
@@ -506,7 +506,16 @@ const renderGroups = computed(() => {
         chain.push(items[j])
         j++
       }
-      groups.push({ key: 'chain-' + chain[0].id, type: 'chain', entries: chain, locations: chainLocations(chain, i) })
+      // Each location also carries the entry the *next* travel belongs after — the
+      // entry this location sits at the end of. That is the same seam a drag-reorder
+      // drop uses (`insertBefore`), so the two gestures agree about what "after this
+      // location" means; `null` means the very front of the book, exactly as dropping
+      // above the first row does.
+      const locations = chainLocations(chain, i).map((loc) => ({
+        ...loc,
+        afterId: items[loc.insertBefore - 1]?.id ?? null,
+      }))
+      groups.push({ key: 'chain-' + chain[0].id, type: 'chain', entries: chain, locations })
       i = j
     } else {
       groups.push({ key: m.id, type: 'entry', entry: m, idx: i })
@@ -517,16 +526,20 @@ const renderGroups = computed(() => {
 })
 
 // The location images of a chain, each carrying the flat-list index a dropped
-// item has to be inserted *at* to land directly after it. A record contributes
-// its origin (insert before the record) and its destination (insert before
-// whatever follows the record); a location shared by consecutive records is
-// emitted once, so dropping mid-path splits the chain at that point.
+// item has to be inserted *at* to land directly after it.
+//
+// Read as a **timeline of arrivals**: the first leg's origin, then where each leg
+// landed — never a leg's own origin again. That matches `chainTitle` (the same
+// sequence as text, used when a chain has no images), and it is what lets a spliced-in
+// leg read as part of the path: records A→B, B→E, B→C, C→D are a *branch* from B, but
+// the book should read A→B→E→C→D, and re-emitting each origin instead reads
+// A→B→E→B→C→D. What each record actually did is still on the record.
 function chainLocations(group, firstIdx) {
   const out = []
   let lastId = null
   group.forEach((m, k) => {
     const d = m.data || {}
-    if (d.from_location && d.from_location !== lastId) {
+    if (k === 0 && d.from_location && d.from_location !== lastId) {
       out.push({ id: d.from_location, insertBefore: firstIdx + k })
       lastId = d.from_location
     }
@@ -582,6 +595,9 @@ async function loadEntries() {
     }
   } finally { loading.value = false }
   fetchThreads()
+  // A travel that landed while a position was set belongs at that position, not at
+  // the end (see the splice note near `transverseTo`).
+  await applyArmedSplice()
   // Never a jump: a reader who has scrolled up into history stays there, and one
   // still at the end gets the new entries revealed.
   if (shouldFollow()) scrollToTail()
@@ -616,6 +632,32 @@ async function fetchThreads() {
   } catch {}
 }
 
+// Write the chain order: each entry points at the one above it. Messages and
+// records are separate collections, so route each write to the owning mutation —
+// `updateMessage` against a record id is a silent no-op (B111). Returns whether
+// anything actually changed.
+//
+// A chain has to be *fully* ordered to be re-ordered at all: the render falls back to
+// createdAt for entries with no `after_ids`, so leaving the untouched run implicit
+// would put an older entry ahead of a spliced-in newer one. That is why the first
+// reorder of a legacy book writes every entry (B111) and later ones touch ~3.
+async function writeOrder(ordered) {
+  const updates = []
+  for (let i = 0; i < ordered.length; i++) {
+    const entry = ordered[i]
+    const newAfterIds = i > 0 ? [ordered[i - 1].id] : []
+    const current = (entry.afterIds || []).slice().sort().join(',')
+    const proposed = newAfterIds.slice().sort().join(',')
+    if (current !== proposed) {
+      updates.push(entry.recordType
+        ? graphql(UPDATE_HISTORICAL_RECORD, { id: entry.id, afterIds: newAfterIds })
+        : graphql(UPDATE_MESSAGE, { id: entry.id, afterIds: newAfterIds }))
+    }
+  }
+  if (updates.length) await Promise.all(updates)
+  return updates.length > 0
+}
+
 async function reorder(srcIdx, target) {
   // Every drop resolves to "insert before this flat index": a row's own index
   // for its top edge, or the index a location image computed for "directly
@@ -640,23 +682,7 @@ async function reorder(srcIdx, target) {
   const at = anchor ? ordered.findIndex(e => e.id === anchor.id) : ordered.length
   ordered.splice(at < 0 ? ordered.length : at, 0, X)
 
-  // Rebuild the chain: each entry points at the one above it. Messages and
-  // records are separate collections, so route the write to the owning
-  // mutation — `updateMessage` against a record id is a silent no-op.
-  const updates = []
-  for (let i = 0; i < ordered.length; i++) {
-    const entry = ordered[i]
-    const newAfterIds = i > 0 ? [ordered[i - 1].id] : []
-    const current = (entry.afterIds || []).slice().sort().join(',')
-    const proposed = newAfterIds.slice().sort().join(',')
-    if (current !== proposed) {
-      updates.push(entry.recordType
-        ? graphql(UPDATE_HISTORICAL_RECORD, { id: entry.id, afterIds: newAfterIds })
-        : graphql(UPDATE_MESSAGE, { id: entry.id, afterIds: newAfterIds }))
-    }
-  }
-
-  if (updates.length) await Promise.all(updates)
+  await writeOrder(ordered)
   await loadEntries()
 }
 
@@ -774,7 +800,49 @@ async function failureReason(r) {
   return body ? `${body.slice(0, 200)} (HTTP ${r.status})` : `HTTP ${r.status} ${r.statusText}`
 }
 
-async function transverseTo(locId) {
+// ── Setting the position (the splice) ────────────────
+// Clicking a location does two things: it *seeks* — re-entering that point without
+// writing a leg, because re-entering an old location is not a journey — and it arms
+// where the next travel belongs, so that leg is spliced in there instead of appended.
+// A→B→C→D, click B, travel to E reads A→B→E→C→D.
+//
+// One-shot by intent: the arm is consumed by the first new travel record and then
+// follows that leg, so continuing from a re-entered stretch keeps extending it. With
+// no arm the book is untouched — ordinary travel appends exactly as before.
+let spliceArm = null  // { anchorId: string|null, known: Set<string> } | null
+
+function armSplice(anchorId) {
+  spliceArm = { anchorId, known: new Set(entries.value.map((e) => e.id)) }
+}
+
+async function applyArmedSplice() {
+  if (!spliceArm) return
+  // Only a *travel record* counts: a journal entry or letter written between the
+  // seek and the travel is not the leg being placed.
+  const fresh = entries.value.filter(
+    (e) => e.recordType === 'transversal' && !spliceArm.known.has(e.id),
+  )
+  if (!fresh.length) return
+  const arm = spliceArm
+  spliceArm = null
+  const moved = fresh[fresh.length - 1]
+
+  const ordered = entries.value.filter((e) => e.id !== moved.id)
+  if (arm.anchorId === null) {
+    ordered.unshift(moved)  // clicked the very first location: the leg belongs at the front
+  } else {
+    const at = ordered.findIndex((e) => e.id === arm.anchorId)
+    // The anchor is gone (deleted, or dropped by a reload): append rather than guess.
+    if (at < 0) return
+    ordered.splice(at + 1, 0, moved)
+  }
+
+  if (await writeOrder(ordered)) await loadEntries()
+  // The cursor follows the leg it just placed.
+  armSplice(moved.id)
+}
+
+async function transverseTo(locId, afterId = null) {
   if (!locId || transversingId.value) return  // one in flight at a time
   transversingId.value = locId
   travelError.value = ''
@@ -786,11 +854,17 @@ async function transverseTo(locId) {
     const r = await window.fetch(`/api/v1/entities/${props.entityId}/consciousness-travel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ location: locId, projection_policy: '{closest_projection}' }),
+      body: JSON.stringify({
+        location: locId,
+        projection_policy: '{closest_projection}',
+        seek: true,
+      }),
     })
     if (!r.ok) throw new Error(await failureReason(r))
-    // No local refresh: the move publishes `location_changed`, which the app
-    // answers by re-anchoring the view and refreshing this book.
+    // Refresh, then arm: baselining the arm *after* the reload is what makes "the
+    // next travel" mean the next one, rather than anything the book had not seen yet.
+    await loadEntries()
+    armSplice(afterId)
   } catch (e) {
     travelError.value = `Could not travel there — ${e.message}`
     console.error('[BB] transverse failed', e)

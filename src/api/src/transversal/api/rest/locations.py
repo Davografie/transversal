@@ -186,6 +186,10 @@ class MoveRequest(BaseModel):
     # as a literal projection id by the travel handler, so nothing here has to
     # police the vocabulary.
     projection_policy: str | None = None
+    # Re-entering a point already in the entity's history: move, but write no
+    # historical record. The Blue Book uses this so a reader can *set* where the
+    # next leg belongs without an untravelled leg entering the record ([[B173]]).
+    seek: bool = False
 
 
 class EdgeRequest(BaseModel):
@@ -232,6 +236,7 @@ async def consciousness_travel(entity_id: str, body: MoveRequest):
             entity_id, body.location,
             transversal_type="consciousness",
             projection_policy=body.projection_policy or "{last_projection}",
+            seek=body.seek,
         )
     except EntityNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
