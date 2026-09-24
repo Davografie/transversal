@@ -1295,7 +1295,20 @@ def _traitset_name(repo, traitset_id: str) -> str:
 
 
 def list_owner_refs(repo, owner_type: str) -> list[dict]:
-    """Return flattened owner refs of one type for the ownership panel.
+    """Return flattened owner refs of one type, **holders first**, for the panel.
+
+    Ordered by how many rules the owner already holds (descending), and *stable*
+    within a count so the underlying order stands: the panel exists to manage what
+    is **attached**, and a flat list of hundreds buries the handful that have
+    anything at all. Sorting here rather than in the picker keeps one answer for
+    every consumer — the same reason the list is built in one place.
+    """
+    return sorted(_owner_refs_for(repo, owner_type),
+                  key=lambda ref: -len(ref.get("sfx_ids") or []))
+
+
+def _owner_refs_for(repo, owner_type: str) -> list[dict]:
+    """The owner refs of one type, in the repository's own order.
 
     Each ref is ``{owner_type, owner_id, label, sfx_ids}``.  ``sfx_ids`` is the
     *active grant* list for that surface (``Trait.default_sfx_ids`` for the

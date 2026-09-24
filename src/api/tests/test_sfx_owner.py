@@ -13,6 +13,7 @@ from transversal.services.sfx_owner import (
     ensure_sfx_owners,
     ensure_targeting_ban_sfx,
     get_available_sfx_ids,
+    list_owner_refs,
     propagate_trait_default_sfx,
     resolve_sfx_source,
 )
@@ -1525,3 +1526,46 @@ def test_the_gate_is_enforced_on_attach_not_just_offered():
     assert attach_refusal(gated, "trait_instance", "ts-1", here) is None
     assert add_sfx_to_owner(here, "trait_instance", "ts-1", gated.id) is True
     assert here.entities["ts-1"].sfx_ids == [gated.id]
+
+
+# ── The ownership panel lists holders first (B72) ─────────────
+#
+# The panel exists to manage what is *attached*: a flat list of hundreds buries
+# the handful of entities that actually hold a rule. Sorted in one place, so every
+# consumer agrees, and *stable* within a count so the repository's own order is
+# not disturbed for owners the change is not about.
+
+class _OwnerRepo:
+    def __init__(self, entities):
+        # (id, name, sfx_ids) triples, in the order the repository would give.
+        self._entities = entities
+
+    def list_all_entities(self):
+        return [
+            SimpleNamespace(id=i, name=n, sfx_ids=list(s),
+                            type=SimpleNamespace(value="character"))
+            for i, n, s in self._entities
+        ]
+
+
+def test_owners_that_hold_rules_come_first():
+    repo = _OwnerRepo([
+        ("e-nothing", "Nothing", []),
+        ("e-two", "Two", ["sfx-a", "sfx-b"]),
+        ("e-one", "One", ["sfx-c"]),
+        ("e-also-nothing", "Also Nothing", []),
+    ])
+    refs = list_owner_refs(repo, "entity")
+    assert [r["owner_id"] for r in refs] == ["e-two", "e-one", "e-nothing", "e-also-nothing"]
+    assert [len(r["sfx_ids"]) for r in refs] == [2, 1, 0, 0]
+
+
+def test_the_order_is_stable_for_owners_holding_the_same_count():
+    """Ties keep the repository's order — this change is about floating the
+    holders up, not about re-sorting the world."""
+    repo = _OwnerRepo([
+        ("e-b", "B", ["sfx-a"]),
+        ("e-a", "A", ["sfx-b"]),
+        ("e-c", "C", ["sfx-c"]),
+    ])
+    assert [r["owner_id"] for r in list_owner_refs(repo, "entity")] == ["e-b", "e-a", "e-c"]
