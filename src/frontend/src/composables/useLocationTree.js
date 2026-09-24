@@ -65,6 +65,13 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
     const map = {}
     for (const e of list) {
       if (!OCCUPANT_TYPES.has(e.type)) continue
+      // Placed and unplaced are disjoint halves, and the halves are what the
+      // group key means: a placed occupant belongs to a location, an unplaced one
+      // to a universe. Requiring the *right* one matters — grouping the unplaced
+      // on `currentUniverse` alone lists everybody in that universe, placed or
+      // not, which is how a universe node came to show the whole roster.
+      // (The app's own `UNPLACED` condition is `current_location in (None, "")`.)
+      if (placed ? !e.currentLocation : e.currentLocation) continue
       const key = placed ? e.currentLocation : e.currentUniverse
       if (!key) continue
       if (!map[key]) map[key] = []

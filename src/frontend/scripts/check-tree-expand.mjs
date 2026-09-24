@@ -100,6 +100,9 @@ const ENTITIES = [
   E('gmc-alice', 'Alice', 'GMC', 'loc-fr', 'earth'),
   E('gmc-bob', 'Bob', 'GMC', 'loc-iron', 'three_realms'),
   E('gmc-cara', 'Cara', 'GMC', 'loc-hut', 'three_realms'),
+  // Genuinely unplaced: no `currentLocation` at all, which is what the app's
+  // `UNPLACED` condition means (`current_location in (None, "")`).
+  E('gmc-loose', 'Loose', 'GMC', null, 'three_realms'),
   // Echo Two shares The Camp with Echo One but does not match a "Echo One" chip.
   E('gmc-e1', 'Echo One', 'GMC', 'loc-tent', 'three_realms'),
   E('gmc-e2', 'Echo Two', 'GMC', 'loc-camp', 'three_realms'),
@@ -237,6 +240,20 @@ console.log('\nplain — open by default, and collapsible\n')
   ok('pressing ▾ collapses it on the first press', [glyph(t, 'u-three'), kids(t, 'u-three')], ['▸', []])
   press(t, 'u-three')
   ok('pressing ▸ opens it again', [glyph(t, 'u-three'), kids(t, 'u-three')], ['▾', ['swamp']])
+}
+
+// ── 5b. a universe lists only occupants with no location ────────────────
+console.log('\nplain — a universe lists the unplaced, not everybody\n')
+
+{
+  // The reported bug: a universe node showed its whole occupant roster. The
+  // unplaced grouping had been keyed on `currentUniverse` alone, so *every*
+  // occupant of that universe qualified — placed or not.
+  const t = world({})
+  const underUniverse = (id) => under(t, id).filter((n) => n.kind === 'occupant').map((n) => n.name)
+  ok('only the genuinely unplaced occupant is listed', underUniverse('u-three'), ['Loose'])
+  ok('a placed occupant is not', underUniverse('u-three').includes('Bob'), false)
+  ok('the universe still shows its child locations', kids(t, 'u-three'), ['swamp'])
 }
 
 // ── 6. the toggle contract itself ───────────────────────────────────────
