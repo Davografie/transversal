@@ -756,3 +756,113 @@ def test_armed_effect_own_condition_withholds_it_when_it_does_not_match(monkeypa
 
     assert fired == []
     assert applied == []
+
+
+def test_armed_earn_pays_once_per_distinct_d4_trait_of_the_roll(monkeypatch):
+    """B98: "d4 bonus" pays one razmerit per d4 trait the roll used, not per die.
+
+    The effect's own path names them — rolled dice → their trait instances → the
+    d4-rated ones — and the applier runs the effect once per resolved target, so
+    two dice from one d4 trait are one trait and pay once. That path is also the
+    gate: no d4 trait in the roll resolves no target and pays nothing.
+    """
+    import transversal.main as main
+    import transversal.services.effects_applier as applier
+    from types import SimpleNamespace
+    from transversal.services.effects_applier import EffectRegistry
+    from transversal.services.target_spec import FilterStep, NavigateStep, SelectStep, TargetSpec
+
+    roll_deferral.reset()
+    roller = SimpleNamespace(id="e1", razmerit=0)
+    traits = {
+        "ts-a": SimpleNamespace(id="ts-a", entity_id="e1", rating="d4"),
+        "ts-b": SimpleNamespace(id="ts-b", entity_id="e1", rating="d4"),
+        "ts-c": SimpleNamespace(id="ts-c", entity_id="e1", rating="d8"),
+    }
+
+    class Repo:
+        def get_entity(self, eid):
+            return roller if eid == "e1" else None
+
+        def get_traitsetting(self, tid):
+            return traits.get(tid)
+
+    repo = Repo()
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    earned = []
+    raz = SimpleNamespace(earn=lambda target, amount, **kw: earned.append((target, amount)))
+    em = SimpleNamespace(repo=repo, create=lambda *a, **k: None)
+    original = applier.effect_registry
+    applier.effect_registry = EffectRegistry()
+    try:
+        applier._register_core_handlers(em, raz)
+        effect = Effect(
+            timing=EffectTiming.ON_ROLL, type="transfer_razmerit", action="earn",
+            target="self", result="1",
+            target_spec=TargetSpec(steps=[
+                SelectStep(collection="rolled_dice"),
+                NavigateStep(edge="traitsetting", dedup=True),
+                FilterStep(field="rating", operator="==", value="d4"),
+            ]),
+        )
+        roll_deferral.arm_sfx("e1", [effect])
+        rolls = [
+            {"rating": "d4", "ts_id": "ts-a", "role": None},
+            {"rating": "d4", "ts_id": "ts-a", "role": "total"},  # same trait again
+            {"rating": "d4", "ts_id": "ts-b", "role": "effect"},
+            {"rating": "d8", "ts_id": "ts-c", "role": None},
+        ]
+        fired = roll_deferral.fire_armed("e1", "on_roll", "earth", {"rolls": rolls})
+    finally:
+        applier.effect_registry = original
+
+    assert earned == [("e1", 1), ("e1", 1)]
+    assert [e.target for e in fired] == ["ts-a", "ts-b"]
+
+
+def test_armed_earn_pays_nothing_when_no_d4_trait_was_rolled(monkeypatch):
+    """The path is the gate: a roll of d6/d8 traits names no d4 trait to pay for."""
+    import transversal.main as main
+    import transversal.services.effects_applier as applier
+    from types import SimpleNamespace
+    from transversal.services.effects_applier import EffectRegistry
+    from transversal.services.target_spec import FilterStep, NavigateStep, SelectStep, TargetSpec
+
+    roll_deferral.reset()
+    roller = SimpleNamespace(id="e1", razmerit=0)
+    traits = {"ts-c": SimpleNamespace(id="ts-c", entity_id="e1", rating="d8")}
+
+    class Repo:
+        def get_entity(self, eid):
+            return roller if eid == "e1" else None
+
+        def get_traitsetting(self, tid):
+            return traits.get(tid)
+
+    repo = Repo()
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    earned = []
+    raz = SimpleNamespace(earn=lambda target, amount, **kw: earned.append((target, amount)))
+    em = SimpleNamespace(repo=repo, create=lambda *a, **k: None)
+    original = applier.effect_registry
+    applier.effect_registry = EffectRegistry()
+    try:
+        applier._register_core_handlers(em, raz)
+        roll_deferral.arm_sfx("e1", [Effect(
+            timing=EffectTiming.ON_ROLL, type="transfer_razmerit", action="earn",
+            target="self", result="1",
+            target_spec=TargetSpec(steps=[
+                SelectStep(collection="rolled_dice"),
+                NavigateStep(edge="traitsetting", dedup=True),
+                FilterStep(field="rating", operator="==", value="d4"),
+            ]),
+        )])
+        fired = roll_deferral.fire_armed(
+            "e1", "on_roll", "earth", {"rolls": [{"rating": "d8", "ts_id": "ts-c"}]})
+    finally:
+        applier.effect_registry = original
+
+    assert earned == []
+    assert fired == []
