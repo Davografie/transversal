@@ -1107,6 +1107,21 @@ select option {
   --dock-w: 400px;   /* the width the sheet already has in the pop-out */
 }
 
+/* Phone landscape is short as well as narrow, and there the full 400px dock
+   eats about half the screen. A short viewport is the honest discriminator:
+   phones held sideways are 360–430px tall, while tablets in landscape are
+   ≥744px and desktops taller still — so neither is touched. 160px is 40% of
+   the pop-out's width; the map gets the rest (684px of 844 at the size
+   measured). */
+@media (max-height: 500px) {
+  .stage.dock-sheet { --dock-w: 160px; }
+  /* The sheet's portrait pops above its own header, and at 160px wide the header
+     is taller so it pops further — which clipped the portrait 5px off the top of
+     the screen on the narrowest phone measured (873×393). This is the room that
+     stops it; it also lifts the peers bar off the screen edge. */
+  .stage.dock-sheet .dice-panel-wrapper { padding-top: 12px; }
+}
+
 /* The wrapper becomes the dock: left edge, full height, and deliberately
    WITHOUT a transform of its own — a transformed ancestor would capture the
    roller band's `position: fixed` and drag the dock around with the roller.

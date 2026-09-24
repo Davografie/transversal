@@ -7,6 +7,8 @@
 //   width ≤ 820px              → the three-band stack
 //   width > 820px, portrait    → the bottom-centre pop-out column (unchanged)
 //   width > 820px, landscape   → the sheet docks left, always visible
+//                                (and narrower still when the viewport is short,
+//                                 i.e. a phone held sideways)
 //
 // Every claim about "unchanged" is a claim about the pop-out's own geometry, so
 // portrait is asserted as strictly as landscape.
@@ -15,11 +17,14 @@ import { test, expect } from '@playwright/test'
 import { findPlayableCharacter, openSheet } from '../helpers/sheet.js'
 
 const DESKTOP = { width: 1280, height: 950 }
+const TABLET_LANDSCAPE = { width: 1194, height: 834 }
 const TABLET_PORTRAIT = { width: 834, height: 1194 }
 const PHONE_PORTRAIT = { width: 390, height: 844 }
 const PHONE_LANDSCAPE = { width: 844, height: 390 }
 
 const DOCK_W = 400            // --dock-w: the width the sheet already has
+const PHONE_DOCK_W = 160      // --dock-w when the viewport is short (phone landscape)
+const PHONE_DOCK_PAD = 12     // top room the narrow dock gives the sheet's portrait
 const SHEET_CHROME = 240      // .embedded-sheet's `calc(100dvh - 240px)` cap
 const PEEK = 56               // PANEL_CLOSED_PEEK
 
@@ -133,15 +138,47 @@ test('phone portrait keeps the three-band stack', async ({ page }) => {
   await expect(stage).not.toHaveClass(/dock-sheet/)
 })
 
-test('phone landscape docks too — the case the ticket left open', async ({ page }) => {
+test('phone landscape docks, with a narrower dock so the map keeps its room', async ({ page }) => {
   await openAt(page, PHONE_LANDSCAPE)
 
   const stage = page.locator('.stage').first()
   await expect(stage).toHaveClass(/dock-sheet/)
   await expect(stage).not.toHaveClass(/mobile-stack/)
 
+  // A phone held sideways is short, so the dock takes 40% of its other width
+  // rather than about half the screen, and the map gets the difference back.
+  const dock = await box(page.locator('.sheet-band').first())
+  expect(Math.round(dock.width)).toBe(PHONE_DOCK_W)
+
+  const map = await box(page.locator('.location-viewer').first())
+  expect(Math.round(map.x)).toBe(PHONE_DOCK_W)
+  expect(Math.round(map.width)).toBe(PHONE_LANDSCAPE.width - PHONE_DOCK_W)
+
   const roller = await box(page.locator('.roller-band').first())
-  expect(Math.round(roller.x + roller.width / 2)).toBe((PHONE_LANDSCAPE.width + DOCK_W) / 2)
+  expect(Math.round(roller.x + roller.width / 2)).toBe((PHONE_LANDSCAPE.width + PHONE_DOCK_W) / 2)
+
+  // The sheet's portrait pops above its own header. At this width the header is
+  // tall enough that it used to pop past the top of the screen, so the dock
+  // carries top room for it — the sheet band must start clear of the edge.
+  expect(dock.y).toBeGreaterThanOrEqual(PHONE_DOCK_PAD)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth
+    - document.documentElement.clientWidth)).toBe(0)
+})
+
+// The narrower dock is keyed on a SHORT viewport, not on being in landscape, so
+// a tablet in landscape must keep the full-width one. This is the boundary.
+test('tablet landscape keeps the full-width dock', async ({ page }) => {
+  await openAt(page, TABLET_LANDSCAPE)
+
+  const stage = page.locator('.stage').first()
+  await expect(stage).toHaveClass(/dock-sheet/)
+
+  const dock = await box(page.locator('.sheet-band').first())
+  expect(Math.round(dock.width)).toBe(DOCK_W)
+
+  const map = await box(page.locator('.location-viewer').first())
+  expect(Math.round(map.x)).toBe(DOCK_W)
+  expect(Math.round(map.width)).toBe(TABLET_LANDSCAPE.width - DOCK_W)
 })
 
 // The peek used to live on the bottom-centre column. Docking moves it onto the

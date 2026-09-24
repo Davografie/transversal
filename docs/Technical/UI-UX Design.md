@@ -627,12 +627,25 @@ changes.
   hidden sheet cannot be left behind. The reverse holds too — `rollerOpen()` is
   `hoverOpen` alone when docked, so selecting a character no longer drags the roller
   open with it. (It is `hoverOpen || sheetVisible` in the pop-out, where sheet and roller
-  genuinely are one column.) **Consequence worth knowing:** on phone landscape the dock
-  holds 400 of 844px permanently, so the map keeps 444px. `--dock-w` is the knob.
-- **The dock is the wrapper.** `.dice-panel-wrapper` becomes a full-height, 400px left
-  column (`--dock-w` — the width the sheet already had in the pop-out, so the sheet's
-  internals needed no narrow-width rework). It is inert itself (`pointer-events: none`,
-  so its box cannot eat map clicks) and its children re-arm events for themselves.
+  genuinely are one column.)
+- **A phone in landscape gets a narrower dock.** 400px is about half of an 873px phone,
+  so when the viewport is **short** (≤500px — phones held sideways are 360–430px tall,
+  while tablets in landscape are ≥744px) `--dock-w` drops to **160px** and the map takes
+  the rest (713px of 873 measured). *Shortness* is the discriminator, not being in
+  landscape, so a tablet in landscape keeps the full-width dock — pinned by a test.
+  That mode also carries **12px of top room**: the sheet's portrait pops above its own
+  header, and at 160px the header is tall enough that on the narrowest phone measured
+  (873×393) the portrait was clipped 5px off the top of the screen. 8px cleared it; 12px
+  gives margin and lifts the peers bar off the screen edge too.
+  **Known cost, owned downstream:** at 160px the sheet's *own* internals are cramped —
+  the "name this projection" placeholder wraps to three lines and the toolbar pills stack
+  into a vertical icon column. That is the narrow-width pass [[character-sheet]] already
+  carries as verification debt; it was written when ~400px looked like the floor, and
+  160px makes it pressing rather than optional.
+- **The dock is the wrapper.** `.dice-panel-wrapper` becomes a full-height left column
+  (`--dock-w` — 400px by default, the width the sheet already had in the pop-out). It is
+  inert itself (`pointer-events: none`, so its box cannot eat map clicks) and its children
+  re-arm events for themselves.
 - **The dock is deliberately transform-free.** A transformed ancestor would both drag
   the dock along with the roller's drag and capture the roller band's `position: fixed`
   — the peek lives on the band, not the column (see *Drag-to-open/close gesture*).
@@ -653,9 +666,10 @@ Verified in the browser (Firefox + Chromium, `e2e/tests/dock.spec.js`): the dock
 at 1280×950 **before anything is clicked**, with the map inset to 880 and the sheet
 uncapped; selecting a character leaves the roller peeked and hovering the roller opens
 the roller without disturbing the sheet; 834×1194 keeps the pop-out and its
-`100dvh − 240px` cap; 390×844 keeps the band stack; 844×390 docks — the phone-landscape
-call the ticket left open, resolved by the same rule; and rotating hands the peek back
-to the column. The existing sheet-definition suite passes unchanged *inside* the dock.
+`100dvh − 240px` cap; 390×844 keeps the band stack; 844×390 docks narrow (160px, map
+inset to 684, no horizontal overflow); 1194×834 — a tablet in landscape — keeps the
+full 400px dock, which is the boundary; and rotating hands the peek back to the column.
+The existing sheet-definition suite passes unchanged *inside* the dock.
 
 ## Theming
 
