@@ -262,11 +262,24 @@ async def consciousness_travel(entity_id: str, body: MoveRequest):
 
 @router.post("/locations/{from_id}/edges/{to_id}")
 async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
-    """Create or update a super or transversal edge between two locations."""
+    """Create or update a super or transversal edge between two locations.
+
+    A ``super`` edge is a parent link (child → parent), so one that would close
+    a loop is refused before anything is written: a location cannot be its own
+    parent, nor be re-parented under something already inside its own subtree.
+    Such an edge detaches the whole branch from the tree root and it simply
+    disappears from the location tree — the state Yinling Creek was found in on
+    2026-09-11. The GM tree refuses the drop client-side too (``56a0ab5``); this
+    is the same rule where the data is written, so no other caller gets past it.
+    """
     if body.type not in ("super", "transversal"):
         raise HTTPException(status_code=400, detail=f"Invalid edge type: {body.type}")
 
     repo = _repo()
+    refusal = repo.validate_relationship(from_id, to_id, body.type)
+    if refusal:
+        raise HTTPException(status_code=400, detail=refusal)
+
     edge_key = f"edge:{from_id}:{to_id}:{body.type}"
     patch = {}
     if body.transversal_type is not None:

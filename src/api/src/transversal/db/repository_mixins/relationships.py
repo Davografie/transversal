@@ -315,11 +315,32 @@ class RepositoryRelationships:
     def validate_relationship(self, from_id: str, to_id: str, rel_type: str) -> str | None:
         """Why this edge may not exist — or ``None`` when it may.
 
-        Only ``membership`` is constrained today. A roster entry is
-        member → faction, so a self-edge, a ``_to`` that is not a faction, or a
-        ``_from`` that cannot hold membership is refused rather than written.
+        ``membership`` is constrained: a roster entry is member → faction, so a
+        self-edge, a ``_to`` that is not a faction, or a ``_from`` that cannot
+        hold membership is refused rather than written.
+
+        ``super`` is constrained too, because it is the location tree's parent
+        edge (child → parent) and a loop in it is unreachable from every root:
+        the branch simply vanishes from the tree — the limbo Yinling Creek fell
+        into ([[B122]]). Re-parenting a location under itself, or under anything
+        in its own subtree, is refused. Everything else about a location edge is
+        deliberately unchecked; the REST endpoint inserts the edge document
+        directly, so this is the only place the shapes are policed.
+
         Returns a human-readable refusal; the caller raises it.
         """
+        if rel_type == "super":
+            if from_id == to_id:
+                return "a location cannot be its own parent"
+            if from_id in self.get_location_ancestors(to_id):
+                child = self.get_entity(from_id)
+                parent = self.get_entity(to_id)
+                return (
+                    f"'{parent.name if parent else to_id}' is inside "
+                    f"'{child.name if child else from_id}'s own subtree — a "
+                    "location cannot be re-parented under itself"
+                )
+            return None
         if rel_type != "membership":
             return None
         if from_id == to_id:
