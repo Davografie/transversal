@@ -201,11 +201,18 @@ function initialDuration(sfx) {
       })
       if (!result) { errorMsg.value = apiError.value || 'Save failed'; return false }
       patchData('sfxs', sfxId.value, {
+        // ⚠ The keys must match what the `sfxs` query returns (camelCase). A
+        // snake_case key here does not *replace* the query's value — it sits
+        // beside it, and the camelCase one wins on the next read. That is how a
+        // just-saved bound variable came back empty after closing and reopening
+        // the editor: `boundVariables` still held the value from the last fetch
+        // while the fresh edit went to `bound_variables`. Same trap for
+        // sourceKind / armingScope / listenerSpec / acquireSpec.
         name: draft.name, trigger: draft.trigger, description: draft.description,
-        source_kind: draft.source_kind, placement: draft.placement,
-        arming_scope: draft.arming_scope, listener_spec: draft.listener_spec,
-        acquire_spec: draft.acquire_spec,
-        bound_variables: (draft.bound_variables || []).map(bv => ({ ...bv })),
+        sourceKind: draft.source_kind, placement: draft.placement,
+        armingScope: draft.arming_scope, listenerSpec: draft.listener_spec,
+        acquireSpec: draft.acquire_spec,
+        boundVariables: (draft.bound_variables || []).map(bv => ({ ...bv })),
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
       savedAt.value = Date.now()
@@ -241,11 +248,12 @@ function initialDuration(sfx) {
       errorMsg.value = ''
       await fetchTraitsConfig()
       patchData('sfxs', id, {
+        // Same key discipline as `save()` above: mirror the query's shape.
         id, name: draft.name.trim(), trigger: draft.trigger, description: draft.description,
-        source_kind: draft.source_kind, placement: draft.placement,
-        arming_scope: draft.arming_scope, listener_spec: draft.listener_spec,
-        acquire_spec: draft.acquire_spec,
-        bound_variables: (draft.bound_variables || []).map(bv => ({ ...bv })),
+        sourceKind: draft.source_kind, placement: draft.placement,
+        armingScope: draft.arming_scope, listenerSpec: draft.listener_spec,
+        acquireSpec: draft.acquire_spec,
+        boundVariables: (draft.bound_variables || []).map(bv => ({ ...bv })),
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
       successMsg.value = `Created "${draft.name}"`
