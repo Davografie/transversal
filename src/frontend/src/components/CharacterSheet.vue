@@ -1048,36 +1048,34 @@ function clickSuppressed() { return Date.now() < suppressClickUntil }
 function suppressClicks() { suppressClickUntil = Date.now() + 200 }
 
 // ── The set accordion ───────────────────────────────────────────────────
-// Every set is a section with its traits under it. Sets start **expanded**, so
-// the first thing the traits tab shows is the traits — the docked sheet is tall
-// and a column of set names alone was most of an empty screen. Collapsing is
-// remembered for the session, not persisted: re-opening the sheet shows
-// everything, which is the state with nothing to wonder about.
-const collapsedSets = ref(new Set())
+// Every set is a section with its traits under it, and they all start **closed**:
+// the sets are a short list you scan, and opening one is a deliberate act.
+//
+// Which are open is **persisted**, like the container state — a reload in the
+// middle of arranging a sheet should put you back where you were rather than
+// collapsing everything under you. An array, not a `Set`: this writes through
+// `JSON.stringify`, and a Set serialises to `{}`.
+const openSets = usePersistedRef('sheet.openTraitSets', [])
 
-const isSetOpen = (name) => !collapsedSets.value.has(name)
+const isSetOpen = (name) => openSets.value.includes(name)
 
 function toggleSet(name) {
-  const next = new Set(collapsedSets.value)
-  if (next.has(name)) {
-    next.delete(name)
-    // Entering a set collapses *its* containers — their contents are something
-    // you look into deliberately, not state carried over from last time. This is
-    // the rule the drill-in applied on set entry; per set now, because several
-    // sets can be open at once and one set's entry must not close another's.
-    collapseContainersIn(name)
-  } else {
-    next.add(name)
+  if (isSetOpen(name)) {
+    openSets.value = openSets.value.filter(n => n !== name)
+    return
   }
-  collapsedSets.value = next
+  openSets.value = [...openSets.value, name]
+  // Entering a set collapses *its* containers — their contents are something you
+  // look into deliberately, not state carried over from last time. This is the
+  // rule the drill-in applied on set entry; per set now, because several sets can
+  // be open at once and one set's entry must not close another's.
+  collapseContainersIn(name)
 }
 
 /** Open a set without toggling it shut, for landing on a trait that just appeared. */
 function expandSet(name) {
   if (!name || isSetOpen(name)) return
-  const next = new Set(collapsedSets.value)
-  next.delete(name)
-  collapsedSets.value = next
+  openSets.value = [...openSets.value, name]
 }
 
 function collapseContainersIn(name) {
@@ -1095,12 +1093,6 @@ function goToTraitSets() {
   activeSheetView.value = 'traits'
   cancelEdit()
 }
-
-// Re-opening the sheet shows everything, so a collapse chosen earlier is not a
-// state you have to remember having chosen.
-watch(() => props.visible, (v) => {
-  if (!v && collapsedSets.value.size) collapsedSets.value = new Set()
-})
 
 // The accordion's rows: each set's traits, grouped so a relationship's rows sit
 // together, with the ids whose `→ contact` the row above already states.
@@ -2623,7 +2615,6 @@ onMounted(() => {
 watch(() => props.entityId, loadCachedEntity)
 watch(() => props.universe, loadCachedEntity)
 watch(() => props.overrideEntityId, loadCachedEntity)
-watch(() => [props.entityId, props.overrideEntityId], () => { collapsedSets.value = new Set() })
 watch(showAllTraits, () => recomputeTraitSets('show-all-toggled'))
 
 // ── Relationship fetch ─────────────────────────────
@@ -2835,10 +2826,18 @@ watch(() => props.externalPoolSources, (sources) => {
   white-space: nowrap;
 }
 /* [+] and the dots both hug the right edge; the toggle's flex:1 pushes them. */
+/* The glyph is centred by flex, not left to the text baseline: a bare button
+   puts `＋` on its baseline in the inline flow, which lands it low and right of
+   the box rather than in the middle of it. `padding: 0` for the same reason —
+   the UA's default padding shifts the glyph off-centre. */
 .set-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   width: 22px;
   height: 22px;
+  padding: 0;
   line-height: 1;
   border-radius: 4px;
   border: 1px solid var(--overlay-10);
