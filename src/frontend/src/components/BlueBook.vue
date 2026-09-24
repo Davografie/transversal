@@ -67,10 +67,17 @@
 
       <!-- ── Entries ── -->
       <div ref="entriesEl" class="bb-entries">
-        <div v-if="loading" class="bb-empty">Loading…</div>
+        <!-- "Loading…" only when there is nothing to show yet. It used to replace the
+             list on *every* fetch, which unmounted the entries — and an unmounted list
+             cannot hold a scroll position, so each SSE refresh (a travel anywhere)
+             threw the reader's place away before any scroll rule could apply. -->
+        <div v-if="loading && !displayEntries.length" class="bb-empty">Loading…</div>
         <div v-else-if="!displayEntries.length" class="bb-empty">No entries yet.</div>
-        <TransitionGroup v-else name="bb-list" tag="div" class="bb-list" :class="{ 'bb-phasing': filterPhasing }">
-          <div v-for="(g, gidx) in renderGroups" :key="g.key" :data-bb-idx="g.type === 'entry' ? g.idx : -1" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (renderGroups.length - 1 - gidx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': g.type === 'entry' && dragIndex === g.idx, 'bb-drag-over': g.type === 'entry' && dragTarget?.kind === 'row' && dragTarget.insertBefore === g.idx, 'bb-continuation': g.type === 'entry' && entryContinuations.has(g.entry.id) }" :draggable="g.type === 'entry'" @dragstart="g.type === 'entry' && dragStart($event, g.idx)" @dragover="dragOver" @drop="drop" @dragend="dragEnd" @touchstart="g.type === 'entry' && touchStart($event, g.idx)">
+        <!-- `appear` matters now that the list is no longer emptied and refilled:
+             without it the first paint mounts this group already populated, and the
+             entries would skip the enter transition entirely. -->
+        <TransitionGroup v-else ref="listEl" name="bb-list" tag="div" class="bb-list" appear :class="{ 'bb-phasing': filterPhasing }">
+          <div v-for="g in renderGroups" :key="g.key" :data-bb-idx="g.type === 'entry' ? g.idx : -1" class="bb-entry" :class="{ 'bb-dragging': g.type === 'entry' && dragIndex === g.idx, 'bb-drag-over': g.type === 'entry' && dragTarget?.kind === 'row' && dragTarget.insertBefore === g.idx, 'bb-continuation': g.type === 'entry' && entryContinuations.has(g.entry.id) }" :draggable="g.type === 'entry'" @dragstart="g.type === 'entry' && dragStart($event, g.idx)" @dragover="dragOver" @drop="drop" @dragend="dragEnd" @touchstart="g.type === 'entry' && touchStart($event, g.idx)">
             <!-- ⠿ grip: the app-wide drag affordance (GmListItem/TraitRow). Touch
                  drags from it engage instantly; the row keeps whole-row mouse
                  drag and long-press. -->
@@ -133,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import MediaImage from './MediaImage.vue'
 import TagInput from './ui/TagInput.vue'
@@ -330,21 +337,109 @@ const filteredEntries = computed(() => {
   return entries.value.filter(m => (m.threads || []).includes(selectedThread.value))
 })
 
+// Scroll behaviour: the book owns the viewport until the reader takes it.
+//
+// It used to jump to the bottom on *every* refresh — and `fetch()` runs on each SSE
+// `location_changed`, so any travel (yours or another player's) yanked the book out
+// from under whoever was reading. Two things had to go for a gate to mean anything:
+//
+//   * the scripted jumps, replaced by the rule below; and
+//   * the empty-then-refill that forced the cascade. Clearing the list collapses
+//     the scroll container, and the browser clamping the scroll to 0 throws the
+//     reader's position away *before* any gate is consulted. Entries now update in
+//     place: a refresh that only appends leaves the viewport alone, and only
+//     genuinely new rows animate in.
+//
+// The rule: until the reader has touched the scroll, the book keeps the newest entry
+// at the end — it must, because the content keeps growing *after* the first pin (an
+// entry's images acquire their height when they load; measured at +650px on a
+// 107-entry book, most of a viewport). Once they have touched it, the book follows
+// only from the end and otherwise leaves them alone.
+//
+// Intent is read from the reader's **input**, not from scroll events — the browser
+// fires those for its own adjustments too, and those are indistinguishable from a
+// gesture by geometry: Chrome's scroll anchoring moves scrollTop while images load
+// above the viewport, and it moves it either way (measured: it pulled a pin at 1384
+// back to 1318 and pushed one at 999 up to 1330). Reading that as "the reader left"
+// is what made the entry sit ~300px below the fold with nothing left to re-pin it.
+const TAIL_SLACK_PX = 24  // "at the end" with a margin — sub-pixel heights, and a half-visible last row still counts as reading the end
+let readerTookOver = false  // set by the reader's own input, never by the browser's adjustments
+
+const gapAtEnd = (el) => el.scrollHeight - el.scrollTop - el.clientHeight
+
+function shouldFollow() {
+  const el = entriesEl.value
+  if (!el) return false
+  if (!readerTookOver) return true   // the book owns the viewport until the reader takes it
+  // Nothing to follow when the content already fits: the end is on screen, so a pin
+  // would be a no-op — and answering "yes" here would carry a stale "they were at
+  // the end" across a list swap (filter to a short thread, then back to All) and yank
+  // them on the way back, which is the thing being fixed.
+  if (el.scrollHeight - el.clientHeight <= TAIL_SLACK_PX) return false
+  return gapAtEnd(el) <= TAIL_SLACK_PX
+}
+
+function onReaderInput() { readerTookOver = true }
+
+async function scrollToTail() {
+  await nextTick()
+  const el = entriesEl.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+// Content grows *after* the pin that revealed it, so watch the list's own size
+// instead of guessing when that stops. `load` events miss growth no image owns
+// (video metadata, reflow) and the engines disagree about the ordering — a
+// load-driven re-pin still opened 37px short in Firefox while Chromium opened at 0.
+// This replaces the old "wait (n-1)*40 + 350ms, then jump" timer, which was a guess
+// at exactly this.
+const listEl = ref(null)
+let growthWatcher = null
+
+function onContentGrew() {
+  const el = entriesEl.value
+  if (!el) return
+  if (gapAtEnd(el) <= TAIL_SLACK_PX) return  // already showing the end
+  if (shouldFollow()) scrollToTail()
+}
+
+// The list is inside `v-else`, so it comes and goes with the entries; `$el` because
+// the ref lands on the TransitionGroup component, not its rendered div.
+watch(listEl, (target) => {
+  growthWatcher?.disconnect()
+  const node = target?.$el || target
+  if (!node) return
+  growthWatcher = new ResizeObserver(onContentGrew)
+  growthWatcher.observe(node)
+}, { flush: 'post' })
+
+// Anything that means "the reader is driving now". `pointerdown` covers a scrollbar
+// drag (and costs nothing when it is a click instead); `keydown` is here for the day
+// the container becomes focusable.
+const READER_INPUT = ['wheel', 'touchmove', 'keydown', 'pointerdown']
+
+onMounted(() => {
+  for (const type of READER_INPUT) {
+    entriesEl.value?.addEventListener(type, onReaderInput, { passive: true })
+  }
+})
+
+onBeforeUnmount(() => {
+  growthWatcher?.disconnect()
+  for (const type of READER_INPUT) {
+    entriesEl.value?.removeEventListener(type, onReaderInput)
+  }
+})
+
 // Phased display for smooth filter transitions
 const displayEntries = ref([])
 const filterPhasing = ref(false)
 let filterTimer = null
 
-async function refreshEntries(newList) {
-  displayEntries.value = []
-  await nextTick()
+function refreshEntries(newList) {
+  const follow = shouldFollow()  // read before the swap: a filtered list can be shorter than the viewport
   displayEntries.value = [...newList]
-  // Scroll to bottom after cascade completes
-  const delay = (newList.length - 1) * 40 + 300 + 50
-  setTimeout(() => {
-    const el = entriesEl.value
-    if (el) el.scrollTop = el.scrollHeight
-  }, delay)
+  if (follow) scrollToTail()
 }
 
 watch(selectedThread, (newVal) => {
@@ -483,10 +578,9 @@ async function fetch() {
     }
   } finally { loading.value = false }
   fetchThreads()
-  nextTick(() => {
-    const el = entriesEl.value
-    if (el) el.scrollTop = el.scrollHeight
-  })
+  // Never a jump: a reader who has scrolled up into history stays there, and one
+  // still at the end gets the new entries revealed.
+  if (shouldFollow()) scrollToTail()
 }
 
 async function fetchEntityInfo(eid) {

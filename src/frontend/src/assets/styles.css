@@ -907,7 +907,9 @@ select option {
   pointer-events: none;
 }
 
-/* Blue Book cascade animation */
+/* Blue Book entry transition. The animation is per-entry and simultaneous — the
+   staggered "cascade" was removed with the scripted scroll it existed to mask
+   (see the scroll behaviour note in BlueBook.vue). */
 @keyframes bb-enter {
   from { opacity: 0; transform: translateY(-12px); }
   to   { opacity: 1; transform: translateY(0); }
