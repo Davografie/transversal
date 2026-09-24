@@ -124,7 +124,7 @@
     @applied="onSupportCreated"
     @close="supportCastMenu = null"
   />
-  <div class="stage" :style="{ '--roller-h': rollerContentH + 'px' }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '', sheetDock ? 'dock-sheet' : '', dockOpen ? 'sheet-open' : '']">
+  <div class="stage" :style="{ '--roller-h': rollerContentH + 'px' }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '', sheetDock ? 'dock-sheet' : '']">
     <ArmedSfxRail
       v-if="playerId && !showLoginOverlay && !fullCanvas"
       :entity-id="entityId"
@@ -154,9 +154,9 @@
       />
       <div v-if="mobileStackActive && mobileFocus !== 'location'" class="band-tap" @touchstart="onBandDragStart($event, 'location')" @click="tapBand('location')"></div>
     </div>
-    <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen && !sheetDock, dragging: occupantDragging && !isMobile && !sheetDock }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
+    <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: rollerOpen() && !sheetDock, dragging: occupantDragging && !isMobile && !sheetDock }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <PeersBar
-        v-if="(wrapperOpen || mobileStackActive) && peers.length"
+        v-if="(rollerOpen() || mobileStackActive || sheetDock) && peers.length"
         :peers="peers"
         :assumed-id="entityId"
         :viewed-id="viewingEntityId"
@@ -167,7 +167,7 @@
           v-show="sheetShown"
           ref="sheetRef"
           class="embedded-sheet"
-          :class="{ 'sheet-hidden': !sheetVisible && !mobileStackActive }"
+          :class="{ 'sheet-hidden': !sheetVisible && !mobileStackActive && !sheetDock }"
           :entity-id="entityId"
           :override-entity-id="viewingEntityId"
           :viewer-entity-id="entityId"
@@ -176,7 +176,7 @@
           :main-entity-id="ownMainId"
           :universe="universe"
           :phase="phase"
-          :visible="sheetVisible || mobileStackActive"
+          :visible="sheetDock || sheetVisible || mobileStackActive"
           embedded
           :gm-mode="gmMode"
           @open-settings="openSettings"
@@ -192,7 +192,7 @@
         />
         <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @touchstart="onBandDragStart($event, 'sheet')" @click="tapBand('sheet')"></div>
       </div>
-      <div ref="rollerBandEl" class="roller-band" :class="{ open: sheetDock && wrapperOpen, dragging: sheetDock && occupantDragging && !isMobile }">
+      <div ref="rollerBandEl" class="roller-band" :class="{ open: sheetDock && rollerOpen(), dragging: sheetDock && occupantDragging && !isMobile }">
         <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => { mirrorOwnResult({ result: r }); shareRoll(r) }" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
         <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @touchstart="onBandDragStart($event, 'dice')" @click="tapBand('dice')"></div>
       </div>
@@ -1489,7 +1489,11 @@ const rollerBandEl = useTemplateRef('rollerBandEl')
 // capture the band's `position: fixed`. Only ever read from handlers that run
 // after setup, so the `sheetDock` ref declared further down is initialised.
 function panelEl() { return sheetDock.value ? rollerBandEl.value : wrapperEl.value }
-const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
+// The roller's own open state, on the same lazy-read footing as `panelEl`.
+// Normally the sheet shares the roller's column, so revealing the sheet opens
+// the roller with it. Docked, the sheet is a permanent panel and the roller
+// answers to hover and drag alone — the two are deliberately independent.
+function rollerOpen() { return sheetDock.value ? hoverOpen.value : (hoverOpen.value || sheetVisible.value) }
 let panelResizeObserver = null
 const documentDragging = ref(false)
 
@@ -1538,7 +1542,7 @@ function onPanelDragStart() {
   if (mobileStackActive.value) return
   const el = panelEl()
   if (!el) return
-  panelDragState.wasOpen = wrapperOpen.value
+  panelDragState.wasOpen = rollerOpen()
   panelDragState.startOffset = panelDragState.wasOpen ? 0 : Math.max(0, el.offsetHeight - PANEL_CLOSED_PEEK)
   panelDragState.active = true
   el.style.transition = 'none'
@@ -1587,16 +1591,16 @@ const { isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobi
   wrapperEl, gmMode, entityId, viewingEntityId,
 })
 
-// Is there actually a sheet to show? One expression, shared by the sheet's own
-// v-show and the dock's open state — a mismatch between the two is exactly how
-// an empty 400px column would end up parked over the map.
-const sheetShown = computed(() =>
-  (mobileStackActive.value || (sheetVisible.value && (phase.value === 'adding' || forceSheet.value)))
-  && (!gmMode.value || entityId.value || viewingEntityId.value))
-
-// A dock with no sheet in it is an empty column, so the dock follows the
-// sheet's content rather than the roller's hover.
-const dockOpen = computed(() => sheetDock.value && sheetShown.value)
+// Is there a sheet to show? One expression, shared by the sheet's v-show and by
+// the pop-out's own reasoning.
+const sheetShown = computed(() => {
+  // Docked, the sheet is a permanent panel: nothing summons it and nothing
+  // dismisses it, so it ignores the roller's hover, the phase and whether a
+  // character was explicitly picked.
+  if (sheetDock.value) return true
+  return (mobileStackActive.value || (sheetVisible.value && (phase.value === 'adding' || forceSheet.value)))
+    && (!gmMode.value || entityId.value || viewingEntityId.value)
+})
 
 // Switching between the pop-out column and the dock moves the peek onto a
 // different element. A drag can leave an inline transform on whichever one no
@@ -1640,7 +1644,7 @@ function panelGeometry() {
       scrollHeight: el?.scrollHeight ?? null,
       inlineTransform: el?.style.transform || '(none)',
       computedTransform: el ? getComputedStyle(el).transform : null,
-      open: wrapperOpen.value,
+      open: rollerOpen(),
     },
     sheet: sheetRect ? { top: Math.round(sheetRect.top), bottom: Math.round(sheetRect.bottom), height: Math.round(sheetRect.height), display: getComputedStyle(sheet).display } : null,
     roller: rollerRect ? { top: Math.round(rollerRect.top), bottom: Math.round(rollerRect.bottom), height: Math.round(rollerRect.height) } : null,
@@ -1653,7 +1657,6 @@ function panelGeometry() {
       closedOffset: el ? Math.max(0, el.offsetHeight - PANEL_CLOSED_PEEK) : null,
       sheetDock: sheetDock.value,
       sheetShown: sheetShown.value,
-      dockOpen: dockOpen.value,
     },
     flags: {
       wrapperBelowViewport: rect ? rect.bottom > vh + 1 : null,
@@ -1673,7 +1676,7 @@ function logPanelGeometry(label) {
     `wrapper top=${w.top} bottom=${w.bottom} h=${w.height} open=${w.open} inline="${w.inlineTransform}"`,
     `roller top=${r.top ?? '-'} bottom=${r.bottom ?? '-'}`,
     `viewport innerH=${v.innerH} visualH=${v.visualH} vOffsetTop=${v.visualOffsetTop} scale=${v.scale}`,
-    `state hoverOpen=${g.state.hoverOpen} sheetVisible=${g.state.sheetVisible} phase=${g.state.phase} closedOffset=${g.state.closedOffset} dock=${g.state.sheetDock} dockOpen=${g.state.dockOpen}`,
+    `state hoverOpen=${g.state.hoverOpen} sheetVisible=${g.state.sheetVisible} phase=${g.state.phase} closedOffset=${g.state.closedOffset} dock=${g.state.sheetDock} sheetShown=${g.state.sheetShown}`,
     `flags belowViewport=${g.flags.wrapperBelowViewport} rollerBelow=${g.flags.rollerBelowViewport} aboveViewport=${g.flags.wrapperAboveViewport} visualShorter=${g.flags.visualViewportShorter}`,
   )
   return g
@@ -1683,7 +1686,7 @@ function onViewportResize() {
   // Viewport changes (orientation, keyboard, URL-bar collapse) can leave a
   // fixed-position panel drifted. Re-sync the closed position, and log so the
   // human can correlate a mis-position with the resize.
-  if (!wrapperOpen.value) nextTick(() => syncClosedPosition())
+  if (!rollerOpen()) nextTick(() => syncClosedPosition())
   logPanelGeometry('viewport-resize')
 }
 
@@ -1727,7 +1730,7 @@ function onDocumentClick(e) {
     armHoverHold()
   }
   if (gmMode.value) return
-  if (!wrapperOpen.value) return
+  if (!rollerOpen()) return
   if (phase.value === 'picking') return
   const el = wrapperEl.value
   if (el && el.contains(e.target)) return
@@ -1751,7 +1754,7 @@ onMounted(() => {
     if (window.visualViewport) window.visualViewport.addEventListener('resize', onViewportResize)
     if (typeof ResizeObserver !== 'undefined') {
       panelResizeObserver = new ResizeObserver(() => {
-        if (!wrapperOpen.value) nextTick(() => syncClosedPosition())
+        if (!rollerOpen()) nextTick(() => syncClosedPosition())
       })
       // Both carriers: the column's height drives the peek normally, but once
       // the sheet docks the column is a fixed-height dock and the roller band
@@ -1811,11 +1814,11 @@ onUnmounted(() => {
 
 // Re-sync closed position when sheet visibility changes while wrapper is closed
 watch(sheetVisible, () => {
-  if (!wrapperOpen.value) nextTick(() => syncClosedPosition())
+  if (!rollerOpen()) nextTick(() => syncClosedPosition())
 })
 
 // Refresh the peer bar whenever the dice wrapper opens.
-watch(wrapperOpen, (open) => {
+watch(rollerOpen, (open) => {
   if (open) fetchPeers()
 })
 

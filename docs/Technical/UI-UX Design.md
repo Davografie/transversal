@@ -606,9 +606,10 @@ slide/peek mechanics are inert while the stack is active.
 ## Landscape dock
 
 The third layout (B169). Above the phone breakpoint **and in landscape** the sheet
-stops riding in the roller's bottom-centre column and docks to the left of the map.
-Portrait keeps the pop-out — a portrait tablet's column has height to spare, and
-docking there would spend the wrong axis. Below the breakpoint nothing changes.
+stops riding in the roller's bottom-centre column and docks to the left of the map as a
+**permanent panel**. Portrait keeps the pop-out — a portrait tablet's column has height
+to spare, and docking there would spend the wrong axis. Below the breakpoint nothing
+changes.
 
 - **The gate is width *and* orientation** — one `matchMedia` in `useMobileBands`
   (`(min-width: 821px) and (orientation: landscape)`), exposed as `sheetDock`. Both
@@ -619,32 +620,39 @@ docking there would spend the wrong axis. Below the breakpoint nothing changes.
   landscape; it would dock only the phone-landscape case and refuse the tablet one.
   The two gates are mutually exclusive by width, so `.dock-sheet` and `.mobile-stack`
   can never both apply.
+- **Permanent, and decoupled from the roller.** Nothing summons the dock and nothing
+  dismisses it: it does not follow the roller's hover, the phase, or whether a character
+  was explicitly picked. `sheetShown` short-circuits to `true` when docked, and the
+  sheet's `:visible` / `.sheet-hidden` bindings both carry a `sheetDock` exemption so a
+  hidden sheet cannot be left behind. The reverse holds too — `rollerOpen()` is
+  `hoverOpen` alone when docked, so selecting a character no longer drags the roller
+  open with it. (It is `hoverOpen || sheetVisible` in the pop-out, where sheet and roller
+  genuinely are one column.) **Consequence worth knowing:** on phone landscape the dock
+  holds 400 of 844px permanently, so the map keeps 444px. `--dock-w` is the knob.
 - **The dock is the wrapper.** `.dice-panel-wrapper` becomes a full-height, 400px left
   column (`--dock-w` — the width the sheet already had in the pop-out, so the sheet's
-  internals needed no narrow-width rework), and its `.peers-bar` + `.sheet-band` slide
-  in together. A closed dock is fully off-screen left, with `pointer-events: none` so
-  it cannot eat map clicks.
-- **The dock is deliberately transform-free.** A transformed ancestor would both slide
+  internals needed no narrow-width rework). It is inert itself (`pointer-events: none`,
+  so its box cannot eat map clicks) and its children re-arm events for themselves.
+- **The dock is deliberately transform-free.** A transformed ancestor would both drag
   the dock along with the roller's drag and capture the roller band's `position: fixed`
   — the peek lives on the band, not the column (see *Drag-to-open/close gesture*).
 - **The map is inset, not overlaid.** `.location-viewer` takes `left: var(--dock-w)`,
   so its own top-left overlay controls ride along at 12px of the remaining map instead
-  of disappearing under the sheet, and the viewer's `ResizeObserver` drives the camera
-  through the change. The Active SFX rail — which owns the left edge — steps right of
-  the dock for the same reason.
+  of disappearing under the sheet, and the viewer's `ResizeObserver` drives the camera.
+  The Active SFX rail — which owns the left edge — steps right of the dock for the same
+  reason.
 - **The roller keeps its peek on a different element.** `.roller-band` becomes
   `position: fixed`, centred on the map area the dock leaves
   (`calc(50% + var(--dock-w) / 2)`, not 50%), and carries `--panel-closed-y` itself.
-- **Open/close is the same vocabulary.** The dock follows the sheet's own content
-  (`sheetShown`, one expression shared with the sheet's `v-show`, so an empty 400px
-  column can never appear), while the roller still opens on hover and settles on drag.
-  Hovering the roller still reaches the panel through the inert dock: the roller band
-  re-arms pointer events for itself.
+  It still opens on hover and settles on drag; hovering it reaches through the inert
+  dock because the band re-arms pointer events for itself.
 - **GM panels** draw over the dock exactly as they already drew over the roller
   (`.panel-viewport` is `z-index: 25`; the dock is 12).
 
-Verified in the browser (Firefox + Chromium, `e2e/tests/dock.spec.js`): 1280×950 docks
-with the map inset to 880 and the sheet uncapped; 834×1194 keeps the pop-out and its
+Verified in the browser (Firefox + Chromium, `e2e/tests/dock.spec.js`): the dock is up
+at 1280×950 **before anything is clicked**, with the map inset to 880 and the sheet
+uncapped; selecting a character leaves the roller peeked and hovering the roller opens
+the roller without disturbing the sheet; 834×1194 keeps the pop-out and its
 `100dvh − 240px` cap; 390×844 keeps the band stack; 844×390 docks — the phone-landscape
 call the ticket left open, resolved by the same rule; and rotating hands the peek back
 to the column. The existing sheet-definition suite passes unchanged *inside* the dock.
