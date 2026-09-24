@@ -43,6 +43,32 @@ ACTIONS: list[EffectActionMeta] = [
         supports_duration=True,
         inverse=("entity", "remove_targeting_ban"),
     ),
+    # ── Knowledge (fog of war) ─────────────────────────
+    # "Who is here?" as an effect: the subject's `known_to` gains the resolved
+    # targets. It **unions** and never replaces — the whole point of [[B121]],
+    # where a GM assuming a hidden occupant must not wipe what that occupant
+    # already knew. A path fans out, so "every occupant of my location" arrives
+    # one id at a time and the dedupe is the membership check.
+    #
+    # No inverse: forgetting is not the undo of learning. A rule that should
+    # unlearn something has to say what it forgets.
+    EffectActionMeta(
+        action_id="learn_entities",
+        label="Learn",
+        description=(
+            "The entity learns the resolved targets: their ids join its known_to "
+            "list, deduped, without disturbing what it already knows"
+        ),
+        category="benefit",
+        effect_type="entity",
+        effect_action="learn",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Who To Learn", field_type="text",
+                           required=False),
+        ],
+        target_kind="entity",
+    ),
 
     # ── Contests ───────────────────────────────────────
     # The missing half of the contest vocabulary: the engine could *react* to a

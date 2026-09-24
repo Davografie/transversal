@@ -3040,3 +3040,72 @@ def test_reroll_highest_is_retired_in_favour_of_a_path():
     from transversal.services.effects_registry import get_action_meta
     assert get_action_meta("reroll_highest").retired is True
     assert get_action_meta("reroll_die").retired is False
+
+
+# ── Learning (fog of war, B121) ──────────────
+
+def test_learn_unions_into_known_to_without_clobbering():
+    """A GM assuming a hidden occupant must not wipe what it already knew, so the
+    action unions rather than writes."""
+    from transversal.domain import EntityType
+    actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
+    actor.known_to = ["char-old"]
+    other = _entity(id="char-2", name="Bystander")
+    repo = FakeRepo(entities=[other])
+    result = apply_effects(actor, [_effect("entity", "learn", "char-2")], repo)
+    assert actor.known_to == ["char-old", "char-2"]
+    assert "learns char-2" in result.applied[0].summary
+
+
+def test_learning_someone_already_known_changes_nothing():
+    actor = _entity(id="gmc-1", current_location="loc-1")
+    actor.known_to = ["char-2"]
+    repo = FakeRepo(entities=[_entity(id="char-2")])
+    result = apply_effects(actor, [_effect("entity", "learn", "char-2")], repo)
+    assert actor.known_to == ["char-2"]
+    assert "already knows char-2" in result.applied[0].summary
+
+
+def test_an_entity_is_not_made_known_to_itself():
+    actor = _entity(id="gmc-1", current_location="loc-1")
+    result = apply_effects(actor, [_effect("entity", "learn", "gmc-1")], FakeRepo())
+    assert actor.known_to == []
+    assert "already knows itself" in result.applied[0].summary
+
+
+def test_learn_is_registered_on_the_engine_registry():
+    """The engine dispatches through ``effect_registry`` — a handler only in
+    ``_MUTATION_HANDLERS`` would never fire on a real trigger."""
+    from types import SimpleNamespace
+    import transversal.services.effects_applier as applier
+    from transversal.services.effects_applier import EffectRegistry
+
+    original = applier.effect_registry
+    applier.effect_registry = EffectRegistry()
+    try:
+        raz = SimpleNamespace(spend=lambda *a, **k: None, earn=lambda *a, **k: None,
+                              transfer=lambda *a, **k: None)
+        em = SimpleNamespace(repo=None, create=lambda *a, **k: None)
+        applier._register_core_handlers(em, raz)
+        assert ("entity", "learn") in applier.effect_registry._handlers
+    finally:
+        applier.effect_registry = original
+
+
+def test_taking_control_fires_the_assumed_trigger(monkeypatch):
+    """The GM-assumes-an-occupant moment is `record_control(stamp=False)`; the
+    trigger reports it for *both* audiences and the rule's conditions narrow it."""
+    from transversal.services import player_manager as pm
+    from transversal.services.player_manager import PlayerManager
+
+    fired = []
+    monkeypatch.setattr(pm, "_current_body", {})
+    from transversal.services import state_events
+    monkeypatch.setattr(state_events, "fire_state_sfx",
+                        lambda eid, uni, ev, ctx=None: fired.append((eid, ev)))
+
+    manager = PlayerManager.__new__(PlayerManager)
+    manager._repo = None
+    manager.record_control("player-1", "gmc-1", stamp=False)
+
+    assert fired == [("gmc-1", "assumed")]

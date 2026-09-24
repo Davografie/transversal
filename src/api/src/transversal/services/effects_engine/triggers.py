@@ -30,6 +30,7 @@ _DIRECT_EVENTS: dict[str, frozenset[str]] = {
     "character_created": frozenset({"on_character_create"}),
     "projection_created": frozenset({"on_projection_create"}),
     "challenge_completed": frozenset({"on_challenge_completed"}),
+    "assumed": frozenset({"assumed"}),
     "location_changed": frozenset({"on_location_change"}),
     "pool_changed": frozenset({"on_pool_change", "on_pool_add"}),
     "beat": frozenset({"on_beat"}),

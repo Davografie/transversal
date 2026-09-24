@@ -17,7 +17,7 @@ EVENT_TYPES = [
     "manual", "on_roll", "on_result", "on_set", "contest", "location_changed",
     "trait_updated", "trait_learned", "trait_offered", "relationship_created",
     "character_created", "projection_created", "challenge_completed",
-    "beat", "scene", "session_start", "session_end", "pool_changed",
+    "beat", "scene", "session_start", "session_end", "pool_changed", "assumed",
 ]
 
 

@@ -128,6 +128,7 @@ TRIGGER_CARDS: dict[str, str] = {
     "on_session_start": "At the start of each session",
     "on_session_end": "At the end of each session",
     "on_challenge_completed": "When a challenge is completed",
+    "assumed": "When someone takes control of this entity",
 }
 
 
@@ -256,6 +257,12 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("trait_id", "trait"),
         Variable("capacity", "string"),
     ), group="auto"),
+    # "Someone took control of this entity" — a player switching to a main or a
+    # support character, and the GM assuming an occupant (the `stamp=false`
+    # control call). It reports the *state change* and nothing more: whether that
+    # means "a hidden occupant meets the room" is a condition's business
+    # ([[B121]]), which is what lets one trigger serve both halves of the switch.
+    TriggerDef("assumed", "On Assume (took control)", group="auto"),
 )
 
 

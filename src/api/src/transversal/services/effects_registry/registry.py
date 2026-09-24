@@ -69,6 +69,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "earn_razmerit": "Razmerit", "spend_razmerit": "Razmerit",
     "transfer_razmerit": "Razmerit",
     "create_asset": "Entity", "end_active_effect": "Entity", "create_projection": "Entity",
+    "learn_entities": "Entity",
     # `suppress` is the removal half of `attune` (see actions_world), and
     # `set_destination` is how a rule grants travel directions.
     "attune": "Attunement", "suppress": "Attunement",

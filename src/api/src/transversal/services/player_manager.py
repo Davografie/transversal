@@ -119,11 +119,21 @@ class PlayerManager:
 
         Returns True when the entity is a main (and was stamped).
         """
-        from transversal.services.state_events import broadcast_main_active, broadcast_body_changed
+        from transversal.services.state_events import (
+            broadcast_main_active,
+            broadcast_body_changed,
+            fire_state_sfx,
+        )
 
         # Track the current body on every switch — main, support character, or a
         # GM's possessed GMC.
         _current_body[player_id] = entity_id
+
+        # "Someone took control of this entity" — the state change, fired for
+        # every switch and both audiences. What it *means* (a GM assuming a
+        # hidden occupant, a player taking their main back) is a rule's business,
+        # so a condition decides rather than this call: see [[B121]].
+        fire_state_sfx(entity_id, "", "assumed", {})
 
         if not stamp:
             broadcast_body_changed(player_id, entity_id)

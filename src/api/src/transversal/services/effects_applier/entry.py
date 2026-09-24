@@ -70,6 +70,7 @@ from transversal.services.effects_applier.handlers_traits import (
 )
 from transversal.services.effects_applier.handlers_world import (
     _apply_clear_destination,
+    _apply_learn,
     _apply_cancel_scheduled_event,
     _apply_create_projection,
     _apply_relationship_create,
@@ -145,6 +146,8 @@ _MUTATION_HANDLERS = {
     ("modify_outcome", "step_up_outcome"): _apply_step_up_outcome,
     # Starting a contest — the missing half of the contest vocabulary (B105).
     ("contest", "start"): _apply_start_contest,
+    # Fog of war: the subject learns the resolved targets (B121).
+    ("entity", "learn"): _apply_learn,
     ("relationship", "create"): _apply_relationship_create,
     ("travel", "move"): _apply_travel,
     ("location", "set"): _apply_set_location,

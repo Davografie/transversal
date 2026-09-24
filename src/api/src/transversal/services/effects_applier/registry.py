@@ -358,6 +358,9 @@ def _register_core_handlers(em, raz):
     # Starting a contest is a scene-state change on two entities, so it commits
     # through the shared applier like every other real mutation (B105).
     effect_registry.register("contest", "start", _commit)
+    # Learning who is here (B121) is an entity write, so it commits through the
+    # shared applier like the rest.
+    effect_registry.register("entity", "learn", _commit)
     # The rest of the dice-pool actions are still resolver-context only.
     effect_registry.register("modify_roll", "*",
         lambda a, eid, u, ctx: None)  # passed through to resolver context

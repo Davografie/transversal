@@ -462,3 +462,40 @@ def _apply_clear_destination(entity, effect, repo, result):
     result.applied.append(
         AppliedEffect(effect, f"directions restored to {prior}" if prior else "directions cleared")
     )
+
+
+def _apply_learn(entity, effect, repo, result):
+    """The subject learns the effect's target ([[B121]]).
+
+    A **union**, never a replace: the id joins ``known_to`` only if it is not
+    already there, so a rule that fires twice — or a second rule that teaches
+    something adjacent — cannot wipe the list. That is the whole reason this is
+    an action rather than a field write: `known_to` is monotonic knowledge, and
+    the GM assuming a hidden occupant must not forget what that occupant already
+    knew.
+
+    A path fans out before it reaches here, so "every occupant of my location"
+    arrives as one call per occupant and the membership check does the dedupe.
+    An entity is never made known to itself.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    target = _resolve_target(subject, effect, result, repo)
+    if not target:
+        result.applied.append(AppliedEffect(effect, "no one named to learn"))
+        return
+    if target == subject.id:
+        result.applied.append(AppliedEffect(
+            effect, f"{subject.name or subject.id} already knows itself"))
+        return
+    known = list(getattr(subject, "known_to", None) or [])
+    if target in known:
+        result.applied.append(AppliedEffect(
+            effect, f"{subject.name or subject.id} already knows {target}"))
+        return
+    subject.known_to = [*known, target]
+    result.applied.append(AppliedEffect(
+        effect, f"{subject.name or subject.id} learns {target}"))
