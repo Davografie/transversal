@@ -271,6 +271,23 @@ clause carries (see `B159`).
 WebP) → `EntityImage`. If the result is the sole image for its owner, all three
 roles are auto-selected.
 
+**The first image generated for a projection is also cut out** (`B166`). The
+generated image becomes the projection's `background`; the transparent cutout
+becomes its `navdot` **and** `sheet`, so a body renders a floating portrait
+rather than a cropped circle. The trigger is the first *generated image* for the
+projection, not entity creation — a cutout needs a source, and creation has no
+image. It reuses the sole-image condition above (`owner and not existing`), and
+because the owner had no images there are no siblings holding those roles to
+strip.
+
+Two paths intentionally do **not** trigger it: **uploads**, and **entity-level**
+generation (the gallery's main Imagen button, `projection_id` empty) — the rule
+is scoped per projection. See `B129` for whether to widen it.
+
+If the cutout fails the generation is unaffected: the image is already recorded,
+and the source keeps all three roles rather than giving up `sheet`/`navdot` to a
+cutout that does not exist.
+
 ### Remove background (static cutout)
 
 `run_remove_background` turns an existing static image into a transparent
@@ -412,6 +429,11 @@ image in its owner scope:
 - **upload** — sole entity-level image.
 - **generation** — sole image for the entity or projection.
 - **drop** — dragging an image onto an empty entity/projection gallery.
+
+The one case where that three-role result is deliberately redistributed is a
+**projection's first generated image**: the generated image keeps `background`
+and a new transparent cutout takes `navdot` + `sheet` (`B166`; see
+[[#Imagen (static)]]). Upload and drop do not cut out.
 
 ## Frontend
 
