@@ -422,6 +422,67 @@ mutation($sfxId: ID!, $ownerRefs: [OwnerRefInput!]!) {
 }
 """
 
+# ── Blue Book (messages / journal) ───────────────────
+# The Blue Book is a per-entity record. ``journal`` entries are *self-addressed*
+# and GM-visible — how a character writes to itself — while ``letter``/``report``
+# /``gm_note`` are directed. Entries chain causally through ``afterIds`` (the
+# book is a DAG, not a list) and group through ``threads``.
+#
+# ``MessageKind`` is an enum **on the wire, in upper case** — LETTER, JOURNAL,
+# REPORT, GM_NOTE — while the domain model and the docs spell it lower case.
+# ``_enum()`` normalises, so callers may pass either.
+
+_MESSAGE_FIELDS = (
+    "id senderEntityId recipientEntityId kind title body images afterIds threads "
+    "createdAt relationshipDescription"
+)
+
+_MUT_ADD_JOURNAL_ENTRY = (
+    "mutation($input: JournalEntryInput!) {\n"
+    "  addJournalEntry(input: $input) {\n"
+    "    " + _MESSAGE_FIELDS + "\n"
+    "  }\n"
+    "}\n"
+)
+
+_MUT_SEND_MESSAGE = (
+    "mutation($input: SendMessageInput!) {\n"
+    "  sendMessage(input: $input) {\n"
+    "    " + _MESSAGE_FIELDS + "\n"
+    "  }\n"
+    "}\n"
+)
+
+_MUT_UPDATE_MESSAGE = """
+mutation($input: UpdateMessageInput!) {
+  updateMessage(input: $input)
+}
+"""
+
+_QUERY_JOURNAL = (
+    "query($id: ID!) {\n"
+    "  journal(entityId: $id) {\n"
+    "    " + _MESSAGE_FIELDS + "\n"
+    "  }\n"
+    "}\n"
+)
+
+_QUERY_TIMELINE = (
+    "query($entityId: ID, $tags: [String!]) {\n"
+    "  timeline(entityId: $entityId, tags: $tags) {\n"
+    "    " + _MESSAGE_FIELDS + "\n"
+    "  }\n"
+    "}\n"
+)
+
+_QUERY_CONVERSATION = (
+    "query($a: ID!, $b: ID!) {\n"
+    "  conversation(entityA: $a, entityB: $b) {\n"
+    "    " + _MESSAGE_FIELDS + "\n"
+    "  }\n"
+    "}\n"
+)
+
 # ── Step building + execution (dry-run aware) ────────
 
 def _step(op: str, query: str, variables: dict, describe: str) -> dict:
@@ -941,6 +1002,119 @@ def remove_owner_sfx(args: dict) -> dict:
     }
     return _call_mutation("removeOwnerSfx", _MUT_REMOVE_OWNER_SFX, variables,
                           args.get("dry_run", True), "removeOwnerSfx")
+
+
+# ── Blue Book: the entity's own record ───────────────
+
+def add_journal_entry(args: dict) -> dict:
+    """Write an entry into an entity's Blue Book — including an NPC's private reasoning.
+
+    A journal entry is **self-addressed** (the entity writes to itself) and
+    **GM-visible**, which is the shape for "what this character privately
+    thinks", as opposed to ``send_message`` for actual correspondence. Use it to
+    seed a GMC's inner voice.
+
+    The entry lands on whichever ``entity_id`` is named — the underlying write
+    path carries **no ownership or role guard**, so a GMC's book is authorable
+    directly and does not require logging in as that character.
+
+    ``after_ids`` places the entry in the book's causal chain (the Blue Book
+    orders entries as a DAG, not a list); ``threads`` are the tags it groups by.
+    Both optional, but a chain reads far better than a heap.
+    """
+    input_ = {
+        "entityId": args["entity_id"],
+        "title": args.get("title", ""),
+        "body": args.get("body", ""),
+    }
+    for key, gql_key in (("images", "images"), ("after_ids", "afterIds"),
+                         ("threads", "threads")):
+        if args.get(key) is not None:
+            input_[gql_key] = args[key]
+    return _call_mutation("addJournalEntry", _MUT_ADD_JOURNAL_ENTRY,
+                          {"input": input_}, args.get("dry_run", True),
+                          "addJournalEntry")
+
+
+def send_message(args: dict) -> dict:
+    """Send a directed Blue Book entry from one entity to another.
+
+    ``kind`` is ``LETTER`` (entity → entity, recipient + GM), ``REPORT``
+    (entity → GMC, GM-visible) or ``GM_NOTE`` (GM → entity: NPC correspondence
+    and nudges). ``JOURNAL`` is the self-addressed kind and belongs to
+    ``add_journal_entry`` instead. Either spelling works — the enum is normalised.
+
+    Publishes a live event to open sessions, so a message written while the
+    human is connected appears on their screen as it lands.
+    """
+    input_ = {
+        "senderEntityId": args["sender_entity_id"],
+        "recipientEntityId": args["recipient_entity_id"],
+        "title": args.get("title", ""),
+        "body": args.get("body", ""),
+    }
+    if args.get("kind") is not None:
+        input_["kind"] = _enum(args["kind"])
+    for key, gql_key in (("images", "images"), ("after_ids", "afterIds"),
+                         ("threads", "threads")):
+        if args.get(key) is not None:
+            input_[gql_key] = args[key]
+    return _call_mutation("sendMessage", _MUT_SEND_MESSAGE, {"input": input_},
+                          args.get("dry_run", True), "sendMessage")
+
+
+def update_message(args: dict) -> dict:
+    """Re-file an existing Blue Book entry: its chain position and its tags.
+
+    ``after_ids`` and ``threads`` are the only mutable fields — entries are
+    otherwise append-only, so correcting a body means writing a new entry rather
+    than editing the old one. Omitted keys are left alone; pass ``[]`` to clear.
+
+    Returns the mutation's boolean, so **read the entry back** to confirm.
+    """
+    input_ = {"id": args["message_id"]}
+    for key, gql_key in (("after_ids", "afterIds"), ("threads", "threads")):
+        if args.get(key) is not None:
+            input_[gql_key] = args[key]
+    return _call_mutation("updateMessage", _MUT_UPDATE_MESSAGE, {"input": input_},
+                          args.get("dry_run", True), "updateMessage")
+
+
+def read_journal(args: dict) -> dict:
+    """An entity's own Blue Book entries — what that character wrote to itself.
+
+    The plain read beside ``read_timeline``: this one answers "what has this
+    character recorded", without ordering it.
+    """
+    data = _graphql(_QUERY_JOURNAL, {"id": args["entity_id"]})
+    entries = data.get("journal") or []
+    return {"count": len(entries), "results": entries}
+
+
+def read_timeline(args: dict) -> dict:
+    """A Blue Book in causal order, optionally filtered by entity and/or tags.
+
+    The book is a DAG — entries point at what they follow (``after_ids``) — and
+    anything not yet chained falls back to ``created_at``. Use this rather than
+    ``read_journal`` when the *order* is the question, and filter by ``tags`` to
+    follow one thread through several characters' books.
+    """
+    variables = {"entityId": args.get("entity_id") or "", "tags": args.get("tags")}
+    data = _graphql(_QUERY_TIMELINE, variables)
+    entries = data.get("timeline") or []
+    return {"count": len(entries), "results": entries}
+
+
+def read_conversation(args: dict) -> dict:
+    """Every message between two entities — the GM's view of a correspondence.
+
+    Both directions, regardless of kind, which is what makes it the read for
+    "what has passed between these two" when neither side is a player.
+    """
+    data = _graphql(_QUERY_CONVERSATION,
+                    {"a": args["entity_a"], "b": args["entity_b"]})
+    entries = data.get("conversation") or []
+    return {"count": len(entries), "results": entries}
 
 
 def get_entity(args: dict) -> dict:
@@ -1618,6 +1792,12 @@ TOOLS = {
     "update_sfx": update_sfx,
     "delete_sfx": delete_sfx,
     "remove_owner_sfx": remove_owner_sfx,
+    "add_journal_entry": add_journal_entry,
+    "send_message": send_message,
+    "update_message": update_message,
+    "read_journal": read_journal,
+    "read_timeline": read_timeline,
+    "read_conversation": read_conversation,
     "roll_dice": roll_dice,
     "pick_total": pick_total,
     "pick_effect_die": pick_effect_die,
@@ -2357,6 +2537,88 @@ TOOL_SCHEMAS = {
                 "dry_run": _dry_run_property(),
             },
             "required": ["sfx_id", "owner_type", "owner_id"],
+        },
+    },
+    "add_journal_entry": {
+        "name": "add_journal_entry",
+        "description": "Write a self-addressed, GM-visible entry into an entity's Blue Book — the shape for an NPC's private reasoning. Lands on whichever entity_id you name (no ownership guard), so a GMC's book is authorable directly. Optional after_ids chains the entry causally; threads are its tags.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string", "description": "whose book — a GMC id works"},
+                "title": {"type": "string"},
+                "body": {"type": "string", "description": "supports markdown"},
+                "images": {"type": "array", "items": {"type": "string"},
+                           "description": "media paths"},
+                "after_ids": {"type": "array", "items": {"type": "string"},
+                              "description": "entry ids this one follows in the causal chain"},
+                "threads": {"type": "array", "items": {"type": "string"},
+                            "description": "tags the book groups by"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "title", "body"],
+        },
+    },
+    "send_message": {
+        "name": "send_message",
+        "description": "Send a directed Blue Book entry between two entities. kind is LETTER (entity to entity), REPORT (entity to GMC) or GM_NOTE (GM to entity); JOURNAL is self-addressed and belongs to add_journal_entry. Publishes a live event to open sessions.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sender_entity_id": {"type": "string"},
+                "recipient_entity_id": {"type": "string"},
+                "kind": {"type": "string", "description": "LETTER|REPORT|GM_NOTE (case-insensitive)"},
+                "title": {"type": "string"},
+                "body": {"type": "string", "description": "supports markdown"},
+                "images": {"type": "array", "items": {"type": "string"}},
+                "after_ids": {"type": "array", "items": {"type": "string"}},
+                "threads": {"type": "array", "items": {"type": "string"}},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["sender_entity_id", "recipient_entity_id", "title", "body"],
+        },
+    },
+    "update_message": {
+        "name": "update_message",
+        "description": "Re-file an existing Blue Book entry: its after_ids (chain position) and/or threads (tags). The only mutable fields — entries are append-only, so correcting a body means writing a new entry. Returns a boolean; read the entry back to confirm.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "message_id": {"type": "string"},
+                "after_ids": {"type": "array", "items": {"type": "string"}},
+                "threads": {"type": "array", "items": {"type": "string"}},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["message_id"],
+        },
+    },
+    "read_journal": {
+        "name": "read_journal",
+        "description": "An entity's own Blue Book entries — what that character wrote to itself. Unordered; use read_timeline when the order is the question.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"entity_id": {"type": "string"}},
+            "required": ["entity_id"],
+        },
+    },
+    "read_timeline": {
+        "name": "read_timeline",
+        "description": "A Blue Book in causal order (the after_ids DAG, unchained entries by created_at), optionally filtered by entity and/or tags. Filter by tags to follow one thread across several characters' books.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string", "description": "optional — omit for all entities"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+    },
+    "read_conversation": {
+        "name": "read_conversation",
+        "description": "Every message between two entities, both directions and all kinds — the GM's view of a correspondence.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"entity_a": {"type": "string"}, "entity_b": {"type": "string"}},
+            "required": ["entity_a", "entity_b"],
         },
     },
     "add_owner_sfx": {
