@@ -27,3 +27,29 @@ export function entityTypeRank(type, agency) {
   return i === -1 ? ENTITY_TYPE_ORDER.length : i
 }
 
+/**
+ * The single holder per entity, from a `players { agency }` payload — the map
+ * {@link entityTypeRank} wants, in one read.
+ *
+ * `Entity.agency` on its own resolves with queries of its own, which is fine for
+ * a sheet's handful of contacts and ruinous over a whole entity tree, so callers
+ * that need it for many entities read the players instead. An entity can be held
+ * by several player records (one human's per-device identities), so the holder
+ * is picked the way the backend's `get_agency_for_entity` picks it — a `main`
+ * claim first, then the lowest player id — or the client's bucket could disagree
+ * with a per-entity read.
+ */
+export function buildAgencyIndex(players) {
+  const map = new Map()
+  for (const p of players || []) {
+    for (const edge of p.agency || []) {
+      const held = map.get(edge.entityId)
+      if (!held || (edge.main && !held.main) ||
+          (edge.main === held.main && String(p.id) < String(held.playerId))) {
+        map.set(edge.entityId, { playerId: p.id, main: !!edge.main })
+      }
+    }
+  }
+  return map
+}
+

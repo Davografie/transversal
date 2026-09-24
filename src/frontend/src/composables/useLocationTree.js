@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { entityTypeRank } from '@/constants/entityTypes.js'
 
 // ── Module-level singleton state ─────────────────────
 const locationTree = ref([])
@@ -9,10 +10,9 @@ const expandedNodes = ref({})
 const focusId = ref('')
 
 // ── Constants ────────────────────────────────────────
-const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
 const OCCUPANT_TYPES = new Set(['CHARACTER', 'GMC', 'ASSET'])
 
-export function useLocationTree({ entities, filteredEntities, activeFilters, currentUniverse }) {
+export function useLocationTree({ entities, filteredEntities, agencyByEntity, activeFilters, currentUniverse }) {
   // The focused node: its ancestor chain stays expanded, its siblings stub.
   function setFocus(id) {
     focusId.value = id || ''
@@ -39,8 +39,20 @@ export function useLocationTree({ entities, filteredEntities, activeFilters, cur
   }
 
   // ── Occupant grouping ──────────────────────────────
+  // The tree reads the way the sheet's relationship list does: mains first, then
+  // supports, then everyone else by type, alphabetical inside each group. The
+  // name tiebreak is what makes the order *deterministic* rather than merely
+  // grouped — the entity list arrives unsorted (`list_all_entities` has no
+  // SORT), and a stable sort preserves that arbitrary order within a type. The
+  // id is the last resort so two names that compare equal (they differ only in
+  // case, which `sensitivity: 'base'` ignores) still land in a fixed order.
   function _sortOccupants(arr) {
-    arr.sort((a, b) => (TYPE_PRIORITY[a.type] ?? 9) - (TYPE_PRIORITY[b.type] ?? 9))
+    const agency = agencyByEntity?.value
+    const byName = { sensitivity: 'base' }
+    arr.sort((a, b) =>
+      (entityTypeRank(a.type, agency?.get(a.id)) - entityTypeRank(b.type, agency?.get(b.id)))
+      || String(a.name || '').localeCompare(String(b.name || ''), undefined, byName)
+      || String(a.id).localeCompare(String(b.id)))
   }
 
   // Both rosters are needed. `occupantsByLocation` is what the filter matches,

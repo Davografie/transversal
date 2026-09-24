@@ -130,6 +130,7 @@ import Button from '@/components/ui/Button.vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLocationTree } from '@/composables/useLocationTree.js'
 import { useEntityFilter } from '@/composables/useEntityFilter.js'
+import { buildAgencyIndex } from '@/constants/entityTypes.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
@@ -222,12 +223,19 @@ watch(() => props.entityId, (id) => {
   activeFilters.value = [{ type: 'name', value: id, label: ent?.name || id }]
 }, { immediate: true })
 
+// Who holds agency over each entity, for the tree's PC(MC)/PC(SC) buckets —
+// filled by `fetchAgency` below. One read for the whole roster (`players {
+// agency }`) rather than an entity field: `Entity.agency` resolves with queries
+// of its own, which is fine for a sheet's handful of contacts and ruinous over a
+// ~970-entity tree.
+const agencyByEntity = ref(new Map())
+
 // ── Location tree ───────────────────────────────────
 const {
   locationTree, expandedNodes,
   fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds,
   focusPath, setFocus, collapseAll,
-} = useLocationTree({ entities, filteredEntities, activeFilters, currentUniverse: toRef(props, 'universe') })
+} = useLocationTree({ entities, filteredEntities, agencyByEntity, activeFilters, currentUniverse: toRef(props, 'universe') })
 
 // ── Faction distance ranking ────────────────────────
 // The factions list is read nearest-first: how far each faction's closest
@@ -629,10 +637,17 @@ async function onMoveEntity({ entityId, entityKind, targetId, targetKind, target
 }
 
 // ── Lifecycle ───────────────────────────────────────
+async function fetchAgency() {
+  try {
+    const data = await graphql(`{ players { id agency { entityId main } } }`)
+    agencyByEntity.value = buildAgencyIndex(data?.players)
+  } catch {}
+}
+
 onMounted(() => {
-  fetchEntities(); fetchLocationTree(); startJobPolling()
+  fetchEntities(); fetchLocationTree(); fetchAgency(); startJobPolling()
   offCanvasInspect = bus.on('canvas:inspect', (id) => toggleEntity({ id }))
-  offLocationsChanged = bus.on('locations-changed', () => { fetchLocationTree(); fetchEntities() })
+  offLocationsChanged = bus.on('locations-changed', () => { fetchLocationTree(); fetchEntities(); fetchAgency() })
 })
 onUnmounted(() => {
   stopJobPolling()

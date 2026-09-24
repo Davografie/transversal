@@ -27,8 +27,20 @@
  * exercised for real, and the expansion is asserted on the real ref.
  */
 import { readFileSync } from 'node:fs'
+import { register } from 'node:module'
 import { ref, nextTick } from 'vue'
-import { useLocationTree } from '../src/composables/useLocationTree.js'
+
+// `useLocationTree` imports through the `@/` alias, which plain node cannot
+// resolve, so map it to `src/` before pulling the module in.
+register('data:text/javascript,' + encodeURIComponent(`
+export async function resolve(specifier, context, next) {
+  if (specifier.startsWith('@/')) {
+    return next(new URL('./src/' + specifier.slice(2), 'file:///app/').href, context)
+  }
+  return next(specifier, context)
+}
+`))
+const { useLocationTree } = await import('../src/composables/useLocationTree.js')
 
 let pass = 0, fail = 0
 const ok = (name, got, want) => {
