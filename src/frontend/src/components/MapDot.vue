@@ -267,6 +267,22 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   50%      { box-shadow: 0 0 0 9px rgba(120,220,255,0.55), 0 0 34px rgba(120,220,255,0.9), 0 0 70px rgba(120,220,255,0.5); }
 }
 
+/* Guided route: the one navdot that is the next step toward the character's
+   destination, set by an SFX in the fiction. A sonar ping in gold rather than
+   the armed cyan *breathe*, because the two say different things — "this is the
+   way" versus "you would travel if you dropped here" — and both can be on screen
+   at once (a guided dot arms the moment you drag onto it). */
+.map-dot.guided {
+  animation: guided-ping 1.6s ease-out infinite;
+  z-index: 14;
+}
+
+@keyframes guided-ping {
+  0%   { box-shadow: 0 0 0 0 rgba(255,206,84,0.85), 0 0 22px rgba(255,206,84,0.55); }
+  70%  { box-shadow: 0 0 0 15px rgba(255,206,84,0), 0 0 26px rgba(255,206,84,0.7); }
+  100% { box-shadow: 0 0 0 0 rgba(255,206,84,0), 0 0 22px rgba(255,206,84,0.55); }
+}
+
 /* GM-only draft (unpublished) entity marker */
 .map-dot.dot-draft {
   opacity: 0.55;

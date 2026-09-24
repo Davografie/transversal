@@ -20,7 +20,7 @@
         :title="zoneLabel(z)"
         :hole-style="zoneHoleStyle(z)"
         :expand-level="expandLevels['zone-' + zoneId(z, i)] || 0"
-        :class="{ armed: armedDot === 'zone-' + zoneId(z, i), dimmed: !!armedDot && armedDot !== 'zone-' + zoneId(z, i) }"
+        :class="{ armed: armedDot === 'zone-' + zoneId(z, i), guided: guidedDot === 'zone-' + zoneId(z, i), dimmed: !!armedDot && armedDot !== 'zone-' + zoneId(z, i) }"
         @click="onDotClick('zone', z)"
         @overlay-click="onExpandedClick('zone', z)"
         @drag-start="(e) => onZoneDragStart(e, z, i)"
@@ -74,7 +74,7 @@
         :title="nd.name"
         :hole-style="navHoleStyle(nd)"
         :expand-level="expandLevels['nav-' + nd.key] || 0"
-        :class="{ armed: armedDot === 'nav-' + nd.key, dimmed: !!armedDot && armedDot !== 'nav-' + nd.key }"
+        :class="{ armed: armedDot === 'nav-' + nd.key, guided: guidedDot === 'nav-' + nd.key, dimmed: !!armedDot && armedDot !== 'nav-' + nd.key }"
         @click="onDotClick('nav', nd)"
         @overlay-click="onExpandedClick('nav', nd)"
         @drag-start="(e) => onNavDragStart(e, nd)"
@@ -668,6 +668,21 @@ const navDots = computed(() => {
   return dots
 })
 
+// The one dot the guided route lights: the navdot whose target *is* the next hop
+// the server returned. Identity is the stored link — a portal's target id, a
+// zone's `location_id`, the parent's key — never a display name, so a rename
+// cannot retarget the pulse. Empty when the character has no directions, or when
+// they are already at the destination / nothing connects the two. Only ever ONE
+// dot: the route is walked a hop at a time, so following directions still means
+// travelling rather than reading the map.
+const guidedDot = computed(() => {
+  const hop = nav.value.next_hop
+  if (!hop) return ''
+  for (const nd of navDots.value) if (nd.target?.id === hop) return `nav-${nd.key}`
+  for (const z of zones.value) if (z.location_id === hop) return `zone-${zoneId(z)}`
+  return ''
+})
+
 // ── The arrival-point rule ─────────────────────────────────────────────────
 // Where an entity lands when it arrives at a location coming from `fromId`.
 // This is the ONE rule: the dot preview (`preloadDestNavCache`) and the travel
@@ -1195,7 +1210,10 @@ function onGmDotDragEnd() {
 
 async function fetchNav() {
   try {
-    const r = await fetch(`/api/v1/locations/${props.locationId}/navigate`)
+    // The destination is per-character, so the guided route only exists when we
+    // ask for it as someone (`destination` / `next_hop` in the response).
+    const q = props.entityId ? `?entity_id=${encodeURIComponent(props.entityId)}` : ''
+    const r = await fetch(`/api/v1/locations/${props.locationId}/navigate${q}`)
     const data = await r.json()
     nav.value = data
     zones.value = data.location?.zones || []

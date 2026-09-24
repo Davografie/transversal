@@ -123,6 +123,8 @@ occDragging       // occupant drag: { index, startX, startY, origX, origY }
 dragTarget        // non-reactive — nearest travel target during self-drag
 expandLevels      // reactive — 'zone-<zoneId>'/'nav-<key>' → 0..1 proximity level (multi-bubble)
 armedDot          // reactive — which dot is within travelProximity (drop → travel)
+guidedDot         // reactive — the single dot that is the next hop toward the character's
+                  //   destination ('zone-<id>'/'nav-<key>'), from nav.next_hop; '' when none
 occDragMoved      // pointer passed the 6px tap threshold
 occSuppressClick  // suppress the synthesized click after a real drag
 ```
@@ -206,6 +208,39 @@ link supplies both its identity (`zoneId`) and its **label**: the dot renders th
 child's *current* name (`zoneLabel`), so renaming a child can never leave a pin
 stale. Nothing about the zone's name is stored on the zone itself. A zone is always
 a link — there are no decorative pins.
+
+### Guided route — the next hop
+
+An SFX can hand a character **directions** in the fiction (the effects system's
+"set destination" action writes `Entity.destination_location`); the map then lights
+the way, one step at a time.
+
+- `fetchNav` asks *as the acting character*
+  (`/locations/{id}/navigate?entity_id=…`), so the response carries
+  `destination {location_id, name}` and `next_hop` (a neighbouring location id).
+  Both keys are **absent** without an `entity_id`, so other callers are unaffected;
+  `next_hop` is **null** when the character is already there or nothing connects them.
+- `guidedDot` maps `next_hop` onto **exactly one** dot, by the stored link: a nav dot
+  whose `target.id` matches, else a zone whose `location_id` matches — never by name.
+- That dot renders as `.map-dot.guided`: a **gold sonar ping** (`guided-ping`),
+  deliberately unlike the cyan `armed` *breathe*, because "this is the way" is a
+  different statement from "you would travel if you dropped here" — and both can be
+  true at once (a guided dot arms the moment you drag onto it).
+- **One hop, never the whole route.** Following the blinks still means travelling, so
+  the map never becomes a read-out of the graph.
+- The hop is measured from the **location being viewed**, so each location shows its
+  own next step.
+- **Hidden locations stay hidden unless unavoidable.** `get_route_next_hop`
+  (`db/repository_mixins/canvas.py`) searches with `hidden` locations removed and
+  falls back to the full graph **only** when that leaves the origin unreachable — so a
+  concealed place is never given away while a way around it exists. It is a two-pass
+  exclusion, not a weight penalty: a cheap hidden shortcut versus a long open detour is
+  a different answer from "avoid it if you can".
+
+**Authoring is meant to refuse a destination with no route**
+(`get_location_distances_from(origin, {destination})` empty ⇒ refuse, with an error),
+so an unusable directions SFX should never reach a player; `destination` present with
+`next_hop: null` is the belt-and-braces case for a graph that changed afterwards.
 
 Zones and nav dots show the destination's background as their expanded image
 (the `navdot_image` role) — the "hole": an inner `<img>` sized as the
