@@ -124,7 +124,7 @@
     @applied="onSupportCreated"
     @close="supportCastMenu = null"
   />
-  <div class="stage" :style="{ '--roller-h': rollerContentH + 'px' }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '', sheetDock ? 'dock-sheet' : '']">
+  <div class="stage" :style="{ '--roller-h': rollerContentH + 'px', '--dock-w-short': dockWShort }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '', sheetDock ? 'dock-sheet' : '']">
     <ArmedSfxRail
       v-if="playerId && !showLoginOverlay && !fullCanvas"
       :entity-id="entityId"
@@ -1609,6 +1609,27 @@ watch(sheetDock, () => {
   for (const el of [wrapperEl.value, rollerBandEl.value]) if (el) el.style.transform = ''
   nextTick(() => syncClosedPosition())
 })
+
+// ── Dock-width override ────────────────────────────
+// The phone-landscape dock width is a feel number, and the person who can judge
+// it is looking at a phone, not at devtools — so it is dialled in from the
+// address bar: `?dockw=340` sets it and remembers it, `?dockw=reset` forgets it.
+// Feeds `--dock-w-short`, which only the short-viewport dock consumes, so a
+// desktop can never inherit a phone's number.
+const DOCK_W_KEY = 'dockw'
+const dockWShort = ref(null)
+
+function syncDockWidthOverride() {
+  const raw = new URLSearchParams(window.location.search).get('dockw')
+  if (raw !== null) {
+    const clean = raw.trim().toLowerCase()
+    if (clean === 'reset' || clean === '') localStorage.removeItem(DOCK_W_KEY)
+    else if (/^\d{2,4}$/.test(clean)) localStorage.setItem(DOCK_W_KEY, clean)
+  }
+  const stored = localStorage.getItem(DOCK_W_KEY) || ''
+  dockWShort.value = /^\d{2,4}$/.test(stored) ? `${stored}px` : null
+}
+syncDockWidthOverride()
 
 // ── Panel geometry diagnostics ─────────────────────
 // The panel is position:fixed;bottom:0 and slides via an inline translateY

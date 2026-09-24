@@ -630,18 +630,27 @@ changes.
   genuinely are one column.)
 - **A phone in landscape gets a narrower dock.** 400px is about half of an 873px phone,
   so when the viewport is **short** (≤500px — phones held sideways are 360–430px tall,
-  while tablets in landscape are ≥744px) `--dock-w` drops to **160px** and the map takes
-  the rest (713px of 873 measured). *Shortness* is the discriminator, not being in
+  while tablets in landscape are ≥744px) `--dock-w` drops to **224px** and the map takes
+  the rest (649px of 873 measured). *Shortness* is the discriminator, not being in
   landscape, so a tablet in landscape keeps the full-width dock — pinned by a test.
   That mode also carries **12px of top room**: the sheet's portrait pops above its own
-  header, and at 160px the header is tall enough that on the narrowest phone measured
-  (873×393) the portrait was clipped 5px off the top of the screen. 8px cleared it; 12px
-  gives margin and lifts the peers bar off the screen edge too.
-  **Known cost, owned downstream:** at 160px the sheet's *own* internals are cramped —
-  the "name this projection" placeholder wraps to three lines and the toolbar pills stack
-  into a vertical icon column. That is the narrow-width pass [[character-sheet]] already
-  carries as verification debt; it was written when ~400px looked like the floor, and
-  160px makes it pressing rather than optional.
+  header, and the narrower the sheet the taller that header gets, so on the narrowest
+  phone measured (873×393) the portrait was clipped 5px off the top of the screen. 8px
+  cleared it; 12px gives margin and lifts the peers bar off the screen edge too.
+- **That width is tunable from the address bar**: `?dockw=340` sets and remembers it,
+  `?dockw=reset` forgets it. It feeds `--dock-w-short`, which only the short-viewport dock
+  consumes, so a desktop can never inherit a phone's number. It exists because this is a
+  feel number judged on a phone, where there is no devtools.
+- **Where the sheet stops being cramped** (measured at 873×393). The toolbar is four
+  ~43px pills laid *beside* the sheet's portrait, so it only regains a row once
+  `dock − portrait` is wide enough. **160/200/224 are identical on every metric that reads
+  as cramped** — placeholder 3 lines, pills 4 rows, 2 peer chips visible. 260 gives 2 rows
+  / 2 lines, 300 a single-line placeholder, and **340** is where nothing wraps (1 row,
+  1 line, 4 chips), costing map 533px. So the honest trade is ~340 for an un-cramped sheet
+  against ~224 for a taller map. The real remaining fix is downstream and already logged:
+  a narrow-width pass on the sheet's own header (reflow or drop the portrait beside the
+  toolbar) is what would let a ~224px dock be comfortable — [[character-sheet]]'s
+  verification debt, written when ~400px looked like the floor.
 - **The dock is the wrapper.** `.dice-panel-wrapper` becomes a full-height left column
   (`--dock-w` — 400px by default, the width the sheet already had in the pop-out). It is
   inert itself (`pointer-events: none`, so its box cannot eat map clicks) and its children
@@ -666,10 +675,12 @@ Verified in the browser (Firefox + Chromium, `e2e/tests/dock.spec.js`): the dock
 at 1280×950 **before anything is clicked**, with the map inset to 880 and the sheet
 uncapped; selecting a character leaves the roller peeked and hovering the roller opens
 the roller without disturbing the sheet; 834×1194 keeps the pop-out and its
-`100dvh − 240px` cap; 390×844 keeps the band stack; 844×390 docks narrow (160px, map
-inset to 684, no horizontal overflow); 1194×834 — a tablet in landscape — keeps the
-full 400px dock, which is the boundary; and rotating hands the peek back to the column.
-The existing sheet-definition suite passes unchanged *inside* the dock.
+`100dvh − 240px` cap; 390×844 keeps the band stack; 844×390 docks narrow (224px, map
+inset to 649, no horizontal overflow); 1194×834 — a tablet in landscape — keeps the
+full 400px dock, which is the boundary; and rotating hands the peek back to the column. A
+separate case pins the `?dockw` knob's contract (sets, persists, resets, and never
+touches the desktop dock). The existing sheet-definition suite passes unchanged *inside*
+the dock.
 
 ## Theming
 

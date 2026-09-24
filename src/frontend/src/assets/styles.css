@@ -1110,15 +1110,18 @@ select option {
 /* Phone landscape is short as well as narrow, and there the full 400px dock
    eats about half the screen. A short viewport is the honest discriminator:
    phones held sideways are 360–430px tall, while tablets in landscape are
-   ≥744px and desktops taller still — so neither is touched. 160px is 40% of
-   the pop-out's width; the map gets the rest (684px of 844 at the size
-   measured). */
+   ≥744px and desktops taller still — so neither is touched. 224px is 140% of
+   the first 160px attempt, which left the sheet's own header too cramped; the
+   map keeps the rest (649px of 873 at the size measured).
+   NB: a feel number the human tunes by eye. It is overridable at runtime with
+   `?dockw=<px>` (see App.vue) so it can be dialled in on the device it matters
+   for — `--dock-w-short` is that override's hook. */
 @media (max-height: 500px) {
-  .stage.dock-sheet { --dock-w: 160px; }
-  /* The sheet's portrait pops above its own header, and at 160px wide the header
-     is taller so it pops further — which clipped the portrait 5px off the top of
-     the screen on the narrowest phone measured (873×393). This is the room that
-     stops it; it also lifts the peers bar off the screen edge. */
+  .stage.dock-sheet { --dock-w: var(--dock-w-short, 224px); }
+  /* The sheet's portrait pops above its own header, which is taller the narrower
+     the sheet gets — at 160px it clipped 5px off the top of the screen on the
+     narrowest phone measured (873×393). This is the room that stops it; it also
+     lifts the peers bar off the screen edge. */
   .stage.dock-sheet .dice-panel-wrapper { padding-top: 12px; }
 }
 

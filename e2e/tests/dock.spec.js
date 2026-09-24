@@ -23,7 +23,7 @@ const PHONE_PORTRAIT = { width: 390, height: 844 }
 const PHONE_LANDSCAPE = { width: 844, height: 390 }
 
 const DOCK_W = 400            // --dock-w: the width the sheet already has
-const PHONE_DOCK_W = 160      // --dock-w when the viewport is short (phone landscape)
+const PHONE_DOCK_W = 224      // --dock-w when the viewport is short (phone landscape)
 const PHONE_DOCK_PAD = 12     // top room the narrow dock gives the sheet's portrait
 const SHEET_CHROME = 240      // .embedded-sheet's `calc(100dvh - 240px)` cap
 const PEEK = 56               // PANEL_CLOSED_PEEK
@@ -179,6 +179,34 @@ test('tablet landscape keeps the full-width dock', async ({ page }) => {
   const map = await box(page.locator('.location-viewer').first())
   expect(Math.round(map.x)).toBe(DOCK_W)
   expect(Math.round(map.width)).toBe(TABLET_LANDSCAPE.width - DOCK_W)
+})
+
+// The width is a feel number, so it is tunable from the address bar on the very
+// device that judges it. This pins the knob's contract, not the number itself.
+test('?dockw tunes the short-viewport dock, and reset forgets it', async ({ page }) => {
+  await page.setViewportSize(PHONE_LANDSCAPE)
+  await page.goto('/?dockw=300')
+  await page.evaluate(([pid, pname, eid]) => {
+    localStorage.setItem('playerId', pid); localStorage.setItem('playerName', pname); localStorage.setItem('entityId', eid)
+  }, [character.playerId, character.playerName, character.entityId])
+
+  await page.goto('/')
+  await expect(page.locator('.stage').first()).toHaveClass(/dock-sheet/)
+  expect(Math.round((await box(page.locator('.sheet-band').first())).width)).toBe(300)
+
+  // It sticks across a plain reload.
+  await page.goto('/')
+  expect(Math.round((await box(page.locator('.sheet-band').first())).width)).toBe(300)
+
+  await page.goto('/?dockw=reset')
+  await page.goto('/')
+  expect(Math.round((await box(page.locator('.sheet-band').first())).width)).toBe(PHONE_DOCK_W)
+
+  // …and it only ever touches the short dock: a desktop keeps its own 400px.
+  await page.setViewportSize(DESKTOP)
+  await page.goto('/?dockw=300')
+  await page.goto('/')
+  expect(Math.round((await box(page.locator('.sheet-band').first())).width)).toBe(DOCK_W)
 })
 
 // The peek used to live on the bottom-centre column. Docking moves it onto the
