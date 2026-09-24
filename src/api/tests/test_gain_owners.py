@@ -134,9 +134,12 @@ def test_an_unordered_subtrait_is_left_unranked_rather_than_first():
 
 
 def test_the_owner_kind_comes_from_the_declaration_not_the_value():
-    """Both new verbs resolve to *some* id; only the action's `owner_elements` says
-    which collection reads it back. A verb with no owner path ignores one entirely,
-    so a stray context key cannot move a plain gain onto an edge."""
+    """An id alone does not say which collection reads it back.
+
+    A verb that declares a *single* kind still reads stored content of that shape
+    (an id with no kind — what resolution wrote before the kind travelled with
+    it), but one that declares several cannot guess: an untyped id anchors to the
+    subject entity rather than to some other collection's row."""
     repo = Repo()
     effect = _gain("gain")
     effect.context[OWNER_ID_CONTEXT_KEY] = "rel-1"

@@ -83,9 +83,16 @@ class EffectActionMeta:
     path_element: tuple[str, ...] = ()
     # The catalog elements this action's **owner path** (`Effect.owner_spec`) may
     # land on, when it anchors what it makes somewhere other than the subject
-    # entity: a `relationship` edge (a tie to someone) or a `traitsetting` (a
-    # facet of another trait). Empty = the action has no owner path, and the
-    # subject entity is the owner — the ordinary case.
+    # entity: a `relationship` edge (a tie to someone), a `traitsetting` (a facet
+    # of another trait), a `projection` (a specific body), or the `entity` itself.
+    # Empty = the action has no owner path, and the subject entity is the owner —
+    # the ordinary case.
+    #
+    # A **set**, not a kind: the element the path actually landed on is what the
+    # anchor is (it travels with the id), and this tuple is the permission that
+    # element is checked against. Trait verbs that create or move an instance all
+    # declare the same set (see :data:`TRAIT_OWNER_ELEMENTS`), because which anchor
+    # a rule wants is a fact about the rule, not about the verb.
     owner_elements: tuple[str, ...] = ()
     refs: list[RefDef] = field(default_factory=list)  # named references (multi-target model)
     # Render the refs above the fields. A ref that names the *subject* ("Trait to
@@ -135,6 +142,23 @@ _ENTITY_FIELD = EffectFieldDef(
     field_type="entity",
     required=False,
 )
+
+#: Every anchor a trait instance can hang on, declared together on the verbs that
+#: create or move one. The anchor is a path (`Effect.owner_spec`), and this is what
+#: that path may land on:
+#:
+#: * ``entity`` — the subject's own sheet. A non-ego trait granted this way is
+#:   **morph-anchored** (``_new_traitsetting`` re-anchors it to the active
+#:   projection), which is why ``projection`` is also declared: a path may name a
+#:   *specific* body instead of "whichever one is active".
+#: * ``relationship`` — a tie to someone (your standing with a faction, a rank on a
+#:   membership).
+#: * ``traitsetting`` — another trait instance (a facet of a trait, an agenda step).
+#:
+#: One set for all of them, because *which* anchor a rule wants is a fact about the
+#: rule, not about the verb: the same "gain or step up" action serves a sheet trait
+#: and a tenure on a faction edge.
+TRAIT_OWNER_ELEMENTS = ("entity", "projection", "relationship", "traitsetting")
 
 #: *Gain Trait* only, and the reason it is a real field rather than prose: with it
 #: set, a trait that is already there is **left alone** and the step still names

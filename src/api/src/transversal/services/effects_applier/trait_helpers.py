@@ -43,14 +43,23 @@ def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
     edge exists, so the caller can say so instead of guessing.
     """
     from transversal.services.effects_applier.datatypes import OWNER_ID_CONTEXT_KEY
+    from transversal.services.effects_applier.datatypes import OWNER_KIND_CONTEXT_KEY
     from transversal.services.effects_registry.lookup import owner_elements_for
 
-    # A resolved owner path wins: the action declared what it may land on, so the
-    # kind is read from that declaration rather than guessed from the value.
+    # A resolved owner path wins: the kind is the element the path landed on, and
+    # the action's declaration is the permission it is checked against. Content
+    # stored when a verb declared a *single* kind carries an id and no kind, and
+    # still means that one — a verb that declares several cannot guess from an id
+    # alone, so an untyped id anchors to nobody rather than to a foreign
+    # collection's row.
     resolved_owner = (effect.context or {}).get(OWNER_ID_CONTEXT_KEY)
     declared = owner_elements_for(effect.type, effect.action)
     if resolved_owner and declared:
-        return (declared[0], resolved_owner)
+        landed = (effect.context or {}).get(OWNER_KIND_CONTEXT_KEY) or ""
+        if landed in declared:
+            return (landed, resolved_owner)
+        if len(declared) == 1:
+            return (declared[0], resolved_owner)
 
     # A declared owner **path** that resolved to nothing is not "no owner": it is a
     # missing anchor, and falling back to the subject entity would write the trait
@@ -80,6 +89,10 @@ def _find_traitsetting(owner: tuple[str, str], repo, trait_id: str) -> Optional[
     from_type, owner_id = owner
     if from_type == "relationship":
         settings = repo.get_relationship_traitsettings(owner_id)
+    elif from_type == "projection":
+        # A body's own traits: the entity is the same either way, so the read is
+        # by projection id.
+        settings = repo.get_projection_traitsettings(owner_id)
     elif from_type == "traitsetting":
         # A nested instance's "already here?" is asked of its *parent*, not of the
         # entity — the entity's own settings deliberately exclude them.
@@ -328,7 +341,12 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
     if not traitset_id and polarity == Polarity.NEGATIVE:
         traitset_id = "ts-complications-a190"
     projection_id = None
-    if from_type == "entity" and trait is not None and not getattr(trait, "default_ego", False):
+    if from_type == "projection":
+        # An explicit body anchor: the owner id *is* the projection. Without this
+        # the row kept `from_type='projection'` and no id, so it anchored to
+        # `projections/<entity_id>` — a body that does not exist.
+        projection_id = owner_id
+    elif from_type == "entity" and trait is not None and not getattr(trait, "default_ego", False):
         # Morph-by-default — anchor the grant to the entity's active projection.
         get_entity = getattr(repo, "get_entity", None)
         entity = get_entity(owner_id) if get_entity else None

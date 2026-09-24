@@ -375,6 +375,7 @@ def resolve_effect_owner(effect: Effect, entity_id: str, repo,
         return effect
     from transversal.services.effects_applier.datatypes import (
         OWNER_ID_CONTEXT_KEY,
+        OWNER_KIND_CONTEXT_KEY,
         SOURCE_CONTEXT_KEY, SOURCE_ELEMENT_CONTEXT_KEY,
     )
     from transversal.services.target_resolver import TargetContext, event_collections, resolve
@@ -395,14 +396,19 @@ def resolve_effect_owner(effect: Effect, entity_id: str, repo,
         rid = value.get("id") if isinstance(value, dict) else getattr(value, "id", None)
         if not rid:
             continue
-        # The *kind* is not guessed here: the action declares what this path may
-        # land on (`owner_elements`), and the handler reads that declaration back.
-        # One truth, so a value can never be interpreted as the wrong collection.
+        # The *kind* travels with the id: the path landed on a specific element —
+        # an edge, a trait instance, a body — and that is what the anchor is. The
+        # action still declares what it may land on (`owner_elements`), and
+        # ``_trait_owner`` refuses a kind outside that declaration, so one truth
+        # is kept without guessing.
+        landing = resolution.trace[-1] if resolution.trace else None
+        kind = getattr(landing, "element", "") or ""
         return effect.model_copy(update={
             "owner_spec": None,
             "context": {
                 **(effect.context or {}),
                 OWNER_ID_CONTEXT_KEY: str(rid),
+                **({OWNER_KIND_CONTEXT_KEY: kind} if kind else {}),
             },
         })
     return effect

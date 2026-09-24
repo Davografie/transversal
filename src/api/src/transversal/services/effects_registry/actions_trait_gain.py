@@ -1,6 +1,7 @@
 """Trait gain / complications — action definitions split out of ``effects_registry.py``."""
 
 from transversal.services.effects_registry.action_types import (
+    TRAIT_OWNER_ELEMENTS,
     EffectActionMeta,
     EffectFieldDef,
     _ENTITY_FIELD,
@@ -35,9 +36,13 @@ ACTIONS: list[EffectActionMeta] = [
         supports_polarity=True,
         inverse=("modify_trait", "remove"),
         path_element=("trait",),
+        owner_elements=TRAIT_OWNER_ELEMENTS,
     ),
-    # The three gain verbs differ in **where the trait is anchored**, not in what
-    # gaining means, so they share one applier and declare their owner here. The
+    # The gain verbs differ in **what happens when the trait is already there**
+    # (leave it, step it up, jump to the effect die), not in where it is anchored:
+    # all of them take the same owner path, so `gain` alone serves a tie and a
+    # facet as well as a sheet trait — which is why the two specialised verbs below
+    # are retired (kept for stored content, gone from the picker). The
     # owner is a *path* (`Effect.owner_spec`) rather than a pair of context fields:
     # which edge, or which parent, is a fact you pick out of the world, and a path
     # is the only thing that can express "this one".
@@ -66,10 +71,11 @@ ACTIONS: list[EffectActionMeta] = [
         inverse=("modify_trait", "remove"),
         path_element=("trait",),
         field_order=("target", "entity", "owner", "result"),
-        # The edge to anchor to. `select self → relationships → filter contact_id == …`
-        # is the shape, and `contact_id` is a reference, so it offers an entity
-        # picker rather than the text box the old "Relationship with" field was.
         owner_elements=("relationship",),
+        # Subsumed by `gain` (same applier, same owner path) once the gain verbs
+        # declare every anchor: two verbs that differ only in which kind they
+        # declare is the split this merge undoes.
+        retired=True,
     ),
     EffectActionMeta(
         action_id="gain_subtrait",
@@ -127,6 +133,7 @@ ACTIONS: list[EffectActionMeta] = [
         supports_duration=True,
         supports_polarity=True,
         path_element=("trait",),
+        owner_elements=TRAIT_OWNER_ELEMENTS,
     ),
     EffectActionMeta(
         action_id="cortex_gain_trait",
@@ -146,6 +153,7 @@ ACTIONS: list[EffectActionMeta] = [
         context_fields=[_STATEMENT_CONTEXT_FIELD, _NOTES_CONTEXT_FIELD],
         supports_polarity=True,
         path_element=("trait",),
+        owner_elements=TRAIT_OWNER_ELEMENTS,
     ),
     EffectActionMeta(
         action_id="reveal_trait",
