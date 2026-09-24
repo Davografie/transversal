@@ -37,15 +37,42 @@ def _weight(value: float) -> str:
     return f"{round(value, 4):g}"
 
 
-def _appearance_text(repository, entity_id: str, universes: list[str]) -> str:
+def _join_parts(*values: str | None) -> str:
+    """Join non-empty prompt fragments with ', '."""
+    return ", ".join(part for part in values if part)
+
+
+def _effective_projection(entity: Entity) -> str | None:
+    """The body to read traits from when the caller names no projection.
+
+    Mirrors ``Entity.image()``, which resolves ``projection_id or
+    current_projection``. Creating a trait setting through the API anchors it to
+    the active body (``from_type='projection'``), so an entity's appearance
+    normally lives on ``current_projection`` rather than on the entity — reading
+    entity-level traits alone silently drops everything authored through the API.
+    That is how 19 locations' appearances, and the 27 entities [[mcp-architect]]
+    wrote, went missing from the prompt while the images resolved fine.
+    """
+    return entity.current_projection or None
+
+
+def _appearance_text(
+    repository,
+    entity_id: str,
+    universes: list[str],
+    projection_id: str | None = None,
+) -> str:
     """An entity's authored appearance: its `appearance` traits' statement + notes.
 
     v1 stored a location's description in a `description` field; v2 has no such
     field, so the equivalent content lives in the `appearance` trait — which is
     why both parts are read here.
+
+    ``projection_id`` must be the *owning* entity's active body: a sub-location
+    or ancestor carries its own projection, not the root location's.
     """
     try:
-        settings = repository.get_prompt_traitsettings(entity_id, universes)
+        settings = repository.get_prompt_traitsettings(entity_id, universes, projection_id)
     except Exception:
         return ""
     parts: list[str] = []
@@ -56,10 +83,9 @@ def _appearance_text(repository, entity_id: str, universes: list[str]) -> str:
             trait = None
         if trait is None or trait.name != "appearance":
             continue
-        for value in (ts.statement, ts.notes):
-            cleaned = clean_text(value or "")
-            if cleaned:
-                parts.append(cleaned)
+        cleaned = _join_parts(clean_text(ts.statement or ""), clean_text(ts.notes or ""))
+        if cleaned:
+            parts.append(cleaned)
     return ", ".join(parts)
 
 
@@ -80,7 +106,9 @@ def _build_location_context(repository, entity: Entity, universes: list[str]) ->
         if child_id:
             children.append({
                 "name": child.get("name") or "",
-                "appearance": _appearance_text(repository, child_id, universes),
+                "appearance": _appearance_text(
+                    repository, child_id, universes, child.get("current_projection")
+                ),
             })
 
     ancestors: list[dict] = []
@@ -97,7 +125,9 @@ def _build_location_context(repository, entity: Entity, universes: list[str]) ->
                 continue
             ancestors.append({
                 "name": ancestor.name or "",
-                "appearance": _appearance_text(repository, ancestor_id, universes),
+                "appearance": _appearance_text(
+                    repository, ancestor_id, universes, ancestor.current_projection
+                ),
             })
 
     return {"children": children, "ancestors": ancestors}
@@ -203,6 +233,11 @@ def _build_entity_prompt(
 
         trait_name = trait.name if trait else ts.trait_id
         statement = clean_text(ts.statement) if ts.statement else ""
+        notes = clean_text(ts.notes) if ts.notes else ""
+        # Most live settings hold their content in ONE of the two fields, not
+        # both: 231 of 423 `negative imagen` settings are notes-only, so gating
+        # on `statement` alone dropped the majority of them.
+        details = _join_parts(statement, notes)
 
         if trait_name == "appearance":
             # `statement` is the short distinction ("lithe"); the longer
@@ -210,20 +245,21 @@ def _build_entity_prompt(
             # Both are authored appearance content, so both go in the one
             # emphasised clause — dropping `notes` silently discarded most of
             # what a GM writes about how a character looks.
-            appearance = ", ".join(
-                part for part in (statement, clean_text(ts.notes or "")) if part
-            )
-            if appearance:
-                appearance_parts.append(f"({appearance}:1.4)")
+            if details:
+                appearance_parts.append(f"({details}:1.4)")
         elif trait_name.startswith("LoRA"):
+            # Deliberately `statement` only, and NOT merged with `notes`: the
+            # value is fed to ComfyUI as a LoRA filename
+            # (`flux/{name}.safetensors`), so free text would corrupt the path.
+            # Every live LoRA setting already carries the name in `statement`.
             if statement:
                 loras.append(statement)
         elif trait_name == "negative imagen":
-            if statement:
-                negative += f", {statement}"
+            if details:
+                negative += f", {details}"
         elif trait_name == "positive imagen":
-            if statement:
-                prompt += f"({statement}:0.8), "
+            if details:
+                prompt += f"({details}:0.8), "
         elif ts.rating_type.value not in ("resource", "challenge"):
             # Generic trait → add to prompt with name+statement
             part = f"({trait_name}"
@@ -277,13 +313,18 @@ def build_imagen_prompt(
     """Build a complete image generation prompt from an entity's traits.
 
     ``projection_id`` scopes the prompt to a specific body: that projection's
-    morph traits plus the entity's ego traits drive the prompt. With no
-    projection, only entity traits are used. ``universe`` is the generation
-    universe (style guide + LoRA config).
+    morph traits plus the entity's ego traits drive the prompt. **When it is
+    omitted the entity's active body is used** (``current_projection``), the same
+    rule ``Entity.image()`` applies — the API anchors new trait settings to the
+    active body, so without this fallback a prompt silently loses every
+    appearance authored through the API. Only genuinely body-less entities fall
+    through to entity traits alone. ``universe`` is the generation universe
+    (style guide + LoRA config).
 
     Returns a dict with all the parameters needed by the ComfyUI workflow:
         prompt, negative, loras, steps, width, height
     """
+    projection_id = projection_id or _effective_projection(entity)
     trait_universes = [universe]
     if projection_id:
         proj = repository.get_projection(projection_id)

@@ -32,6 +32,7 @@ class _StubRepository:
         self._ancestors = ancestors        # get_location_ancestors()
         self._entities = entities          # _key -> Entity
         self._appearance_by_entity = {}    # entity_id -> list[TraitSetting]
+        self.trait_calls = []              # (entity_id, projection_id) lookups
 
     def get_trait(self, trait_id):
         name = self._traits.get(trait_id)
@@ -47,6 +48,7 @@ class _StubRepository:
         return self._entities.get(entity_id)
 
     def get_prompt_traitsettings(self, entity_id, universes, projection_id=None):
+        self.trait_calls.append((entity_id, projection_id))
         return self._appearance_by_entity.get(entity_id, [])
 
 
@@ -179,3 +181,29 @@ def test_child_appearance_carries_statement_and_notes():
     prompt = _prompt(repo, _location("loc1", "Whispering Forest"))
 
     assert "((Glade, cramped, a low stone cellar:0.4)" in prompt
+
+
+def test_a_childs_appearance_is_read_from_the_childs_own_projection():
+    """Morph-anchored content lives on the child's body, not on the root's.
+
+    The live data looks like this: 19 locations hold their appearance on their
+    own projection, so it is returned only when *that* projection is named. The
+    zones clause used to query with no projection and silently print bare names.
+    """
+    repo = _repo()
+    repo._children = [{"_key": "c1", "name": "Glade", "current_projection": "c1:earth"}]
+
+    def morph_anchored(entity_id, universes, projection_id=None):
+        repo.trait_calls.append((entity_id, projection_id))
+        if projection_id == "c1:earth":
+            return [_appearance(notes="sunlit clearing", owner="c1")]
+        return []
+
+    repo.get_prompt_traitsettings = morph_anchored
+
+    prompt = _prompt(repo, _location("loc1", "Whispering Forest"))
+
+    assert ("c1", "c1:earth") in repo.trait_calls, (
+        "the child must be queried with its own projection"
+    )
+    assert "(Glade, sunlit clearing:0.4)" in prompt
