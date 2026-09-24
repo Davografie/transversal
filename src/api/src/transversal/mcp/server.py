@@ -771,6 +771,28 @@ def set_rank_role(args: dict) -> dict:
     return _run_steps(steps, args.get("dry_run", True))
 
 
+#: Edge types a relationship trait can sit on. ``commands`` is still advertised
+#: only for legacy reasons — [[B147]] retires it (0 rows ever written).
+_RELATIONSHIP_TYPES = ("relation", "membership", "super", "transversal", "agency", "support")
+
+_QUERY_RELATIONSHIP_TYPE = """
+query($f: ID!, $t: ID!) {
+  relationship(fromEntityId: $f, toEntityId: $t) { id type }
+}
+"""
+
+
+def _existing_edge_type(from_id: str, to_id: str) -> str | None:
+    """The type of the edge already joining two entities, or ``None``.
+
+    Only ever returns *one* edge's type, so it is a safe answer when a pair is
+    joined once and an ambiguous one when it is joined twice. ``add_relationship_trait``
+    uses it to avoid creating a second, differently-typed edge by accident.
+    """
+    rel = _graphql(_QUERY_RELATIONSHIP_TYPE, {"f": from_id, "t": to_id}).get("relationship")
+    return (rel or {}).get("type")
+
+
 def add_relationship_trait(args: dict) -> dict:
     """Put a rated trait on a relationship edge — a roster rank/role, a posture, or a claim.
 
@@ -778,14 +800,33 @@ def add_relationship_trait(args: dict) -> dict:
     traits: rank, role, loyalty, grudge, history … and the ``control`` claim a
     faction makes on a location ([[Factions and Organizations Design Log]] §6.6 —
     control is a trait on the faction ↔ location tie, deliberately *not* a field
-    on the location). The tie is matched on its endpoints and type, and is
-    **created if it does not exist**. ``traitset_id`` is derived from the registry
-    trait when omitted, so a trait id alone is usually enough.
+    on the location). ``traitset_id`` is derived from the registry trait when
+    omitted, so a trait id alone is usually enough.
+
+    **``rel_type`` names the edge the trait lives on, and it is required when the
+    two entities are not already linked.** This is not pedantry: an omitted type
+    used to fall back to ``relation``, and because ``addRelationshipTrait``
+    *creates the edge when it is missing*, asking for a trait on a pair that was
+    already joined by a ``membership`` silently produced a **second edge of a
+    different type** with the trait on it — so the roster role never reached the
+    membership it was meant for. When the pair *is* already linked the existing
+    edge's type is used, so ``rel_type`` may be omitted. Pass it explicitly when
+    a pair carries more than one edge, since the lookup returns only one.
     """
+    from_id, to_id = args["from_id"], args["to_id"]
+    rel_type = args.get("rel_type")
+    if not rel_type:
+        rel_type = _existing_edge_type(from_id, to_id)
+        if not rel_type:
+            raise ValueError(
+                f"{from_id} and {to_id} are not linked yet, so rel_type is required "
+                f"(one of {', '.join(_RELATIONSHIP_TYPES)}) — a trait must name the "
+                f"edge it sits on rather than defaulting to a new one."
+            )
     variables = {
-        "from": args["from_id"],
-        "to": args["to_id"],
-        "relType": args.get("rel_type", "relation"),
+        "from": from_id,
+        "to": to_id,
+        "relType": rel_type,
         "traitId": args["trait_id"],
         "stmt": args.get("statement", ""),
     }
@@ -795,8 +836,12 @@ def add_relationship_trait(args: dict) -> dict:
         variables["die"] = _enum(args["die"])
     if args.get("traitset_id") is not None:
         variables["ts"] = args["traitset_id"]
-    return _call_mutation("addRelationshipTrait", _MUT_ADD_RELATIONSHIP_TRAIT_FULL, variables,
-                          args.get("dry_run", True), "addRelationshipTrait")
+    result = _call_mutation("addRelationshipTrait", _MUT_ADD_RELATIONSHIP_TRAIT_FULL, variables,
+                            args.get("dry_run", True), "addRelationshipTrait")
+    # Say which edge was chosen, since that is the whole failure mode this guards.
+    if isinstance(result, dict) and result.get("relType") is None:
+        result = {**result, "relType": rel_type}
+    return result
 
 
 # ── Trait / SFX / life-path / roll-table authoring (API) ──
@@ -1988,14 +2033,14 @@ TOOL_SCHEMAS = {
     },
     "add_relationship_trait": {
         "name": "add_relationship_trait",
-        "description": "Put a rated trait on a relationship edge — a roster rank/role, a posture, or a claim (e.g. a faction's `control` over a location). The tie is matched on its endpoints + type and is CREATED if it does not exist. The trait set is derived from the registry trait unless traitset_id is given.",
+        "description": "Put a rated trait on a relationship edge — a roster rank/role, a posture, or a claim (e.g. a faction's `control` over a location). rel_type names the edge the trait lives on: it is REQUIRED when the two entities are not already linked (previously it defaulted to 'relation', which silently created a second edge of the wrong type — a roster role meant for a membership never reached it). When the pair is already joined the existing edge's type is used.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "from_id": {"type": "string", "description": "Source entity id (e.g. the faction)"},
                 "to_id": {"type": "string", "description": "Target entity id (e.g. the location)"},
                 "trait_id": {"type": "string", "description": "Registry trait id to instantiate on the tie"},
-                "rel_type": {"type": "string", "description": "Edge type (default 'relation')"},
+                "rel_type": {"type": "string", "description": "Edge the trait sits on: relation|membership|super|transversal|agency|support. Required when the pair is not already linked; otherwise inferred from the existing edge."},
                 "die": {"type": "string", "description": "Rating die, e.g. 'D8'; defaults to the trait's own default"},
                 "traitset_id": {"type": "string", "description": "Override the trait set (defaults to the registry trait's set)"},
                 "statement": {"type": "string", "description": "The trait's statement — what the tie means"},
