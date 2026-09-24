@@ -80,6 +80,8 @@ const TREE = [
       L('loc-hut', 'The Hut', 'three_realms'),
     ]),
   ]),
+  // No child locations at all — only an occupant placed in the universe itself.
+  U('u-empty', 'Empty Realm', 'empty_uni'),
 ]
 
 const ENTITIES = [
@@ -103,6 +105,11 @@ const ENTITIES = [
   // Genuinely unplaced: no `currentLocation` at all, which is what the app's
   // `UNPLACED` condition means (`current_location in (None, "")`).
   E('gmc-loose', 'Loose', 'GMC', null, 'three_realms'),
+  // In the universe, at no place: `currentLocation` names the *universe* rather
+  // than a location (54 live, the Discworld GMCs among them).
+  E('gmc-rounds', 'Rounds', 'GMC', 'u-three', 'three_realms'),
+  E('u-empty', 'Empty Realm', 'UNIVERSE', null, 'empty_uni'),
+  E('gmc-viking', 'Viking', 'GMC', 'u-empty', 'empty_uni'),
   // Echo Two shares The Camp with Echo One but does not match a "Echo One" chip.
   E('gmc-e1', 'Echo One', 'GMC', 'loc-tent', 'three_realms'),
   E('gmc-e2', 'Echo Two', 'GMC', 'loc-camp', 'three_realms'),
@@ -131,11 +138,21 @@ function world({ chips = [], focus = '', universe = 'three_realms' } = {}) {
 
 const row = (t, id) => t.flatTree.value.find((n) => n.id === id)
 const glyph = (t, id) => { const n = row(t, id); return n ? (n.expanded ? '▾' : '▸') : '—' }
+// Rows directly under `id`, in render order: its own occupants and its immediate
+// child locations, but nothing deeper. Scanned to the end of that node's subtree
+// — filtering the whole flat list by depth would also pick up every *other*
+// node's children at the same level, which is how a universe came to look like it
+// held a sibling's occupants.
 const under = (t, id) => {
   const flat = t.flatTree.value
-  const r = flat.find((n) => n.id === id)
-  if (!r) return []
-  return flat.filter((n) => n.depth === r.depth + 1 && n.id !== 'more:' + id)
+  const i = flat.findIndex((n) => n.id === id)
+  if (i < 0) return []
+  const out = []
+  for (let k = i + 1; k < flat.length; k++) {
+    if (flat[k].depth <= flat[i].depth) break
+    if (flat[k].depth === flat[i].depth + 1 && flat[k].id !== 'more:' + id) out.push(flat[k])
+  }
+  return out
 }
 const kids = (t, id) => under(t, id).filter((n) => n.kind === 'location').map((n) => n.name)
 const roster = (t, id) => under(t, id).filter((n) => n.kind === 'occupant').map((n) => n.name)
@@ -251,9 +268,41 @@ console.log('\nplain — a universe lists the unplaced, not everybody\n')
   // occupant of that universe qualified — placed or not.
   const t = world({})
   const underUniverse = (id) => under(t, id).filter((n) => n.kind === 'occupant').map((n) => n.name)
-  ok('only the genuinely unplaced occupant is listed', underUniverse('u-three'), ['Loose'])
+  ok('the universe-level occupants are listed', underUniverse('u-three'), ['Loose', 'Rounds'])
   ok('a placed occupant is not', underUniverse('u-three').includes('Bob'), false)
   ok('the universe still shows its child locations', kids(t, 'u-three'), ['swamp'])
+}
+
+// ── 5c. an occupant placed in the universe itself ───────────────────────
+console.log('\nplain — "location set to universe" reads under that universe\n')
+
+{
+  const t = world({})
+  const names = under(t, 'u-three').filter((n) => n.kind === 'occupant').map((n) => n.name)
+  ok('an occupant whose location is the universe is listed', names.includes('Rounds'), true)
+  ok('…beside the unplaced one, in type-then-name order', names, ['Loose', 'Rounds'])
+  ok('a genuinely placed occupant still is not', names.includes('Bob'), false)
+  ok('the universe still shows its child locations', kids(t, 'u-three'), ['swamp'])
+}
+
+{
+  // A universe with no locations at all: without counting the universe-level
+  // roster as content it would have no chevron, and its occupant no way in.
+  const t = world({})
+  ok('a universe with no locations still offers its occupants', glyph(t, 'u-empty'), '▸')
+  press(t, 'u-empty')
+  ok('…and expands to them',
+    [glyph(t, 'u-empty'), under(t, 'u-empty').filter((n) => n.kind === 'occupant').map((n) => n.name)],
+    ['▾', ['Viking']])
+}
+
+{
+  // The universe-level roster has to put its universe on the filter's populated
+  // path. Marking by the `universe` key alone also matched every location in it,
+  // which unrolled the whole subtree (257 locations for Three Realms).
+  const t = world({ chips: chip('Rounds') })
+  ok('filtering for one draws its universe and nothing else',
+    t.flatTree.value.map((n) => `${n.kind}:${n.name}`), ['universe:Three Realms', 'occupant:Rounds'])
 }
 
 // ── 6. the toggle contract itself ───────────────────────────────────────

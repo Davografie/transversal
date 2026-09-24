@@ -55,6 +55,17 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       || String(a.id).localeCompare(String(b.id)))
   }
 
+  // Universes are entities too, so an occupant's `currentLocation` can name the
+  // **universe** it is in rather than a place — 54 do (the Discworld set:
+  // Rincewind, Cohen, Luggage…, and 20 in Three Realms). That is not a location:
+  // such an entity is in the universe but at no place, so it reads under its
+  // universe with the unplaced ones rather than being invisible.
+  const universeIds = computed(() => new Set(
+    (entities?.value ?? filteredEntities?.value ?? [])
+      .filter((e) => e.type === 'UNIVERSE')
+      .map((e) => e.id)
+  ))
+
   // Both rosters are needed. `occupantsByLocation` is what the filter matches,
   // and is what a level reveals on its own; `allOccupantsByLocation` is everyone
   // who is actually there, which is what tells the chevron whether the filter is
@@ -63,15 +74,18 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
   // claimed ▾ while hiding its whole roster.
   function _groupOccupants(list, placed) {
     const map = {}
+    const universes = universeIds.value
     for (const e of list) {
       if (!OCCUPANT_TYPES.has(e.type)) continue
-      // Placed and unplaced are disjoint halves, and the halves are what the
-      // group key means: a placed occupant belongs to a location, an unplaced one
-      // to a universe. Requiring the *right* one matters — grouping the unplaced
-      // on `currentUniverse` alone lists everybody in that universe, placed or
-      // not, which is how a universe node came to show the whole roster.
-      // (The app's own `UNPLACED` condition is `current_location in (None, "")`.)
-      if (placed ? !e.currentLocation : e.currentLocation) continue
+      // Placed and unplaced are disjoint halves, and the half is what the group
+      // key means: a placed occupant belongs to a location, an unplaced one to a
+      // universe. "Unplaced" here is `currentLocation` empty **or naming a
+      // universe** — both mean "in this universe, at no place". Requiring the
+      // right half matters: keying the unplaced on `currentUniverse` alone lists
+      // everybody in that universe, placed or not, which is how a universe node
+      // came to show the whole roster.
+      const atPlace = !!e.currentLocation && !universes.has(e.currentLocation)
+      if (placed !== atPlace) continue
       const key = placed ? e.currentLocation : e.currentUniverse
       if (!key) continue
       if (!map[key]) map[key] = []
@@ -116,6 +130,29 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       for (const e of (filteredEntities?.value ?? [])) {
         if (e.type === 'LOCATION') set.add(e.id)
       }
+    }
+    // A universe holding matching universe-level occupants is on the populated
+    // path too. They are keyed by universe *key* while the nodes carry ids, so
+    // this walks the tree rather than seeding the set directly — without it,
+    // filtering for Rincewind (who is in Discworld, at no place) marked nothing
+    // and the tree came back empty.
+    const universeKeys = new Set(
+      Object.entries(unplacedByUniverse.value)
+        .filter(([, list]) => list.length)
+        .map(([key]) => key)
+    )
+    if (universeKeys.size) {
+      const markUniverses = (nodes) => {
+        for (const n of nodes) {
+          // Only the universe *node* — locations carry the same `universe` key,
+          // so matching on it alone marked the whole subtree and filtering for a
+          // universe-level occupant unrolled every location in the universe.
+          const isUniverse = (n.kind || n.node_type) === 'universe'
+          if (isUniverse && n.universe && universeKeys.has(n.universe)) set.add(n.id)
+          if (n.children) markUniverses(n.children)
+        }
+      }
+      markUniverses(locationTree.value)
     }
     // Mark every node that holds (or contains, at any depth) a matching
     // occupant. Must visit ALL siblings — an early `return true` here leaves
@@ -249,6 +286,10 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       if (filterMode) {
         defaultKids = kids.filter((c) => populated.has(c.id))
         defaultRoster = occ.length > 0
+        // A universe-level occupant that matched is this level's content, the
+        // same way a matched roster is a place's — otherwise filtering for one
+        // drew its universe with nothing under it.
+        defaultUnplaced = unplacedHere.length > 0
         baselineOpen = true      // being on the populated path is this mode's baseline
       } else if (focusMode) {
         defaultKids = onFocus ? kids.filter((c) => focusSet.has(c.id)) : []
@@ -285,7 +326,10 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       // ▾ means "nothing is left hidden at this level"; ▸ means "press for the
       // rest". A level that shows only part of its children therefore reads ▸,
       // and pressing it is what reveals the others.
-      const hasChildren = kids.length > 0 || allOcc.length > 0
+      // The universe-level roster counts as content for the chevron: Valhalla has
+      // no child locations at all, and its one occupant would otherwise be
+      // unreachable.
+      const hasChildren = kids.length > 0 || allOcc.length > 0 || allUnplacedHere.length > 0
       const fullyRevealed = revealedKids.length === kids.length &&
         shownRoster.length === allOcc.length &&
         shownUnplaced.length === allUnplacedHere.length
