@@ -89,13 +89,18 @@
               </div>
               <div class="bb-record-locations">
                 <template v-for="(loc, li) in g.locations" :key="loc.id + ':' + li">
-                  <img v-if="locationPortraits[loc.id]" :src="locationPortraits[loc.id]" class="bb-location-img" :class="{ 'bb-drop-target': isLocationDropTarget(loc) }" :data-bb-insert="loc.insertBefore" alt="" draggable="false" @click="viewImage(locationPortraits[loc.id])" @dragover.stop="dragOver" @drop.stop="drop" />
-                  <span v-else class="bb-location-missing" :class="{ 'bb-drop-target': isLocationDropTarget(loc) }" :data-bb-insert="loc.insertBefore" @dragover.stop="dragOver" @drop.stop="drop">{{ locationNames[loc.id] || loc.id }}</span>
+                  <!-- A location in the chain is a control, not a picture: clicking
+                       it transverses the book's owner here. The image viewer that
+                       used to be on this click is gone by decision (2026-09-24) —
+                       entry images below keep theirs. -->
+                  <img v-if="locationPortraits[loc.id]" :src="locationPortraits[loc.id]" class="bb-location-img" :class="{ 'bb-drop-target': isLocationDropTarget(loc), 'bb-traveling': transversingId === loc.id }" :data-bb-insert="loc.insertBefore" alt="" draggable="false" :title="'Travel to ' + (locationNames[loc.id] || loc.id)" @click="transverseTo(loc.id)" @dragover.stop="dragOver" @drop.stop="drop" />
+                  <span v-else class="bb-location-missing" :class="{ 'bb-drop-target': isLocationDropTarget(loc), 'bb-traveling': transversingId === loc.id }" :data-bb-insert="loc.insertBefore" :title="'Travel to ' + (locationNames[loc.id] || loc.id)" @click="transverseTo(loc.id)" @dragover.stop="dragOver" @drop.stop="drop">{{ locationNames[loc.id] || loc.id }}</span>
                   <!-- The arrow is part of "after this location" too, so the whole
                        path is a drop target rather than a run of dead gaps. -->
                   <span v-if="li < g.locations.length - 1" class="bb-location-arrow" :data-bb-insert="loc.insertBefore">→</span>
                 </template>
                 <span v-if="!g.locations.length" class="bb-entry-title bb-record-title">{{ chainTitle(g.entries) }}</span>
+                <span v-if="travelError" class="bb-travel-error">{{ travelError }}</span>
               </div>
             </template>
             <!-- ── Single entry (message or non-transversal record) ── -->
@@ -644,6 +649,37 @@ async function uploadImage(e) {
 }
 function viewImage(src) { window.open(src, '_blank') }
 
+// ── Transverse from the book ─────────────────────────
+// Clicking a location in a transversal chain sends the book's **owner** there —
+// `props.entityId`, never the reader, so a GM reading someone's book moves them
+// and their own view stays put. It is consciousness travel, not a teleport: the
+// backend picks the owner's nearest body by the location-graph distance and
+// brings that body to the place (`{closest_projection}`), which is also why an
+// owner with no reachable body arrives in a fresh one rather than not at all.
+const transversingId = ref('')
+const travelError = ref('')
+
+async function transverseTo(locId) {
+  if (!locId || transversingId.value) return  // one in flight at a time
+  transversingId.value = locId
+  travelError.value = ''
+  try {
+    const r = await fetch(`/api/v1/entities/${props.entityId}/consciousness-travel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location: locId, projection_policy: '{closest_projection}' }),
+    })
+    if (!r.ok) throw new Error(await r.text())
+    // No local refresh: the move publishes `location_changed`, which the app
+    // answers by re-anchoring the view and refreshing this book.
+  } catch (e) {
+    travelError.value = 'Could not travel there.'
+    console.error('[BB] transverse failed', e)
+  } finally {
+    transversingId.value = ''
+  }
+}
+
 async function fetchRelatedEntities() {
   const data = await graphql(RELATED_ENTITIES, { eid: selfId.value, q: '' })
   relatedEntities.value = data?.relatedEntities || []
@@ -781,7 +817,13 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-record-locations{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0}
 .bb-location-img{width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--border);cursor:pointer}
 .bb-location-arrow{font-size:14px;color:var(--text-dim)}
-.bb-location-missing{font-size:11px;color:var(--text-dim);padding:4px 8px;border:1px dashed var(--border);border-radius:6px}
+.bb-location-missing{font-size:11px;color:var(--text-dim);padding:4px 8px;border:1px dashed var(--border);border-radius:6px;cursor:pointer}
+/* Hover is "go here", deliberately *not* the accent outline: that one means
+   "drop an entry at this seam" while a drag is in flight, and the two must not
+   read the same. */
+.bb-location-img:hover,.bb-location-missing:hover{filter:brightness(1.15)}
+.bb-location-img.bb-traveling,.bb-location-missing.bb-traveling{opacity:0.5;cursor:progress}
+.bb-travel-error{font-size:11px;color:var(--danger);width:100%}
 .bb-entry-threads{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 4px}
 .bb-thread{font-size:10px;color:var(--accent);opacity:0.7}
 .bb-rel{font-size:11px;color:var(--text-dim);font-style:italic}
