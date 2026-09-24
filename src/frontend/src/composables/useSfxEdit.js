@@ -257,6 +257,9 @@ function initialDuration(sfx) {
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
       successMsg.value = `Created "${draft.name}"`
+      // It exists now, so the auto-save must arm: without this every edit after
+      // the create was silently unsaved until the panel was reopened.
+      sfxId.value = id
       return id
     } finally { saving.value = false }
   }
@@ -282,8 +285,13 @@ function initialDuration(sfx) {
     clearTimeout(_validationTimer)
     _validationTimer = setTimeout(() => { validate(); previewText() }, 400)
   }, { deep: true, flush: 'sync' })
+  // The auto-save follows the **whole draft**, not a list of its field names: a
+  // list is a promise to keep it in step, and it had already fallen behind twice
+  // — `acquire_spec` was never in it, and neither was `bound_variables` when it
+  // arrived. Both edits simply never saved, which reads as "auto-save is broken"
+  // rather than as a missing name in a list.
   watch(
-    () => [draft.name, draft.description, draft.trigger, draft.source_kind, draft.placement, draft.arming_scope, draft.listener_spec, draft.conditions, draft.duration, draft.effects],
+    () => draft,
     () => {
       if (_suppressEdits) return
       if (!sfxId.value) return

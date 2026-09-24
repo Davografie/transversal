@@ -184,7 +184,9 @@ function newSfx() {
     component: GmSfxEditPanel,
     title: 'New SFX',
     badge: 'SFX',
-    props: { sfx: null },
+    // Whatever is in the search box is the name they were looking for and did not
+    // find — making them type it again is the whole friction this removes.
+    props: { sfx: null, prefillName: search.value.trim() },
     listeners: { 'sfx-created': () => { fetchTraitsConfig() } },
   })
 }

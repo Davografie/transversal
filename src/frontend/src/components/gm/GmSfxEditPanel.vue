@@ -155,7 +155,7 @@
 </template>
 
 <script setup>
-import { computed, inject, onMounted, provide, ref, watch } from 'vue'
+import { computed, getCurrentInstance, inject, onMounted, provide, ref, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -174,6 +174,10 @@ import Button from '@/components/ui/Button.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()
+// This panel's own component definition, for re-speccing itself after a create.
+// A `<script setup>` block has no local binding for its own component, so naming
+// it directly is a **runtime** ReferenceError the build happily passes.
+const selfComponent = getCurrentInstance()?.type
 const { traitNameMap, traitsets, allSfxs, fetchTraitsConfig } = useTraitsConfig()
 // One editor state per panel; the effect-edit child panel injects this same
 // instance so the pair shares a single draft (and two open editors do not).
@@ -181,7 +185,7 @@ const sfxEdit = createSfxEdit()
 provide('sfxEdit', sfxEdit)
 const {
   draft, saving, errorMsg, successMsg, savedAt, validationWarnings, scopeVariables, cardText,
-  open, reset, save, create, remove,
+  open, save, create, remove,
 } = sfxEdit
 
 const props = defineProps({
@@ -193,6 +197,11 @@ const props = defineProps({
    * attachment has been an invisible fact on this screen.
    */
   owner: { type: Object, default: null },
+  /**
+   * A name to start a *new* rule with — what the caller was searching for when
+   * they found nothing. Ignored when `sfx` is given (an existing rule has a name).
+   */
+  prefillName: { type: String, default: '' },
 })
 
 // "LOCATION" reads as "location" in a sentence; the raw enum is for the picker.
@@ -212,6 +221,9 @@ const emit = defineEmits(['sfx-created', 'sfx-updated', 'sfx-deleted'])
 // Initialize the shared draft synchronously (no empty-state flash). The
 // composable's sync-flush watchers ignore this via `_suppressEdits`.
 open(props.sfx)
+// A new rule starts with the name the author was already looking for; a rule
+// being edited never takes it.
+if (!props.sfx && props.prefillName) draft.name = props.prefillName
 
 // The draft is a module-level singleton shared across every open SFX panel. When
 // this panel becomes the active tab again, reload it from the freshest copy of
@@ -455,13 +467,26 @@ async function onSave() {
 async function onCreate() {
   const id = await create()
   if (!id) return
+  const created = allSfxs.value.find(s => s.id === id) || { id, name: draft.name.trim() }
   emit('sfx-created', {
     id, name: draft.name.trim(), trigger: draft.trigger,
     description: draft.description, conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
     source_kind: draft.source_kind, placement: draft.placement,
   })
-  setTimeout(() => { panel.close() }, 600)
-  reset()
+  // `create` marks the end of *naming* a rule, not the end of authoring one —
+  // closing here threw the author out mid-rule. The panel instead **becomes** the
+  // new rule's editor: same component instance, so the draft is untouched, but the
+  // title, the copy-ID badge and the danger zone are now the rule's. A caller that
+  // wants it closed (the picker, which returns to attaching) closes its own panel
+  // in its `sfx-created` listener.
+  panel.replace({
+    component: selfComponent,
+    title: draft.name.trim() || 'Edit SFX',
+    id,
+    badge: 'SFX',
+    props: { sfx: created, owner: props.owner },
+    listeners: {},
+  })
   setTimeout(() => { successMsg.value = '' }, 8000)
 }
 
