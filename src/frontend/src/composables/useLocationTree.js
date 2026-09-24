@@ -27,8 +27,15 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     }
   }
 
-  function toggleTreeNode(id) {
-    expandedNodes.value = { ...expandedNodes.value, [id]: !expandedNodes.value[id] }
+  // `next` is the state the row should move to, which the row knows because it
+  // is drawn from the same computation (`expanded` on the flattened node). It
+  // cannot be derived here: a level can open *by default* — the current
+  // universe, the filter's path, the focus chain — so `expandedNodes[id]` is
+  // undefined while the row already reads as open, and toggling that from
+  // undefined set `true`, a press that did nothing.
+  function toggleTreeNode(id, next) {
+    const value = next === undefined ? !expandedNodes.value[id] : next
+    expandedNodes.value = { ...expandedNodes.value, [id]: value }
   }
 
   // ── Occupant grouping ──────────────────────────────
@@ -147,7 +154,12 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     !hasOccupantFilter.value && !activeUniverseFilters.value.size && focusPathIds.value.size === 0
   )
 
-  function flattenTree(nodes, occupants, depth = 0) {
+  // `forced` = this level's nodes are being shown because their parent was
+  // explicitly expanded, so the filter's populated-path prune must not drop
+  // them again. That is precisely what was missing: pressing ▸ on a filtered
+  // level flipped the chevron to ▾ and revealed nothing, because the children
+  // it recursed into were pruned one frame later.
+  function flattenTree(nodes, occupants, depth = 0, forced = false) {
     const result = []
     const filterMode = hasOccupantFilter.value
     const populated = populatedLocations.value
@@ -183,42 +195,71 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
       // In filter mode only render nodes on the populated path, which hides
       // sibling locations and unrelated universes.
       const onPath = filterMode && populated.has(node.id)
-      if (filterMode && !onPath) continue
+      if (filterMode && !onPath && !forced) continue
       const onFocus = focusMode && focusSet.has(node.id)
 
-      // Focus mode: a level of the chain shows its on-chain child(ren) and
-      // collapses every other child into one "… N more" stub, until that
-      // level is explicitly expanded (which renders all of its children).
       const kids = node.children || []
-      const showAllKids = !focusMode || !onFocus || expandedNodes.value[node.id] === true
-      const visibleKids = showAllKids ? kids : kids.filter((c) => focusSet.has(c.id))
+      const occ = occupants[node.id] || []
+      const unplacedHere = kind === 'universe' && node.universe
+        ? (unplacedByUniverse.value[node.universe] || [])
+        : []
 
-      let expanded
-      if (expandedNodes.value[node.id] !== undefined) {
-        expanded = expandedNodes.value[node.id]
-      } else if (filterMode) {
-        expanded = false
+      // What this level reveals *on its own*, before the GM touches the chevron:
+      // the filter's populated path, the focus chain's on-chain child, or — in
+      // the plain view — the current universe's roots. Nothing else opens
+      // itself, so a plain location shows no children until it is opened.
+      let defaultKids = []
+      let defaultRoster = false
+      let defaultUnplaced = false
+      let baselineOpen = false
+      if (filterMode) {
+        defaultKids = kids.filter((c) => populated.has(c.id))
+        defaultRoster = occ.length > 0
+        baselineOpen = true      // being on the populated path is this mode's baseline
       } else if (focusMode) {
-        expanded = onFocus
+        defaultKids = onFocus ? kids.filter((c) => focusSet.has(c.id)) : []
+        defaultRoster = occ.length > 0 && node.id === focusId.value
+        baselineOpen = onFocus
       } else {
-        expanded = depth === 0 && node.universe === curUniverse
+        baselineOpen = depth === 0 && node.universe === curUniverse
+        defaultKids = baselineOpen ? kids : []
+        defaultUnplaced = baselineOpen
       }
-      const hasChildren = kids.length > 0 ||
-        (occupants[node.id] && occupants[node.id].length > 0)
+
+      // Pressing ▾ has to hide something. It returns the level to its baseline
+      // when that baseline hides part of the level (the filter's path, the focus
+      // chain); where the baseline *is* everything — the plain view's current
+      // universe, or a filter that happens to match every child — "back to the
+      // baseline" would be a press that does nothing, so it hides the lot.
+      const baselineHides =
+        defaultKids.length < kids.length ||
+        (occ.length > 0 && !defaultRoster) ||
+        (unplacedHere.length > 0 && !defaultUnplaced)
+      const explicit = expandedNodes.value[node.id]
+      const revealAll = explicit === true
+      const hideAll = explicit === false && !baselineHides
+
+      const revealedKids = revealAll ? kids : (hideAll ? [] : defaultKids)
+      const revealRoster = revealAll ? true : (hideAll ? false : defaultRoster)
+      const revealUnplaced = revealAll ? true : (hideAll ? false : defaultUnplaced)
+      const contentsOpen = revealAll || (!hideAll && baselineOpen)
+
+      // ▾ means "nothing is left hidden at this level"; ▸ means "press for the
+      // rest". A level that shows only part of its children therefore reads ▸,
+      // and pressing it is what reveals the others.
+      const hasChildren = kids.length > 0 || occ.length > 0
+      const fullyRevealed = revealedKids.length === kids.length && (occ.length === 0 || revealRoster)
       result.push({
         id: node.id, name: node.name, universe: node.universe,
         depth, hasChildren, kind,
-        // The glyph reflects what is on screen: a chain level that shows its
-        // child renders as expanded even though it is not fully expanded.
-        expanded: expanded || (focusMode && onFocus && visibleKids.length > 0),
+        expanded: fullyRevealed,
       })
-      // In filter mode also reveal the occupant on a collapsed leaf. In focus
-      // mode only the focused place itself (and levels the GM expanded by hand)
-      // lists occupants — otherwise every ancestor's roster would bloat the
-      // chain.
-      const revealOccupants = !focusMode || expandedNodes.value[node.id] === true || node.id === focusId.value
-      if ((expanded && revealOccupants) || (filterMode && occupants[node.id] && occupants[node.id].length)) {
-        for (const e of occupants[node.id] || []) {
+      // In filter mode the matched roster of any place on the path is listed. In
+      // focus mode only the focused place itself (and levels the GM expanded by
+      // hand) lists occupants — otherwise every ancestor's roster would bloat
+      // the chain.
+      if (revealRoster) {
+        for (const e of occ) {
           result.push({
             id: e.id, name: e.name, universe: e.currentUniverse || '',
             depth: depth + 1, hasChildren: false, kind: 'occupant',
@@ -226,7 +267,7 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
           })
         }
         // Occupants live in locations, so the row trails each location's roster.
-        if (kind === 'location' && expanded && showAddRows.value) {
+        if (kind === 'location' && contentsOpen && showAddRows.value) {
           result.push({
             id: 'add:occupant:' + node.id, kind: 'add', addType: 'occupant',
             parentId: node.id, universe: node.universe || '', depth: depth + 1,
@@ -234,39 +275,32 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
           })
         }
       }
-      if (expanded && kind === 'universe' && node.universe && revealOccupants) {
-        const unplaced = unplacedByUniverse.value[node.universe]
-        if (unplaced) {
-          for (const e of unplaced) {
-            result.push({
-              id: e.id, name: e.name, universe: e.currentUniverse || '',
-              depth: depth + 1, hasChildren: false, kind: 'occupant',
-              entityType: e.type, entity: e,
-            })
-          }
+      if (revealUnplaced) {
+        for (const e of unplacedHere) {
+          result.push({
+            id: e.id, name: e.name, universe: e.currentUniverse || '',
+            depth: depth + 1, hasChildren: false, kind: 'occupant',
+            entityType: e.type, entity: e,
+          })
         }
       }
-      if (kids.length) {
-        if (expanded) {
-          result.push(...flattenTree(visibleKids, occupants, depth + 1))
-        } else if (filterMode && onPath) {
-          // Collapsed but on the focus path: render only the on-path child.
-          const next = kids.filter((c) => populated.has(c.id))
-          if (next.length) result.push(...flattenTree(next, occupants, depth + 1))
-        }
-        if (focusMode && onFocus && expanded && !showAllKids) {
-          const hidden = kids.length - visibleKids.length
-          if (hidden > 0) {
-            result.push({
-              id: 'more:' + node.id, kind: 'more', parentId: node.id, count: hidden,
-              name: `… ${hidden} more`, depth: depth + 1, hasChildren: false,
-            })
-          }
+      if (revealedKids.length) {
+        // `revealAll` forces this level's children past the filter's prune — the
+        // explicit expand the chevron promises.
+        result.push(...flattenTree(revealedKids, occupants, depth + 1, revealAll))
+      }
+      if (focusMode && onFocus) {
+        const hidden = kids.length - revealedKids.length
+        if (hidden > 0) {
+          result.push({
+            id: 'more:' + node.id, kind: 'more', parentId: node.id, count: hidden,
+            name: `… ${hidden} more`, depth: depth + 1, hasChildren: false,
+          })
         }
       }
       // Locations are placed in a universe, so the row trails that universe's
       // children — including when it has none yet.
-      if (kind === 'universe' && expanded && showAddRows.value && node.universe) {
+      if (kind === 'universe' && contentsOpen && showAddRows.value && node.universe) {
         result.push({
           id: 'add:location:' + node.id, kind: 'add', addType: 'location',
           parentId: node.id, universe: node.universe, depth: depth + 1,

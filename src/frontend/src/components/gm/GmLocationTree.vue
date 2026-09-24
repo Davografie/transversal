@@ -24,7 +24,9 @@
         <span class="entity-name more-name" :title="`Show the other ${node.count} children of this level`">⋯ {{ node.name }}</span>
       </template>
       <template v-else>
-      <span v-if="node.hasChildren" class="tree-toggle" @click.stop="$emit('toggle-expand', node.id)">
+      <!-- The row knows which way it is drawn, so it names the state to move to:
+           a level that is open by default must collapse on the first press. -->
+      <span v-if="node.hasChildren" class="tree-toggle" @click.stop="$emit('toggle-expand', node.id, !node.expanded)">
         {{ node.expanded ? '▾' : '▸' }}
       </span>
       <span v-else class="tree-toggle" :class="{ leaf: node.kind === 'location', occupant: node.kind === 'occupant', universe: node.kind === 'universe' }"></span>
