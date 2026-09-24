@@ -286,6 +286,32 @@ Where v1 read a location's `description`, v2 has no such field: both clauses use
 the `appearance` trait's `statement` + `notes`, the same content the appearance
 clause carries (see `B159`).
 
+### Occupant location context
+
+A **GMC or asset** prompt can also say where it is — the place it is in, then
+that place's ancestors, in the same nested `located in (…)` form with the same
+×0.6 decay (`B168`; v1 gave this to npc and asset via `flask/app.py:5551`). It is
+gated by that entity's own **Surroundings** toggle, so a GMC with it off builds
+exactly the prompt it did before.
+
+- **The body's location wins.** `Projection.current_location` is read before
+  `Entity.current_location`, because a projection can be somewhere its soul is
+  not (four live entities differ). Otherwise a body would be described as
+  standing wherever the soul happens to sit.
+- **No sub-locations.** `the different zones in X are …` describes what a place
+  *contains* — right for a location's own backdrop, wrong for someone standing
+  inside it.
+- **Characters are excluded**, matching v1: a PC is generated wherever the player
+  wants, not pinned to the soul's location.
+
+> [!warning] There is no cutoff
+> With the toggle on, the **whole** chain to the root is included. A passage in a
+> dungeon at a theme park is told about the theme park. Expressing "knows it's in
+> the dungeon, not that it's in Disneyland" needs a per-location boundary marker
+> meaning *"describe me, then stop"* — that is **not built** (raised as a
+> question, not a requirement). `B168` records it, and a test documents the
+> current behaviour so the gap is visible rather than assumed.
+
 ### Imagen (static)
 
 `run_imagen` → ComfyUI Flux → `_save_image_variants` (Original/Large/Small/Mini
