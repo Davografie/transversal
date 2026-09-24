@@ -234,6 +234,7 @@ class HistoricalRecordType(str, Enum):
     """Kinds of append-only historical events."""
     ROLL_TABLE = "roll_table"
     CONTEST = "contest"
+    TEST = "test"
     TRANSVERSAL = "transversal"
 
 

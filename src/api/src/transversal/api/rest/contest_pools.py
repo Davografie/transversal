@@ -96,6 +96,7 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
     otherwise a waiting flag.
     """
     ct = get_contest_tracker()
+    from transversal.services import contest_history
     # Store the raw result first (no compare): an outcome effect firing below may
     # rewrite the effect die it carries, and the compare flips initiative, so it
     # must run exactly once afterwards on the value the table will see.
@@ -153,6 +154,19 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
         "defendant_id": defendant_id,
     })
 
+    if isinstance(result, (ContestCompare, ContestOutcome)):
+        # The round is complete — freeze it now, after the outcome effects have had
+        # their say, so the Blue Book entry records the value the contest resolves
+        # on rather than the one the client sent ([[B177]]).
+        contest_history.snapshot_round(
+            location_id,
+            ct,
+            get_scene_store(),
+            [challenger_id, defendant_id],
+            decision="compare" if isinstance(result, ContestCompare) else "resolved",
+            pending=result.pending if isinstance(result, ContestCompare) else None,
+        )
+
     if isinstance(result, ContestCompare):
         _broadcast("contest_compare", location_id, entity_id, result.model_dump())
         return result
@@ -169,6 +183,8 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
             high_stakes=result.high_stakes,
             taken_out=result.taken_out,
         )
+        # One entry per participant's book, each from its own side ([[B177]]).
+        contest_history.record_contest_outcome(location_id, challenger, defendant, result)
         _broadcast("contest_resolved", location_id, entity_id, {
             "winner": result.winner.value,
             "gave_in": result.gave_in.value if result.gave_in else None,
@@ -206,6 +222,7 @@ async def give_in(location_id: str, entity_id: str):
     Gated: the initiator must have committed a result first.
     """
     ct = get_contest_tracker()
+    from transversal.services import contest_history
     challenger, defendant = ct.get_contestants(location_id, entity_id)
     logger.info(
         f"[contest] give_in loc={location_id} entity={entity_id} "
@@ -232,6 +249,18 @@ async def give_in(location_id: str, entity_id: str):
     challenger, defendant = ct.get_contestants(location_id, entity_id)
     challenger_id = challenger.entity_id if challenger else None
     defendant_id = defendant.entity_id if defendant else None
+
+    # A give-in before any compare leaves the initiator's committed roll
+    # unsnapshotted (no compare ran), so freeze whatever is committed now; a
+    # side already recorded for this round is skipped ([[B177]]).
+    contest_history.snapshot_round(
+        location_id,
+        ct,
+        get_scene_store(),
+        [challenger_id, defendant_id],
+        decision="gave_in",
+    )
+    contest_history.record_contest_outcome(location_id, challenger, defendant, outcome)
 
     _broadcast("contest_give_in", location_id, entity_id, {
         "gave_in": outcome.gave_in.value if outcome.gave_in else None,

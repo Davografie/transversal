@@ -60,6 +60,19 @@ class ContestState:
     # / `/set` mean a contest, `/resolve` means a test. Defaults to TEST, which is
     # what a state created by a pool save is.
     kind: RollKind = RollKind.TEST
+    # This side's frozen rolls, one per round (see ``services/contest_history``).
+    # A push clears ``committed``, so without this the round before a push is
+    # lost; the Blue Book entry stacks these vertically. The round counter is
+    # shared by both sides and advances in ``push``.
+    rounds: list[dict] = field(default_factory=list)
+    round_no: int = 1
+    # The committed result the last snapshot captured, so a round in which this
+    # side did not re-roll (the opponent's standing total after a push) is not
+    # recorded twice. Identity, not equality: a re-set builds a new object.
+    last_snapshotted: Optional[CommittedResult] = None
+    # Whether the Blue Book entry for this contest has been written. Both sides
+    # are marked together so a repeated commit cannot append the entry twice.
+    settled: bool = False
 
 
 @dataclass
@@ -114,6 +127,10 @@ class ContestTracker:
         state.pending_decision = None
         state.high_stakes = False
         state.pushed_this_loop = False
+        state.rounds = []
+        state.round_no = 1
+        state.settled = False
+        state.last_snapshotted = None
 
         opponent = self.get_or_create(location_id, opponent_id, universe)
         opponent.committed = None
@@ -122,6 +139,10 @@ class ContestTracker:
         opponent.pending_decision = None
         opponent.high_stakes = False
         opponent.pushed_this_loop = False
+        opponent.rounds = []
+        opponent.round_no = 1
+        opponent.settled = False
+        opponent.last_snapshotted = None
         # Both sides are in the same contest, so both records say so — neither
         # side's `kind` may depend on which one was challenged.
         opponent.kind = RollKind.CONTEST
@@ -559,6 +580,11 @@ class ContestTracker:
         state.committed = None
         challenger.pending_decision = None
         defendant.pending_decision = None
+        # The next commit is the next round, and it stacks on the last one in the
+        # Blue Book entry. Both sides advance together so a round number means the
+        # same round on either half of the entry.
+        challenger.round_no += 1
+        defendant.round_no += 1
         logger.info(f"[contest] push started loc={location_id} entity={entity_id}")
         return {"status": "pushed", "entity_id": entity_id}
 

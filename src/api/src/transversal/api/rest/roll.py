@@ -230,6 +230,22 @@ async def resolve_pool(location_id: str, entity_id: str):
     from transversal.services.roll_orchestrator import fire_result_sfx
     fire_result_sfx(entity_id, universe, dice, effect_die=effect_die, total=total)
 
+    # A test is a Blue Book entry too ([[B177]]): the roller's own dice on the
+    # left, the difficulty it was rolled against on the right. Recorded here —
+    # the test path — so a pool later challenged as a contest does not turn a
+    # test already resolved into one.
+    from transversal.services import contest_history
+    contest_history.record_test(
+        location_id,
+        entity_id,
+        dice,
+        total=total,
+        effect_die=effect_die,
+        difficulty=difficulty,
+        universe=universe,
+        high_stakes=bool(contest.high_stakes) if contest is not None else False,
+    )
+
     broadcast_pool_change(location_id, entity_id, dice=dice, phase="resolved")
     return {"phase": "resolved"}
 

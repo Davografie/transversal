@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from transversal.api.rest.contest_pools import router as contest_pools_router
 from transversal.api.rest.scene_state import router as scene_state_router
+from transversal.services import contest_history
 from transversal.services import contest_tracker as ct_module
 from transversal.services import scene_state as ss_module
 from transversal.services.contest_tracker import ContestTracker
@@ -17,6 +18,10 @@ def client():
     # Fresh tracker + scene store so state doesn't leak between tests.
     ct_module._contest_tracker = ContestTracker()
     ss_module._store = SceneStateStore()
+    # These tests are about the contest flow, not the Blue Book: a getter that
+    # returns None keeps the recording path ([[B177]]) off the live database.
+    # The record payloads are asserted in test_contest_history.py.
+    contest_history._repo_getter = lambda: None
     app = FastAPI()
     app.include_router(scene_state_router)
     app.include_router(contest_pools_router)
