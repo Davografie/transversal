@@ -372,7 +372,8 @@ live and persists the whole `nav_positions` object on end via the
   `onOccDragMove` buffers the latest pointer position and schedules a single
   `requestAnimationFrame` (`applyOccDragFrame`), so a high-polling mouse can't
   starve rAF with per-event re-renders.
-- While dragging self, the drag frame computes two proximity sets:
+- While dragging self, **or a GMC/asset the GM is carrying (B170)**, the drag frame
+  computes two proximity sets:
   - **`expandLevels`** — every zone/nav bubble within `EXPAND_PROXIMITY` (24 image-%)
     opens, sized continuously by distance (`1 - (d/EXPAND_PROXIMITY)²`, quick ramp).
   - **`armedDot`** — the single nearest bubble within `travelProximity()` (the
@@ -384,6 +385,16 @@ On drop:
 
 - **Self + near a zone** → find the matching child and `travelWithAnimation`.
 - **Self + near a nav dot** → `travelWithAnimation` to the parent/portal target.
+- **GM + a GMC/asset dropped on a zone or nav dot (B170)** → **send that occupant
+  travelling** via `sendOccupant`, and persist *nothing* here: it no longer stands
+  on this location. The GM's own view does not move and no portal animation plays —
+  the viewer is not travelling, only the occupant is. `canTravelOccupant` gates it
+  (never self; never arrange mode, which is for positioning), and
+  `travelDescriptor` resolves the destination so the world lands in the same state
+  the occupant's own drop would have produced: a plain `POST /entities/{id}/move`
+  for a zone/parent, `POST /entities/{id}/consciousness-travel` for a consciousness
+  portal, or `POST /locations/{from}/portal/{to}/fire` when the portal has effects.
+  The dot then disappears on the `fetchNav()` refresh.
 - **Otherwise** → persist the new `map_x`/`map_y` via
   `PATCH /api/v1/entities/{id}/map-position` (which broadcasts `entity_moved` over SSE).
 

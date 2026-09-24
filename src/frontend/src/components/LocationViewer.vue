@@ -769,6 +769,16 @@ function canDragOccupant(occupant) {
   return false
 }
 
+// May the GM *send* this occupant somewhere by dropping it on a navdot (B170)?
+// Only the world occupants the GM may already drag — player characters stay
+// immovable by the GM — and never in arrange mode, which is for positioning.
+// Self is excluded: its own drag path animates the portal and moves the viewer.
+function canTravelOccupant(occupant) {
+  if (!occupant || occupant.id === props.entityId) return false
+  if (props.editZones) return false
+  return props.gmMode && (occupant.type === 'gmc' || occupant.type === 'asset')
+}
+
 function occupantInitials(name) {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 }
@@ -917,7 +927,11 @@ async function applyOccDragFrame() {
     occ.map_y = Math.max(2, Math.min(98, Math.round(img.y)))
   }
 
-  if (occ && occ.id === props.entityId) updateTravelTargets(occ.map_x, occ.map_y)
+  // Arm travel for self, and for a world occupant the GM is carrying (B170): the
+  // feedback — bubbles expanding, the nearest dot arming — is the same either way.
+  if (occ && (occ.id === props.entityId || canTravelOccupant(occ))) {
+    updateTravelTargets(occ.map_x, occ.map_y)
+  }
 
   await nextTick() // wait for Vue to flush the reactive re-render
   noteFrameWork(performance.now() - t0)
@@ -979,6 +993,71 @@ function travelToTarget(t) {
   return false
 }
 
+// Resolve a drop target into the travel it implies. Deliberately parallel to
+// `travelToTarget` (which drives the viewer's animation), but returning a
+// description so `sendOccupant` can address it to someone who is not us — the
+// occupant must reach the same world state its own drop would have produced.
+function travelDescriptor(t) {
+  if (!t) return null
+  if (t.type === 'zone') {
+    const zone = zones.value.find(z => zoneId(z) === t.id)
+    if (!zone) return null
+    const child = childForZone(zone)
+    if (child) {
+      return {
+        locationId: child._key,
+        universe: child.current_universe ?? '',
+        consciousness: child.transversal_type === 'consciousness',
+        effects: child.effects,
+      }
+    }
+    // No resolvable child: a plain move to the stored link, as `travelToTarget`.
+    if (zone.location_id) {
+      return { locationId: zone.location_id, universe: '', consciousness: false, effects: null }
+    }
+    return null
+  }
+  if (t.type === 'nav') {
+    const nd = navDots.value.find(d => d.key === t.id)
+    if (!nd) return null
+    return {
+      locationId: nd.target.id,
+      universe: nd.target.universe ?? '',
+      // The destination's own consequences, read exactly as `travelWithAnimation`
+      // reads them: only a portal can be a consciousness jump. Nav dots carry no
+      // effects — portal effects hang off a zone's child location.
+      consciousness: nd.type === 'portal' && nd.transversal_type === 'consciousness',
+      effects: nd.target.effects,
+    }
+  }
+  return null
+}
+
+// Send another entity travelling, mirroring `relocate`'s three travel kinds but
+// addressed to it rather than to us. No `moved` emit: the viewer is not
+// travelling, so App.vue's perspective must not change — only the occupant's
+// location does.
+async function sendOccupant(occId, desc) {
+  const post = (url, body) => fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  try {
+    if (desc.effects?.length) {
+      await post(`/api/v1/locations/${props.locationId}/portal/${desc.locationId}/fire`,
+        { entity_id: occId })
+    } else if (desc.consciousness) {
+      await post(`/api/v1/entities/${occId}/consciousness-travel`,
+        { location: desc.locationId })
+    } else {
+      await post(`/api/v1/entities/${occId}/move`,
+        { location: desc.locationId, universe: desc.universe })
+    }
+  } catch { /* silent */ }
+  await fetchNav()  // it has left this location — drop its dot
+}
+
 async function onOccDragEnd() {
   document.removeEventListener('mousemove', onOccDragMove)
   document.removeEventListener('mouseup', onOccDragEnd)
@@ -1007,6 +1086,18 @@ async function onOccDragEnd() {
     const t = dragTarget
     dragTarget = null
     if (travelToTarget(t)) return
+  }
+  // The GM dropped a world occupant on a navdot: send it travelling (B170). Its
+  // location changes server-side, so the drop must NOT also be persisted as a map
+  // position here — the occupant no longer stands on this location.
+  if (canTravelOccupant(occ) && dragTarget) {
+    const desc = travelDescriptor(dragTarget)
+    dragTarget = null
+    if (desc) {
+      await sendOccupant(occ.id, desc)
+      activeElement.value = { type: 'occupant', id: props.entityId }  // keep self popped
+      return
+    }
   }
   dragTarget = null
   // Keep self popped
