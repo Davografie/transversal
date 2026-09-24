@@ -23,23 +23,54 @@ export function useEntityFilter(entities) {
     return false
   }
 
+  // A location's `currentLocation` is its parent, so the hierarchy the scope
+  // needs is derivable from the entity list alone — no tree to thread in. (This
+  // composable sits upstream of useLocationTree, which reads the filtered list,
+  // so asking the tree here would be a cycle.)
+  const locationChildren = computed(() => {
+    const childrenOf = new Map()
+    for (const e of entities.value) {
+      if (e.type !== 'LOCATION' || !e.currentLocation) continue
+      if (!childrenOf.has(e.currentLocation)) childrenOf.set(e.currentLocation, [])
+      childrenOf.get(e.currentLocation).push(e.id)
+    }
+    return childrenOf
+  })
+
+  // A place covers everything nested under it: searching "Scotland" has to find
+  // the people in Craigmuir and The Stag's Head, not only whoever is standing in
+  // Scotland itself. Matching the location id exactly left a region whose
+  // occupants are all one or two levels down with nothing at all.
+  function _withDescendants(rootIds, childrenOf) {
+    const out = new Set()
+    const stack = [...rootIds]
+    while (stack.length) {
+      const id = stack.pop()
+      if (out.has(id)) continue
+      out.add(id)
+      for (const c of childrenOf.get(id) || []) stack.push(c)
+    }
+    return out
+  }
+
   // A name chip that matches a location or a universe is a *scope* match: the
   // entities at/in it match too. Searching "Yinling Creek" has to show the
   // creek and who is in it — the tree draws occupants, and the location entity
   // alone leaves it with nothing to render.
   const matchedScope = computed(() => {
-    const locations = new Set()
     const universes = new Set()
+    const roots = new Set()
     for (const f of activeFilters.value) {
       if (f.type !== 'name') continue
       for (const e of entities.value) {
-        if (e.type !== 'LOCATION' && e.type !== 'UNIVERSE') continue
-        if (!(fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value))) continue
-        if (e.type === 'UNIVERSE') universes.add(e.currentUniverse || e.id)
-        else locations.add(e.id)
+        if (e.type === 'UNIVERSE') {
+          if (fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value)) universes.add(e.currentUniverse || e.id)
+        } else if (e.type === 'LOCATION') {
+          if (fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value)) roots.add(e.id)
+        }
       }
     }
-    return { locations, universes }
+    return { locations: _withDescendants(roots, locationChildren.value), universes }
   })
 
   // Chips combine with OR: an entity matches when it matches *any* active chip

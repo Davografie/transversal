@@ -76,6 +76,16 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
   const populatedLocations = computed(() => {
     const occ = occupantsByLocation.value
     const set = new Set(Object.keys(occ))
+    // A place that matched the filter by name must draw itself even when nobody
+    // is standing in it. Occupants are the only other seed and a LOCATION entity
+    // is not an occupant, so a place holding nobody directly (only nested towns)
+    // had no populated node on its path at all — filter mode then skipped every
+    // row and the tree came back empty.
+    if (hasOccupantFilter.value) {
+      for (const e of (filteredEntities?.value ?? [])) {
+        if (e.type === 'LOCATION') set.add(e.id)
+      }
+    }
     // Mark every node that holds (or contains, at any depth) a matching
     // occupant. Must visit ALL siblings — an early `return true` here leaves
     // later branches unmarked, and `flattenTree` only descends into marked
@@ -143,7 +153,16 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     const populated = populatedLocations.value
     const curUniverse = currentUniverse?.value || ''
     const focusSet = focusPathIds.value
-    const focusMode = focusSet.size > 0
+    // A filter and a focus are two answers to "what is on screen", and the
+    // focus's answer is the wrong one. Focus mode stubs a level's off-chain
+    // children behind "… N more", so a filter match sitting off the focus chain
+    // was hidden behind that stub; and the ROOT stub's count is computed from
+    // the focus chain, which is how "… 17 more universes" came to sit above an
+    // empty list and expand to "No entities found". While any filter is active
+    // the filter decides, so focus stubbing is off — filter mode already drills
+    // the populated paths on its own.
+    const filtering = filterMode || activeUniverseFilters.value.size > 0
+    const focusMode = focusSet.size > 0 && !filtering
     // At the root level, focus mode keeps only the focused universe on screen
     // and stubs the others, until the level is expanded (the stub click).
     const rootStubbed = depth === 0 && focusMode && expandedNodes.value[ROOT_KEY] !== true
