@@ -119,7 +119,11 @@ mutation($input: CreateEntityInput!) {
 
 _MUT_UPDATE_ENTITY = """
 mutation($input: UpdateEntityInput!) {
-  updateEntity(input: $input) { id name currentUniverse currentLocation hidden unpublished ownedBy }
+  updateEntity(input: $input) {
+    id name razmerit currentUniverse currentLocation hidden unpublished ownedBy
+    supportEligible knownTo starterLocation navPositions
+    backgroundImage overlay loraConfig promptSteering promptIncludeAncestors
+  }
 }
 """
 
@@ -1376,10 +1380,28 @@ def unpublish_entity(args: dict) -> dict:
 
 
 def update_entity(args: dict) -> dict:
-    """Update an entity's mutable fields (name, universe, location, owner, flags, background)."""
+    """Update an entity's mutable fields — the whole of ``UpdateEntityInput``, not half of it.
+
+    Every field the mutation accepts is mapped, because a field left out of a tool is
+    a field no client can ever set, and it fails *silently*: the write returns 200 and
+    the value was simply never there. This tool shipped with 8 of 18 — which is how
+    ``support_eligible``, the flag that decides whether a GMC may be taken over as a
+    support character (B86), ended up set on **zero** entities in the whole database.
+
+    Two worth knowing:
+
+    * ``support_eligible`` — "Available for take-over" in the GM editor. Raise it on
+      any GMC a player may pick up; without it the take-over picker will not offer it.
+    * ``suitable_life_path_ids`` — the same write as ``set_faction_life_paths``, which
+      stays the readable way to wire a faction's paths. Note it is **write-only from
+      here**: `Entity` does not expose it, so the write cannot be read back on the
+      entity — read it from the other side instead, via ``list_life_paths``, whose
+      entries carry ``factionIds``.
+    """
     inp = {"id": args["entity_id"]}
     for key, gql_key in (
         ("name", "name"),
+        ("razmerit", "razmerit"),
         ("current_universe", "currentUniverse"),
         ("current_location", "currentLocation"),
         ("owned_by", "ownedBy"),
@@ -1387,6 +1409,14 @@ def update_entity(args: dict) -> dict:
         ("overlay", "overlay"),
         ("unpublished", "unpublished"),
         ("hidden", "hidden"),
+        ("support_eligible", "supportEligible"),
+        ("known_to", "knownTo"),
+        ("starter_location", "starterLocation"),
+        ("nav_positions", "navPositions"),
+        ("suitable_life_path_ids", "suitableLifePathIds"),
+        ("lora_config", "loraConfig"),
+        ("prompt_steering", "promptSteering"),
+        ("prompt_include_ancestors", "promptIncludeAncestors"),
     ):
         if args.get(key) is not None:
             inp[gql_key] = args[key]
@@ -1984,12 +2014,13 @@ TOOL_SCHEMAS = {
     },
     "update_entity": {
         "name": "update_entity",
-        "description": "Update an entity's mutable fields (name, universe, location, owner).",
+        "description": "Update an entity's mutable fields — every field UpdateEntityInput accepts. Notably support_eligible ('Available for take-over', the B86 flag a GMC needs before a player can assume it as a support character), razmerit, known_to, starter_location, nav_positions, lora_config, prompt_steering, prompt_include_ancestors and suitable_life_path_ids (the last being the same write as set_faction_life_paths).",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "entity_id": {"type": "string"},
                 "name": {"type": "string"},
+                "razmerit": {"type": "integer"},
                 "current_universe": {"type": "string"},
                 "current_location": {"type": "string"},
                 "owned_by": {"type": "string"},
@@ -1997,6 +2028,16 @@ TOOL_SCHEMAS = {
                 "overlay": {"type": "string"},
                 "unpublished": {"type": "boolean"},
                 "hidden": {"type": "boolean"},
+                "support_eligible": {"type": "boolean",
+                    "description": "Available for take-over: may a player assume this GMC as a support character? Without it the take-over picker will not offer it."},
+                "known_to": {"type": "array", "items": {"type": "string"},
+                    "description": "entity ids that can see this one"},
+                "starter_location": {"type": "boolean"},
+                "nav_positions": {"type": "string", "description": "JSON string of canvas pin positions"},
+                "suitable_life_path_ids": {"type": "array", "items": {"type": "string"}},
+                "lora_config": {"type": "string"},
+                "prompt_steering": {"type": "string"},
+                "prompt_include_ancestors": {"type": "boolean"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["entity_id"],
