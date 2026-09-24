@@ -454,6 +454,22 @@ location switches (zone click, nav-dot click, and drop-on-target):
    character at the arrival position, swap `currentImage`, clear the portal, and
    re-show elements + self.
 
+> [!warning] The wipe's box is the **map's**, so `TravelOverlay` must stay `absolute`
+> `TravelOverlay` is a direct child of `.location-viewer` and must be
+> `position: absolute; inset: 0` — **never `fixed`**. Every percentage it receives
+> (`--travel-x`/`--travel-y` from `toViewportPos`, and the destination scene box
+> sized from `cw`/`ch`) is measured against the **viewer's** box, so the wipe has to
+> be that same box. `fixed` resolves against the viewport, and the docked layout
+> makes those two differ: `.stage.dock-sheet .location-viewer { left: var(--dock-w) }`
+> offsets the map by 400px, which opened the portal one dock width away from the dot
+> that was clicked and parked the destination scene at the viewport's left edge. The
+> mobile stack breaks the same thing on the vertical axis, where the viewer is a
+> band rather than the whole screen. Pinned by a browser test —
+> `e2e/tests/travel-overlay.spec.js` asserts `offsetParent` is the map and that the
+> overlay matches the map's client box **at the same moment** (comparing bounding
+> rects across two round-trips reports a phantom offset, because the map is a moving
+> frame while the wipe opens).
+
 `relocate` routes the move:
 
 - **Consciousness travel** (`transversal_type === 'consciousness'`) →
