@@ -40,8 +40,10 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     # which one ("remove the highest rating die of your trait instances").
     ("modify_roll", "remove_die"): "remove {target}",
     ("modify_pool", "resolve"): "resolve {target}",
-    ("modify_dice_limit", "increase"): "increase the dice limit by {result}",
-    ("modify_dice_limit", "decrease"): "decrease the dice limit by {result}",
+    # The limit is a *choice* (total vs effect), so the card has to carry it —
+    # otherwise two effects that do different things read identically.
+    ("modify_dice_limit", "increase"): "increase the {limit} dice limit by {result}",
+    ("modify_dice_limit", "decrease"): "decrease the {limit} dice limit by {result}",
     ("entity", "targeting_ban"): "impose a targeting ban on {target}",
     ("relationship", "create"): "create a relationship with {target}",
     ("attune", "enable"): "attune {target} to {result}",

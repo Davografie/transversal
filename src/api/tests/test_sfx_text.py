@@ -220,7 +220,7 @@ class TestEffects:
                         conditions=[Condition(type=ConditionType.SOURCE_RATING,
                                               operator="==", value="d6")])
         assert effect_text(effect, source_element="traitsetting") == \
-            "if this trait is rated d6, increase the dice limit by 2"
+            "if this trait is rated d6, increase the total dice limit by 2"
 
     def test_die_scope_names_the_subset(self):
         """``die_filter {role: None}`` is the codebase's "left unchosen"."""
@@ -376,8 +376,8 @@ class TestSfx:
         text = sfx_text(sfx)
         assert text.count("reverts") == 1
         assert "each reverts at the next roll" in text
-        assert "if this trait is rated d4, increase the dice limit by 1" in text
-        assert "if this trait is rated d12, increase the dice limit by 5" in text
+        assert "if this trait is rated d4, increase the total dice limit by 1" in text
+        assert "if this trait is rated d12, increase the total dice limit by 5" in text
 
 
 class TestVocabularyGuards:
@@ -794,7 +794,7 @@ def test_a_declared_variable_is_stated_and_then_named():
 
     text = sfx_text(sfx)
     assert "the cultivation tier is the tier of the rating" in text
-    assert "increase the dice limit by the cultivation tier" in text
+    assert "increase the total dice limit by the cultivation tier" in text
     # Not the raw token, and not the section's absence.
     assert "{" not in text
 
@@ -813,3 +813,118 @@ def test_a_declared_variable_with_a_broken_path_is_not_stated():
         effects=[],
     )
     assert "stage tier is" not in sfx_text(sfx)
+
+
+# ── The card tells the truth about an amount ──────────────────
+# Found by authoring *Cultivation Stage*: the card said "increase the dice limit
+# by your dice pool", because the effect's `pool` ref (which names *whose* limits
+# move) was read out as the amount. Three separable defects, pinned here.
+
+def _pool_ref():
+    return {"pool": {"value": "", "spec": {
+        "steps": [{"kind": "select", "collection": "self"},
+                  {"kind": "navigate", "edge": "pool"}]}}}
+
+
+def _limit_effect(result="{cultivation rank}", limit="total", refs=True):
+    return Effect(type="modify_dice_limit", action="increase", result=result,
+                  context={"limit": limit}, refs=_pool_ref() if refs else None)
+
+
+def test_a_subject_reference_is_not_read_out_as_the_amount():
+    """`increase_dice_limit`'s `pool` ref names the pool whose limits move; the
+    amount is its own field. With the ref present the card must still state the
+    amount — it used to say "by your dice pool" and never mention it."""
+    assert effect_text(_limit_effect()) == \
+        "increase the total dice limit by the cultivation rank"
+
+
+def test_the_action_default_still_speaks_when_no_amount_is_authored():
+    """An empty amount means the action's default (1, and `_apply_dice_limit`
+    agrees) — not whatever a reference happened to resolve to."""
+    assert effect_text(_limit_effect(result="")) == \
+        "increase the total dice limit by 1"
+
+
+def test_which_limit_is_named_because_the_two_differ():
+    """`total` and `effect` are different effects; a card that cannot tell them
+    apart is wrong half the time. Absent → `total`, matching the applier."""
+    assert effect_text(_limit_effect(limit="effect")) == \
+        "increase the effect dice limit by the cultivation rank"
+    assert effect_text(_limit_effect(limit=None)) == \
+        "increase the total dice limit by the cultivation rank"
+
+
+def test_an_action_with_no_result_field_still_names_its_object_by_reference():
+    """The other half of the rule: `move`/`copy`/`change` have **no** result
+    field, so a reference is exactly how they say what they act on. Precedence
+    must not take that away."""
+    move = Effect(type="modify_trait", action="move", target="me",
+                  refs={"trait": {"value": "", "spec": {
+                      "steps": [{"kind": "select", "collection": "self_traitsettings"}]}}})
+    assert "move " in effect_text(move)
+    assert "your trait instance" in effect_text(move)
+
+
+def test_a_result_field_that_declares_a_superseding_ref_still_uses_it():
+    """Attune is the declared exception, and the declaration is the registry's
+    own `hidden_when_ref`: its named-universe field is the *fallback* the resolved
+    projection supersedes. Losing this would break the card this mechanism was
+    built for."""
+    from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY as REG
+    attune = next(m for m in REG if m.effect_type == "attune")
+    field = next(f for f in attune.fields if f.name == "result")
+    assert field.hidden_when_ref == "projection", "the declaration this reads"
+    assert effect_text(Effect(
+        type="attune", action="enable", target="kael",
+        refs={"projection": {"value": "", "spec": {"steps": [
+            {"kind": "select", "collection": "self"},
+            {"kind": "navigate", "edge": "projections"}]}}},
+    )) != "attune kael to "
+
+
+def test_a_cast_keeps_the_superlative_the_path_earned():
+    """`top(rating)` says *which* rating; the `tier` cast transforms it. The cast
+    used to replace the phrase outright, so "the highest" vanished and the card
+    read as if any rating would do."""
+    spec = TargetSpec(steps=[
+        {"kind": "select", "collection": "source"},
+        {"kind": "navigate", "edge": "rating_dice", "dedup": True},
+        {"kind": "aggregate", "fn": "top", "field": "rating"},
+        {"kind": "aggregate", "fn": "tier", "field": "rating"},
+    ])
+    assert render_phrase(path_phrase(spec, source_element="traitsetting")) == \
+        "the tier of the highest rating"
+    # Without the ranking step there is no superlative to keep.
+    plain = TargetSpec(steps=[
+        {"kind": "select", "collection": "source"},
+        {"kind": "aggregate", "fn": "tier", "field": "rating"},
+    ])
+    assert render_phrase(path_phrase(plain, source_element="traitsetting")) == \
+        "the tier of the rating"
+
+
+def test_a_hop_onto_a_state_reads_as_a_clause_not_a_possession():
+    """`entity → contest` is a *state*: "there is at least one of your contest"
+    is what a possessive noun phrase does to one. The hop declares the clause, and
+    only a condition reads it — a target position keeps the noun phrase."""
+    condition = Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "self"},
+        {"kind": "navigate", "edge": "contest"},
+    ]))
+    assert condition_text(condition) == "you are in a contest"
+    # The same hop as a *target* is still a noun phrase.
+    phrase = path_phrase(condition.spec, source_element="traitsetting")
+    assert phrase.state == "you are in a contest"
+    assert render_phrase(phrase) == "your contest"
+
+
+def test_the_state_reading_does_not_claim_another_party():
+    """The clause is about the actor, so it is only used where the phrase *is* the
+    actor. From someone else's seed the noun phrase is the honest reading."""
+    spec = TargetSpec(steps=[
+        {"kind": "select", "collection": "occupants"},
+        {"kind": "navigate", "edge": "contest"},
+    ])
+    assert condition_text(Condition(type=ConditionType.TARGET_PATH, spec=spec)) != \
+        "you are in a contest"

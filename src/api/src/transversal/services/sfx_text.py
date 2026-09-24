@@ -263,6 +263,11 @@ class Phrase:
     prefix: str = ""          # leading quantifier: "one of the …"
     scalar: str = ""          # a complete scalar phrase (aggregates)
     predicate: str = ""       # a complete boolean clause (evaluate)
+    #: A complete clause for a hop that lands on a **state** rather than a thing
+    #: you possess ("you are in a contest"). Only the condition renderer reads it
+    #: (`_at_least_one`), so a *target* position still gets the noun phrase — the
+    #: two positions want different sentences out of the same hop.
+    state: str = ""
     possessive: bool = False  # renders as "your {noun}"
     pronoun: bool = False     # the bare pronoun "you"
     modal: bool = False       # a choose/random step made this interactive
@@ -331,7 +336,14 @@ def _with_article(p: Phrase) -> str:
 
 
 def _at_least_one(p: Phrase) -> str:
-    """The existence clause for a collection ("there is at least one d4 trait")."""
+    """The existence clause for a collection ("there is at least one d4 trait").
+
+    A hop onto a **state** supplies its own sentence, because "there is at least
+    one of your contest" is what a possessive noun phrase does to a state — the
+    entity does not *have* a contest, it *is in* one.
+    """
+    if p.state:
+        return p.state
     if p.possessive:
         return f"there is at least one of {render_phrase(_as_many(p), '')}"
     if p.cardinality == "many":
@@ -551,12 +563,17 @@ def _navigate_phrase(p: Phrase, step: NavigateStep) -> Phrase:
     # origin is the actor's default, a seed that knows its own party wins (the
     # other side's dice read "they rolled", never "you rolled").
     origin = p.absorb or edge.card_origin
+    # A state hop reads as a clause *about the actor* — and only there, because
+    # from another party's seed the declared sentence would name the wrong party
+    # ("you are in a contest" for their contest). Every other branch below keeps
+    # the noun phrase.
+    state = edge.state_phrase if p.pronoun else ""
 
     if p.pronoun:
         # "you" → "your location" (one possessive hop; a further hop goes back
         # to "the X of your location" so long chains stay unambiguous).
         return Phrase(element=element, cardinality=cardinality, noun=noun,
-                      plural=plural, possessive=True, modal=p.modal)
+                      plural=plural, possessive=True, state=state, modal=p.modal)
 
     if not origin and len(edge.target) == 1 and noun == p.noun:
         # A hop to the *same word* says nothing new, so it does not get said: a
@@ -564,7 +581,7 @@ def _navigate_phrase(p: Phrase, step: NavigateStep) -> Phrase:
         # one to the other is how a filter reaches the definition's tags. Reading
         # it literally gave "a trait of this trait tagged fire" for what the author
         # wrote as "this trait tagged fire".
-        return replace(p, element=element, cardinality=cardinality)
+        return replace(p, element=element, cardinality=cardinality, state=state)
 
     if origin:
         # The edge absorbs its source ("… you rolled"): carry the source's
@@ -573,10 +590,11 @@ def _navigate_phrase(p: Phrase, step: NavigateStep) -> Phrase:
         head_words = set(noun.lower().split())
         keep = [a for a in p.adjectives if a.lower().split()[-1] not in head_words]
         return Phrase(element=element, cardinality=cardinality, adjectives=keep,
-                      noun=noun, plural=plural, origin=origin, modal=p.modal)
+                      noun=noun, plural=plural, origin=origin, state=state, modal=p.modal)
 
     return Phrase(element=element, cardinality=cardinality, noun=noun, plural=plural,
-                  origin=f"of {render_phrase(p, _determiner(p))}".strip(), modal=p.modal)
+                  origin=f"of {render_phrase(p, _determiner(p))}".strip(),
+                  state=state, modal=p.modal)
 
 
 def _aggregate_phrase(p: Phrase, step: AggregateStep) -> Phrase:
@@ -585,6 +603,16 @@ def _aggregate_phrase(p: Phrase, step: AggregateStep) -> Phrase:
     if step.field:
         field_def = tc.field(p.element, step.field) if p.element else None
         field_text = tc.field_label(field_def) if field_def else step.field.replace("_", " ")
+    if agg is not None and agg.name == "tier":
+        # A **cast** transforms the value the path already selected, so it must not
+        # throw the selection away: after `top(rating)` the phrase carries "with
+        # the highest rating", and the generic branch below would flatten that to
+        # "the tier of the rating" — reading as if any rating would do. Keep the
+        # superlative the path earned.
+        m = re.match(r"with the (highest|lowest) (.+)$", (p.origin or "").strip())
+        if m:
+            return Phrase(element="int", cardinality="one",
+                          scalar=f"the tier of the {m.group(1)} {m.group(2)}")
     if agg is not None and agg.name == "random":
         # A sample is an indefinite noun, not a definite one: "a random die in
         # your roll", "some random traits". A phrase that already carries its own
@@ -872,17 +900,53 @@ def condition_text(condition: Condition, *, resolve: NameResolver | None = None,
 
 # ── Effects ───────────────────────────────────────────────────
 
+def _effect_meta(effect: Effect):
+    """The registry entry for an effect's ``(type, action)``, or None."""
+    return next((m for m in reg.EFFECT_ACTION_REGISTRY
+                 if m.effect_type == effect.type and m.effect_action == effect.action), None)
+
+
+def _result_field(effect: Effect):
+    """The action's own ``result`` field definition, or None when it has none."""
+    meta = _effect_meta(effect)
+    return next((f for f in meta.fields if f.name == "result"), None) if meta else None
+
+
 def _effect_result(effect: Effect) -> str:
     """The magnitude/rating an effect states, falling back to its field default."""
     if effect.result not in (None, ""):
         return str(effect.result)
-    meta = next((m for m in reg.EFFECT_ACTION_REGISTRY
-                 if m.effect_type == effect.type and m.effect_action == effect.action), None)
+    meta = _effect_meta(effect)
     if meta:
         for fdef in [*meta.fields, *meta.context_fields]:
             if fdef.name == "result" and fdef.default:
                 return str(fdef.default)
     return ""
+
+
+def _result_text(effect: Effect, ref_result: str,
+                 resolve: NameResolver | None = None) -> str:
+    """What fills the card's ``{result}`` — the author's amount, or a ref's object.
+
+    An action may have both a result **field** and references, and they mean
+    different things. ``increase_dice_limit``'s ``pool`` ref names **whose** limits
+    move while the amount is its own field; ``move``/``copy``/``change`` have no
+    result field at all, so a reference *is* how they name their object. Reading
+    the ref first made the author's card say "increase the dice limit by your dice
+    pool" and never mention the amount.
+
+    The registry already declares which case it is: a result field naming a ref in
+    ``hidden_when_ref`` is the **fallback form** that ref supersedes — Attune's
+    named universe vs. its resolved projection. So the ref wins only there, or
+    where there is no result field to speak; otherwise the field does.
+    """
+    field_def = _result_field(effect)
+    if field_def is None:
+        return ref_result or display_value(_effect_result(effect), resolve)
+    superseding = (getattr(field_def, "hidden_when_ref", "") or "").strip()
+    if superseding and superseding in (effect.refs or {}) and ref_result:
+        return ref_result
+    return display_value(_effect_result(effect), resolve)
 
 
 def _target_element(effect: Effect) -> str:
@@ -1026,9 +1090,13 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
     """An effect's clause, without timing/scope/duration (those group)."""
     target, subject = _effect_parts(effect, resolve=resolve, source_element=source_element,
                                     variables=variables)
-    result = _effect_result(effect)
     ref_result = _ref_result(effect, resolve=resolve, source_element=source_element,
                              variables=variables)
+    result_text = _result_text(effect, ref_result, resolve)
+    # `modify_dice_limit` chooses *which* limit moves, and the card has to say it:
+    # "total" and "effect" are different effects that otherwise read identically.
+    # Defaults to `total`, which is what `_apply_dice_limit` does with no choice.
+    which_limit = str((effect.context or {}).get("limit") or "total")
     template = reg.effect_card(effect.type, effect.action)
     stated = _stated_grant(effect)
     if stated:
@@ -1040,10 +1108,10 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
         target = _target_placeholder(effect)
     if subject:
         target = f"{target} {subject}" if target else subject
-    if not result and not ref_result:
+    if not result_text:
         # Drop a clause the empty placeholder leaves dangling ("… as {result}").
         template = re.sub(r"\s+\b(at|to|by|as|on|with|from|of)\s+\{result\}", "", template)
-    text = template.format(target=target, result=ref_result or display_value(result, resolve))
+    text = template.format(target=target, result=result_text, limit=which_limit)
     if effect.negative and "complication" not in text:
         text = f"{text} as a complication"
 
@@ -1077,8 +1145,8 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
         # longer exposes it — reach is meant to come from how many targets the
         # "who" path resolves to.
         text = f"{text}, reaching everyone there"
-    if "{result}" not in template and (result or ref_result):
-        text = f"{text} ({ref_result or display_value(result, resolve)})"
+    if "{result}" not in template and result_text:
+        text = f"{text} ({result_text})"
 
     text = _tidy(text)
     gates, flavour = [], []

@@ -188,7 +188,7 @@ That single declaration is what makes this writable as one effect instead of fiv
 > `{cultivation_tier}`.
 >
 > The card reads: *"Whenever a roll happens, where the cultivation tier is the tier
-> of the rating: increase the dice limit by the cultivation tier."* At d8 the
+> of the rating: increase the total dice limit by the cultivation tier."* At d8 the
 > increase is **3** — the die's position on the ladder (d4 = 1 … d12 = 5), not its
 > side count.
 
@@ -686,14 +686,16 @@ Read it as a sanity check. If the card line does not say what you meant, the SFX
 - **The trigger** first: *Whenever a roll happens* / *Activated* / *At the start of each session*.
 - **Then the gates**: *if you are not at a location yet and you are in Earth*.
 - **Then the effects**, in authored order, each with its timing: *whenever a roll is resolved, step down each static trait instance you rolled by one step*.
-- **Effect-level conditions gate that effect**: *if this trait is rated d6, increase the dice limit by 2*. A narrative condition on an effect trails in parentheses instead (flavour, like the SFX-level one).
+- **Effect-level conditions gate that effect**: *if this trait is rated d6, increase the total dice limit by 2*. A narrative condition on an effect trails in parentheses instead (flavour, like the SFX-level one).
+- **A limit says which one**: *increase the **total** dice limit by 2* vs *the **effect** dice limit* — they are different limits, so the card names the one you chose (a card that cannot tell them apart is wrong half the time).
+- **A state reads as a state**: a path that lands on a contest renders as *if you are in a contest*, not as something you possess. The clause is only used where the path starts from *you* — from someone else's seed the card keeps the noun phrase, because the sentence would otherwise claim the wrong party.
 - **Effects scoped to a subset of dice say so**: an effect with a die-role filter reads *for each unchosen die, …* — the dice a player didn't assign. Inside such an effect the die being processed **is** the roll, so a path seeded from `rolled_dice` reads *that die* rather than *each die in your roll*. That is what makes "for each unchosen die, give its owner's location a hazard" land once per die.
 - **A step's value can be a name.** Where a filter wants a value, pick it from the autosuggest list — or press the small `{ }` button to compare against a **bound name** instead (`{universe}`), which is how one path joins to a choice made in another. Picking a universe stores its handle (`earth`), which is what a life records.
 - **Attune carries two paths, and path 2 starts from path 1 by name.** Give path 1's last step an `output` name (e.g. `attune_target`), then open path 2 and add a `select variable` step — that name is in the list. Name it for the reader, because the name is both how path 2 starts and what the card shows.
 - **An effect that lands somewhere other than its target says where**: *gain the environmental hazard trait **on the location of each owner of each trait instance you rolled*** — that clause comes from the effect's subject (`entity_spec`), so if you author a subject, expect to see it.
 - **Effects that share framing are grouped.** Consecutive effects with the same timing, die scope and duration read as one list with the framing stated once:
 
-  > *…if this trait is rated d4, increase the dice limit by 1; if this trait is rated d6, increase the dice limit by 2; … (each reverts at the next roll).*
+  > *…if this trait is rated d4, increase the total dice limit by 1; if this trait is rated d6, increase the total dice limit by 2; … (each reverts at the next roll).*
 
   So five rating-gated bumps revert *together*, and the card says so once rather than five times.
 - **A narrative condition trails in parentheses.** It is flavour the engine never checks, so it is kept visually apart from the rules text.

@@ -413,6 +413,14 @@ class Edge:
     noun: str = ""
     plural: str = ""
     card_origin: str = ""
+    #: A hop can land on a **state** rather than a thing you possess, and then the
+    #: possessive noun phrase is the wrong sentence: `entity → contest` is not
+    #: "your contest" but "you are in a contest". Declared here as the clause a
+    #: condition reads when *this hop is what it tests*. Read only where the
+    #: phrase belongs to the acting entity (a pronoun source), because from
+    #: another party's seed the clause would claim the wrong party; a target
+    #: position keeps the noun phrase either way (see ``Phrase.state``).
+    state_phrase: str = ""
 
 
 def edge_noun(e: Edge) -> tuple[str, str]:
@@ -528,7 +536,8 @@ EDGES: tuple[Edge, ...] = (
     Edge("contest", "pool", ("contest",), "one", "Contest",
          noun="contest", plural="contest"),
     Edge("contest", "entity", ("contest",), "one", "Contest in",
-         noun="contest", plural="contest"),
+         noun="contest", plural="contests",
+         state_phrase="you are in a contest"),
     Edge("contests", "location", ("contest",), "many", "Contests",
          noun="contest", plural="contests"),
     # The parties, and each side's pool — "who is in it" and "what are they
