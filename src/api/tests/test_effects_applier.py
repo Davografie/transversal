@@ -3109,3 +3109,55 @@ def test_taking_control_fires_the_assumed_trigger(monkeypatch):
     manager.record_control("player-1", "gmc-1", stamp=False)
 
     assert fired == [("gmc-1", "assumed")]
+
+
+# ── Granting a rule (the lost-update trap) ───
+
+class _FreshReadRepo(FakeRepo):
+    """`get_entity` hands back a **new** object on every read, like the real
+    repository does.
+
+    This is what made a grant to the committed entity vanish: the owner helper
+    read its own copy, wrote the rule through it, and then `commit_effects` saved
+    *its* copy — taken before the grant — over the top. The action reported
+    success and the rule was gone.
+    """
+
+    def get_entity(self, entity_id):
+        found = self.entities.get(entity_id)
+        return found.model_copy(deep=True) if found is not None else None
+
+    def update_entity(self, entity):
+        self.entities[entity.id] = entity.model_copy(deep=True)
+        return entity
+
+
+def test_a_rule_granted_to_the_committed_entity_survives_the_commit():
+    from transversal.services.effects_commit import commit_effects
+
+    target = _entity(id="char-2", name="Dmitri")
+    repo = _FreshReadRepo(entities=[target])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="sfx", action="grant",
+                    target="sfx-teleport-to-main")
+
+    result = commit_effects(target, [effect], repo)
+
+    assert result.applied and "granted" in result.applied[0].summary
+    assert "sfx-teleport-to-main" in repo.entities["char-2"].sfx_ids
+
+
+def test_a_rule_granted_to_someone_else_is_persisted_too():
+    """The other direction: the recipient is not the primary, so it travels via
+    `entities_to_update` and must land as well."""
+    from transversal.services.effects_commit import commit_effects
+
+    actor = _entity(id="char-1", name="Tester")
+    learner = _entity(id="char-2", name="Dmitri")
+    repo = _FreshReadRepo(entities=[actor, learner])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="sfx", action="grant",
+                    entity="char-2", target="sfx-teleport-to-main")
+
+    result = commit_effects(actor, [effect], repo)
+
+    assert result.applied and "granted" in result.applied[0].summary
+    assert "sfx-teleport-to-main" in repo.entities["char-2"].sfx_ids

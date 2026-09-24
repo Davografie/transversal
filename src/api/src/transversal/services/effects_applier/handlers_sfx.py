@@ -114,6 +114,17 @@ def _apply_grant_sfx(entity, effect: Effect, repo, result: EffectsResult) -> Non
             AppliedEffect(effect, f"{sfx_id} can't attach to {owner_type} {owner_id}"))
         return
 
+    # `add_sfx_to_owner` reads and writes its **own** copy of the owner — the real
+    # repository hands back a fresh object on every read — and when the grant lands
+    # on the very entity being committed, `commit_effects` saves *its* copy last,
+    # still holding the pre-grant list, and the grant silently disappears: the
+    # action reported success and the rule was gone. So the list is read back onto
+    # the object that is about to be written.
+    if owner_type in ("entity", "location") and getattr(entity, "id", "") == owner_id:
+        fresh = repo.get_entity(owner_id)
+        if fresh is not None:
+            entity.sfx_ids = list(fresh.sfx_ids or [])
+
     sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
     label = getattr(sfx, "name", "") or sfx_id
     result.applied.append(AppliedEffect(effect, f"granted {label}", owner_id))
