@@ -218,9 +218,15 @@ the `imagen_progress` SSE event. Statuses are `prompting` → `generating` →
     `clean_text`), joined into one `:1.4` clause — the appearance description
     lives in `notes` far more often than in `statement` (of the live appearance
     settings, 438/455 carry notes and 434 have no statement at all).
-  - `LoRA*` traits → LoRA list.
-  - `negative imagen` / `positive imagen` traits → negative/positive additions.
-  - generic traits → `(trait is statement:rating_weight)` clauses.
+  - `LoRA*` traits → LoRA list. **`statement` only, never merged with `notes`**:
+    the value becomes a filename (`flux/{name}.safetensors`), so free text would
+    corrupt the path. All live LoRA settings already use `statement`.
+  - `negative imagen` / `positive imagen` traits → negative/positive additions,
+    each carrying `statement` **and** `notes`. Most live settings use one field
+    or the other, not both: 231 of 423 `negative imagen` settings are notes-only,
+    so gating on `statement` alone (`B167`) dropped the majority of them.
+  - generic traits → `(trait is statement:rating_weight)` clauses. This branch
+    still ignores `notes`, unlike the three above.
 - Adds universe style guidance, the universe's per-entity-type LoRA config, and
   the universe's free-text **prompt steering** sentence
   (`Entity.prompt_steering`, authored per universe in the GM LoRA panel and
@@ -229,8 +235,23 @@ the `imagen_progress` SSE event. Statuses are `prompting` → `generating` →
 For a **projection** generation, trait selection is scoped by
 `get_prompt_traitsettings(entity_id, universes, projection_id)`: entity traits
 (`from_type == 'entity'`) plus that projection's morph traits
-(`from_type == 'projection'` and matching `projection_id`). Entity-level
-generation uses entity traits only.
+(`from_type == 'projection'` and matching `projection_id`).
+
+> [!warning] Never read a prompt without a projection
+> Creating a trait setting through the API **anchors it to the active body**
+> (`from_type='projection'`), so an entity's appearance normally lives on its
+> `current_projection`, not on the entity. `build_imagen_prompt` therefore
+> resolves `projection_id or entity.current_projection` — the same rule
+> `Entity.image()` already applied — and only genuinely body-less entities fall
+> through to entity traits alone. Without that fallback a prompt silently loses
+> every morph trait: the gallery's main Imagen button sends `projection_id=''`,
+> so it was the *common* case, and 19 locations' appearances plus every
+> appearance authored through the API ([[mcp-architect]]'s 27 entities) never
+> reached the generator while their images resolved fine (`B167`).
+>
+> The same applies per-entity inside the location context: a sub-location or
+> ancestor is read with **its own** `current_projection`, not the root
+> location's.
 
 ### Location prompts
 
