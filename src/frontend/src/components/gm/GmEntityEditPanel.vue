@@ -199,6 +199,31 @@
         </Button>
       </div>
     </div>
+    <!-- What happens when someone walks in ([[B8]]). A place's arrival rules are
+         spent the moment they fire — they are never *held* by an occupant — so no
+         other surface lists them, and from the place itself there was no answer to
+         "what does walking in here do?". Rule names come from the shared SFX list,
+         so the whole section costs one read. -->
+    <div v-if="form.type === 'LOCATION' && arrivalRules.length" class="arrival-section">
+      <div class="gallery-header">
+        <h4>Fires on arrival</h4>
+      </div>
+      <div v-for="group in arrivalRules" :key="group.locationId" class="arrival-group">
+        <!-- A rule may come from a parent place; say which, rather than implying
+             this room owns it. The place itself needs no label. -->
+        <div v-if="group.locationId !== entityId" class="arrival-from">
+          from {{ group.locationName }}
+        </div>
+        <button
+          v-for="sid in group.sfxIds"
+          :key="sid"
+          type="button"
+          class="arrival-rule"
+          :title="sid"
+          @click="openArrivalRule(sid)"
+        >{{ sfxName(sid) }}</button>
+      </div>
+    </div>
     <div v-if="form.type === 'FACTION'" class="members-section">
       <div class="gallery-header">
         <h4>Members</h4>
@@ -321,6 +346,7 @@ import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmRollTablesPanel from '@/components/gm/GmRollTablesPanel.vue'
+import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
 import GmPortalConfigPanel from '@/components/gm/GmPortalConfigPanel.vue'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
@@ -340,7 +366,7 @@ const { form, selected, uploadBgImage, onImagen: doImagen, onCancel: doCancel, i
 // Genuinely global: the GM panel's entity list, and the delete that clears the
 // shared selection.
 const { deleteEntity, fetchEntities } = useEntityCrud()
-const { traitNameMap, traitsets, fetchTraitsConfig } = useTraitsConfig()
+const { traitNameMap, traitsets, allSfxs, fetchTraitsConfig } = useTraitsConfig()
 const { fetchLifePaths } = useLifePaths()
 const { name: universeName, options: universeOptions, load: loadUniverseNames } = useUniverseNames()
 loadUniverseNames()
@@ -705,7 +731,51 @@ function openPortalConfig(link) {
 
 watch(() => [props.entityId, form.value?.type], ([id, type]) => {
   if (id && type === 'LOCATION') loadTransversalLinks()
+  if (id && type === 'LOCATION') loadArrivalRules()
 }, { immediate: true })
+
+// ── Rules that fire on arrival (B8) ─────────────────
+// The rules a place *spends* on whoever walks in. They are never held, so the
+// sheet's place-rules strip leaves them out and nothing else showed them either;
+// a GM looking at the place is the one reader who wants exactly these.
+const arrivalRules = ref([])
+
+async function loadArrivalRules() {
+  arrivalRules.value = []
+  if (!props.entityId) return
+  try {
+    const data = await graphql(
+      `query($id: ID!) { arrivalSfxRules(locationId: $id) { locationId locationName sfxIds } }`,
+      { id: props.entityId })
+    arrivalRules.value = data?.arrivalSfxRules || []
+    // Names live in the shared SFX list; load it only when there is something to
+    // name, so a place with no arrival rules costs nothing.
+    if (arrivalRules.value.length && !allSfxs.value.length) fetchTraitsConfig()
+  } catch { arrivalRules.value = [] }
+}
+
+// Names come from the shared SFX list the panel already holds — one read for the
+// section, and a rule the list has not caught up with falls back to its id rather
+// than rendering blank.
+function sfxName(id) {
+  return allSfxs.value.find((s) => s.id === id)?.name || id
+}
+
+function openArrivalRule(sfxId) {
+  const sfx = allSfxs.value.find((s) => s.id === sfxId) || null
+  panel.open({
+    component: GmSfxEditPanel,
+    title: sfx?.name || 'Edit SFX',
+    id: sfxId,
+    badge: 'SFX',
+    props: {
+      sfx,
+      // The place is the owner, so the editor shows where the rule lives.
+      owner: { ownerType: 'LOCATION', ownerId: props.entityId, label: form.value?.name || '' },
+    },
+    listeners: {},
+  })
+}
 
 // ── Zones (sub-locations) ───────────────────────────
 const zones = ref([])
@@ -1259,6 +1329,12 @@ defineExpose({ refresh: loadImages })
 .zones-add { display: flex; gap: 6px; margin-top: 8px; }
 .zone-input { flex: 1; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
 .section-btn.zone-add-btn { flex: 0 0 auto; padding: 6px 10px; }
+.arrival-section { margin-top: 12px; }
+.arrival-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 4px; }
+/* A rule inherited from a parent place, said rather than implied. */
+.arrival-from { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.arrival-rule { font-size: 11px; padding: 3px 8px; border: 1px solid var(--overlay-10); border-radius: 4px; background: var(--overlay-2); color: var(--text); cursor: pointer; text-align: left; }
+.arrival-rule:hover { background: var(--overlay-4); border-color: var(--accent); }
 .members-section { margin-top: 12px; }
 .members-list { display: flex; flex-direction: column; gap: 4px; }
 .member-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--overlay-2); cursor: pointer; }
