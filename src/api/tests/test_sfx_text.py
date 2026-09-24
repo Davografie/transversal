@@ -272,6 +272,27 @@ class TestEffects:
         assert text.startswith("gain the Fire trait on")
         assert "location" in text and "owner" in text
 
+    def test_a_target_ending_in_the_preposition_does_not_double_it(self):
+        """A source-scoped path can end with the very word that joins the clause.
+
+        The "lands on" clause is joined by a preposition, and the live
+        `sfx-teach` read "…sits on on one of the occupants…". The seam takes a
+        comma instead of a second copy of the word.
+        """
+        effect = Effect(
+            type="modify_trait", action="gain",
+            target_spec=spec({"kind": "select", "collection": "source"}),
+            entity_spec=spec(
+                {"kind": "select", "collection": "source"},
+                {"kind": "navigate", "edge": "location"},
+            ),
+        )
+        text = effect_text(effect, resolve=resolve, source_element="entity")
+        assert " on on " not in text
+        assert text == (
+            "gain the entity this SFX sits on, on the location of the entity this SFX sits on"
+        )
+
     def test_domain_attunement_says_it_reaches_past_its_carrier(self):
         self_scope = Effect(type="attune", action="enable", target="loc-rusted-gate",
                             result="three_realms")

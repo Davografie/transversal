@@ -1012,6 +1012,14 @@ def _effect_parts(effect: Effect, *, resolve: NameResolver | None = None,
     if target:
         if subject:
             prep = _EFFECT_SUBJECT_PREPOSITIONS.get(effect.type, "on")
+            # The "lands on" clause is joined with a preposition, and a path can
+            # end with that same word: "one of the trait instances of the entity
+            # this SFX sits **on**" + "**on** one of the occupants…" reads as
+            # "on on". The seam is the sentence's only place to break, so when
+            # the target already ends with the preposition the clause takes a
+            # comma instead of a second copy of the word.
+            if target.rstrip().lower().endswith(f" {prep}"):
+                return target, f", {prep} {subject}"
             return target, f"{prep} {subject}"
         return target, ""
     # No primary target: the subject *is* what the effect acts on.
