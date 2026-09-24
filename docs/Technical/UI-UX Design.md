@@ -444,13 +444,27 @@ Tunable constants:
 
 
 **Panel position is stateless (B48).** The desktop sheet's closed offset lives in
-`--panel-closed-y` on `.dice-panel-wrapper`, and the `.open` class sets
-`transform` itself:
+`--panel-closed-y`, and the `.open` class sets `transform` itself:
 
 ```css
 .dice-panel-wrapper      { transform: translateX(-50%) translateY(var(--panel-closed-y, 0px)); }
 .dice-panel-wrapper.open { transform: translateX(-50%) translateY(0); }
 ```
+
+**Which element carries that depends on the layout (B169).** Normally it is the
+bottom-centre column; once the sheet has docked, the column *is* the dock and the peek
+moves onto `.roller-band`, which is `position: fixed` there:
+
+```css
+.stage.dock-sheet .roller-band      { transform: translateX(-50%) translateY(var(--panel-closed-y, 0px)); }
+.stage.dock-sheet .roller-band.open { transform: translateX(-50%) translateY(0); }
+```
+
+`App.vue` names that element `panelEl()` — the whole column, or the roller band when
+`sheetDock`. The drag, `syncClosedPosition()` and `panelResizeObserver` all go through
+it, so neither a drag nor a resize can write the peek onto the wrong element, and the
+watcher on `sheetDock` clears any inline transform left on the one that just stopped
+carrying it.
 
 The closed offset used to be written as an **inline** `transform`, which beats a
 class rule — so any code path that opened the panel (the sheet/peer/perspective
@@ -502,8 +516,10 @@ and a single `.active` class answered neither.
 
 Player phones/portraits (≤ 820px) replace the desktop bottom-sheet
 with three first-class vertical bands: **location** (top) · **character
-sheet** (middle) · **dice roller** (bottom). The desktop layout is untouched
-above the breakpoint. **Architect (GM) mode gets the same stack**; while a GM
+sheet** (middle) · **dice roller** (bottom). Above the breakpoint the layout
+depends on orientation — **portrait keeps the bottom-centre pop-out column,
+landscape docks the sheet to the left** (see *Landscape dock* below).
+**Architect (GM) mode gets the same stack**; while a GM
 panel is open (`PanelStack`'s `.panel-viewport` exists) the sheet and roller
 bands hide and the map takes the whole stage — the overlay controls in the
 viewer hide too, leaving a clean design workspace (CSS-only via `:has`).
@@ -578,10 +594,60 @@ viewer hide too, leaving a clean design workspace (CSS-only via `:has`).
 
 Tunables: breakpoint `MOBILE_MAX_WIDTH = 820` (App.vue) mirrored by the
 `@media (max-width: 820px)` block in `styles.css`; the focus grow ratios live
-in that same CSS block. The band drag's own `BAND_DRAG_SLOP` / `_DISTANCE` /
-`_VELOCITY` live in `useMobileBands.js` and match the dice panel's
-`PANEL_DRAG_*` feel. The desktop wrapper's slide/peek mechanics (hover,
-`syncClosedPosition`, panel drag) are inert while the stack is active.
+in that same CSS block. (`ArmedSfxRail.vue` carries a third `820` in its own
+media block, and the `styles.css` one is *redundant*: every rule inside it is
+prefixed `.stage.mobile-stack`, and that class only exists once the JS gate has
+already matched — so `useMobileBands` is the source of truth and the media
+wrapper guards only a one-frame flash on a widening resize.) The band drag's
+own `BAND_DRAG_SLOP` / `_DISTANCE` / `_VELOCITY` live in `useMobileBands.js`
+and match the dice panel's `PANEL_DRAG_*` feel. The desktop wrapper's
+slide/peek mechanics are inert while the stack is active.
+
+## Landscape dock
+
+The third layout (B169). Above the phone breakpoint **and in landscape** the sheet
+stops riding in the roller's bottom-centre column and docks to the left of the map.
+Portrait keeps the pop-out — a portrait tablet's column has height to spare, and
+docking there would spend the wrong axis. Below the breakpoint nothing changes.
+
+- **The gate is width *and* orientation** — one `matchMedia` in `useMobileBands`
+  (`(min-width: 821px) and (orientation: landscape)`), exposed as `sheetDock`. Both
+  conjuncts carry weight: orientation alone would dock an iPhone SE in landscape
+  (667×375) and leave it a 267px map. It is deliberately **not** keyed on available
+  height — every standard iPad landscape viewport is ≥744px tall (1133×744 mini,
+  1180×820, 1194×834, 1366×1024), so a height ceiling would never fire on a tablet in
+  landscape; it would dock only the phone-landscape case and refuse the tablet one.
+  The two gates are mutually exclusive by width, so `.dock-sheet` and `.mobile-stack`
+  can never both apply.
+- **The dock is the wrapper.** `.dice-panel-wrapper` becomes a full-height, 400px left
+  column (`--dock-w` — the width the sheet already had in the pop-out, so the sheet's
+  internals needed no narrow-width rework), and its `.peers-bar` + `.sheet-band` slide
+  in together. A closed dock is fully off-screen left, with `pointer-events: none` so
+  it cannot eat map clicks.
+- **The dock is deliberately transform-free.** A transformed ancestor would both slide
+  the dock along with the roller's drag and capture the roller band's `position: fixed`
+  — the peek lives on the band, not the column (see *Drag-to-open/close gesture*).
+- **The map is inset, not overlaid.** `.location-viewer` takes `left: var(--dock-w)`,
+  so its own top-left overlay controls ride along at 12px of the remaining map instead
+  of disappearing under the sheet, and the viewer's `ResizeObserver` drives the camera
+  through the change. The Active SFX rail — which owns the left edge — steps right of
+  the dock for the same reason.
+- **The roller keeps its peek on a different element.** `.roller-band` becomes
+  `position: fixed`, centred on the map area the dock leaves
+  (`calc(50% + var(--dock-w) / 2)`, not 50%), and carries `--panel-closed-y` itself.
+- **Open/close is the same vocabulary.** The dock follows the sheet's own content
+  (`sheetShown`, one expression shared with the sheet's `v-show`, so an empty 400px
+  column can never appear), while the roller still opens on hover and settles on drag.
+  Hovering the roller still reaches the panel through the inert dock: the roller band
+  re-arms pointer events for itself.
+- **GM panels** draw over the dock exactly as they already drew over the roller
+  (`.panel-viewport` is `z-index: 25`; the dock is 12).
+
+Verified in the browser (Firefox + Chromium, `e2e/tests/dock.spec.js`): 1280×950 docks
+with the map inset to 880 and the sheet uncapped; 834×1194 keeps the pop-out and its
+`100dvh − 240px` cap; 390×844 keeps the band stack; 844×390 docks — the phone-landscape
+call the ticket left open, resolved by the same rule; and rotating hands the peek back
+to the column. The existing sheet-definition suite passes unchanged *inside* the dock.
 
 ## Theming
 
