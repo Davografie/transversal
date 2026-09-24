@@ -8,6 +8,7 @@ single-file registry.
 from __future__ import annotations
 
 from transversal.services.effects_registry import (
+    actions_client,
     actions_lifepath,
     actions_razmerit,
     actions_relationships,
@@ -29,6 +30,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
     *actions_lifepath.ACTIONS,
     *actions_relationships.ACTIONS,
     *actions_sfx.ACTIONS,
+    *actions_client.ACTIONS,
 ]
 
 
@@ -82,6 +84,8 @@ _ACTION_GROUPS: dict[str, str] = {
     "create_relationship": "Relationship", "entity_targeting_ban": "Relationship",
     "start_contest": "Contest",
     "grant_sfx": "Rules",
+    # Client-directed: they change nothing in the world, only what a screen shows.
+    "open_sheet": "Client", "show_toast": "Client",
 }
 
 for _m in EFFECT_ACTION_REGISTRY:

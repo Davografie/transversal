@@ -361,6 +361,9 @@ def _register_core_handlers(em, raz):
     # Learning who is here (B121) is an entity write, so it commits through the
     # shared applier like the rest.
     effect_registry.register("entity", "learn", _commit)
+    # Client-directed effects (B132): the handler publishes, the commit is a no-op.
+    effect_registry.register("client", "open_sheet", _commit)
+    effect_registry.register("client", "toast", _commit)
     # The rest of the dice-pool actions are still resolver-context only.
     effect_registry.register("modify_roll", "*",
         lambda a, eid, u, ctx: None)  # passed through to resolver context

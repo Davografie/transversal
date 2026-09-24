@@ -968,7 +968,7 @@ def _target_element(effect: Effect) -> str:
         return "pool"
     if effect.type == "set_destination":
         return "location"
-    if effect.type in ("entity", "relationship", "attune", "location", "contest"):
+    if effect.type in ("entity", "relationship", "attune", "location", "contest", "client"):
         return "entity"
     if effect.type == "roll_table":
         return "roll_table"

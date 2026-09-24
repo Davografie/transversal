@@ -10,6 +10,10 @@ from transversal.services.effects_applier.datatypes import (
     BINDINGS_CONTEXT_KEY,
     EffectsResult,
 )
+from transversal.services.effects_applier.handlers_client import (
+    _apply_open_sheet,
+    _apply_toast,
+)
 from transversal.services.effects_applier.handlers_change_die import (
     _apply_change_double,
     _apply_change_remove,
@@ -150,6 +154,9 @@ _MUTATION_HANDLERS = {
     ("contest", "start"): _apply_start_contest,
     # Fog of war: the subject learns the resolved targets (B121).
     ("entity", "learn"): _apply_learn,
+    # Client-directed, no world change (B132).
+    ("client", "open_sheet"): _apply_open_sheet,
+    ("client", "toast"): _apply_toast,
     ("relationship", "create"): _apply_relationship_create,
     ("travel", "move"): _apply_travel,
     ("location", "set"): _apply_set_location,

@@ -51,6 +51,9 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("entity", "targeting_ban"): "impose a targeting ban on {target}",
     ("contest", "start"): "start a contest with {target}",
     ("entity", "learn"): "learn {target}",
+    # The recipient is the reader, so the card addresses the screen the rule lands on.
+    ("client", "open_sheet"): "open {target}'s sheet",
+    ("client", "toast"): "show a toast: {result}",
     ("relationship", "create"): "create a relationship with {target}",
     ("attune", "enable"): "attune {target} to {result}",
     ("attune", "suppress"): "suppress {result}",
