@@ -1120,11 +1120,6 @@ select option {
    for — `--dock-w-short` is that override's hook. */
 @media (max-height: 500px) {
   .stage.dock-sheet { --dock-w: var(--dock-w-short, 224px); }
-  /* The sheet's portrait pops above its own header, which is taller the narrower
-     the sheet gets — at 160px it clipped 5px off the top of the screen on the
-     narrowest phone measured (873×393). This is the room that stops it; it also
-     lifts the peers bar off the screen edge. */
-  .stage.dock-sheet .dice-panel-wrapper { padding-top: 12px; }
 }
 
 /* The wrapper becomes the dock: left edge, full height, and deliberately
@@ -1148,13 +1143,40 @@ select option {
   pointer-events: auto;
 }
 
-/* The sheet takes the dock's whole height: no 240px-cap arithmetic now that
-   it is no longer sharing a column with the roller. */
+/* The peer strip turns 90° into a rail on the dock's right edge — the seam
+   between the sheet and the map. Horizontally it was a 400px strip pinned in the
+   screen's top-left corner that scrolled sideways once the roster outgrew it
+   (4 of 7 chips at 1194×834); vertically it is a column the whole roster fits
+   down, and it stops competing with the map's top edge.
+   `writing-mode` rather than `transform: rotate()`: the chips rotate with the
+   text — so the rail stays ~40px wide and the sheet keeps its width — while
+   replaced content (the portraits) is left upright. */
+.stage.dock-sheet .dice-panel-wrapper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;   /* the rail is a seam, not a gapped sibling */
+}
+.stage.dock-sheet .peers-bar {
+  grid-area: 1 / 2;
+  writing-mode: vertical-rl;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 8px 4px;
+  border-right: 1px solid var(--overlay-8);
+}
+/* The sheet takes the rest of the dock's whole height: no 240px-cap arithmetic
+   now that it is no longer sharing a column with the roller. The top room is the
+   portrait's: it overhangs the sheet's own header by ~34px, and with the rail
+   moved out of the dock's top the sheet band starts at the screen edge, so
+   without this the character's head is clipped off the top of the display. */
 .stage.dock-sheet .sheet-band {
+  grid-area: 1 / 1;
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
+  padding-top: 40px;
 }
 .stage.dock-sheet .sheet-band .embedded-sheet {
   max-height: none;

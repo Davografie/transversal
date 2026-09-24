@@ -485,7 +485,8 @@ Two surfaces select a character (see [[System Architecture]] component table), a
 `fb78654` they **deliberately differ** — a chip is a rail you can act from, a dot is the
 map itself. One `viewingEntityId` (the peek) sits beside `entityId` (who you are).
 
-- **Peer chips** (`app/PeersBar.vue`, the strip above the sheet) — two states, styled
+- **Peer chips** (`app/PeersBar.vue` — the strip above the sheet, or the vertical rail
+  at the dock's right edge on wide landscape, see *Landscape dock*) — two states, styled
   apart: **`.assumed`** (you *are* it — `entityId`) takes the solid accent fill;
   **`.viewing`** (you are only peeking — `viewingEntityId`) takes the accent border alone,
   no fill.
@@ -641,6 +642,22 @@ changes.
   `?dockw=reset` forgets it. It feeds `--dock-w-short`, which only the short-viewport dock
   consumes, so a desktop can never inherit a phone's number. It exists because this is a
   feel number judged on a phone, where there is no devtools.
+- **The peer strip is rotated into the seam.** As a horizontal strip it was 400px pinned
+  in the screen's top-left corner, scrolling sideways once the roster outgrew it (4 of 7
+  chips visible at 1194×834); it is now a vertical rail on the dock's right edge —
+  between the sheet and the map — that the whole roster fits down. `writing-mode:
+  vertical-rl` rather than `transform: rotate()`, so the chips turn with the text (the
+  rail stays ~40px wide and the sheet keeps its width) while the portraits inside stay
+  upright. The dock is a two-column grid for this: sheet | rail.
+- **That rotation cost the sheet the top room the rail had been providing.** The sheet's
+  portrait overhangs its own header by ~34px; with the strip moved out of the dock's top
+  the sheet band began at the screen edge and the portrait was clipped 34px off the top of
+  the display (measured). The sheet band now carries 40px of top padding instead, so the
+  overhang has somewhere to go.
+- **Scope:** the dock is one code path, so this is what wide *landscape* gets — tablet and
+  desktop alike. Portrait tablets (and narrow desktop) keep the pop-out with the
+  horizontal strip above the floating sheet, and the mobile band stack is untouched.
+
 - **Where the sheet stops being cramped** (measured at 873×393). The toolbar is four
   ~43px pills laid *beside* the sheet's portrait, so it only regains a row once
   `dock − portrait` is wide enough. **160/200/224 are identical on every metric that reads
@@ -677,8 +694,10 @@ uncapped; selecting a character leaves the roller peeked and hovering the roller
 the roller without disturbing the sheet; 834×1194 keeps the pop-out and its
 `100dvh − 240px` cap; 390×844 keeps the band stack; 844×390 docks narrow (224px, map
 inset to 649, no horizontal overflow); 1194×834 — a tablet in landscape — keeps the
-full 400px dock, which is the boundary; and rotating hands the peek back to the column. A
-separate case pins the `?dockw` knob's contract (sets, persists, resets, and never
+full 400px dock, which is the boundary; and rotating hands the peek back to the column. The rail is
+pinned as geometry *and* as a working control — a chip click has to land, because
+rotating it moved the chips to a seam the sheet paints across and a dead rail passes a
+pure-geometry check. A separate case pins the `?dockw` knob's contract (sets, persists, resets, and never
 touches the desktop dock). The existing sheet-definition suite passes unchanged *inside*
 the dock.
 
