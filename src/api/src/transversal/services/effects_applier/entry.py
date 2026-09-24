@@ -309,17 +309,39 @@ def resolve_effect_result(effect: Effect, entity_id: str, repo,
     return effect.model_copy(update={"result": None, "result_spec": None})
 
 
+#: The ladder's sizes, as the numbers a die-typed field reads back as.
+_DIE_SIZES = frozenset({4, 6, 8, 10, 12})
+
+
 def _die_from_spec_value(value) -> str | None:
-    """The die a resolved ``result_spec`` value names, if it names one."""
+    """The die a resolved ``result_spec`` value names, if it names one.
+
+    A die-typed field read through the resolver arrives as its **size**, not its
+    name — ``aggregate max effect_die`` over a roll yields ``8`` — and an int was
+    refused here, so "create the hazard at that die's effect die" ([[B98]]) could
+    not be written even though the path resolved the right number. A size on the
+    ladder *is* the die, so it is named back; anything else (a card value, a count
+    of 3) still names no die, which is what keeps a wrong path from inventing one.
+    """
     raw = None
     if isinstance(value, dict):
         raw = value.get("rating") or value.get("die")
-    if raw is None:
+    else:
         raw = getattr(value, "rating", None) or getattr(value, "die", None)
-    if raw is None and isinstance(value, str) and value[:1] == "d":
-        raw = value  # a bare die value, e.g. an aggregate over a die field
+        if raw is None and isinstance(value, (str, int, float)):
+            # The value *is* the die: a bare name ("d8"), or the size a die-typed
+            # field reads back as (8).
+            raw = value
+    if raw is None:
+        return None
     size = getattr(raw, "value", raw)
-    return str(size) if size else None
+    if size is None:
+        return None
+    try:
+        number = int(size)
+    except (TypeError, ValueError):
+        return str(size)
+    return f"d{number}" if number in _DIE_SIZES else None
 
 
 def resolve_effect_owner(effect: Effect, entity_id: str, repo,

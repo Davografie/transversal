@@ -19,6 +19,8 @@ from transversal.domain import (
     TransversalType,
 )
 from transversal.services.effects_applier import PendingChoice, apply_effects, resolve_choice
+from transversal.services.target_resolver import Binding
+from transversal.services.target_spec import TargetSpec
 
 
 class FakeTrait:
@@ -2881,6 +2883,7 @@ def test_the_found_instance_is_what_the_output_name_binds():
     makes 'name the trait, however it got here' work."""
     from transversal.services.effects_applier.registry import publish_effect_output
     from transversal.services.target_resolver import Binding
+    from transversal.services.target_spec import TargetSpec
 
     owned = _ts("medicine", [DieType.D6], traitset_id="ts-x")
     repo = FakeRepo(traits=[FakeTrait("medicine", "ts-x")], traitsettings=[owned])
@@ -3161,3 +3164,70 @@ def test_a_rule_granted_to_someone_else_is_persisted_too():
 
     assert result.applied and "granted" in result.applied[0].summary
     assert "sfx-teleport-to-main" in repo.entities["char-2"].sfx_ids
+
+
+# ── Naming a die by path (B98's effect half) ───
+#
+# "create the hazard at that die's effect die": a result_spec's aggregate over a
+# die-typed field arrives as the *size*, and a size on the ladder is the die.
+
+def test_a_spec_value_that_is_a_die_size_names_that_die():
+    from transversal.domain import DieType
+    from transversal.services.effects_applier.entry import _die_from_spec_value
+
+    for size, name in ((4, "d4"), (6, "d6"), (8, "d8"), (10, "d10"), (12, "d12")):
+        assert _die_from_spec_value(size) == name
+    assert _die_from_spec_value(DieType.D10) == "d10"
+    assert _die_from_spec_value({"rating": "d6"}) == "d6"
+    assert _die_from_spec_value("d8") == "d8"
+    # Anything not on the ladder names no die, so a wrong path cannot invent one.
+    assert _die_from_spec_value(3) is None
+    assert _die_from_spec_value(None) is None
+
+
+def test_a_result_spec_reads_the_unchosen_source_dies_effect_die():
+    """The whole route, with the roll in context: filter to *my* die that was not
+    chosen, then read the die it left."""
+    from transversal.services.effects_applier.datatypes import (
+        BINDINGS_CONTEXT_KEY,
+        SOURCE_CONTEXT_KEY,
+        SOURCE_ELEMENT_CONTEXT_KEY,
+    )
+    from transversal.services.effects_applier.entry import resolve_effect_result
+
+    class Repo:
+        def get_entity(self, eid):
+            return _entity(id=eid, current_location="loc-1")
+
+    dice = [
+        {"ts_id": "ts-scar", "role": None, "result": 3, "rating": "d6", "effect_die": "d8"},
+        {"ts_id": "ts-scar", "role": "total", "result": 5, "rating": "d8", "effect_die": "d6"},
+    ]
+    effect = Effect(
+        timing=EffectTiming.ON_RESULT, type="modify_trait", action="gain",
+        target="trait-scar", result="d6",
+        result_spec=TargetSpec.model_validate({"steps": [
+            {"kind": "select", "collection": "rolled_dice"},
+            {"kind": "filter", "field": "ts_id", "operator": "==", "value": "{trait_setting}"},
+            {"kind": "filter", "field": "role", "operator": "==", "value": None},
+            {"kind": "aggregate", "fn": "max", "field": "effect_die"},
+        ]}),
+    )
+    context = {
+        "rolls": dice,
+        BINDINGS_CONTEXT_KEY: {
+            "trait_setting": Binding(value="ts-scar", values=["ts-scar"],
+                                     element="traitsetting", cardinality="one"),
+        },
+        SOURCE_CONTEXT_KEY: _ts("scar", [DieType.D8]),
+        SOURCE_ELEMENT_CONTEXT_KEY: "traitsetting",
+    }
+    out = resolve_effect_result(effect, "char-2", Repo(), context)
+    assert out.result == "d8"      # the unchosen die's effect die
+    assert out.result_spec is None
+
+    # No unchosen die of mine in the roll: the result is cleared rather than left
+    # standing, so nothing is invented (the handler reports "no die rating").
+    chosen_only = dict(context, rolls=[dict(dice[0], role="effect"), dice[1]])
+    cleared = resolve_effect_result(effect, "char-2", Repo(), chosen_only)
+    assert cleared.result is None
