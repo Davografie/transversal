@@ -70,7 +70,13 @@ const TREE = [
         L('loc-forge', 'Bulwark Forge', 'three_realms'),
         L('loc-pond', 'Stillness Pond', 'three_realms'),
       ]),
-      L('loc-grove', 'Iron Grove', 'three_realms'),
+      L('loc-grove', 'Iron Grove', 'three_realms', [
+        // A place whose only child is on the filter's path, with somebody of its
+        // own the filter drops — the shape that read ▾ while hiding its roster.
+        L('loc-camp', 'The Camp', 'three_realms', [
+          L('loc-tent', 'The Tent', 'three_realms'),
+        ]),
+      ]),
       L('loc-hut', 'The Hut', 'three_realms'),
     ]),
   ]),
@@ -88,10 +94,15 @@ const ENTITIES = [
   E('loc-forge', 'Bulwark Forge', 'LOCATION', 'loc-iron', 'three_realms'),
   E('loc-pond', 'Stillness Pond', 'LOCATION', 'loc-iron', 'three_realms'),
   E('loc-grove', 'Iron Grove', 'LOCATION', 'loc-swamp', 'three_realms'),
+  E('loc-camp', 'The Camp', 'LOCATION', 'loc-grove', 'three_realms'),
+  E('loc-tent', 'The Tent', 'LOCATION', 'loc-camp', 'three_realms'),
   E('loc-hut', 'The Hut', 'LOCATION', 'loc-swamp', 'three_realms'),
   E('gmc-alice', 'Alice', 'GMC', 'loc-fr', 'earth'),
   E('gmc-bob', 'Bob', 'GMC', 'loc-iron', 'three_realms'),
   E('gmc-cara', 'Cara', 'GMC', 'loc-hut', 'three_realms'),
+  // Echo Two shares The Camp with Echo One but does not match a "Echo One" chip.
+  E('gmc-e1', 'Echo One', 'GMC', 'loc-tent', 'three_realms'),
+  E('gmc-e2', 'Echo Two', 'GMC', 'loc-camp', 'three_realms'),
   // One in each of Europe's children, for the "baseline is already everything" case.
   E('gmc-a1', 'Alpha One', 'GMC', 'loc-fr', 'earth'),
   E('gmc-a2', 'Alpha Two', 'GMC', 'loc-de', 'earth'),
@@ -102,6 +113,9 @@ function world({ chips = [], focus = '', universe = 'three_realms' } = {}) {
   const f = useEntityFilter(ref(ENTITIES))
   f.activeFilters.value = chips
   const t = useLocationTree({
+    // The full list matters: it is what tells the chevron that a filter is
+    // hiding people at a level whose own roster came back empty.
+    entities: ref(ENTITIES),
     filteredEntities: f.filteredEntities,
     activeFilters: f.activeFilters,
     currentUniverse: ref(universe),
@@ -158,6 +172,27 @@ console.log('\nfilter — the roster counts as content\n')
   ok('pressing ▾ hides it (nothing is left, so it hides the lot)', [glyph(t, 'loc-hut'), roster(t, 'loc-hut')], ['▸', []])
   press(t, 'loc-hut')
   ok('pressing ▸ brings it back', [glyph(t, 'loc-hut'), roster(t, 'loc-hut')], ['▾', ['Cara']])
+}
+
+// ── 2b. a level hiding its own roster may not claim to be expanded ───────
+console.log('\nfilter — a hidden roster makes the level read ▸\n')
+
+{
+  // The reported case: The Camp's only child is on the path (so nothing is
+  // hidden among its children) but the filter drops the person standing in The
+  // Camp itself. The filtered roster is empty, which used to satisfy the roster
+  // check vacuously and draw ▾ over a hidden relative.
+  const t = world({ chips: chip('Echo One') })
+  ok('all children shown', kids(t, 'loc-camp'), ['The Tent'])
+  ok('…but a hidden occupant still reads ▸', glyph(t, 'loc-camp'), '▸')
+  ok('…and neither occupant is listed yet', roster(t, 'loc-camp'), [])
+  ok('the matched one is listed where they are', roster(t, 'loc-tent'), ['Echo One'])
+  press(t, 'loc-camp')
+  ok('pressing ▸ reveals the whole roster, not just the matched part',
+    roster(t, 'loc-camp'), ['Echo Two'])
+  ok('…and then it reads ▾', glyph(t, 'loc-camp'), '▾')
+  press(t, 'loc-camp')
+  ok('pressing ▾ returns to the filtered view', [glyph(t, 'loc-camp'), roster(t, 'loc-camp')], ['▸', []])
 }
 
 // ── 3. when the baseline is already everything, ▾ has to hide ────────────

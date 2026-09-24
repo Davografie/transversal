@@ -12,7 +12,7 @@ const focusId = ref('')
 const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
 const OCCUPANT_TYPES = new Set(['CHARACTER', 'GMC', 'ASSET'])
 
-export function useLocationTree({ filteredEntities, activeFilters, currentUniverse }) {
+export function useLocationTree({ entities, filteredEntities, activeFilters, currentUniverse }) {
   // The focused node: its ancestor chain stays expanded, its siblings stub.
   function setFocus(id) {
     focusId.value = id || ''
@@ -43,29 +43,34 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     arr.sort((a, b) => (TYPE_PRIORITY[a.type] ?? 9) - (TYPE_PRIORITY[b.type] ?? 9))
   }
 
-  const occupantsByLocation = computed(() => {
+  // Both rosters are needed. `occupantsByLocation` is what the filter matches,
+  // and is what a level reveals on its own; `allOccupantsByLocation` is everyone
+  // who is actually there, which is what tells the chevron whether the filter is
+  // hiding people. With only the filtered one, a place whose occupants all failed
+  // the filter looked empty — so the roster check passed vacuously and the level
+  // claimed ▾ while hiding its whole roster.
+  function _groupOccupants(list, placed) {
     const map = {}
-    for (const e of (filteredEntities?.value ?? [])) {
-      if (OCCUPANT_TYPES.has(e.type) && e.currentLocation) {
-        if (!map[e.currentLocation]) map[e.currentLocation] = []
-        map[e.currentLocation].push(e)
-      }
+    for (const e of list) {
+      if (!OCCUPANT_TYPES.has(e.type)) continue
+      const key = placed ? e.currentLocation : e.currentUniverse
+      if (!key) continue
+      if (!map[key]) map[key] = []
+      map[key].push(e)
     }
     for (const key of Object.keys(map)) _sortOccupants(map[key])
     return map
-  })
+  }
 
-  const unplacedByUniverse = computed(() => {
-    const map = {}
-    for (const e of (filteredEntities?.value ?? [])) {
-      if (OCCUPANT_TYPES.has(e.type) && !e.currentLocation && e.currentUniverse) {
-        if (!map[e.currentUniverse]) map[e.currentUniverse] = []
-        map[e.currentUniverse].push(e)
-      }
-    }
-    for (const key of Object.keys(map)) _sortOccupants(map[key])
-    return map
-  })
+  const occupantsByLocation = computed(() =>
+    _groupOccupants(filteredEntities?.value ?? [], true))
+  const allOccupantsByLocation = computed(() =>
+    _groupOccupants(entities?.value ?? filteredEntities?.value ?? [], true))
+
+  const unplacedByUniverse = computed(() =>
+    _groupOccupants(filteredEntities?.value ?? [], false))
+  const allUnplacedByUniverse = computed(() =>
+    _groupOccupants(entities?.value ?? filteredEntities?.value ?? [], false))
 
   // ── Filter-aware location helpers ──────────────────
   const hasOccupantFilter = computed(() =>
@@ -154,12 +159,14 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     !hasOccupantFilter.value && !activeUniverseFilters.value.size && focusPathIds.value.size === 0
   )
 
+  // `occupants` / `allOccupants` are the matched and the full rosters; the
+  // difference is what the filter is hiding, which the chevron has to own up to.
   // `forced` = this level's nodes are being shown because their parent was
   // explicitly expanded, so the filter's populated-path prune must not drop
   // them again. That is precisely what was missing: pressing ▸ on a filtered
   // level flipped the chevron to ▾ and revealed nothing, because the children
   // it recursed into were pruned one frame later.
-  function flattenTree(nodes, occupants, depth = 0, forced = false) {
+  function flattenTree(nodes, occupants, allOccupants, depth = 0, forced = false) {
     const result = []
     const filterMode = hasOccupantFilter.value
     const populated = populatedLocations.value
@@ -199,9 +206,17 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
       const onFocus = focusMode && focusSet.has(node.id)
 
       const kids = node.children || []
+      // `occ` is who the filter matched here; `allOcc` is everyone who is here.
+      // The chevron has to answer to the second one — otherwise a place whose
+      // occupants all failed the filter looks empty, the roster check passes
+      // vacuously, and the level claims ▾ while hiding its entire roster.
       const occ = occupants[node.id] || []
+      const allOcc = allOccupants[node.id] || []
       const unplacedHere = kind === 'universe' && node.universe
         ? (unplacedByUniverse.value[node.universe] || [])
+        : []
+      const allUnplacedHere = kind === 'universe' && node.universe
+        ? (allUnplacedByUniverse.value[node.universe] || [])
         : []
 
       // What this level reveals *on its own*, before the GM touches the chevron:
@@ -231,24 +246,30 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
       // chain); where the baseline *is* everything — the plain view's current
       // universe, or a filter that happens to match every child — "back to the
       // baseline" would be a press that does nothing, so it hides the lot.
+      // Compared against the FULL rosters: people the filter dropped are hidden
+      // content, and hiding them is what ▸ is for.
       const baselineHides =
         defaultKids.length < kids.length ||
-        (occ.length > 0 && !defaultRoster) ||
-        (unplacedHere.length > 0 && !defaultUnplaced)
+        (allOcc.length > 0 && !defaultRoster) ||
+        (allUnplacedHere.length > 0 && !defaultUnplaced)
       const explicit = expandedNodes.value[node.id]
       const revealAll = explicit === true
       const hideAll = explicit === false && !baselineHides
 
       const revealedKids = revealAll ? kids : (hideAll ? [] : defaultKids)
-      const revealRoster = revealAll ? true : (hideAll ? false : defaultRoster)
-      const revealUnplaced = revealAll ? true : (hideAll ? false : defaultUnplaced)
+      // An explicit expand shows the whole roster, not only the matched part —
+      // the same "press for the rest" the chevron promises for child locations.
+      const shownRoster = revealAll ? allOcc : (hideAll ? [] : (defaultRoster ? occ : []))
+      const shownUnplaced = revealAll ? allUnplacedHere : (hideAll ? [] : (defaultUnplaced ? unplacedHere : []))
       const contentsOpen = revealAll || (!hideAll && baselineOpen)
 
       // ▾ means "nothing is left hidden at this level"; ▸ means "press for the
       // rest". A level that shows only part of its children therefore reads ▸,
       // and pressing it is what reveals the others.
-      const hasChildren = kids.length > 0 || occ.length > 0
-      const fullyRevealed = revealedKids.length === kids.length && (occ.length === 0 || revealRoster)
+      const hasChildren = kids.length > 0 || allOcc.length > 0
+      const fullyRevealed = revealedKids.length === kids.length &&
+        shownRoster.length === allOcc.length &&
+        shownUnplaced.length === allUnplacedHere.length
       result.push({
         id: node.id, name: node.name, universe: node.universe,
         depth, hasChildren, kind,
@@ -258,8 +279,8 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
       // focus mode only the focused place itself (and levels the GM expanded by
       // hand) lists occupants — otherwise every ancestor's roster would bloat
       // the chain.
-      if (revealRoster) {
-        for (const e of occ) {
+      if (shownRoster.length) {
+        for (const e of shownRoster) {
           result.push({
             id: e.id, name: e.name, universe: e.currentUniverse || '',
             depth: depth + 1, hasChildren: false, kind: 'occupant',
@@ -275,8 +296,8 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
           })
         }
       }
-      if (revealUnplaced) {
-        for (const e of unplacedHere) {
+      if (shownUnplaced.length) {
+        for (const e of shownUnplaced) {
           result.push({
             id: e.id, name: e.name, universe: e.currentUniverse || '',
             depth: depth + 1, hasChildren: false, kind: 'occupant',
@@ -287,7 +308,7 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
       if (revealedKids.length) {
         // `revealAll` forces this level's children past the filter's prune — the
         // explicit expand the chevron promises.
-        result.push(...flattenTree(revealedKids, occupants, depth + 1, revealAll))
+        result.push(...flattenTree(revealedKids, occupants, allOccupants, depth + 1, revealAll))
       }
       if (focusMode && onFocus) {
         const hidden = kids.length - revealedKids.length
@@ -329,7 +350,7 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
   }
 
   const flatTree = computed(() => {
-    return flattenTree(locationTree.value, occupantsByLocation.value, 0)
+    return flattenTree(locationTree.value, occupantsByLocation.value, allOccupantsByLocation.value, 0)
   })
 
   // ── Ancestor path ──────────────────────────────────

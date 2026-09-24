@@ -227,7 +227,7 @@ const {
   locationTree, expandedNodes,
   fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds,
   focusPath, setFocus, collapseAll,
-} = useLocationTree({ filteredEntities, activeFilters, currentUniverse: toRef(props, 'universe') })
+} = useLocationTree({ entities, filteredEntities, activeFilters, currentUniverse: toRef(props, 'universe') })
 
 // ── Faction distance ranking ────────────────────────
 // The factions list is read nearest-first: how far each faction's closest

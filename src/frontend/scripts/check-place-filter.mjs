@@ -145,9 +145,12 @@ console.log('\ntree — the filter decides what is on screen\n')
  * fresh tree array (a same-reference assignment would not invalidate Vue's
  * computeds) and a reset expansion map.
  */
-function scopedTree(entities, filters, { focus = 'loc-iron-roots', universe = 'three_realms' } = {}) {
+function scopedTree(entities, filters, { focus = 'loc-iron-roots', universe = 'three_realms', all = ENTITIES } = {}) {
   const f = typeof entities === 'object' && entities.filteredEntities ? entities : filter(entities, filters)
   const t = useLocationTree({
+    // The unfiltered list too — production passes it, and it is what tells a
+    // level whether the filter is hiding people of its own.
+    entities: ref(all),
     filteredEntities: f.filteredEntities,
     activeFilters: f.activeFilters,
     currentUniverse: ref(universe),
@@ -188,7 +191,7 @@ function scopedTree(entities, filters, { focus = 'loc-iron-roots', universe = 't
   // A matched place with nobody anywhere inside it: it must still draw itself
   // (and its ancestors) rather than collapsing to an empty tree.
   const placesOnly = ENTITIES.filter((e) => e.type === 'LOCATION' || e.type === 'UNIVERSE')
-  const { flat } = scopedTree(placesOnly, [{ type: 'name', value: 'Craigmuir', label: 'Craigmuir' }])
+  const { flat } = scopedTree(placesOnly, [{ type: 'name', value: 'Craigmuir', label: 'Craigmuir' }], { all: placesOnly })
   const got = flatIds(flat)
   ok('a matched place with no occupants still draws itself', got.includes('location-craigmuir'), true)
   ok('…along with its ancestor path',
