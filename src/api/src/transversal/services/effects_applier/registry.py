@@ -11,6 +11,7 @@ from transversal.services.effects_applier.datatypes import (
     ACTIVATION_CONTEXT_KEY,
 )
 from transversal.services.effects_applier.handlers_world import (
+    _apply_attune_projection,
     _apply_attune_universe,
 )
 
@@ -231,9 +232,12 @@ def _register_core_handlers(em, raz):
     effect_registry.register("create_entity", "create_asset", _create_asset)
     effect_registry.register("entity", "delete_entity", _delete_entity)
 
-    # Attunement (temporary effective-universe additions)
-    def _attune(a, eid, u, ctx):
-        from transversal.domain import Attunement, AttunementScope
+    # Projection grants ([[Active Projections Design Log]]): attune *adds* a body
+    # to the active set, suppress *removes* one. One handler, because the two are
+    # one operation with an `op` — and because the grant lifecycle (expiry through
+    # `schedule_revert`) is identical for both.
+    def _projection_grant(a, eid, u, ctx):
+        from transversal.domain import Attunement, AttunementOp, AttunementScope
         raw = (a.target or "").strip()
         target_id = eid if raw in ("", "self", "wielder") else raw
         entity = em.repo.get_entity(target_id)
@@ -247,24 +251,50 @@ def _register_core_handlers(em, raz):
             scope = AttunementScope(raw_scope)
         except ValueError:
             scope = AttunementScope.SELF
-        universe = _apply_attune_universe(a, em, u)
+
+        # Each action's grant shape, stated rather than derived. An attunement is
+        # a *world* (an add to the active set); a suppression is a *body* (a remove
+        # from it). Keeping `enable` to the universe form is deliberate — it is
+        # what existing content and the derived effective-universe view expect.
         if a.action == "enable":
-            if not any(x.universe == universe and x.scope == scope for x in entity.attunements):
+            op, universe, projection_id = AttunementOp.ADD, _apply_attune_universe(a, em, u), None
+        elif a.action == "suppress":
+            op, universe, projection_id = AttunementOp.REMOVE, None, _apply_attune_projection(a, em)
+        elif a.action == "disable":
+            op, universe, projection_id = AttunementOp.ADD, _apply_attune_universe(a, em, u), None
+        else:  # unsuppress
+            op, universe, projection_id = AttunementOp.REMOVE, None, _apply_attune_projection(a, em)
+
+        if a.action in ("enable", "suppress"):
+            # Idempotent on the whole identity, `op` included: an attunement and a
+            # suppression naming the same thing are different grants, and de-duping
+            # on `(universe, scope)` alone would swallow the second.
+            if not any(x.op == op and x.universe == universe
+                       and x.projection_id == projection_id and x.scope == scope
+                       for x in entity.attunements):
                 entity.attunements.append(Attunement(
-                    universe=universe, scope=scope,
+                    op=op, universe=universe, projection_id=projection_id, scope=scope,
                     source_sfx_id=ctx.get("sfx_id"),
                 ))
             from transversal.services.scheduled_events import schedule_revert
             schedule_revert(em.repo, "entity", entity.id, a, source_sfx_id=ctx.get("sfx_id"))
-        else:  # disable
+        else:
+            # ⚠ Scoped by `op`, and that is the point: `disable` ends an
+            # *attunement*, `unsuppress` ends a *suppression*. Matching on
+            # `(universe, scope)` alone meant ending one silently stripped the
+            # other — a suppressed body would come back to life when an unrelated
+            # attunement expired.
             entity.attunements = [
                 x for x in entity.attunements
-                if not (x.universe == universe and x.scope == scope)
+                if not (x.op == op and x.universe == universe
+                        and x.projection_id == projection_id and x.scope == scope)
             ]
         em.repo.update_entity(entity)
 
-    effect_registry.register("attune", "enable", _attune)
-    effect_registry.register("attune", "disable", _attune)
+    effect_registry.register("attune", "enable", _projection_grant)
+    effect_registry.register("attune", "disable", _projection_grant)
+    effect_registry.register("attune", "suppress", _projection_grant)
+    effect_registry.register("attune", "unsuppress", _projection_grant)
 
     # Targeting ban (directional, scene-counted): the owner may not target the
     # resolved opponent again until the ban expires.

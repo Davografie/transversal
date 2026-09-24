@@ -114,6 +114,7 @@ from transversal.services.effects_applier.handlers_pools import (  # noqa: F401
 
 # Re-exported for backwards compatibility (previously defined here).
 from transversal.services.effects_applier.handlers_world import (  # noqa: F401
+    _apply_attune_projection,
     _apply_attune_universe,
     _next_projection_id,
     _apply_create_projection,

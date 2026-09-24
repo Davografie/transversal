@@ -47,6 +47,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("entity", "targeting_ban"): "impose a targeting ban on {target}",
     ("relationship", "create"): "create a relationship with {target}",
     ("attune", "enable"): "attune {target} to {result}",
+    ("attune", "suppress"): "suppress {result}",
     ("location", "set"): "move to {target}",
     ("set_destination", "set"): "grant directions to {target}",
     ("life_path", "discover"): "discover the {target} life path",

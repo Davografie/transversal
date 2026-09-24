@@ -115,6 +115,47 @@ ACTIONS: list[EffectActionMeta] = [
         target_kind="entity",
     ),
 
+    # ── Suppress (the removal counterpart of Attune) ────
+    # "Attune to another body" and "suppress the current one" are the two halves of
+    # one operation: attune is an **add** to the active set, suppress a **remove**
+    # from it. A swap is the pair, not a `replace` flag — and suppress alone is a
+    # legal state (an empty set: ego traits only, cut off from every body).
+    #
+    # A suppression names a **specific** projection — the body it cut off — never
+    # "whatever is current": it is stable and reversible, and it can never suppress
+    # a body the effect never saw. See [[Active Projections Design Log]].
+    EffectActionMeta(
+        action_id="suppress",
+        label="Suppress",
+        description="Cut a specific body out of the character's active set until a timing expires — it can never name 'whatever is current'",
+        category="cost",
+        effect_type="attune",
+        effect_action="suppress",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            # The fallback form: a body named directly. Superseded by the
+            # ``projection`` reference below, which is the intended way — a path
+            # can resolve "the body that is current *now*" (decision 4: resolution
+            # is read-time, so a body gained while this is live is included).
+            EffectFieldDef(name="result", label="Target Projection", field_type="text",
+                          required=False, hidden_when_ref="projection"),
+            EffectFieldDef(name="target", label="Who It Applies To", field_type="text",
+                          required=False, default="self"),
+        ],
+        refs=[
+            RefDef(name="projection", label="Body (projection)", element="projection"),
+        ],
+        # Scope, like attune's: `self` cuts off the carrier's body; `domain` reaches
+        # everyone in its location subtree (the "the laws here cut you off" case).
+        context_fields=[
+            EffectFieldDef(name="scope", label="Scope", field_type="select",
+                          required=False, default="self", options=["self", "domain"]),
+        ],
+        supports_duration=True,
+        inverse=("attune", "unsuppress"),
+        target_kind="entity",
+    ),
+
     # ── Travel / Transversal ───────────────────────────
     EffectActionMeta(
         action_id="travel",

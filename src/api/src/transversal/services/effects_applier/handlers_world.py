@@ -36,6 +36,22 @@ def _apply_attune_universe(a, em, universe_fallback: str) -> str:
             return projection.universe
     return a.result or universe_fallback
 
+def _apply_attune_projection(a, em) -> Optional[str]:
+    """The body a grant names, from the resolved ``projection`` reference.
+
+    The reference is the intended form for *both* halves: for an attunement it is
+    the life the capability is sourced from, and for a suppression it is the body
+    being cut off — resolved at read-time by its path (see decision 4 in
+    [[Active Projections Design Log]]), so "the body that is current" means it when
+    the effect runs and not when it was authored.
+
+    Falls back to the authored id so a directly-named body keeps working.
+    """
+    ref = (getattr(a, "refs", None) or {}).get("projection")
+    projection_id = getattr(ref, "value", "") if ref is not None else ""
+    return projection_id or (a.result or "").strip() or None
+
+
 def _apply_cancel_scheduled_event(entity, effect, repo, result):
     """End a pending row now (target = a scheduled-event id).
 
