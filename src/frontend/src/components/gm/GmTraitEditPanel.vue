@@ -704,6 +704,7 @@ function onSfxClick(sfx) {
     component: GmSfxEditPanel,
     title: sfx.name || 'Edit SFX',
     id: sfx.id,
+    badge: 'SFX',
     props: { sfx: sfx },
     listeners: {},
   })

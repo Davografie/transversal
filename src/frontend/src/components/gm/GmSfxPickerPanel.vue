@@ -104,6 +104,7 @@ function onNewSfx() {
   panel.open({
     component: GmSfxEditPanel,
     title: 'New SFX',
+    badge: 'SFX',
     props: { sfx: null },
     listeners: {
       'sfx-created': (created) => {

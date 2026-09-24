@@ -168,6 +168,9 @@ function openSfx(sfx) {
     component: GmSfxEditPanel,
     title: sfx.name || 'Edit SFX',
     id: sfx.id,
+    // The panel's kind badge *is* its copy-ID control (Panel.vue): clicking it
+    // copies the rule's id. Same convention as TRAIT/TRAITSET.
+    badge: 'SFX',
     props: {
       sfx,
       owner: ref ? { ownerType: ref.ownerType, ownerId: ref.ownerId, label: ref.label } : null,
@@ -180,6 +183,7 @@ function newSfx() {
   panel.open({
     component: GmSfxEditPanel,
     title: 'New SFX',
+    badge: 'SFX',
     props: { sfx: null },
     listeners: { 'sfx-created': () => { fetchTraitsConfig() } },
   })

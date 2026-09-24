@@ -25,6 +25,7 @@
 .type-faction, .type-FACTION { background: var(--danger); color: var(--text-on-accent); }
 .type-asset, .type-ASSET { background: var(--text-dim); color: var(--text-on-accent); }
 .type-universe, .type-UNIVERSE { background: var(--type-universe); color: var(--text-on-accent); }
+.type-sfx, .type-SFX { background: var(--accent-pale); color: var(--text-invert); }
 
 /* ── Form layout (traitset/trait/sfx editors) ─────── */
 .ps-form { display: flex; flex-direction: column; gap: 6px; }
