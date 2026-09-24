@@ -22,10 +22,12 @@ BINDINGS_CONTEXT_KEY = "_bindings"
 ACTIVATION_CONTEXT_KEY = "_activation"
 
 #: Where a gained trait is *anchored*, when that is not the plain entity: the
-#: ``(owner_kind, owner_id)`` pair the engine resolved from ``Effect.owner_spec``.
-#: It lives in the effect context — the ``_``-prefixed convention the source uses
-#: — because it is engine-resolved rather than authored: the author writes a path,
-#: and the handler reads the thing it landed on.
+#: The catalog element the ``owner_spec`` path landed on — ``relationship``,
+#: ``traitsetting``, ``entity`` or ``projection``. Written by
+#: :func:`effects_applier.entry.resolve_effect_owner` next to
+#: :data:`OWNER_ID_CONTEXT_KEY` and read back by ``_trait_owner``, so the anchor's
+#: *kind* is the type the path actually resolved to rather than an assumption
+#: drawn from the action's first declared element.
 OWNER_KIND_CONTEXT_KEY = "_owner_kind"
 
 OWNER_ID_CONTEXT_KEY = "_owner_id"

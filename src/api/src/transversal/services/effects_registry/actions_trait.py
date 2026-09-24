@@ -1,6 +1,7 @@
 """Trait Modification — action definitions split out of ``effects_registry.py``."""
 
 from transversal.services.effects_registry.action_types import (
+    TRAIT_OWNER_ELEMENTS,
     EffectActionMeta,
     EffectFieldDef,
     RefDef,
@@ -39,6 +40,10 @@ ACTIONS: list[EffectActionMeta] = [
         supports_duration=True,
         inverse=("modify_trait", "step_down"),
         target_kind="trait",
+        # Retired from the picker, but live roll-table content still uses it, and
+        # the applier reads the *declaration* to know what an owner path may anchor
+        # to — so the anchor set belongs here even though the verb is gone.
+        owner_elements=TRAIT_OWNER_ELEMENTS,
         # Superseded by the change-die family, on a rating die.
         retired=True,
     ),
@@ -59,6 +64,7 @@ ACTIONS: list[EffectActionMeta] = [
         supports_duration=True,
         inverse=("modify_trait", "step_up"),
         target_kind="trait",
+        owner_elements=TRAIT_OWNER_ELEMENTS,
         # Superseded by the change-die family, on a rating die.
         retired=True,
     ),

@@ -187,6 +187,28 @@ class RepositoryTraitSettings:
             )
         ]
 
+    def get_projection_traitsettings(self, projection_id: str) -> list[TraitSetting]:
+        """Return trait settings anchored to one projection (one body of an entity).
+
+        A projection anchor is the *stored* form of an entity anchor once the owner
+        is wearing a body (``_new_traitsetting`` morphs it), so a path that names a
+        projection outright — rather than the entity, which resolves to whichever
+        body is active — reads them here. ``entity_id`` is the owning entity either
+        way, so it cannot be the filter; ``projection_id`` is what distinguishes one
+        body's traits from another's.
+        """
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.from_type == 'projection'
+                AND ts.projection_id == @pid
+            SORT ts.traitset_id, ts.trait_id, ts._key
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars={"pid": projection_id})
+        ]
+
     def get_sub_traitsettings(self, parent_traitsetting_id: str) -> list[TraitSetting]:
         """Return sub-trait settings nested under a parent trait setting.
 

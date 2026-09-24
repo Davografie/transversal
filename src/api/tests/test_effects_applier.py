@@ -1852,6 +1852,12 @@ class RelationshipFakeRepo:
     def get_relationship_traitsettings(self, edge_key):
         return self.relationship_traits
 
+    def get_projection_traitsettings(self, projection_id):
+        # A body's traits — the twin of the edge read above, so the projection
+        # anchor goes through the real lookup instead of a missing method.
+        return [ts for ts in self.relationship_traits
+                if ts.from_type == "projection" and ts.projection_id == projection_id]
+
 
 def test_gain_relationship_trait():
     entity = _entity()
@@ -3385,6 +3391,66 @@ def test_an_effect_with_no_owner_path_still_anchors_to_the_entity():
     plain = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
                    action="gain_relationship", target="trait-rel-tenure", result="d4")
     assert _trait_owner(_entity(id="char-1"), plain, FakeRepo()) == ("entity", "char-1")
+
+
+def test_the_owner_path_decides_the_anchor_not_the_verb():
+    """B164: the gain verbs declare every anchor, so *where the path landed* is the
+    anchor. Before this the verbs declared nothing, so an authored path was dropped
+    and a tenure trait landed on the character — reporting success.
+
+    The kind rides with the id (``_owner_kind``, stamped by ``resolve_effect_owner``),
+    which is what makes a declaration that is a *set* usable at all: taking
+    ``owner_elements[0]`` would have classified every one of them as an entity.
+    """
+    from transversal.services.effects_applier.datatypes import (
+        OWNER_ID_CONTEXT_KEY, OWNER_KIND_CONTEXT_KEY)
+
+    edge = "edge:char-1:fac-1:membership"
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
+        target="trait-rel-rank", result="d4",
+        context={OWNER_ID_CONTEXT_KEY: edge, OWNER_KIND_CONTEXT_KEY: "relationship"},
+    )
+    result = apply_effects(_entity(), [effect], RelationshipFakeRepo(edge_key=edge))
+
+    assert len(result.new_trait_settings) == 1
+    ts = result.new_trait_settings[0]
+    assert (ts.from_type, ts.entity_id) == ("relationship", edge)
+    assert ts.trait_id == "trait-rel-rank"
+
+
+def test_a_projection_anchor_is_its_own_kind():
+    """A body's traits are read by projection id: the entity is the same either
+    way, so the kind is what decides which body's sheet is meant."""
+    from transversal.services.effects_applier.datatypes import (
+        OWNER_ID_CONTEXT_KEY, OWNER_KIND_CONTEXT_KEY)
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
+        target="trait-rel-rank", result="d4",
+        context={OWNER_ID_CONTEXT_KEY: "proj-1", OWNER_KIND_CONTEXT_KEY: "projection"},
+    )
+    result = apply_effects(_entity(), [effect], RelationshipFakeRepo())
+
+    ts = result.new_trait_settings[0]
+    assert (ts.from_type, ts.projection_id) == ("projection", "proj-1")
+
+
+def test_a_kind_the_verb_does_not_declare_falls_back_to_the_declared_one():
+    """Stored content predates the declaration being a set: it carries an id and no
+    kind, and means the first declared element — never a reinterpretation. A verb
+    that still declares one kind (``gain_subtrait``) keeps behaving as it did."""
+    from transversal.services.effects_applier.datatypes import (
+        OWNER_ID_CONTEXT_KEY, OWNER_KIND_CONTEXT_KEY)
+    from transversal.services.effects_applier.trait_helpers import _trait_owner
+
+    outside = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                     action="gain_subtrait", target="trait-rank", result="d4",
+                     context={OWNER_ID_CONTEXT_KEY: "ts-parent",
+                              OWNER_KIND_CONTEXT_KEY: "entity"})
+    assert _trait_owner(_entity(), outside, FakeRepo()) == ("traitsetting", "ts-parent")
+    silent = outside.model_copy(update={"context": {OWNER_ID_CONTEXT_KEY: "ts-parent"}})
+    assert _trait_owner(_entity(), silent, FakeRepo()) == ("traitsetting", "ts-parent")
 
 
 def test_setting_a_challenge_to_its_capacity_completes_it(monkeypatch):
