@@ -317,9 +317,30 @@ def _apply_armed(
             source, source_element = resolved
     effect_context = _source_context(context, source, source_element, armed.source_sfx_id, armed.source_id)
     applied: list[Effect] = []
+    condition_repo = None
+    condition_entity = None
     for effect in armed.effects:
         if effect.timing.value != event_type:
             continue
+        if effect.conditions:
+            # An armed effect's *own* gates run here, at the roll — the only moment
+            # the dice exist. Arming happens at the trigger, where there may be no
+            # roll at all, so a roll-state gate cannot live on the SFX.
+            #
+            # The condition's path may also publish named outputs ("the d4 traits
+            # in this roll"), which the effect's own targeting path then reads by
+            # name; they join this activation's scope like any other step output.
+            if condition_repo is None:
+                condition_repo = _get_repo()
+                condition_entity = (
+                    condition_repo.get_entity(entity_id) if condition_repo is not None else None
+                )
+            from transversal.services.conditions import evaluate_conditions
+            if not evaluate_conditions(
+                condition_entity, effect.conditions, condition_repo, context,
+                source=source, source_element=source_element, out_bindings=bindings,
+            ):
+                continue
         if bool(effect.die_filter):
             # A die filter runs the effect once per matching die. Everything the
             # effect resolves — its subject, its target path, its references —

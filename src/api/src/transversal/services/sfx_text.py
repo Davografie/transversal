@@ -45,6 +45,7 @@ from transversal.services.target_spec import (
     SelectStep,
     TargetSpec,
     ValueType,
+    spec_variables,
     trace,
 )
 
@@ -1021,6 +1022,12 @@ def _effect_parts(effect: Effect, *, resolve: NameResolver | None = None,
 
     if target:
         if subject:
+            if "{subject}" in reg.effect_card(effect.type, effect.action):
+                # The template gives the subject its own slot, so it is handed
+                # over bare: there it leads the clause ("each occupant here
+                # travels to X") rather than trailing a preposition that would
+                # reverse who moves and what they move to.
+                return target, subject
             prep = _EFFECT_SUBJECT_PREPOSITIONS.get(effect.type, "on")
             # The "lands on" clause is joined with a preposition, and a path can
             # end with that same word: "one of the trait instances of the entity
@@ -1132,6 +1139,7 @@ def _ref_result(effect: Effect, *, resolve: NameResolver | None = None,
 def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
                  source_element: str | None = None, variables=None) -> str:
     """An effect's clause, without timing/scope/duration (those group)."""
+    variables = _effect_scope(effect, source_element, variables)
     target, subject = _effect_parts(effect, resolve=resolve, source_element=source_element,
                                     variables=variables)
     ref_result = _ref_result(effect, resolve=resolve, source_element=source_element,
@@ -1150,12 +1158,13 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
         template = "create {target}"
     elif not target and "{target}" in template:
         target = _target_placeholder(effect)
-    if subject:
+    if subject and "{subject}" not in template:
         target = f"{target} {subject}" if target else subject
     if not result_text:
         # Drop a clause the empty placeholder leaves dangling ("… as {result}").
         template = re.sub(r"\s+\b(at|to|by|as|on|with|from|of)\s+\{result\}", "", template)
-    text = template.format(target=target, result=result_text, limit=which_limit)
+    text = template.format(target=target, result=result_text, limit=which_limit,
+                           subject=subject)
     if effect.negative and "complication" not in text:
         text = f"{text} as a complication"
 
@@ -1214,12 +1223,55 @@ def effect_text(effect: Effect, *, resolve: NameResolver | None = None,
                          variables=variables)
 
 
-def _effect_key(effect: Effect) -> tuple:
+def _effect_scope(effect: Effect, source_element: str | None, variables):
+    """The activation scope as *this* effect sees it — its own gate outputs included.
+
+    An effect's conditions run before it does, so the names their paths output are
+    in scope for its own paths; without tracing them here a path naming one ("for
+    each d4 trait") renders untyped, i.e. singular.
+    """
+    for cond in (effect.conditions or []):
+        if cond.spec is not None:
+            variables = spec_variables(cond.spec, source_element, variables)
+    return variables
+
+
+def _repeat_scope(effect: Effect, *, resolve: NameResolver | None = None,
+                  source_element: str | None = None, variables=None) -> str:
+    """How many times the effect runs, when it runs once per thing.
+
+    Two ways to say it, one reading. A ``die_filter`` names dice ("for each
+    unchosen die from this trait"). A ``target_spec`` on an action whose card
+    template has no ``{target}`` slot — ``earn``/``spend`` razmerit, a dice-limit
+    bump, a suppress — names the things it happens *for*, because the template
+    has nowhere else to put them ("for each d4 trait"). That clause is not
+    decoration: the applier fans the effect out once per resolved target, so a
+    card that dropped it would promise one razmerit where the rule pays one per
+    trait.
+    """
+    die_scope = _die_scope(effect)
+    if die_scope:
+        return die_scope
+    if "{target}" in reg.effect_card(effect.type, effect.action):
+        return ""  # the path is the effect's object, and the template names it
+    spec = effect.target_spec
+    if spec is None or not spec.steps:
+        return ""
+    phrase = path_phrase(spec, source_element=source_element, resolve=resolve,
+                         variables=_effect_scope(effect, source_element, variables))
+    rendered = render_phrase(phrase, _determiner(phrase) or "the")
+    return f"for {rendered}" if rendered else ""
+
+
+def _effect_key(effect: Effect, resolve: NameResolver | None = None,
+                source_element: str | None = None, variables=None) -> tuple:
     """What two effects must share to be read as one sentence."""
     duration = effect.duration
     timers = tuple((t.event, t.remaining) for t in duration.timers) if duration else ()
     combine = getattr(duration.combine, "value", duration.combine) if duration else ""
-    return (effect.timing, timers, combine, _die_scope(effect))
+    return (effect.timing, timers, combine,
+            _repeat_scope(effect, resolve=resolve, source_element=source_element,
+                          variables=variables))
 
 
 def _effects_text(effects: list[Effect], *, resolve: NameResolver | None = None,
@@ -1232,14 +1284,15 @@ def _effects_text(effects: list[Effect], *, resolve: NameResolver | None = None,
     """
     groups: list[tuple[tuple, list[Effect]]] = []
     for effect in effects:
-        key = _effect_key(effect)
+        key = _effect_key(effect, resolve=resolve, source_element=source_element,
+                          variables=variables)
         if groups and groups[-1][0] == key:
             groups[-1][1].append(effect)
         else:
             groups.append((key, [effect]))
 
     rendered = []
-    for (timing, timers, combine, die_scope), group in groups:
+    for (timing, timers, combine, repeat_scope), group in groups:
         body = "; ".join(
             c for c in (_effect_core(e, resolve=resolve, source_element=source_element,
                                      variables=variables) for e in group) if c
@@ -1247,10 +1300,10 @@ def _effects_text(effects: list[Effect], *, resolve: NameResolver | None = None,
         if not body:
             continue
         lead = _LEADING_TIMINGS.get(timing)
-        if lead and die_scope:
-            body = f"{lead}, {die_scope}, {body}"
-        elif die_scope:
-            body = f"{die_scope}, {body}"
+        if lead and repeat_scope:
+            body = f"{lead}, {repeat_scope}, {body}"
+        elif repeat_scope:
+            body = f"{repeat_scope}, {body}"
         elif lead:
             body = f"{lead}, {body}"
         if timing in _TRAILING_TIMINGS:
@@ -1344,6 +1397,12 @@ def sfx_text(sfx: SFX, *, resolve: NameResolver | None = None,
 
     for cond in sfx.conditions:
         clause = condition_text(cond, resolve=resolve, source_element=source_element, variables=seeds)
+        # A condition's named outputs are in scope for every effect — the engine
+        # evaluates the gate first and shares the scope — so the effects below
+        # must be typed against them. Without this a path naming a gate's output
+        # ("for each d4 trait") renders untyped, i.e. singular.
+        if cond.spec is not None:
+            seeds = spec_variables(cond.spec, source_element, seeds)
         if not clause:
             continue
         (narrative if cond.type == ConditionType.NARRATIVE else rules).append(clause)
