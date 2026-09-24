@@ -194,6 +194,16 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="copy",
         valid_timings=["IMMEDIATE"],
         fields=[_RECIPIENT_FIELD],
+        # How the recipient came by it. The vocabulary is the data model's own
+        # (`source_type`), minus the two the engine writes for other reasons
+        # (a life-path term, an event). "gifted" is the neutral default: a copy
+        # is a hand-over; "taught" is a deliberate lesson, and the teach
+        # reduction table attaches to it as a separate SFX.
+        context_fields=[
+            EffectFieldDef(name="provenance", label="How They Got It",
+                          field_type="select", required=False, default="gifted",
+                          options=["gifted", "taught"]),
+        ],
         refs=[RefDef("trait", "Trait to Copy", "traitsetting")],
         refs_first=True,
     ),

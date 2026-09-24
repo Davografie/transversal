@@ -43,4 +43,32 @@ ACTIONS: list[EffectActionMeta] = [
         supports_duration=True,
         inverse=("entity", "remove_targeting_ban"),
     ),
+
+    # ── Contests ───────────────────────────────────────
+    # The missing half of the contest vocabulary: the engine could *react* to a
+    # contest (`contest_win`) but nothing could put two entities into one. Until
+    # now the only way in was the UI's challenge button, which is why teach/take
+    # could not be rebuilt as SFX — `take` is a contest, and an SFX could not
+    # start it. See [[Character Growth#Trait Transfer — removed (2026-09-10)]].
+    #
+    # No duration and no inverse, deliberately: a contest is beat-scoped
+    # *ephemeral* state ([[Contest Tracker]]) that ends by resolution or by giving
+    # in — never by a timer expiring. An "un-start" would have to decide what to
+    # do about a contest already fought, and every answer is wrong.
+    EffectActionMeta(
+        action_id="start_contest",
+        label="Start Contest",
+        description=(
+            "Oppose another entity: this starts a fresh contest between them at the "
+            "acting entity's location (their rolls become contests until it resolves)"
+        ),
+        category="either",
+        effect_type="contest",
+        effect_action="start",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Opponent", field_type="text", required=True),
+        ],
+        target_kind="entity",
+    ),
 ]

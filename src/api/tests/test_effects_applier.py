@@ -13,6 +13,7 @@ from transversal.domain import (
     Projection,
     RatingType,
     TargetRef,
+    TargetingBan,
     TraitSetting,
     TraitSetSetting,
     TransversalType,
@@ -728,6 +729,174 @@ def test_move_trait_refuses_when_the_recipient_already_has_it():
     assert result.new_trait_settings == []
     assert result.removed_trait_settings == []
     assert "already has asset" in result.applied[0].summary
+
+
+# ── Provenance + instance carry (B105) ───────
+# The teach/gift/take rebuild needs the effect system to say *where a trait came
+# from*; a copy that cannot name its giver is not a gift. See
+# [[Character Growth#Trait Transfer — removed (2026-09-10)]].
+
+def test_copy_records_the_giver_and_the_instance_it_came_from():
+    src = _ts("medicine", [DieType.D8], entity_id="char-1", traitset_id="ts-med",
+              statement="Field surgery")
+    learner = _entity(id="char-2", name="Dmitri")
+    repo = FakeRepo(traits=[FakeTrait("medicine", "ts-med")], traitsettings=[src],
+                    entities=[learner])
+    result = apply_effects(_entity(), [_copy_effect("char-2", "char-1:medicine")], repo)
+    ts = result.new_trait_settings[0]
+    assert ts.source_type == "gifted"          # the neutral default
+    assert ts.source_entity_id == "char-1"     # who handed it over
+    assert ts.source_trait_setting_id == src.id
+
+
+def test_copy_can_say_a_trait_was_taught_rather_than_gifted():
+    src = _ts("medicine", [DieType.D8], entity_id="char-1", traitset_id="ts-med")
+    learner = _entity(id="char-2", name="Dmitri")
+    repo = FakeRepo(traits=[FakeTrait("medicine", "ts-med")], traitsettings=[src],
+                    entities=[learner])
+    effect = _copy_effect("char-2", "char-1:medicine")
+    effect.context = {"provenance": "taught"}
+    result = apply_effects(_entity(), [effect], repo)
+    assert result.new_trait_settings[0].source_type == "taught"
+
+
+def test_copy_carries_the_instances_reach_and_order():
+    """Instance config travels with the instance, the anchor does not."""
+    src = _ts("medicine", [DieType.D8], entity_id="char-1", traitset_id="ts-med",
+              order=3, locations_enabled=["loc-clinic"], locations_disabled=["loc-wilds"],
+              tags=["field"])
+    learner = _entity(id="char-2", name="Dmitri")
+    repo = FakeRepo(traits=[FakeTrait("medicine", "ts-med")], traitsettings=[src],
+                    entities=[learner])
+    result = apply_effects(_entity(), [_copy_effect("char-2", "char-1:medicine")], repo)
+    ts = result.new_trait_settings[0]
+    assert ts.order == 3
+    assert ts.locations_enabled == ["loc-clinic"]
+    assert ts.locations_disabled == ["loc-wilds"]
+    assert ts.tags == ["field"]
+
+
+def test_move_records_that_the_trait_was_taken():
+    src = _ts("asset", [DieType.D8], entity_id="char-1", traitset_id="ts-assets")
+    thief = _entity(id="char-2", name="Kael")
+    repo = FakeRepo(traits=[FakeTrait("asset", "ts-assets")], traitsettings=[src],
+                    entities=[thief])
+    result = apply_effects(_entity(), [_move_effect("char-2", "char-1:asset")], repo)
+    moved = result.new_trait_settings[0]
+    assert moved.source_type == "taken"
+    assert moved.source_entity_id == "char-1"       # the previous owner
+    assert moved.source_trait_setting_id == src.id
+
+
+# ── Contest start (B105) ─────────────────────
+
+def _contest_effect(opponent_id, **overrides):
+    kwargs = dict(timing=EffectTiming.IMMEDIATE, type="contest", action="start",
+                  target=opponent_id)
+    kwargs.update(overrides)
+    return Effect(**kwargs)
+
+
+def _started(monkeypatch):
+    """Capture ``start_contest`` calls without touching the live tracker."""
+    from transversal.services import contest_tracker
+
+    calls = []
+    monkeypatch.setattr(contest_tracker, "start_contest",
+                        lambda loc, eid, opp, uni="": calls.append((loc, eid, opp, uni)))
+    return calls
+
+
+def test_start_contest_opposes_the_subject_and_the_target(monkeypatch):
+    calls = _started(monkeypatch)
+    opponent = _entity(id="char-2", name="Wei Zhao")
+    repo = FakeRepo(entities=[opponent])
+    actor = _entity(id="char-1", current_location="loc-arena", current_universe="three_realms")
+    result = apply_effects(actor, [_contest_effect("char-2")], repo)
+    assert calls == [("loc-arena", "char-1", "char-2", "three_realms")]
+    assert "contest with char-2" in result.applied[0].summary
+
+
+def test_start_contest_refuses_itself(monkeypatch):
+    calls = _started(monkeypatch)
+    repo = FakeRepo()
+    actor = _entity(id="char-1", current_location="loc-arena")
+    result = apply_effects(actor, [_contest_effect("char-1")], repo)
+    assert calls == []
+    assert "cannot contest itself" in result.applied[0].summary
+
+
+def test_start_contest_needs_a_location(monkeypatch):
+    calls = _started(monkeypatch)
+    opponent = _entity(id="char-2", name="Wei Zhao")
+    repo = FakeRepo(entities=[opponent])
+    result = apply_effects(_entity(id="char-1"), [_contest_effect("char-2")], repo)
+    assert calls == []
+    assert "no location to contest at" in result.applied[0].summary
+
+
+def test_start_contest_honours_a_targeting_ban(monkeypatch):
+    """The give-in ban exists so the loser cannot re-challenge — a rule may not
+    route around it."""
+    calls = _started(monkeypatch)
+    opponent = _entity(id="char-2", name="Wei Zhao")
+    repo = FakeRepo(entities=[opponent])
+    actor = _entity(id="char-1", current_location="loc-arena")
+    actor.targeting_bans = [TargetingBan(target_id="char-2")]
+    result = apply_effects(actor, [_contest_effect("char-2")], repo)
+    assert calls == []
+    assert "cannot target char-2 yet" in result.applied[0].summary
+
+
+def test_start_contest_refuses_an_unknown_opponent(monkeypatch):
+    calls = _started(monkeypatch)
+    repo = FakeRepo()
+    actor = _entity(id="char-1", current_location="loc-arena")
+    result = apply_effects(actor, [_contest_effect("char-nope")], repo)
+    assert calls == []
+    assert "no entity char-nope to contest" in result.applied[0].summary
+
+
+def test_start_contest_creates_the_state_on_both_sides():
+    """The real tracker, not a stand-in: a contest exists for *both* entities
+    afterwards, and both are marked as contests rather than tests."""
+    from transversal.domain import RollKind
+    from transversal.services.contest_tracker import get_contest_tracker
+
+    ct = get_contest_tracker()
+    ct.clear_all()
+    try:
+        opponent = _entity(id="char-2", name="Wei Zhao")
+        repo = FakeRepo(entities=[opponent])
+        actor = _entity(id="char-1", current_location="loc-arena")
+        result = apply_effects(actor, [_contest_effect("char-2")], repo)
+        assert result.applied
+        challenger, defendant = ct.get_contestants("loc-arena", "char-1")
+        assert {challenger.entity_id, defendant.entity_id} == {"char-1", "char-2"}
+        assert challenger.opposition_entity_id == "char-2"
+        assert challenger.kind == RollKind.CONTEST
+        assert defendant.kind == RollKind.CONTEST
+    finally:
+        ct.clear_all()
+
+
+def test_start_contest_is_registered_on_the_engine_registry():
+    """The engine dispatches through ``effect_registry``, so a handler only in
+    ``_MUTATION_HANDLERS`` would never fire on a real trigger."""
+    from types import SimpleNamespace
+    import transversal.services.effects_applier as applier
+    from transversal.services.effects_applier import EffectRegistry
+
+    original = applier.effect_registry
+    applier.effect_registry = EffectRegistry()
+    try:
+        raz = SimpleNamespace(spend=lambda *a, **k: None, earn=lambda *a, **k: None,
+                              transfer=lambda *a, **k: None)
+        em = SimpleNamespace(repo=None, create=lambda *a, **k: None)
+        applier._register_core_handlers(em, raz)
+        assert ("contest", "start") in applier.effect_registry._handlers
+    finally:
+        applier.effect_registry = original
 
 
 def test_remove_die_removes_matching_die():

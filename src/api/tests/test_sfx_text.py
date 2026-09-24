@@ -949,3 +949,17 @@ def test_the_state_reading_does_not_claim_another_party():
     ])
     assert condition_text(Condition(type=ConditionType.TARGET_PATH, spec=spec)) != \
         "you are in a contest"
+
+
+def test_starting_a_contest_names_the_opponent():
+    """The contest-start action is the missing half of the contest vocabulary
+    (B105) — and it has to read as plainly as the challenge button it replaces."""
+    effect = Effect(type="contest", action="start", target="char-2")
+    assert effect_text(effect, resolve={"char-2": "Wei Zhao"}.get) == \
+        "start a contest with Wei Zhao"
+
+
+def test_starting_a_contest_reads_the_opponent_token():
+    """A contest-triggered rule names the other side with the event's own token."""
+    effect = Effect(type="contest", action="start", target="{contest_entity_opponent}")
+    assert effect_text(effect) == "start a contest with the opposing entity"

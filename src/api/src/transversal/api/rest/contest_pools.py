@@ -16,6 +16,7 @@ from transversal.domain import CommittedResult, ContestCompare, ContestOutcome, 
 from transversal.services.contest_tracker import (
     broadcast_pool_change,
     get_contest_tracker,
+    start_contest,
 )
 from transversal.services.scene_state import get_scene_store
 
@@ -66,7 +67,12 @@ def _to_committed(body: SetRequest) -> CommittedResult:
 
 @router.post("/{location_id}/pools/{entity_id}/set-opposition")
 async def set_opposition(location_id: str, entity_id: str, body: SetOppositionRequest):
-    """Challenge: designate an opponent for an entity's contest here."""
+    """Challenge: designate an opponent for an entity's contest here.
+
+    ``start_contest`` is the shared choke point — the ``contest/start`` effect
+    comes through the same function, so a challenge begun at the table and one
+    begun by a rule cannot drift.
+    """
     from transversal.main import _get_repo
     from transversal.services.targeting_bans import has_targeting_ban
 
@@ -74,13 +80,7 @@ async def set_opposition(location_id: str, entity_id: str, body: SetOppositionRe
     if has_targeting_ban(challenger, body.opponent_id):
         return {"status": "blocked", "reason": "You can't target that entity yet"}
 
-    ct = get_contest_tracker()
-    ct.set_opposition(location_id, entity_id, body.opponent_id, body.universe)
-    broadcast_pool_change(location_id, entity_id)
-    _broadcast("contest_challenged", location_id, entity_id, {
-        "challenger_id": entity_id,
-        "opponent_id": body.opponent_id,
-    })
+    start_contest(location_id, entity_id, body.opponent_id, body.universe)
     return {
         "entity_id": entity_id,
         "location_id": location_id,

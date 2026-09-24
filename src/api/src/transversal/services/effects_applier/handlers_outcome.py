@@ -125,3 +125,56 @@ def _apply_step_up_outcome(entity, effect: Effect, repo, result: EffectsResult) 
                          committed.model_copy(update={"effect_die": stepped}))
     result.applied.append(AppliedEffect(
         effect, f"stepped the outcome's effect die {before.value} → {stepped.value}"))
+
+
+def _apply_start_contest(entity, effect: Effect, repo, result: EffectsResult) -> None:
+    """Put the subject and the effect's target into a contest (B105).
+
+    The **challenger is the subject** — the entity the effect was applied to,
+    which the ``entity``/``entity_spec`` machinery may have fanned out to someone
+    other than the actor — and the **opponent is the target**. This is the same
+    shape the ``contest_win`` conditions read back (the challenger is the side
+    carrying ``opposition_entity_id``), so a rule that starts a contest can react
+    to its own result.
+
+    Both gates the REST challenge route applies are honoured here too: a
+    **targeting ban** (the give-in ban exists precisely so the loser cannot
+    re-challenge, and an SFX may not route around it) and the need for a
+    **location** (a contest is per-location state; an entity with nowhere to be
+    has no contest to be in). Every refusal is reported as an applied-effect
+    note rather than raised — an unplaceable challenge should not abort the rest
+    of a rule's effects.
+    """
+    from transversal.services.effects_applier.targeting import _effect_subject, _resolve_target, _track_subject
+    from transversal.services.targeting_bans import has_targeting_ban
+
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    opponent_id = _resolve_target(subject, effect, result, repo)
+    if not opponent_id:
+        result.applied.append(AppliedEffect(effect, "no opponent named for the contest"))
+        return
+    if opponent_id == subject.id:
+        result.applied.append(AppliedEffect(effect, "an entity cannot contest itself"))
+        return
+    if has_targeting_ban(subject, opponent_id):
+        result.applied.append(AppliedEffect(
+            effect, f"{subject.name or subject.id} cannot target {opponent_id} yet"))
+        return
+    if repo.get_entity(opponent_id) is None:
+        result.applied.append(AppliedEffect(effect, f"no entity {opponent_id} to contest"))
+        return
+    location_id = subject.current_location or ""
+    if not location_id:
+        result.applied.append(AppliedEffect(
+            effect, f"{subject.name or subject.id} has no location to contest at"))
+        return
+
+    from transversal.services.contest_tracker import start_contest
+
+    start_contest(location_id, subject.id, opponent_id, subject.current_universe or "")
+    result.applied.append(AppliedEffect(
+        effect, f"contest with {opponent_id} at {location_id}"))

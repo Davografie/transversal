@@ -46,6 +46,7 @@ from transversal.services.effects_applier.handlers_pools import (
     _apply_set_traitset_limit,
 )
 from transversal.services.effects_applier.handlers_outcome import (
+    _apply_start_contest,
     _apply_step_up_effect,
     _apply_step_up_outcome,
 )
@@ -142,6 +143,8 @@ _MUTATION_HANDLERS = {
     # acts on a committed result rather than on an entity (see handlers_outcome).
     ("modify_outcome", "step_up_effect"): _apply_step_up_effect,
     ("modify_outcome", "step_up_outcome"): _apply_step_up_outcome,
+    # Starting a contest — the missing half of the contest vocabulary (B105).
+    ("contest", "start"): _apply_start_contest,
     ("relationship", "create"): _apply_relationship_create,
     ("travel", "move"): _apply_travel,
     ("location", "set"): _apply_set_location,

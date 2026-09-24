@@ -67,6 +67,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "draft_life_path": "Life Path", "force_muster": "Life Path",
     "muster": "Life Path", "enroll_life_path": "Life Path",
     "create_relationship": "Relationship", "entity_targeting_ban": "Relationship",
+    "start_contest": "Contest",
     "grant_sfx": "Rules",
 }
 

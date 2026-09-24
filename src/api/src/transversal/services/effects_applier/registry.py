@@ -355,6 +355,9 @@ def _register_core_handlers(em, raz):
     # so they commit rather than passing through.
     for action in ("step_up_effect", "step_up_outcome"):
         effect_registry.register("modify_outcome", action, _commit)
+    # Starting a contest is a scene-state change on two entities, so it commits
+    # through the shared applier like every other real mutation (B105).
+    effect_registry.register("contest", "start", _commit)
     # The rest of the dice-pool actions are still resolver-context only.
     effect_registry.register("modify_roll", "*",
         lambda a, eid, u, ctx: None)  # passed through to resolver context

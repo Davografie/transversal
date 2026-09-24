@@ -97,6 +97,12 @@ def _replicate_traitsetting(src: TraitSetting, subject: Entity, repo, effect: Ef
     instance (statement is what distinguishes duplicates). ``carry_grants`` is
     for a *move*, where the instance keeps its SFX grants, spent dice and
     visibility: it is the same trait changing hands, not a fresh one.
+
+    Everything that describes **the instance** travels with it — including the
+    per-instance presentation and reach (``order``, ``locations_enabled``/
+    ``locations_disabled``) — while anything naming the **anchor**
+    (``from_type``/``projection_id``/``parent_traitsetting_id``) does not: the
+    recipient is an entity, so the new setting is anchored to it.
     """
     get_traitset = getattr(repo, "get_traitset_by_id", None)
     traitset = get_traitset(src.traitset_id) if src.traitset_id and get_traitset else None
@@ -116,7 +122,10 @@ def _replicate_traitsetting(src: TraitSetting, subject: Entity, repo, effect: Ef
         polarity=src.polarity,
         statement=src.statement,
         notes=src.notes,
+        order=src.order,
         tags=list(src.tags),
+        locations_enabled=list(src.locations_enabled),
+        locations_disabled=list(src.locations_disabled),
     )
     if carry_grants:
         ts.sfx_ids = list(src.sfx_ids)
@@ -124,6 +133,24 @@ def _replicate_traitsetting(src: TraitSetting, subject: Entity, repo, effect: Ef
         ts.spent_dice = list(src.spent_dice)
         ts.known_to = list(src.known_to)
     return ts
+
+
+def _write_provenance(ts: TraitSetting, src: TraitSetting, source_type: str) -> None:
+    """Record how ``ts`` was acquired, pointing back at the instance it came from.
+
+    ``source_type`` is the vocabulary the data model already carries
+    (``taught`` | ``gifted`` | ``taken`` | ``life_path_term`` | ``event``);
+    ``source_entity_id`` is **who it came from** — the giver for a copy, the
+    previous owner for a move — and ``source_trait_setting_id`` is the original
+    instance a copy derives from. This is what the removed
+    ``services/trait_transfer.py`` wrote, and the reason the effect system needs
+    its own actions rather than ``gain`` + ``remove``: gain/remove cannot say
+    where the trait came from.
+    """
+    ts.source_type = source_type
+    ts.source_entity_id = src.entity_id
+    ts.source_trait_setting_id = src.id
+
 
 def _apply_copy_trait(entity, effect, repo, result):
     """Give the subject a copy of another trait instance (teach / gift).
@@ -135,7 +162,9 @@ def _apply_copy_trait(entity, effect, repo, result):
 
     Anchored to the recipient entity rather than mirroring the source's
     projection anchor, and left without ``sfx_ids`` so the repo seeds the
-    trait's default grants when it creates the instance.
+    trait's default grants when it creates the instance. It *does* record
+    provenance (``gifted`` by default), because a copy that cannot say who it
+    came from is exactly what the teach/gift rebuild needs.
     """
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -150,6 +179,7 @@ def _apply_copy_trait(entity, effect, repo, result):
     ts = _replicate_traitsetting(src, subject, repo, effect, result)
     if ts is None:
         return
+    _write_provenance(ts, src, _ctx(effect, "provenance") or "gifted")
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"copied {src.trait_id} to {subject.id}", ts.id))
 
@@ -279,6 +309,10 @@ def _apply_move_trait(entity, effect, repo, result):
     same trait changing hands. A trait setting's id is keyed to its owner
     (``{entity}:{trait}``), so a move is a create on the recipient plus a delete
     of the source, not a field edit.
+
+    Provenance is ``taken`` and names the entity it was taken **from** — the
+    move is the steal; a consenting hand-over is a copy plus a remove, which
+    keeps the two meaning different things.
     """
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -296,6 +330,7 @@ def _apply_move_trait(entity, effect, repo, result):
     ts = _replicate_traitsetting(src, subject, repo, effect, result, carry_grants=True)
     if ts is None:
         return
+    _write_provenance(ts, src, "taken")
     result.new_trait_settings.append(ts)
     result.removed_trait_settings.append(src)
     result.applied.append(

@@ -45,6 +45,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_dice_limit", "increase"): "increase the {limit} dice limit by {result}",
     ("modify_dice_limit", "decrease"): "decrease the {limit} dice limit by {result}",
     ("entity", "targeting_ban"): "impose a targeting ban on {target}",
+    ("contest", "start"): "start a contest with {target}",
     ("relationship", "create"): "create a relationship with {target}",
     ("attune", "enable"): "attune {target} to {result}",
     ("attune", "suppress"): "suppress {result}",

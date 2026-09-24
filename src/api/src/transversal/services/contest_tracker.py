@@ -670,3 +670,45 @@ def broadcast_pool_change(
                 "location_id": location_id,
             },
         ))
+
+
+def broadcast_contest_challenged(location_id: str, entity_id: str, opponent_id: str) -> None:
+    """Publish a ``contest_challenged`` SSE event to all active sessions.
+
+    Payload matches the frontend's handler:
+      { location_id, entity_id, challenger_id, opponent_id }
+    """
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="contest_challenged",
+            session_id=s.id,
+            data={
+                "location_id": location_id,
+                "entity_id": entity_id,
+                "challenger_id": entity_id,
+                "opponent_id": opponent_id,
+            },
+        ))
+
+
+def start_contest(location_id: str, entity_id: str, opponent_id: str,
+                  universe: str = "") -> ContestState:
+    """Put two entities into a contest at ``location_id`` — the one way in.
+
+    The choke point for **starting** a contest: the REST challenge route and the
+    ``contest/start`` effect both come through here, so a contest begun by a rule
+    and one begun by the challenge button cannot drift. Both create the state on
+    both sides (``set_opposition``) and both tell every active session — the pool
+    event the roller listens to, and the challenge event the table sees.
+
+    Co-location is *not* enforced, matching ``set_opposition``: the caller picks
+    the location, so a remote or telepathic challenge is expressible and the
+    author's target path is what constrains it.
+    """
+    state = get_contest_tracker().set_opposition(location_id, entity_id, opponent_id, universe)
+    broadcast_pool_change(location_id, entity_id)
+    broadcast_contest_challenged(location_id, entity_id, opponent_id)
+    return state
