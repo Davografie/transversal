@@ -716,8 +716,18 @@ def _evaluate_phrase(p: Phrase, step: EvaluateStep, named: Phrase | None = None)
     if count is None:
         return Phrase(predicate=f"the number of {render_phrase(_as_many(subject), '')} is "
                                 f"{_OP_WORDS.get(op, op)} {value}".strip())
-    if count == 1 and op in (">=", "=="):
+    if count == 1 and op == ">=":
         return Phrase(predicate=_at_least_one(subject))
+    if count == 1 and op == "==":
+        # ``== 1`` is **exactly one**, not "at least one": the evaluator compares
+        # the collection's length, so a roll carrying two matching traits fails
+        # this gate. Reading it as existence made the card promise a rule narrower
+        # than it reads — the live `sfx-d4-bonus` says "at least one d4 trait" and
+        # fires only when there is exactly one, which is how this was found.
+        one = render_phrase(_as_one(subject), "")
+        if subject.possessive:
+            one = f"of {one}"
+        return Phrase(predicate=f"there is exactly one {one}".strip())
     if count == 0 and op == ">":
         return Phrase(predicate=_at_least_one(subject))
     if op == "==" and count == 0:

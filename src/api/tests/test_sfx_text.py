@@ -1034,3 +1034,31 @@ def test_a_lone_die_filter_reads_exactly_as_before():
     effect = Effect(type="modify_trait", action="gain", target="trait-scar", result="d6",
                     die_filter={"role": None})
     assert "for each unchosen die," in effect_text(effect)
+
+
+def test_exactly_one_is_not_read_as_at_least_one():
+    """`count == 1` compares the collection's length, so a roll carrying two
+    matching traits fails the gate. The card said "at least one" for both `>= 1`
+    and `== 1`, which promised a rule wider than it is — the live `sfx-d4-bonus`
+    is the case that exposed it (its card claimed existence, its gate required one).
+    """
+    def condition(op):
+        return Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec(steps=[
+            {"kind": "select", "collection": "rolled_dice"},
+            {"kind": "navigate", "edge": "traitsetting"},
+            {"kind": "evaluate", "operator": op, "field": "count", "value": 1},
+        ]))
+
+    assert "at least one" in condition_text(condition(">="))
+    exact = condition_text(condition("=="))
+    assert "exactly one" in exact
+    assert "at least one" not in exact
+
+
+def test_more_than_zero_still_reads_as_existence():
+    condition = Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "rolled_dice"},
+        {"kind": "navigate", "edge": "traitsetting"},
+        {"kind": "evaluate", "operator": ">", "field": "count", "value": 0},
+    ]))
+    assert "at least one" in condition_text(condition)
