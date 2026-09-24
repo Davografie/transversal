@@ -157,11 +157,15 @@ const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useD
   color: var(--text-dim); cursor: pointer; flex-shrink: 0; text-align: center; user-select: none;
   border-radius: 6px; transition: background 0.12s, color 0.12s;
 }
+/* The partial reveal gets the accent tone. NOT `--accent-dim`: that one is a
+   *background* tint (`background:`/`border:` everywhere it is used) and light
+   theme flips it to a pale `#b9d3ec`, which as text on the light panel was
+   invisible. `--accent` is the accent *foreground* (see `.ee-var`) and reads in
+   both themes. Declared before `:hover` so the hover colour still wins — they
+   have equal specificity, so source order decides. */
+.tree-toggle.reveal-partial { color: var(--accent); }
 .tree-toggle:hover { color: var(--text); background: var(--overlay-8); }
 .tree-toggle:active { background: var(--overlay-12); }
-/* The partial reveal is the filter's doing, not the GM's — a quieter tone than a
-   level they opened themselves, so the outline glyph reads at a glance. */
-.tree-toggle.reveal-partial { color: var(--accent-dim); }
 .tree-toggle.leaf { visibility: hidden; }
 .tree-toggle.occupant { font-size: 8px; width: 32px; min-height: 32px; line-height: 32px; color: var(--text-dim); }
 
