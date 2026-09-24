@@ -473,7 +473,12 @@ def _select_phrase(step: SelectStep, source_element: str | None = None,
 # earlier rather than a literal: "in the universe you chose" reads, "with
 # universe equal to the universe" does not.
 _RELATION_WORDS = {"universe": "in", "origin_universe": "from", "location": "in",
-                   "current_location": "in", "current_universe": "in"}
+                   "current_location": "in", "current_universe": "in",
+                   # A path that names the far end of a hop relates the collection
+                   # to that thing: "your relationships **with** the Verdant
+                   # Steps", "your trait instances **of** Spiritual Power" — not
+                   # "with contact equal to" / "with trait equal to".
+                   "contact_id": "with", "trait_id": "of"}
 
 
 def _bound_name(value) -> str:
@@ -1136,6 +1141,19 @@ def _ref_result(effect: Effect, *, resolve: NameResolver | None = None,
     return text
 
 
+def _drop_empty_clause(template: str, placeholder: str) -> str:
+    """Remove a prepositional clause whose placeholder came up empty.
+
+    ``{result}`` and ``{owner}`` are optional — an effect with no die, or one that
+    anchors to nothing — and their clauses are introduced by a preposition, so an
+    empty value leaves the sentence dangling ("gain X on", "… as"). Removing the
+    whole clause is what the reading wants; leaving the preposition is how the card
+    lied by omission in the other direction.
+    """
+    return re.sub(rf"\s+\b(at|to|by|as|on|with|from|of|under)\s+\{{{placeholder}\}}",
+                  "", template)
+
+
 def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
                  source_element: str | None = None, variables=None) -> str:
     """An effect's clause, without timing/scope/duration (those group)."""
@@ -1160,11 +1178,24 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
         target = _target_placeholder(effect)
     if subject and "{subject}" not in template:
         target = f"{target} {subject}" if target else subject
+    # The anchor, for the two verbs that hang what they make on something other
+    # than the entity ("gain a rank on your tie to …", "gain a facet under …").
+    # It was never filled in, so those cards raised instead of rendering: nothing
+    # live used them, which is exactly how it stayed hidden.
+    owner = ""
+    if effect.owner_spec is not None and effect.owner_spec.steps:
+        phrase = path_phrase(effect.owner_spec, source_element=source_element,
+                             variables=variables, resolve=resolve)
+        owner = render_phrase(phrase, _determiner(phrase))
+    if not owner:
+        # No anchor path = the trait anchors to the entity, so the clause goes
+        # rather than dangling ("gain a rank on").
+        template = _drop_empty_clause(template, "owner")
     if not result_text:
         # Drop a clause the empty placeholder leaves dangling ("… as {result}").
-        template = re.sub(r"\s+\b(at|to|by|as|on|with|from|of)\s+\{result\}", "", template)
+        template = _drop_empty_clause(template, "result")
     text = template.format(target=target, result=result_text, limit=which_limit,
-                           subject=subject)
+                           subject=subject, owner=owner)
     if effect.negative and "complication" not in text:
         text = f"{text} as a complication"
 
@@ -1198,6 +1229,12 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
         # longer exposes it — reach is meant to come from how many targets the
         # "who" path resolves to.
         text = f"{text}, reaching everyone there"
+    if effect.type == "modify_trait" and effect.action == "set_polarity":
+        # Which polarity *is* the effect ("set positive" vs "set negative"), and
+        # the form's default hides that it was a choice — the same reason the
+        # dice limit is said out loud.
+        polarity = str((effect.context or {}).get("polarity") or "positive")
+        text = f"{text} to {polarity}"
     if "{result}" not in template and result_text:
         text = f"{text} ({result_text})"
 
