@@ -389,6 +389,21 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     if repo is not None and sfx.id:
         warnings.extend(unreachable_directions(sfx, repo))
 
+    # Targets that name nothing. The rules live in `effect_validation` because a
+    # roll-table entry's effects need the same answer ([[B156]]); this only names
+    # the carrier. A dead target applies *silently* — no error, no log, just a
+    # dangling setting on the sheet — so authoring time is the only cheap place to
+    # catch it.
+    if repo is not None:
+        from transversal.services.effect_validation import find_missing_targets
+        from transversal.services.target_catalog import source_element as _src_el
+
+        for finding in find_missing_targets(
+            sfx.effects, repo,
+            source_element=_src_el(sfx.source_kind) if sfx.source_kind else None,
+        ):
+            warnings.append(f"Effect {finding.effect_index + 1}: {finding.message}")
+
     return warnings
 
 
