@@ -325,7 +325,8 @@ def seed_life_paths(repo) -> None:
     ROGUE_FACTION = "fac-rogue-cultivators"
 
     # ── Effect / table builders ───────────────────────
-    def eff(type_, action, target="", result=None, context=None, negative=False):
+    def eff(type_, action, target="", result=None, context=None, negative=False,
+            target_spec=None):
         return Effect(
             timing=EffectTiming.IMMEDIATE,
             type=type_,
@@ -334,7 +335,31 @@ def seed_life_paths(repo) -> None:
             result=result,
             negative=negative,
             context=context or {},
+            target_spec=target_spec,
         )
+
+    def rank_die_path(relationship):
+        """The lowest rating die of the rank instance on the tie to ``relationship``.
+
+        A demotion changes a **die**: a rating is a list, so "step down the rank"
+        has to say which one, and the trait-level verb (retired) silently stepped
+        the smallest without the card being able to say so. The path names the tie,
+        then the rank instance anchored to it, then the lowest of that rating's
+        dice.
+        """
+        return TargetSpec.model_validate({"steps": [
+            {"kind": "select", "collection": "self"},
+            {"kind": "navigate", "edge": "relationships"},
+            {"kind": "filter", "field": "contact_id", "operator": "==", "value": relationship},
+            {"kind": "filter", "field": "type", "operator": "==", "value": "membership"},
+            {"kind": "navigate", "edge": "traitsettings"},
+            {"kind": "filter", "field": "trait_id", "operator": "==", "value": "trait-rel-rank"},
+            {"kind": "navigate", "edge": "rating_dice"},
+            {"kind": "aggregate", "fn": "bottom", "field": "rating", "count": 1},
+        ]})
+
+    def demote(relationship=FACTION):
+        return eff("modify_roll", "step_down_die", target_spec=rank_die_path(relationship))
 
     def flow(action, target="", context=None):
         return eff("life_path", action, target, context=context)
@@ -452,7 +477,7 @@ def seed_life_paths(repo) -> None:
             entry("Qi backlash", effects=[trait("gain_or_step_up", "trait-3r-qi-reserves", "d4", relationship=None, negative=True), next_step("rt-verdant-advance")]),
             entry("Lost ground", effects=[eff("transfer_razmerit", "spend", "self", "2"), next_step("rt-verdant-advance")]),
             entry("Wounded spirit", effects=[trait("gain_or_step_up", "trait-3r-dao-comprehension", "d4", relationship=None, negative=True), next_step("rt-verdant-advance")]),
-            entry("Demoted", effects=[trait("step_down", "trait-rel-rank"), next_step("rt-verdant-advance")]),
+            entry("Demoted", effects=[demote(), next_step("rt-verdant-advance")]),
             entry("Expelled", effects=[flow("force_muster")]),
         ],
     ))
@@ -515,7 +540,7 @@ def seed_life_paths(repo) -> None:
             entry("Qi backlash", effects=[trait("gain_or_step_up", "trait-3r-qi-reserves", "d4", relationship=None, negative=True), next_step("rt-drifter-3r-advance")]),
             entry("Lost ground", effects=[eff("transfer_razmerit", "spend", "self", "2"), next_step("rt-drifter-3r-advance")]),
             entry("Wounded spirit", effects=[trait("gain_or_step_up", "trait-3r-dao-comprehension", "d4", relationship=None, negative=True), next_step("rt-drifter-3r-advance")]),
-            entry("Demoted", effects=[trait("step_down", "trait-rel-rank", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-advance")]),
+            entry("Demoted", effects=[demote(ROGUE_FACTION), next_step("rt-drifter-3r-advance")]),
             entry("Expelled", effects=[flow("force_muster")]),
         ],
     ))

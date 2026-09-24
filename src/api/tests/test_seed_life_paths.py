@@ -159,3 +159,29 @@ def test_shared_tables_use_named_exits():
     assert any(eff.target == "{return:next}" for eff in serve.effects)
     # Tenure targets the current term's faction, not a hardcoded one.
     assert any(eff.context.get("relationship") == "{term_faction}" for eff in serve.effects)
+
+
+def test_a_demotion_targets_a_rating_die_not_a_trait():
+    """A rating is a *list*, so "step down the rank" has to name which die.
+
+    The trait-level verb (retired) stepped the smallest one silently, which no card
+    could say; the seeded demotion therefore names the die through a path — the tie
+    to this faction, the rank instance anchored to it, then the lowest of its dice.
+    """
+    repo = SeedRepo()
+    seed_life_paths(repo)
+
+    table = repo.get_roll_table("rt-verdant-mishap")
+    assert table is not None
+    demoted = next(e for e in table.entries if e.label == "Demoted")
+    step = next(e for e in demoted.effects if e.action == "step_down_die")
+    assert (step.type, step.target) == ("modify_roll", ""), "the target comes from the path"
+
+    path = [s for s in step.target_spec.steps]
+    assert [s.kind for s in path] == ["select", "navigate", "filter", "filter",
+                                      "navigate", "filter", "navigate", "aggregate"]
+    assert (path[2].field, path[2].value) == ("contact_id", "fac-verdant-steps")
+    assert (path[3].field, path[3].value) == ("type", "membership")
+    assert (path[5].field, path[5].value) == ("trait_id", "trait-rel-rank")
+    assert path[6].edge == "rating_dice"
+    assert (path[7].fn, path[7].field) == ("bottom", "rating"), "the lowest die, as before"
