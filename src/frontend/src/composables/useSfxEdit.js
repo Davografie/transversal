@@ -42,8 +42,8 @@ export function createSfxEdit() {
   // Derived rules text for the current draft ([[SFX Natural Language Plan]]).
   const cardText = ref('')
 
-const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
-const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec implicit limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec implicit limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
 const VALIDATE_QUERY = `query($input: SfxInput!) { validateSfx(input: $input) }`
 // Derived rules text for an *unsaved* draft — the SFX editor's live card preview.
 const SFX_TEXT_QUERY = `query($sfx: SfxInput!) { sfxText(sfx: $sfx) }`
@@ -107,6 +107,7 @@ function initialDuration(sfx) {
     draft.arming_scope = sfx?.armingScope ?? sfx?.arming_scope ?? null
     draft.listener_spec = sfx?.listenerSpec ?? sfx?.listener_spec ?? { steps: [] }
     draft.acquire_spec = sfx?.acquireSpec ?? sfx?.acquire_spec ?? { steps: [] }
+    draft.implicit = !!sfx?.implicit
     draft.bound_variables = (sfx?.boundVariables ?? sfx?.bound_variables ?? [])
       .map(bv => ({ name: bv.name || '', spec: bv.spec || { steps: [] } }))
     draft.conditions = initialConditions(sfx)
@@ -130,6 +131,7 @@ function initialDuration(sfx) {
     draft.arming_scope = null
     draft.listener_spec = { steps: [] }
     draft.acquire_spec = { steps: [] }
+    draft.implicit = false
     draft.bound_variables = []
     draft.conditions = []
     draft.duration = { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
@@ -156,7 +158,8 @@ function initialDuration(sfx) {
       placement: draft.placement || null,
       armingScope: draft.arming_scope || null,
       listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
-              acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
+      acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
+      implicit: !!draft.implicit,
       boundVariables: (draft.bound_variables || [])
         .filter(bv => (bv.name || '').trim() && (bv.spec?.steps?.length)),
       conditions: draft.conditions || [],
@@ -194,7 +197,8 @@ function initialDuration(sfx) {
           sourceKind: draft.source_kind || null, placement: draft.placement || null,
           armingScope: draft.arming_scope || null,
           listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
-              acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
+          acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
+          implicit: !!draft.implicit,
           boundVariables: (draft.bound_variables || []).filter(bv => (bv.name || '').trim() && (bv.spec?.steps?.length)),
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
@@ -212,6 +216,7 @@ function initialDuration(sfx) {
         sourceKind: draft.source_kind, placement: draft.placement,
         armingScope: draft.arming_scope, listenerSpec: draft.listener_spec,
         acquireSpec: draft.acquire_spec,
+        implicit: !!draft.implicit,
         boundVariables: (draft.bound_variables || []).map(bv => ({ ...bv })),
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
@@ -231,7 +236,8 @@ function initialDuration(sfx) {
           sourceKind: draft.source_kind || null, placement: draft.placement || null,
           armingScope: draft.arming_scope || null,
           listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
-              acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
+          acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
+          implicit: !!draft.implicit,
           boundVariables: (draft.bound_variables || []).filter(bv => (bv.name || '').trim() && (bv.spec?.steps?.length)),
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
@@ -253,6 +259,7 @@ function initialDuration(sfx) {
         sourceKind: draft.source_kind, placement: draft.placement,
         armingScope: draft.arming_scope, listenerSpec: draft.listener_spec,
         acquireSpec: draft.acquire_spec,
+        implicit: !!draft.implicit,
         boundVariables: (draft.bound_variables || []).map(bv => ({ ...bv })),
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })

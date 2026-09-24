@@ -1741,3 +1741,36 @@ def test_an_implicit_rule_the_instance_already_holds_is_not_doubled():
     repo, _ = _implicit_world(implicit=True)
     repo.trait_settings[0].sfx_ids = ["sfx-x"]
     assert get_available_sfx_ids("char-1", "earth", repo) == ["sfx-x"]
+
+
+# ── Who declares a rule (B131's editor read) ───
+
+class _TraitIndexRepo:
+    """The repository read behind `traitsDeclaringSfx`, over the cached index."""
+
+    def __init__(self, docs):
+        self._docs = docs
+
+    def _traits_index(self):
+        return self._docs
+
+
+def test_the_declaring_traits_read_names_both_kinds_of_nomination():
+    from transversal.db.repository_mixins.traits import RepositoryTraits
+
+    def doc(key, name, **rest):
+        return {"_key": key, "id": key, "name": name, "traitset_id": "ts-x", **rest}
+
+    repo = _TraitIndexRepo({
+        "trait-b": doc("trait-b", "background", possible_sfx_ids=["sfx-x"]),
+        "trait-c": doc("trait-c", "cultivation stage",
+                       default_sfx_ids=["sfx-x"], possible_sfx_ids=["sfx-x", "sfx-y"]),
+        "trait-d": doc("trait-d", "dexterity", possible_sfx_ids=["sfx-other"]),
+        "trait-e": doc("trait-e", "empty"),
+    })
+    found = RepositoryTraits.list_traits_declaring_sfx(repo, "sfx-x")
+    # Both nominations count, and the answer is name-sorted so a list reads stably.
+    assert [t.id for t in found] == ["trait-b", "trait-c"]
+    # A trait that does not nominate it is absent, not merely empty.
+    assert [t.id for t in RepositoryTraits.list_traits_declaring_sfx(repo, "sfx-y")] == ["trait-c"]
+    assert RepositoryTraits.list_traits_declaring_sfx(repo, "sfx-none") == []

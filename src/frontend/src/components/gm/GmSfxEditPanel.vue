@@ -124,6 +124,21 @@
            wherever the author means (an entity, a trait instance, …). -->
       <TargetSpecBuilder v-model="draft.acquire_spec" :source-element="sourceElement" />
       <p class="hint">Where this rule may be <em>learned</em> — leaving the place afterwards does not take it away (a condition would). E.g. <em>select source → navigate entity → filter current_location == Azure Dawn</em>.</p>
+
+      <!-- The acquisition path's other half ([[B131]]): a rule a trait offers
+           without anyone having to take it. The declaration lives on the *trait*
+           (`possibleSfxIds`), so the flag alone does nothing — hence the list
+           below, which is the only place that relation is visible from here. -->
+      <label class="sfx-implicit">
+        <input type="checkbox" v-model="draft.implicit" />
+        <span>Applies without being learned</span>
+      </label>
+      <p class="hint">On, every instance of a trait that lists this rule as <em>possible</em> simply has it — no learn-chip, nothing written on the instance. Where it reaches is still the acquire path above.</p>
+      <div v-if="declaringTraits.length" class="sfx-declared-by">
+        <span class="declared-label">Declared by</span>
+        <span v-for="t in declaringTraits" :key="t.id" class="declared-trait" :title="t.id">{{ t.name }}</span>
+      </div>
+      <p v-else-if="sfx" class="hint">No trait lists this rule, so "without being learned" has nothing to act on yet.</p>
     </div>
 
     <!-- Status messages -->
@@ -240,6 +255,25 @@ loadSfxMeta()
 
 const { load: loadCatalog, sourceKinds, collectVariables } = useTargetCatalog()
 loadCatalog()
+
+// Which registry traits nominate this rule ([[B131]]). Read from the rule's own
+// side because the relation is otherwise invisible here: whether an implicit
+// rule reaches anybody is decided by traits *this screen* never mentions. Only
+// meaningful for a rule that exists, so a new draft asks nothing.
+const declaringTraits = ref([])
+async function loadDeclaringTraits() {
+  if (!props.sfx?.id) { declaringTraits.value = []; return }
+  try {
+    const data = await graphql(
+      `query($id: ID!) { traitsDeclaringSfx(sfxId: $id) { id name possibleSfxIds defaultSfxIds } }`,
+      { id: props.sfx.id })
+    declaringTraits.value = data?.traitsDeclaringSfx || []
+  } catch {
+    declaringTraits.value = []
+  }
+}
+loadDeclaringTraits()
+watch(panelActive, (active) => { if (active) loadDeclaringTraits() })
 
 // The SFX's declared source_kind → its catalog element, so a targeting-path
 // condition can offer `select source` typed against it.
@@ -542,6 +576,15 @@ async function onDelete() {
 .sfx-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: var(--accent-12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); }
 .sfx-var-type { font-style: normal; font-family: inherit; font-size: 8px; color: var(--text-dim); margin-left: 3px; }
 .hint { text-transform: none; letter-spacing: 0; color: var(--text-dim); font-size: 9px; }
+/* The implicit checkbox is a control, not a field label — it keeps the sentence
+   case the base rule above would otherwise uppercase. */
+.sfx-acquire label.sfx-implicit {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px;
+  text-transform: none; letter-spacing: 0; font-size: 11px; color: var(--text);
+}
+.sfx-declared-by { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+.declared-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.declared-trait { font-size: 10px; padding: 2px 6px; background: var(--overlay-4); border: 1px solid var(--overlay-10); border-radius: 4px; color: var(--text-dim); }
 .save-main { margin-top: 10px; width: 100%; }
 .error-msg { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
 .success-msg { font-size: 11px; color: var(--success); background: var(--success-8); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
