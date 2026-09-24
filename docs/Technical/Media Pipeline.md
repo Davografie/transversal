@@ -374,6 +374,32 @@ unpinned `git clone` would swap ComfyUI and the nodes for whatever is on master
 that day — a rebuild that changes two things at once cannot tell you which one
 broke it. (The White Rabbit nodes are a local `COPY`, so they need no pin.)
 
+### Workflow inputs must satisfy every node version
+
+The workflow JSON is read at runtime from `WORKFLOW_DIR=/app/workflows` (mounted
+from the repo), so editing a workflow needs no image rebuild.
+
+> [!warning] ComfyUI ignores unknown inputs — use that, and know when it stops
+> `validate_inputs` iterates only the node class's **known** inputs and never
+> checks the submitted workflow for unknown ones:
+>
+> ```python
+> valid_inputs = set(class_inputs.get('required', {})).union(set(class_inputs.get('optional', {})))
+> for x in valid_inputs:      # the class's inputs, not the prompt's
+> ```
+>
+> So a workflow can carry a **superset** of the inputs different node versions
+> need, and each version reads what it knows: `Image Save` keeps `output_path`
+> (old WAS) *and* `root`/`bit_depth` (new WAS); `Text Multiline` carries
+> `dynamic_prompts`, which only the new WAS requires. That is what keeps one
+> workflow valid in both the dev container and a local ComfyUI install on a
+> different node version (`B165`).
+>
+> This only works while the differences are *added* inputs. If a node ever
+> **renames or changes the type** of an input, one name carries two meanings and
+> the versions have to be aligned for real — the trick cannot paper over a
+> conflict.
+
 ## Role assignment & auto-select
 
 Roles are **unique per (owner, role)**, where owner = `projection_id` when set,
