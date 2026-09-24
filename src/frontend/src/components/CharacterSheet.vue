@@ -332,8 +332,10 @@
               <span v-if="entry.ts.limit" class="limit-dots">
                 <span v-for="i in entry.ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(entry.ts) }">{{ i <= inPoolCount(entry.ts) ? '●' : '○' }}</span>
               </span>
+              <!-- Only on an open set: a collapsed row is a line you scan, and a
+                   second control on it competes with the toggle for the tap. -->
               <button
-                v-if="canAddTraits"
+                v-if="canAddTraits && isSetOpen(entry.ts.name)"
                 class="set-add"
                 :title="`Add a ${entry.ts.name} trait`"
                 :aria-label="`Add a ${entry.ts.name} trait`"
