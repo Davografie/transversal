@@ -318,24 +318,51 @@
              two things that live only here and are therefore absent flat: a
              set's limit dots and its trait-set-unit SFX cards (0 rows in the
              live data carry the latter — flagged, not yet designed). -->
-        <div v-else-if="activeSheetView === 'traits' && !flatTraitList && !activeSetName && traitSets.length && !showAddTrait" class="trait-sets">
-          <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
-            <h4 @click="openSet(ts.name)" class="set-header">
-              <span class="set-name">{{ ts.name }}</span>
-              <span v-if="ts.limit" class="limit-dots">
-                <span v-for="i in ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(ts) }">{{ i <= inPoolCount(ts) ? '●' : '○' }}</span>
+        <div v-else-if="activeSheetView === 'traits' && !flatTraitList && traitSets.length && !showAddTrait" class="trait-sets">
+          <div v-for="entry in accordionSets" :key="entry.ts.name" class="trait-set" :class="{ open: isSetOpen(entry.ts.name) }">
+            <h4 class="set-header">
+              <button
+                class="set-toggle"
+                :aria-expanded="isSetOpen(entry.ts.name) ? 'true' : 'false'"
+                @click="toggleSet(entry.ts.name)"
+              >
+                <span class="set-chevron">{{ isSetOpen(entry.ts.name) ? '▾' : '▸' }}</span>
+                <span class="set-name">{{ entry.ts.name }}</span>
+              </button>
+              <span v-if="entry.ts.limit" class="limit-dots">
+                <span v-for="i in entry.ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(entry.ts) }">{{ i <= inPoolCount(entry.ts) ? '●' : '○' }}</span>
               </span>
+              <button
+                v-if="canAddTraits"
+                class="set-add"
+                :title="`Add a ${entry.ts.name} trait`"
+                :aria-label="`Add a ${entry.ts.name} trait`"
+                @click="openAddTrait(entry.ts)"
+              >＋</button>
             </h4>
-            <div v-if="traitsetSfxIds(ts).length" class="sfx-cards">
-              <SfxCard v-for="sfxId in traitsetSfxIds(ts)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
-                       @activate="activateSfx(sfxId, traitsetSettingSourceId(ts))" />
+            <div v-if="isSetOpen(entry.ts.name)" class="set-traits">
+              <TraitRow
+                v-for="t in entry.traits"
+                :key="t.id"
+                :trait="t"
+                :api="traitRowApi"
+                :phase="phase"
+                :limit-reached="limitReachedFor(t)"
+                :hide-contact="entry.continuations.has(t.id)"
+              />
+            </div>
+            <div v-if="traitsetSfxIds(entry.ts).length" class="sfx-cards">
+              <SfxCard v-for="sfxId in traitsetSfxIds(entry.ts)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
+                       @activate="activateSfx(sfxId, traitsetSettingSourceId(entry.ts))" />
             </div>
           </div>
         </div>
 
-        <!-- Set detail, the whole-sheet flat list (B60), or profile -->
+        <!-- The whole-sheet flat list (B60), the profile tab, or the relation tab.
+             A sheet with few traits keeps this: the sets are a navigation device
+             and with a handful of traits there is nothing to navigate, so the two
+             are the same list with and without the set layer rather than a choice. -->
         <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
-          <h4 v-if="activeSheetView === 'traits' && !flatTraitList" class="trait-list-title" @click="closeSet" title="Back to trait sets">← {{ activeSetName }}</h4>
             <TraitRow
               v-for="t in currentTraits"
               :key="t.id"
@@ -346,23 +373,9 @@
               :wrap="activeSheetView === 'profile'"
               :hide-contact="traitContinuations.has(t.id)"
             />
-          <div v-if="activeSheetView === 'traits' && !flatTraitList && (prevSet || nextSet)" class="set-nav">
-            <Button
-              v-if="prevSet"
-              class="set-nav-prev"
-              variant="neutral"
-              @click="goToPrevSet"
-            >← Previous: {{ prevSet.name }}</Button>
-            <Button
-              v-if="nextSet"
-              class="set-nav-next"
-              variant="neutral"
-              @click="goToNextSet"
-            >Next: {{ nextSet.name }} →</Button>
-          </div>
         </div> <!-- .trait-list -->
       <div v-else-if="!showAddTrait" class="empty">{{ activeSheetView === 'profile' ? 'No profile traits' : 'No traits configured' }}</div>
-      <Button v-if="(!overrideEntityId || gmMode) && !showAddTrait" class="add-trait-btn" variant="secondary" block @click="openAddTrait">+ Add Trait</Button>
+      <Button v-if="canAddTraits && !showAddTrait" class="add-trait-btn" variant="secondary" block @click="openAddTrait">+ Add Trait</Button>
       <Button v-if="isForeignSheet && !showAddTrait" class="add-trait-btn" variant="secondary" block @click="openAddRelationshipTrait">+ Add relationship trait</Button>
       <!-- 2-phase trait picker -->
       <div v-if="showAddTrait" class="trait-picker">
@@ -894,8 +907,6 @@ const locationName = ref('')
 const universeName = ref('')
 const universeNames = ref({})  // universe key/id → display name
 
-// Trait-set navigation — at most one set drilled into at a time.
-const activeSetName = ref(null)
 // Traits with an EMPTY rating type, shown flat on the profile tab.
 const profileTraits = ref([])
 
@@ -931,9 +942,10 @@ function containerCount(t) {
 // subtree exclusion is what keeps a container from being offered a drop into its
 // own descendant at any level.
 const draggableRowIds = computed(() => {
-  // The rows on screen, whichever way the list is scoped — a flat sheet has no
-  // active set, and asking `currentSet` would find no containers to drop into.
-  const roots = currentTraits.value || []
+  // The rows on screen, whichever way the list is scoped — and for the accordion
+  // that means the *open* sets, since a collapsed set has no container to drop
+  // into and no row to pick up.
+  const roots = visibleRows.value || []
   const open = []
   const collect = (list) => {
     for (const t of list || []) {
@@ -1008,7 +1020,7 @@ async function moveTraitOut(traitSettingId) {
   // Come out as whatever anchors the chain: a child of a morph container returns
   // to morph on the same body rather than silently becoming ego. Mirrors how
   // nesting inherits its anchor.
-  const anchor = rootAnchor(currentTraits.value || [], traitSettingId)
+  const anchor = rootAnchor(visibleRows.value || [], traitSettingId)
   const input = anchor && anchor.fromType === 'projection' && anchor.projectionId
     ? { fromType: 'projection', projectionId: anchor.projectionId }
     : { fromType: 'entity' }
@@ -1035,50 +1047,86 @@ let suppressClickUntil = 0
 function clickSuppressed() { return Date.now() < suppressClickUntil }
 function suppressClicks() { suppressClickUntil = Date.now() + 200 }
 
-function openSet(name) {
-  activeSetName.value = name
-  // Containers start closed every time a set is opened: their contents are
-  // something you look into deliberately, not state carried over from last time.
-  expandedContainers.value = []
+// ── The set accordion ───────────────────────────────────────────────────
+// Every set is a section with its traits under it. Sets start **expanded**, so
+// the first thing the traits tab shows is the traits — the docked sheet is tall
+// and a column of set names alone was most of an empty screen. Collapsing is
+// remembered for the session, not persisted: re-opening the sheet shows
+// everything, which is the state with nothing to wonder about.
+const collapsedSets = ref(new Set())
+
+const isSetOpen = (name) => !collapsedSets.value.has(name)
+
+function toggleSet(name) {
+  const next = new Set(collapsedSets.value)
+  if (next.has(name)) {
+    next.delete(name)
+    // Entering a set collapses *its* containers — their contents are something
+    // you look into deliberately, not state carried over from last time. This is
+    // the rule the drill-in applied on set entry; per set now, because several
+    // sets can be open at once and one set's entry must not close another's.
+    collapseContainersIn(name)
+  } else {
+    next.add(name)
+  }
+  collapsedSets.value = next
 }
 
-function closeSet() {
-  activeSetName.value = null
+/** Open a set without toggling it shut, for landing on a trait that just appeared. */
+function expandSet(name) {
+  if (!name || isSetOpen(name)) return
+  const next = new Set(collapsedSets.value)
+  next.delete(name)
+  collapsedSets.value = next
+}
+
+function collapseContainersIn(name) {
+  const set = traitSets.value.find(ts => ts.name === name)
+  if (!set) return
+  const inside = new Set()
+  for (const root of set.traits || []) {
+    inside.add(root.id)
+    for (const child of descendantsOf(root)) inside.add(child.id)
+  }
+  expandedContainers.value = expandedContainers.value.filter(id => !inside.has(id))
 }
 
 function goToTraitSets() {
   activeSheetView.value = 'traits'
   cancelEdit()
-  activeSetName.value = null
 }
 
-// Collapse the drilled-in set when the sheet is hidden, so it re-opens clean.
+// Re-opening the sheet shows everything, so a collapse chosen earlier is not a
+// state you have to remember having chosen.
 watch(() => props.visible, (v) => {
-  if (!v && activeSetName.value) activeSetName.value = null
+  if (!v && collapsedSets.value.size) collapsedSets.value = new Set()
 })
 
-const currentSet = computed(() => {
-  if (!activeSetName.value) return null
-  return traitSets.value.find(ts => ts.name === activeSetName.value) || null
-})
+// The accordion's rows: each set's traits, grouped so a relationship's rows sit
+// together, with the ids whose `→ contact` the row above already states.
+const accordionSets = computed(() => traitSets.value.map(ts => {
+  const traits = groupRelationRows(ts.traits)
+  return { ts, traits, continuations: relationContinuations(traits) }
+}))
 
 // B60 — a sheet with few traits skips the set-list layer: the sets are a
 // navigation device, and with a handful of traits there is nothing to navigate.
 // The list itself is the same either way; only the layer above it changes, so a
 // container, a sub-trait and a die all read exactly as they do when drilled in.
+// Adding to a sheet is the owner's (or a GM's) act: a player looking at someone
+// else's sheet sees the traits and no way in. One expression for both the set
+// header's [+] and the button below the list, so the two cannot drift apart.
+const canAddTraits = computed(() => !props.overrideEntityId || props.gmMode)
+
 const flatTraits = computed(() => traitSets.value.flatMap(ts => ts.traits))
 const flatTraitList = computed(() => usesFlatTraitList(traitSets.value))
 
+// The single-list views only. The traits tab splits into the flat list (B60) and
+// the accordion, and the accordion renders each set itself.
 const currentTraits = computed(() => {
   if (activeSheetView.value === 'relation') return relationTraits.value
   if (activeSheetView.value === 'profile') return profileTraits.value
-  // Checked before `currentSet`: a stale `activeSetName` (the count dropped under
-  // the limit while drilled in) must not resurrect the set view.
-  if (flatTraitList.value) return groupRelationRows(flatTraits.value)
-  // Grouped so a relationship's rows are consecutive — the group is what the
-  // repeated `→ contact` would otherwise be re-stating. A no-op for every other
-  // set, and for a relationship whose rows already share an edge.
-  return groupRelationRows(currentSet.value?.traits || [])
+  return groupRelationRows(flatTraits.value)
 })
 
 // Rows whose `→ contact` the row above already states. Computed over whatever
@@ -1086,6 +1134,17 @@ const currentTraits = computed(() => {
 // group the same way; the rule itself lives in the model (utils/traitTree.js) so
 // it can be checked without a browser.
 const traitContinuations = computed(() => relationContinuations(currentTraits.value))
+
+// Every root row the traits area is showing, however it is scoped: the flat list
+// (B60), the accordion's open sets, the profile tab or the relation tab. Drag
+// destinations and the move-out anchor ask this rather than `currentTraits`,
+// which is the single-list views only.
+const visibleRows = computed(() => {
+  if (activeSheetView.value === 'traits' && !flatTraitList.value) {
+    return accordionSets.value.filter(e => isSetOpen(e.ts.name)).flatMap(e => e.traits)
+  }
+  return currentTraits.value || []
+})
 
 // Whether a row's set has used up its picks. The flat list mixes sets, so the
 // answer has to be found per row; drilled into one set, the lookup returns that
@@ -1096,28 +1155,6 @@ function limitReachedFor(t) {
   if (!set || !set.limit) return false
   return countSetPicks(set.traits, isInPool) >= set.limit
 }
-
-const nextSet = computed(() => {
-  const idx = traitSets.value.findIndex(ts => ts.name === activeSetName.value)
-  if (idx === -1) return null
-  return traitSets.value[idx + 1] || null
-})
-
-const prevSet = computed(() => {
-  const idx = traitSets.value.findIndex(ts => ts.name === activeSetName.value)
-  return idx > 0 ? traitSets.value[idx - 1] : null
-})
-
-// Both directions land the same way: the set becomes active and its containers
-// start closed, so a set you step into reads the same however you got there.
-function goToSet(ts) {
-  if (!ts) return
-  activeSetName.value = ts.name
-  expandedContainers.value = []
-}
-
-function goToNextSet() { goToSet(nextSet.value) }
-function goToPrevSet() { goToSet(prevSet.value) }
 
 // SFX usage tracking — reset per dice pool cycle
 const sfxActivations = ref({})
@@ -1230,7 +1267,15 @@ const emptySetMessage = computed(() => {
   return 'All traits in this set are already assigned'
 })
 
-async function openAddTrait() {
+/**
+ * Open the add-trait picker.
+ *
+ * With no argument it starts at the set list — that is how a trait from a set the
+ * sheet has none of yet is reached, since only sets the entity holds appear in the
+ * accordion. A set header's `[+]` passes its own set and lands on that set's list
+ * (or the relationship step first, for the relations set).
+ */
+async function openAddTrait(presetSet = null) {
   addMode.value = 'trait'
   addPhase.value = 'sets'
   selectedTraitSet.value = null
@@ -1251,12 +1296,11 @@ async function openAddTrait() {
   if (trData?.traitsByUniverse) {
     availableTraits.value = trData.traitsByUniverse
   }
-  // If already drilled into a trait set, preselect it and jump straight to its traits.
-  if (activeSetName.value) {
-    const current = availableTraitSets.value.find(ts => ts.id === currentSet.value?.traitsetId)
-    if (current) selectSet(current)
-  }
   showAddTrait.value = true
+  if (presetSet) {
+    const target = availableTraitSets.value.find(ts => ts.id === presetSet.traitsetId)
+    if (target) selectSet(target)
+  }
 }
 
 async function openAddRelationshipTrait() {
@@ -1519,15 +1563,9 @@ function openEditorForNewTrait(id, { relation = false } = {}) {
     activeSheetView.value = 'profile'
   } else {
     activeSheetView.value = 'traits'
-    // A flat sheet has no set layer to land in, and the new trait is already in
-    // the list it shows — drilling in would only strand an `activeSetName` the
-    // view ignores.
-    if (!flatTraitList.value) {
-      const target = traitSets.value.find(s => s.name === setting.traitsetName)
-      // Same landing as the set nav: the set becomes active, its containers closed.
-      if (target) goToSet(target)
-      else activeSetName.value = setting.traitsetName
-    }
+    // The set it landed in is expanded, so the new row is on screen. A flat sheet
+    // has no set layer to expand and already shows it.
+    if (!flatTraitList.value) expandSet(setting.traitsetName)
   }
   startEdit(setting)
 }
@@ -2019,25 +2057,9 @@ function setPoolSources(sources) {
   // sources is now [{ die, label, tsId }, ...] — track by tsId
   poolSources.value = sources.map(s => s.tsId).filter(Boolean)
 
-  // When the current set fills to its limit, advance to the next set's list.
-  // Same count as the limit dots and the gate (countSetPicks): a sub-trait
-  // rides its parent, so the subtree is one pick.
-  // A flat sheet (B60) has no set on screen, so `idx` is -1 and nothing moves:
-  // every set is already listed, so there is no next one to step to.
-  const sets = traitSets.value
-  const idx = sets.findIndex(s => s.name === activeSetName.value)
-  if (idx !== -1) {
-    const count = countSetPicks(sets[idx].traits, isInPool)
-    if (sets[idx].limit && count >= sets[idx].limit) {
-      const to = sets[idx + 1] ? sets[idx + 1].name : null
-      // The jump the player actually sees — put it on the same timeline as the
-      // fetches, so "the next set appeared, then it reloaded" is one sequence.
-      if (to !== activeSetName.value) {
-        perfMark('set-advanced', { from: activeSetName.value, to, picks: count, limit: sets[idx].limit })
-      }
-      activeSetName.value = to
-    }
-  }
+  // The old drill-in advanced to the *next* set's list once the current one filled
+  // its limit. Every set is on screen at once now, so there is no next set to step
+  // to and nothing to move — the limit dots and `limit-reached` carry the signal.
 
   // Auto-recover dice that were removed from the pool before rolling
   // (e.g. via chip click in DiceRoller).  Only during adding phase —
@@ -2601,7 +2623,7 @@ onMounted(() => {
 watch(() => props.entityId, loadCachedEntity)
 watch(() => props.universe, loadCachedEntity)
 watch(() => props.overrideEntityId, loadCachedEntity)
-watch(() => [props.entityId, props.overrideEntityId], () => { activeSetName.value = null })
+watch(() => [props.entityId, props.overrideEntityId], () => { collapsedSets.value = new Set() })
 watch(showAllTraits, () => recomputeTraitSets('show-all-toggled'))
 
 // ── Relationship fetch ─────────────────────────────
@@ -2767,9 +2789,11 @@ watch(() => props.externalPoolSources, (sources) => {
   overflow-y: auto; overflow-x: hidden;
 }
 
+/* The set header is a row: the toggle takes the width, the limit dots and the
+   [+ ] sit at the end. The whole row is not the toggle any more — [+] is a
+   different action, and a header you can only expand by hitting the words is a
+   small target on a touch screen. */
 .set-header {
-  cursor: pointer;
-  user-select: none;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2778,10 +2802,62 @@ watch(() => props.externalPoolSources, (sources) => {
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-dim);
+}
+.set-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
   transition: color 0.15s;
 }
-.set-header:hover {
+.set-toggle:hover {
   color: var(--text);
+}
+.set-chevron {
+  flex-shrink: 0;
+  width: 1em;
+  opacity: 0.7;
+}
+.set-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* [+] and the dots both hug the right edge; the toggle's flex:1 pushes them. */
+.set-add {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  border-radius: 4px;
+  border: 1px solid var(--overlay-10);
+  background: var(--overlay-4);
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.set-add:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-12);
+}
+.set-traits {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 2px;
 }
 .trait-list {
   display: flex;
