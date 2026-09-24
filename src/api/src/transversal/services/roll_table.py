@@ -126,7 +126,8 @@ def backfill_rolltable_anchor_paths(repo) -> int:
                 ]})
                 context.pop("relationship", None)
                 context.pop("relationship_type", None)
-                effect.context = context or None
+                # `Effect.context` is a dict and never null: an emptied one is `{}`.
+                effect.context = context
                 changed += 1
                 touched = True
         if touched:

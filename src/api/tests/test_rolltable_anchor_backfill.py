@@ -42,7 +42,9 @@ def test_a_literal_faction_becomes_an_owner_path():
     assert backfill_rolltable_anchor_paths(repo) == 1
 
     effect = repo.tables[0].entries[0].effects[0]
-    assert effect.context is None, "the legacy pair is gone, not left behind"
+    # Emptied, not null: `Effect.context` is a dict, and a stored null fails to
+    # validate on the next read — which took the whole table out of the API.
+    assert effect.context == {}, "the legacy pair is gone, not left behind"
     assert effect.owner_spec is not None
     assert effect.owner_spec.steps[0].collection == "self"
     assert effect.owner_spec.steps[1].edge == "relationships"
@@ -106,3 +108,16 @@ def test_cost_effects_are_migrated_too():
         RollTableEntry(label="e", cost_effects=[cost], effects=[_effect(relationship="fac-1")])])
     repo = FakeRepo([table])
     assert backfill_rolltable_anchor_paths(repo) == 2
+
+
+def test_the_migrated_effect_round_trips_through_the_model():
+    """The bug this pins: the backfill wrote `context: null`, which the domain model
+    refuses to read back (`context` is a dict) — so the table vanished from the API
+    while the in-memory assertions above still passed. Validate the saved shape."""
+    from transversal.domain import RollTable
+    from transversal.services.roll_table import backfill_rolltable_anchor_paths
+
+    repo = FakeRepo([_table(_effect(relationship="fac-1"))])
+    backfill_rolltable_anchor_paths(repo)
+    stored = repo.tables[0].model_dump()
+    assert RollTable.model_validate(stored).entries[0].effects[0].owner_spec is not None
