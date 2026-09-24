@@ -18,6 +18,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_roll", "step_down_die"): "step down {target}",
     ("modify_trait", "step_up"): "step up {target}",
     ("modify_trait", "step_down"): "step down {target}",
+    ("modify_trait", "enable"): "enable {target}",
     ("modify_trait", "gain_or_step_up"): "gain or step up {target}",
     ("modify_trait", "disable"): "disable {target}",
     ("modify_trait", "gain"): "gain {target}",
@@ -58,6 +59,11 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("attune", "enable"): "attune {target} to {result}",
     ("attune", "suppress"): "suppress {result}",
     ("location", "set"): "move to {target}",
+    # Banish: the destination is a path, and with no template the card dropped it
+    # and read "travel." — the whole rule minus where it goes. The mover leads
+    # here, because for this action the subject *does* the travelling rather than
+    # being what the effect lands on ("each occupant here travels to X").
+    ("travel", "move"): "{subject} travels to {target}",
     ("set_destination", "set"): "grant directions to {target}",
     ("life_path", "discover"): "discover the {target} life path",
     ("roll_table", "menu"): "roll on {target}",

@@ -1022,6 +1022,12 @@ def _effect_parts(effect: Effect, *, resolve: NameResolver | None = None,
 
     if target:
         if subject:
+            if "{subject}" in reg.effect_card(effect.type, effect.action):
+                # The template gives the subject its own slot, so it is handed
+                # over bare: there it leads the clause ("each occupant here
+                # travels to X") rather than trailing a preposition that would
+                # reverse who moves and what they move to.
+                return target, subject
             prep = _EFFECT_SUBJECT_PREPOSITIONS.get(effect.type, "on")
             # The "lands on" clause is joined with a preposition, and a path can
             # end with that same word: "one of the trait instances of the entity
@@ -1152,12 +1158,13 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
         template = "create {target}"
     elif not target and "{target}" in template:
         target = _target_placeholder(effect)
-    if subject:
+    if subject and "{subject}" not in template:
         target = f"{target} {subject}" if target else subject
     if not result_text:
         # Drop a clause the empty placeholder leaves dangling ("… as {result}").
         template = re.sub(r"\s+\b(at|to|by|as|on|with|from|of)\s+\{result\}", "", template)
-    text = template.format(target=target, result=result_text, limit=which_limit)
+    text = template.format(target=target, result=result_text, limit=which_limit,
+                           subject=subject)
     if effect.negative and "complication" not in text:
         text = f"{text} as a complication"
 

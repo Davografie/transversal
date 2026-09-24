@@ -1062,3 +1062,49 @@ def test_more_than_zero_still_reads_as_existence():
         {"kind": "evaluate", "operator": ">", "field": "count", "value": 0},
     ]))
     assert "at least one" in condition_text(condition)
+
+
+def test_a_target_path_on_a_self_effect_reads_as_its_frequency():
+    """``earn``/``spend`` and their kin have no ``{target}`` slot in the template,
+    but the applier still runs the effect once per resolved target — so for them
+    the path *is* the frequency, and a card that dropped it promised one payment
+    where the rule pays one per thing (the live `sfx-d4-bonus`: one razmerit per
+    d4 trait, not one per roll).
+    """
+    effect = Effect(
+        timing=EffectTiming.ON_ROLL, type="transfer_razmerit", action="earn",
+        target="self", result="1",
+        conditions=[Condition(type=ConditionType.TARGET_PATH,
+                              spec=TargetSpec(steps=D4_CONDITION["steps"]))],
+        target_spec=TargetSpec(steps=[
+            {"kind": "select", "collection": "variable", "variable": "d4_traits"}]),
+    )
+    text = effect_text(effect)
+    assert "for each d4 trait" in text
+    assert text.endswith("gain 1 razmerit")
+
+
+def test_an_effect_object_path_is_never_read_as_a_frequency():
+    """The other half of the rule: when the template *does* name the target, the
+    same path is the effect's object, and adding "for each" would say the effect
+    happens on the object's behalf instead of to it."""
+    effect = Effect(type="modify_trait", action="step_down",
+                    target_spec=TargetSpec(steps=ONE_TRICK_PATH["steps"]))
+    text = effect_text(effect)
+    assert text.startswith("step down")
+    assert "for each" not in text
+
+
+def test_the_traveller_leads_the_clause():
+    """``travel`` cannot hang its mover off a preposition: the entity it lands on
+    is the one that moves, so it reads as the sentence's actor. Before this the
+    action had no template at all and the card dropped both the mover and the
+    destination ("Activated: travel.")."""
+    effect = Effect(
+        type="travel", action="move",
+        target_spec=TargetSpec(steps=[{"kind": "select", "collection": "universes"}]),
+        entity_spec=TargetSpec(steps=[{"kind": "select", "collection": "occupants"}]),
+    )
+    text = effect_text(effect)
+    assert "travels to" in text
+    assert not text.startswith("travel")
