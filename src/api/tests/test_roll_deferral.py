@@ -375,10 +375,12 @@ def test_armed_source_threads_into_effect_context(monkeypatch):
     conditions evaluate against the trait that owns the SFX (not ``source=None``)."""
     import transversal.main as main
     from types import SimpleNamespace
-    from transversal.domain import Condition, ConditionType
+    from transversal.domain import Condition, ConditionType, DieType
 
     roll_deferral.reset()
-    ts = SimpleNamespace(id="char-1:cultivation")
+    # The source trait carries the dice the condition reads: an armed effect's own
+    # conditions run at fire time, so this double has to answer them honestly.
+    ts = SimpleNamespace(id="char-1:cultivation", dice=[DieType.D4])
     repo = SimpleNamespace(
         get_entity=lambda eid: SimpleNamespace(id=eid),
         get_traitsetting=lambda tid: ts if tid == ts.id else None,
@@ -647,3 +649,110 @@ def test_die_scoped_entity_spec_reads_that_die(monkeypatch):
 
     assert [e.entity for e in fired] == ["loc-kael", "loc-neya"]
     assert len(applied) == 2
+
+
+def test_armed_effect_runs_its_own_condition_at_the_roll(monkeypatch):
+    """A roll-timing effect's *own* gate is evaluated when the dice land.
+
+    Arming happens at the trigger, where there may be no roll to read at all, so
+    a roll-state gate cannot live on the SFX — it belongs to the effect, and the
+    effect is only applied if the path it names still matches this roll. The
+    condition's named output ("the d4 traits") then drives the effect's own
+    targeting path, which fans out once per trait it names — both dice from one
+    trait count once.
+    """
+    import transversal.main as main
+    from types import SimpleNamespace
+    from transversal.domain import Condition, ConditionType
+    from transversal.services.target_spec import (
+        EvaluateStep, FilterStep, NavigateStep, SelectStep, TargetSpec,
+    )
+
+    roll_deferral.reset()
+    roller = SimpleNamespace(id="e1", razmerit=0)
+    traits = {
+        "ts-a": SimpleNamespace(id="ts-a", entity_id="e1", rating="d4"),
+        "ts-b": SimpleNamespace(id="ts-b", entity_id="e1", rating="d4"),
+        "ts-c": SimpleNamespace(id="ts-c", entity_id="e1", rating="d8"),
+    }
+
+    class Repo:
+        def get_entity(self, eid):
+            return roller if eid == "e1" else None
+
+        def get_traitsetting(self, tid):
+            return traits.get(tid)
+
+    monkeypatch.setattr(main, "_get_repo", lambda: Repo())
+
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    condition = Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec(steps=[
+        SelectStep(collection="rolled_dice"),
+        FilterStep(field="rating", operator="==", value="d4"),
+        NavigateStep(edge="traitsetting", dedup=True),
+        FilterStep(field="rating", operator="==", value="d4", output="d4_traits"),
+        EvaluateStep(field="count", operator=">=", value=1),
+    ]))
+    effect = Effect(
+        timing=EffectTiming.ON_ROLL, type="transfer_razmerit", action="earn",
+        target="self", result="1", conditions=[condition],
+        target_spec=TargetSpec(steps=[SelectStep(collection="variable", variable="d4_traits")]),
+    )
+    roll_deferral.arm_sfx("e1", [effect])
+    rolls = [
+        {"rating": "d4", "ts_id": "ts-a", "role": None},
+        {"rating": "d4", "ts_id": "ts-a", "role": None},  # the same trait twice
+        {"rating": "d4", "ts_id": "ts-b", "role": None},
+        {"rating": "d8", "ts_id": "ts-c", "role": None},
+    ]
+
+    fired = roll_deferral.fire_armed("e1", "on_roll", "earth", {"rolls": rolls})
+
+    assert [e.target for e in fired] == ["ts-a", "ts-b"]
+    assert [e.target for e in applied] == ["ts-a", "ts-b"]
+
+
+def test_armed_effect_own_condition_withholds_it_when_it_does_not_match(monkeypatch):
+    """No d4 trait in the roll → the gate fails and nothing is applied."""
+    import transversal.main as main
+    from types import SimpleNamespace
+    from transversal.domain import Condition, ConditionType
+    from transversal.services.target_spec import (
+        EvaluateStep, FilterStep, SelectStep, TargetSpec,
+    )
+
+    roll_deferral.reset()
+    roller = SimpleNamespace(id="e1", razmerit=0)
+    monkeypatch.setattr(main, "_get_repo", lambda: SimpleNamespace(
+        get_entity=lambda eid: roller if eid == "e1" else None))
+
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    condition = Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec(steps=[
+        SelectStep(collection="rolled_dice"),
+        FilterStep(field="rating", operator="==", value="d4"),
+        EvaluateStep(field="count", operator=">=", value=1),
+    ]))
+    roll_deferral.arm_sfx("e1", [Effect(
+        timing=EffectTiming.ON_ROLL, type="transfer_razmerit", action="earn",
+        target="self", result="1", conditions=[condition],
+    )])
+    rolls = [{"rating": "d8", "ts_id": "ts-c", "role": None}]
+
+    fired = roll_deferral.fire_armed("e1", "on_roll", "earth", {"rolls": rolls})
+
+    assert fired == []
+    assert applied == []
