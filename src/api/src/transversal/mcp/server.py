@@ -113,7 +113,7 @@ def _rest_put(path: str, payload: Any) -> Any:
 
 _MUT_CREATE_ENTITY = """
 mutation($input: CreateEntityInput!) {
-  createEntity(input: $input) { id type name currentUniverse currentLocation }
+  createEntity(input: $input) { id type name currentUniverse currentLocation unpublished }
 }
 """
 
@@ -538,10 +538,20 @@ def _run_steps(steps: list[dict], dry_run: bool) -> dict:
     return {"dry_run": False, "results": results}
 
 
-def _create_entity_step(
-    etype: str, name: str, universe: str, location: str | None = None, razmerit: int = 0
-) -> dict:
-    return _step(
+def _create_entity_steps(
+    etype: str, name: str, universe: str, location: str | None = None,
+    razmerit: int = 0, unpublished: bool = True,
+) -> list[dict]:
+    """The ordered steps that create an entity — held GM-only until it is reviewed.
+
+    **``CreateEntityInput`` carries no ``unpublished`` field**, so an entity cannot
+    be created unpublished in a single call: it lands live and is then hidden by a
+    following ``updateEntity``. That short window is the one weakness of this
+    approach, and the reason the durable fix is a field on the create input (filed
+    with [[backend-platform]]); until then a create is two steps. Pass
+    ``unpublished=False`` when you mean to publish, which skips the second step.
+    """
+    steps = [_step(
         "createEntity",
         _MUT_CREATE_ENTITY,
         {
@@ -554,30 +564,51 @@ def _create_entity_step(
             }
         },
         f"create {etype} '{name}'",
-    )
+    )]
+    if unpublished:
+        steps.append(_step(
+            "updateEntity",
+            _MUT_UPDATE_ENTITY,
+            {"input": {"id": _AUTO_ID, "unpublished": True}},
+            f"hold '{name}' unpublished for review — reveal_entity publishes it",
+        ))
+    return steps
 
 
 # ── Content tools (API) ──────────────────────────────
 
 def create_universe(args: dict) -> dict:
-    """Create a universe entity. The universe key is derived from the name by the API."""
+    """Create a universe entity, unpublished until you reveal it.
+
+    The universe key is derived from the name by the API. Like every create tool
+    here, the new entity is held GM-only by default so nothing reaches players
+    before it is reviewed; pass ``unpublished=false`` to publish it as it is made.
+    """
     name = args["name"]
-    steps = [_create_entity_step("UNIVERSE", name, name)]
+    steps = _create_entity_steps("UNIVERSE", name, name,
+                                 unpublished=args.get("unpublished", True))
     return _run_steps(steps, args.get("dry_run", True))
 
 
 def create_faction(args: dict) -> dict:
+    """Create a faction entity, unpublished until you reveal it (``unpublished=false`` to publish now)."""
     name = args["name"]
     universe = args["universe"]
-    steps = [_create_entity_step("FACTION", name, universe)]
+    steps = _create_entity_steps("FACTION", name, universe,
+                                 unpublished=args.get("unpublished", True))
     return _run_steps(steps, args.get("dry_run", True))
 
 
 def create_location(args: dict) -> dict:
+    """Create a location entity, unpublished until you reveal it (``unpublished=false`` to publish now).
+
+    ``parent_id`` also links it into the tree with a ``super`` edge.
+    """
     name = args["name"]
     universe = args["universe"]
     parent_id = args.get("parent_id")
-    steps = [_create_entity_step("LOCATION", name, universe, location=parent_id)]
+    steps = _create_entity_steps("LOCATION", name, universe, location=parent_id,
+                                 unpublished=args.get("unpublished", True))
     if parent_id:
         steps.append(_step(
             "createRelationship",
@@ -596,19 +627,26 @@ def create_location(args: dict) -> dict:
 
 
 def create_gmc(args: dict) -> dict:
+    """Create a GMC entity, unpublished until you reveal it (``unpublished=false`` to publish now)."""
     name = args["name"]
     universe = args["universe"]
     location = args.get("location")
-    steps = [_create_entity_step("GMC", name, universe, location=location)]
+    steps = _create_entity_steps("GMC", name, universe, location=location,
+                                 unpublished=args.get("unpublished", True))
     return _run_steps(steps, args.get("dry_run", True))
 
 
 def create_asset(args: dict) -> dict:
+    """Create an asset entity, unpublished until you reveal it (``unpublished=false`` to publish now).
+
+    ``owner_id`` also sets its owner.
+    """
     name = args["name"]
     universe = args["universe"]
     owner_id = args.get("owner_id")
     location = args.get("location")
-    steps = [_create_entity_step("ASSET", name, universe, location=location)]
+    steps = _create_entity_steps("ASSET", name, universe, location=location,
+                                 unpublished=args.get("unpublished", True))
     if owner_id:
         steps.append(_step(
             "updateEntity",
@@ -1832,11 +1870,12 @@ def _dry_run_property() -> dict:
 TOOL_SCHEMAS = {
     "create_universe": {
         "name": "create_universe",
-        "description": "Create a universe entity (API derives the universe key from the name).",
+        "description": "Create a universe entity (API derives the universe key from the name). UNPUBLISHED by default — held GM-only for review; reveal_entity publishes it.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Universe name"},
+                "unpublished": {"type": "boolean", "description": "Hold it GM-only for review (default true). Pass false to publish as it is made."},
                 "dry_run": _dry_run_property(),
             },
             "required": ["name"],
@@ -1844,12 +1883,13 @@ TOOL_SCHEMAS = {
     },
     "create_faction": {
         "name": "create_faction",
-        "description": "Create a faction entity.",
+        "description": "Create a faction entity. UNPUBLISHED by default — held GM-only for review; reveal_entity publishes it.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
                 "universe": {"type": "string", "description": "Universe key (e.g. three_realms)"},
+                "unpublished": {"type": "boolean", "description": "Hold it GM-only for review (default true). Pass false to publish as it is made."},
                 "dry_run": _dry_run_property(),
             },
             "required": ["name", "universe"],
@@ -1857,13 +1897,14 @@ TOOL_SCHEMAS = {
     },
     "create_location": {
         "name": "create_location",
-        "description": "Create a location entity, optionally nested under a parent (super edge).",
+        "description": "Create a location entity, optionally nested under a parent (super edge). UNPUBLISHED by default — held GM-only for review; reveal_entity publishes it.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
                 "universe": {"type": "string"},
                 "parent_id": {"type": "string", "description": "Parent location id (optional)"},
+                "unpublished": {"type": "boolean", "description": "Hold it GM-only for review (default true). Pass false to publish as it is made."},
                 "dry_run": _dry_run_property(),
             },
             "required": ["name", "universe"],
@@ -1871,13 +1912,14 @@ TOOL_SCHEMAS = {
     },
     "create_gmc": {
         "name": "create_gmc",
-        "description": "Create a GMC entity (non-player character).",
+        "description": "Create a GMC entity (non-player character). UNPUBLISHED by default — held GM-only for review; reveal_entity publishes it.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
                 "universe": {"type": "string"},
                 "location": {"type": "string", "description": "Location id (optional)"},
+                "unpublished": {"type": "boolean", "description": "Hold it GM-only for review (default true). Pass false to publish as it is made."},
                 "dry_run": _dry_run_property(),
             },
             "required": ["name", "universe"],
@@ -1885,7 +1927,7 @@ TOOL_SCHEMAS = {
     },
     "create_asset": {
         "name": "create_asset",
-        "description": "Create an asset entity, optionally owned by another entity.",
+        "description": "Create an asset entity, optionally owned by another entity. UNPUBLISHED by default — held GM-only for review; reveal_entity publishes it.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1893,6 +1935,7 @@ TOOL_SCHEMAS = {
                 "universe": {"type": "string"},
                 "owner_id": {"type": "string", "description": "Owning entity id (optional)"},
                 "location": {"type": "string", "description": "Location id (optional)"},
+                "unpublished": {"type": "boolean", "description": "Hold it GM-only for review (default true). Pass false to publish as it is made."},
                 "dry_run": _dry_run_property(),
             },
             "required": ["name", "universe"],
