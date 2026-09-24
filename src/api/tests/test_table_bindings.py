@@ -16,7 +16,8 @@ from transversal.services.target_spec import TargetSpec
 
 def _entity(*, enrollments=(), term=None):
     return NS(id="char-1", life_paths=list(enrollments), pending_term=term,
-              current_universe="three_realms", current_location="loc-1", razmerit=0)
+              current_universe="three_realms", current_location="loc-1", razmerit=0,
+              current_projection=None)
 
 
 def _table(table_id="rt-x", life_path=None, declared=()):
@@ -137,3 +138,81 @@ def test_an_effect_anchors_through_the_scope():
     result = apply_effects(entity, [effect], Repo(), {BINDINGS_CONTEXT_KEY: bindings})
     made = result.new_trait_settings[0]
     assert (made.from_type, made.entity_id) == ("relationship", edge)
+
+
+def test_a_tiered_entry_carries_its_effect_die():
+    """The author's requirement: an entry's effect can use the die its *tier*
+    carries (marginal d4, success d6, exceptional d8, perfect d10) — and on a menu
+    pick the tier comes from the entry itself, not from a roll argument."""
+    from transversal.domain import OutcomeTier
+
+    entry = NS(label="Promoted", tier=OutcomeTier.SUCCESS, min_value=3, max_value=4)
+    bindings = table_bindings(_table("rt-verdant-advance"), _entity(), repo=None, entry=entry)
+
+    assert bindings["entry_tier"].value == "success"
+    assert bindings["entry_effect_die"].value == "d6"
+    assert bindings["entry_label"].value == "Promoted"
+    assert bindings["entry_min"].value == "3"
+
+
+def test_a_fail_tier_has_no_effect_die_to_bind():
+    from transversal.domain import OutcomeTier
+
+    bindings = table_bindings(_table(), _entity(), repo=None,
+                              entry=NS(label="Expelled", tier=OutcomeTier.FAIL))
+    assert bindings["entry_tier"].value == "fail"
+    assert "entry_effect_die" not in bindings, "fail carries no die — unbound, not blank"
+
+
+def test_an_entry_effect_can_name_the_entry_effect_die_in_a_flat_field():
+    """The seam that made this unusable before: the engine substitutes ``{name}`` in
+    flat fields, but a roll-table entry goes through the *direct* entry point, where
+    nothing did. So `result: "{entry_effect_die}"` was a literal that named no die."""
+    from transversal.domain import Effect, EffectTiming, OutcomeTier
+    from transversal.services.effects_applier import apply_effects
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
+
+    entity = _entity()
+
+    class Repo:
+        def get_entity(self, eid):
+            return entity
+        def get_trait(self, trait_id):
+            return NS(id=trait_id, traitset_id="ts-rel")
+        def get_traitset_by_id(self, traitset_id):
+            return None
+        def get_traitsettings_for_entity(self, entity_id):
+            return []
+        def get_relationship_traitsettings(self, key):
+            return []
+        def get_projection_traitsettings(self, pid):
+            return []
+        def get_sub_traitsettings(self, pid):
+            return []
+        def find_traitsetting_collision(self, *a, **k):
+            return None
+
+    entry = NS(label="Promoted", tier=OutcomeTier.EXCEPTIONAL)
+    bindings = table_bindings(_table(), entity, Repo(), entry=entry)
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                    target="trait-rel-rank", result="{entry_effect_die}")
+    result = apply_effects(entity, [effect], Repo(), {BINDINGS_CONTEXT_KEY: bindings})
+
+    assert result.new_trait_settings[0].dice[0].value == "d8", "exceptional carries d8"
+
+
+def test_a_table_source_can_walk_to_its_life_path():
+    """The table is the entry-effect's source, so `select source` is the table and
+    the path it belongs to is one hop away — which is where the faction comes from
+    (via the entity's enrollment for that path)."""
+    from transversal.services.target_resolver import TargetContext, resolve, resolved_id
+
+    table = NS(id="rt-verdant-advance", life_path="lp-verdant", entries=[])
+    repo = NS(get_lifepath=lambda lid: NS(id=lid, name="Verdant Disciple")
+              if lid == "lp-verdant" else None)
+    spec = TargetSpec.model_validate({"steps": [
+        {"kind": "select", "collection": "source"},
+        {"kind": "navigate", "edge": "life_path"},
+    ]})
+    ctx = TargetContext(subject=None, repo=repo, source=table, source_element="roll_table")
+    assert [resolved_id(v) for v in resolve(spec, ctx).values] == ["lp-verdant"]

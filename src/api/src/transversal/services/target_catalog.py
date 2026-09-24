@@ -615,6 +615,11 @@ EDGES: tuple[Edge, ...] = (
          noun="life path", plural="life paths"),
     Edge("roll_tables", "life_path", ("roll_table",), "many", "Roll tables",
          noun="roll table", plural="roll tables"),
+    # ...and back, so a table *source* can walk up to the path it belongs to
+    # ([[B164]]: an entry's effect is applied with its table as the source, and its
+    # path — then the entity's enrollment for that path — is where the faction is).
+    Edge("life_path", "roll_table", ("life_path",), "one", "Life path",
+         noun="life path"),
 
     # entity → the timers counting down on it (an effect's duration, whether it
     # was scheduled on the entity or on one of its trait instances).

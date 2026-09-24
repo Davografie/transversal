@@ -89,7 +89,15 @@ def pick_roll_table_entry(
     from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
     from transversal.services.roll_table import table_bindings
 
-    context = {BINDINGS_CONTEXT_KEY: table_bindings(table, entity, repo, index=index)}
+    from transversal.services.effects_applier.datatypes import (
+        SOURCE_CONTEXT_KEY, SOURCE_ELEMENT_CONTEXT_KEY,
+    )
+
+    context = {
+        BINDINGS_CONTEXT_KEY: table_bindings(table, entity, repo, entry=entry, index=index),
+        SOURCE_CONTEXT_KEY: table,
+        SOURCE_ELEMENT_CONTEXT_KEY: "roll_table",
+    }
     result = commit_effects(entity, to_commit, repo, context)
     return result, structured, entry.label, raz_cost
 
@@ -133,7 +141,7 @@ def create_support_character(
     from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
     from transversal.services.roll_table import table_bindings
 
-    context = {BINDINGS_CONTEXT_KEY: table_bindings(table, main, repo, index=index)}
+    context = {BINDINGS_CONTEXT_KEY: table_bindings(table, main, repo, entry=entry, index=index)}
 
     # 1. The main pays the cost.
     if entry.cost_effects:

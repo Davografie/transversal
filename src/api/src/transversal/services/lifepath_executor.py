@@ -100,8 +100,19 @@ def resolve_step(
     from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
     from transversal.services.roll_table import table_bindings
 
+    from transversal.services.effects_applier.datatypes import (
+        SOURCE_CONTEXT_KEY, SOURCE_ELEMENT_CONTEXT_KEY,
+    )
+
     effect_context = {
-        BINDINGS_CONTEXT_KEY: table_bindings(table, entity, repo, roll=roll, tier=tier, index=index)
+        BINDINGS_CONTEXT_KEY: table_bindings(table, entity, repo, entry=entry,
+                                             roll=roll, tier=tier, index=index),
+        # The entry's effect is applied *from* its table, so the table is the
+        # source: `select source` is the table, and `navigate life_path` reaches
+        # the path it belongs to (then the entity's enrollment for that path is
+        # where its faction is).
+        SOURCE_CONTEXT_KEY: table,
+        SOURCE_ELEMENT_CONTEXT_KEY: "roll_table",
     }
 
     if engine is not None:

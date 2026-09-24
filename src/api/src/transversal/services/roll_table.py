@@ -144,7 +144,8 @@ AMBIENT_TABLE_BINDINGS = ("term_faction", "term_path", "path_faction", "path_id"
                           "table_id", "roll", "entry_tier")
 
 
-def table_bindings(table, entity, repo, *, roll=None, tier=None, index=None) -> dict:
+def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
+                   index=None) -> dict:
     """The scope a roll-table entry's conditions and effects resolve against.
 
     Two kinds of name, one scope:
@@ -200,8 +201,27 @@ def table_bindings(table, entity, repo, *, roll=None, tier=None, index=None) -> 
         bindings["table_id"] = one(table.id)
     if roll is not None:
         bindings["roll"] = one(roll)
-    if tier is not None:
-        bindings["entry_tier"] = one(getattr(tier, "value", tier))
+    # The **entry's** metadata, which is what an effect usually wants: which row
+    # ran, and — on a tiered table — the effect die the tier carries. The tier
+    # comes from the argument when the roll produced it, else from the entry
+    # itself (a TIER table declares its tier per row), so a menu pick has it too.
+    resolved_tier = tier if tier is not None else getattr(entry, "tier", None)
+    if entry is not None:
+        if getattr(entry, "label", ""):
+            bindings["entry_label"] = one(entry.label)
+        if index is not None:
+            bindings["entry_index"] = one(index)
+        if getattr(entry, "min_value", None) is not None:
+            bindings["entry_min"] = one(entry.min_value)
+        if getattr(entry, "max_value", None) is not None:
+            bindings["entry_max"] = one(entry.max_value)
+    if resolved_tier is not None:
+        bindings["entry_tier"] = one(getattr(resolved_tier, "value", resolved_tier))
+        effect_die = getattr(resolved_tier, "effect_die", None)
+        if effect_die is not None:
+            # `OutcomeTier.effect_die` — marginal d4, success d6, exceptional d8,
+            # perfect d10, fail none. A die, so an effect's ``result`` can name it.
+            bindings["entry_effect_die"] = one(getattr(effect_die, "value", effect_die))
 
     declared = getattr(table, "bound_variables", None) or []
     if declared and repo is not None:

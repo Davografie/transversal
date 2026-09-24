@@ -184,6 +184,15 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
     bindings = (context or {}).get(BINDINGS_CONTEXT_KEY) or {}
     for raw_effect in effects:
         effect = raw_effect
+        # A ``{name}`` in a flat field resolves from the activation scope here too.
+        # The engine's own paths substitute before dispatch, but this entry point is
+        # reached directly — a roll-table entry's effects, a life-path consequence —
+        # and without this a scope name worked in a *path* (the resolver's
+        # `_bound_value`) but silently did nothing in a field like ``result``.
+        if bindings:
+            from transversal.services.effects_engine.refs import _substitute_effect_context
+
+            effect = _substitute_effect_context(effect, context or {}, bindings)
         if effect.conditions and not evaluate_conditions(entity, effect.conditions, repo, context, source=source, source_element=source_element):
             continue
         # Resolve an ``entity_spec`` here too when this list was applied directly
