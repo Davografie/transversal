@@ -175,3 +175,31 @@ def test_the_trait_change_trigger_declares_the_instance():
 
     names = {v.name for v in trigger_variables("on_trait_change")}
     assert {"trait", "traitset", "trait_setting"} <= names
+
+
+def test_removing_a_trait_tells_clients(monkeypatch):
+    """A removal had no broadcast at all, so a sheet already open kept rendering
+    the trait an effect had taken away ([[B74]]).
+
+    The event is the one the client already handles — `trait_updated` → refetch
+    the sheet — with the dice emptied so the assembled pool drops its die too.
+    """
+    from transversal.services import effects_commit as ec
+
+    captured = {}
+    monkeypatch.setattr(ec, "resync_pool_dice_for_trait",
+                        lambda eid, tid, dice: captured.setdefault("resync", (eid, tid, dice)))
+    monkeypatch.setattr(ec, "_publish",
+                        lambda event, data: captured.setdefault("sse", (event, data)))
+
+    ts = SimpleNamespace(id="char-1:scar", entity_id="char-1", trait_id="trait-scar",
+                         traitset_id="ts-x", dice=[DieType.D6])
+    ec._publish_trait_removed(ts, "earth")
+
+    event, data = captured["sse"]
+    assert event == "trait_updated"
+    assert data["trait_setting_id"] == "char-1:scar"
+    assert data["new_dice"] == [] and data["new_rating"] is None
+    assert data["removed"] is True
+    # The pool's die for it goes with it.
+    assert captured["resync"] == ("char-1", "char-1:scar", [])

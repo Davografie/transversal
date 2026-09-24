@@ -42,6 +42,32 @@ def _publish_trait_changed(ts, universe: str) -> None:
                             "trait_setting": ts.id})
 
 
+def _publish_trait_removed(ts, universe: str) -> None:
+    """Tell clients a trait instance is gone ([[B74]]).
+
+    A removal had **no** broadcast at all, so a sheet that was already open kept
+    rendering the trait an effect had taken away until something else forced a
+    refetch — the visible half of "the sheet live-updates when an SFX changes
+    traits". The event is the same one the client already handles (`trait_updated`
+    → refetch the sheet, and re-sync that die), with the dice emptied: the trait's
+    identity is what the client keys on, and `new_dice: []` clears the assembled
+    pool's die for it.
+
+    Deliberately **not** dispatched to the effects engine: a rule that reacts to
+    "this trait changed" would be handed an instance that no longer exists. If a
+    rule ever needs the removal moment, it wants its own event, not this one.
+    """
+    _publish("trait_updated", {
+        "entity_id": ts.entity_id,
+        "trait_id": ts.trait_id,
+        "trait_setting_id": ts.id,
+        "new_rating": None,
+        "new_dice": [],
+        "removed": True,
+    })
+    resync_pool_dice_for_trait(ts.entity_id, ts.id, [])
+
+
 def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | None = None, source=None, source_element: str | None = None, arrival_kind: str | None = None) -> EffectsResult:
     """Apply effects in-memory, then persist and broadcast.
 
@@ -131,6 +157,7 @@ def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | 
         _publish_trait_changed(ts, entity.current_universe)
     for ts in result.removed_trait_settings:
         repo.delete_traitsetting(ts.id)
+        _publish_trait_removed(ts, entity.current_universe)
 
     # Trait-set settings (limit overrides) produced by the applier.
     for tss in result.new_traitsetsettings:
