@@ -138,6 +138,17 @@ class QueriesEntities:
         ]
 
     @strawberry.field
+    def relationship_types(self, info: strawberry.Info) -> list[str]:
+        """The relationship-type vocabulary, for a picker rather than a text box.
+
+        One answer for both places that ask: a `Create Relationship` effect's
+        *Relationship Type* field and a path's `relationship.type` filter. It is a
+        vocabulary, not an enum — the types are content (`membership`, `agency`, a
+        GM's own `relation`), which is why it has to be asked rather than typed.
+        """
+        return _em(info).repo.list_relationship_types()
+
+    @strawberry.field
     def entity_factions(
         self, info: strawberry.Info, entity_ids: list[strawberry.ID]
     ) -> list[EntityFactionRef]:

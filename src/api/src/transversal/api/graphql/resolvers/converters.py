@@ -619,7 +619,20 @@ def _field_options(fdef, repo) -> tuple[list[str], list[str]]:
             return values, labels
     return list(fdef.options or []), []
 
-_OPTION_SOURCES = {"universes": _universe_options}
+def _relationship_type_options(repo) -> tuple[list[str], list[str]]:
+    """The relationship-type vocabulary for an action field's picker.
+
+    No separate labels: a type *is* its own name (`membership`, `relation`), unlike
+    a universe key whose label is the world's name.
+    """
+    values = repo.list_relationship_types()
+    return values, []
+
+
+_OPTION_SOURCES = {
+    "universes": _universe_options,
+    "relationship_types": _relationship_type_options,
+}
 
 def _gql_field_def(fdef, repo) -> GqlEffectFieldDef:
     """One effect-action field, with its options resolved."""

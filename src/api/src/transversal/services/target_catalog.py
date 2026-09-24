@@ -364,8 +364,12 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "id": ScalarField("relationship", "id", "string",
                           references="relationship", label="relationship"),
         # The edge's own type ("membership", "agency", …) — content, not schema,
-        # so it is a plain string rather than an enum.
-        "type": ScalarField("relationship", "type", "string"),
+        # so it is a *string* rather than an enum; but its values are data the
+        # graph already holds, which is exactly what `suggest` is for (the same
+        # shape `trait_tags` has). Without it the filter was a free-text box and
+        # a typo read as "no relationship matches".
+        "type": ScalarField("relationship", "type", "string",
+                            suggest="relationship_types", label="relationship type"),
         "description": ScalarField("relationship", "description", "string"),
         "owner_id": ScalarField("relationship", "owner_id", "string",
                                 references="entity", label="holding entity"),

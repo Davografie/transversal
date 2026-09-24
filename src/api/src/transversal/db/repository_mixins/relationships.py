@@ -412,6 +412,27 @@ class RepositoryRelationships:
         }))
         return cursor[0] if cursor else None
 
+    def list_relationship_types(self) -> list[str]:
+        """Every relationship *type* in use — the vocabulary, not a schema enum.
+
+        A type is **content**: `membership` and `agency` are structural wiring the
+        code declares, and everything else is whatever a GM has authored (`relation`,
+        a custom tie). So the answer is the live edges **plus** the declared ones —
+        a type nothing currently uses must still be offered, or authoring a rule for
+        it becomes impossible exactly when the graph is empty. Declared first, so
+        the system's own wiring reads at the top of a picker.
+        """
+        from transversal.domain import PERSONAL_RELATIONSHIP_TYPE, STRUCTURAL_RELATIONSHIP_TYPES
+
+        declared = [*sorted(STRUCTURAL_RELATIONSHIP_TYPES), PERSONAL_RELATIONSHIP_TYPE]
+        live = sorted({
+            t for t in self.db.aql.execute(
+                f"FOR r IN {RELATIONSHIPS} RETURN DISTINCT r.type"
+            ) if t
+        })
+        # Declared order first, then anything content added that the code does not know.
+        return declared + [t for t in live if t not in set(declared)]
+
     def get_relationship_by_key(self, edge_key: str) -> dict | None:
         """Get a relationship edge by its ArangoDB ``_key``."""
         return self._relationships.get(edge_key)

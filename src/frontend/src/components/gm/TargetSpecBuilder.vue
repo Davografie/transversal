@@ -353,7 +353,17 @@ const entityNameOptions = computed(() => names((entityRows.value || []).map((e) 
 const locationNameOptions = computed(() => byType('location'))
 const universeNameOptions = computed(() => byType('universe'))
 
+const relationshipTypeOptions = ref([])
+
+async function loadRelationshipTypes() {
+  try {
+    const data = await graphql(`query { relationshipTypes }`)
+    relationshipTypeOptions.value = data?.relationshipTypes || []
+  } catch (e) { /* a suggestion list is a convenience; typing still works */ }
+}
+
 const SUGGEST_SOURCES = {
+  relationship_types: relationshipTypeOptions,
   trait_tags: tagOptions,
   trait_names: traitNameOptions,
   traitset_names: traitsetNameOptions,
@@ -407,6 +417,7 @@ function fieldSuggest(i) {
 function suggestOptions(i) {
   const source = fieldSuggest(i)
   if (source && ENTITY_BACKED_SUGGESTS.has(source)) loadEntityRows()
+  if (source === 'relationship_types' && !relationshipTypeOptions.value.length) loadRelationshipTypes()
   const list = source ? SUGGEST_SOURCES[source] : null
   return list ? list.value : []
 }

@@ -18,7 +18,10 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Entity", field_type="text", required=True),
-            EffectFieldDef(name="result", label="Relationship Type", field_type="text", required=True),
+            # A picker, not free text: the types are a vocabulary the graph
+            # already holds, and a typo here creates an edge nothing can find.
+            EffectFieldDef(name="result", label="Relationship Type", field_type="select",
+                          required=True, options_from="relationship_types"),
         ],
         context_fields=[
             EffectFieldDef(name="description", label="Description", field_type="text", required=False),

@@ -226,8 +226,15 @@ def test_a_retired_action_is_not_offered_but_still_resolves():
     assert retired, "the vocabulary round retired something"
 
     class Repo:
+        # The two reads the served action metadata needs to resolve an option
+        # source: the universe list (attune) and the relationship types (create
+        # relationship). A real repo answers both; a double must too, or the
+        # serialization raises rather than testing what it means to test.
         def list_all_entities(self):
             return []
+
+        def list_relationship_types(self):
+            return ["membership", "relation"]
 
     info = NS(context={"entity_manager": NS(repo=Repo())})
     served = {a.action_id for a in QueriesTargeting().effect_actions(info)}
