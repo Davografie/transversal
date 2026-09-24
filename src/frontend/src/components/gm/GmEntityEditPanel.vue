@@ -57,10 +57,10 @@
             <span v-if="imagenStatus.status" class="btn-status">{{ imagenStatus.status }}</span>
           </button>
           <label
-            v-if="form.type === 'LOCATION'"
+            v-if="supportsSurroundings"
             class="ancestors-toggle"
             :class="{ saving: savingAncestors }"
-            title="Also describe this location's ancestors in the image prompt — the surrounding geography. Good for exteriors; usually noise for interiors. Sub-locations are always described."
+            :title="surroundingsTitle"
           >
             <input
               type="checkbox"
@@ -1031,17 +1031,27 @@ const imagenStatus = computed(() => {
 
 const genTarget = ref(null)  // projection id (or '' for entity) of the active generation
 
-// ── Location prompt: describe the surrounding geography? ─────────────
-// Sub-locations ("zones") always go into a location's image prompt. The ancestor
-// chain is opted into per location — the surroundings make an exterior read
-// right and are usually noise for an interior. Stored as
-// `Entity.prompt_include_ancestors`; survives the form save because that
-// mutation only sends the fields it names.
+// ── Surroundings: describe where this thing is? ──────────────────────
+// For a LOCATION the sub-locations ("zones") always go into the prompt; the
+// ancestor chain is the optional part — surroundings make an exterior read
+// right and are usually noise for an interior. For a GMC or asset the whole
+// chain is optional: it describes the place they are in and its surroundings,
+// which v1 also gave npc/asset prompts. Characters are deliberately excluded —
+// a PC is generated wherever the player wants, not where the soul sits.
+// Stored as `Entity.prompt_include_ancestors`; it survives a form save because
+// that mutation only sends the fields it names.
+const SURROUNDINGS_TYPES = ['LOCATION', 'GMC', 'ASSET']
+const supportsSurroundings = computed(() => SURROUNDINGS_TYPES.includes(form.value?.type))
+const surroundingsTitle = computed(() =>
+  form.value?.type === 'LOCATION'
+    ? "Also describe this location's ancestors in the image prompt — the surrounding geography. Good for exteriors; usually noise for interiors. Sub-locations are always described."
+    : "Also describe where this is — the place they are in, and its surroundings."
+)
 const promptIncludeAncestors = ref(false)
 const savingAncestors = ref(false)
 
 async function fetchPromptIncludeAncestors() {
-  if (!props.entityId || form.value?.type !== 'LOCATION') {
+  if (!props.entityId || !supportsSurroundings.value) {
     promptIncludeAncestors.value = false
     return
   }

@@ -133,6 +133,68 @@ def _build_location_context(repository, entity: Entity, universes: list[str]) ->
     return {"children": children, "ancestors": ancestors}
 
 
+def _occupant_location_id(entity: Entity, projection_id: str | None, repository) -> str | None:
+    """Where an occupant is standing, for its own prompt.
+
+    The **body's** location wins when there is one: a projection can be
+    somewhere its entity is not (four live entities are, e.g. a body in one
+    place while the soul sits in another), and describing a body as standing
+    where its soul happens to be would be wrong.
+    """
+    if projection_id:
+        try:
+            projection = repository.get_projection(projection_id)
+        except Exception:
+            projection = None
+        if projection is not None and projection.current_location:
+            return projection.current_location
+    return entity.current_location or None
+
+
+def _build_occupant_location_context(
+    repository, entity: Entity, projection_id: str | None, universes: list[str]
+) -> dict:
+    """Where an occupant is, for its prompt: the containing location + ancestors.
+
+    v1 gave npc and asset prompts this chain ("located in …", decaying 0.6 per
+    level); v2 dropped it. Gated by the entity's own ``prompt_include_ancestors``
+    toggle — a GMC with **Surroundings** off builds exactly the prompt it did
+    before.
+
+    **No sub-locations.** Those describe what a place *contains*, which is the
+    right thing for a location's own backdrop and the wrong thing for someone
+    standing in it.
+    """
+    if not entity.prompt_include_ancestors:
+        return {"children": [], "ancestors": []}
+
+    location_id = _occupant_location_id(entity, projection_id, repository)
+    if not location_id:
+        return {"children": [], "ancestors": []}
+
+    # Nearest first: the place they are in, then up the chain.
+    try:
+        chain = [location_id] + list(repository.get_location_ancestors(location_id))
+    except Exception:
+        chain = [location_id]
+
+    ancestors: list[dict] = []
+    for place_id in chain:
+        place = repository.get_entity(place_id)
+        # A `super` parent can be a non-location (the live data has one location
+        # under a character); only places describe where someone is.
+        if place is None or place.type != EntityType.LOCATION:
+            continue
+        ancestors.append({
+            "name": place.name or "",
+            "appearance": _appearance_text(
+                repository, place_id, universes, place.current_projection
+            ),
+        })
+
+    return {"children": [], "ancestors": ancestors}
+
+
 def _nested_ancestors(ancestors: list[dict], strength: float) -> str:
     """``in (parent in (grandparent:0.36):0.6)`` — nearest ancestor outermost."""
     nearest, rest = ancestors[0], ancestors[1:]
@@ -203,10 +265,12 @@ def _build_entity_prompt(
     elif entity_type == EntityType.GMC:
         prompt = f"(a solo upper body character portrait of {name}:1.2), "
         steps = 48
+        prompt += _location_context_clause(name, location_context)
     elif entity_type == EntityType.ASSET:
         prompt = f"(a concept art image of {name}:1.2), "
         negative += ", person"
         steps = 48
+        prompt += _location_context_clause(name, location_context)
     elif entity_type == EntityType.FACTION:
         prompt = f"(a symbol or logo or flag or shield or emblem representing the faction {name}:1.2), "
         negative += ", photo, person, environment"
@@ -338,6 +402,13 @@ def build_imagen_prompt(
     location_context = None
     if entity.type == EntityType.LOCATION:
         location_context = _build_location_context(repository, entity, trait_universes)
+    elif entity.type in (EntityType.GMC, EntityType.ASSET):
+        # v1 gave npc/asset prompts the containing location and its ancestors.
+        # Characters are deliberately excluded: a PC is generated wherever the
+        # player wants, not pinned to wherever the soul currently sits.
+        location_context = _build_occupant_location_context(
+            repository, entity, projection_id, trait_universes
+        )
     prompt, negative, loras, steps = _build_entity_prompt(
         entity, trait_settings, universe, location_context
     )
