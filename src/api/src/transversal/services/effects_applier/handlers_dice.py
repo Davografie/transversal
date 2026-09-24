@@ -170,6 +170,12 @@ def _apply_set(entity, effect, repo, result):
     result.updated_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"set {target} to {die.value}", existing.id))
     _queue_trait_revert(repo, existing, effect, prior_result=prior)
+    # A *set* can fill a clock, so it has to say so. Every other way a challenge
+    # reaches its capacity fires the completion event (`add_die`, `step_up`,
+    # `gain_or_step_up`); `set` was the one that left the pool looking full while
+    # nothing happened — so "set the portent to full" silently did nothing. The
+    # check is a no-op for every non-challenge rating.
+    _maybe_complete_challenge(existing, subject)
 
 def _apply_disable(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)

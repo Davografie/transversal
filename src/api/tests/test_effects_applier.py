@@ -3385,3 +3385,45 @@ def test_an_effect_with_no_owner_path_still_anchors_to_the_entity():
     plain = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
                    action="gain_relationship", target="trait-rel-tenure", result="d4")
     assert _trait_owner(_entity(id="char-1"), plain, FakeRepo()) == ("entity", "char-1")
+
+
+def test_setting_a_challenge_to_its_capacity_completes_it(monkeypatch):
+    """Every other way a challenge fills fires the completion event (`add_die`,
+    `step_up`, `gain_or_step_up`); `set` left the pool looking full with nothing
+    happening, so "set the portent to full" silently did nothing."""
+    from transversal.services import challenge_pools as cp
+    from transversal.domain import RatingType
+
+    fired = []
+
+    def _fire(ts, universe=""):
+        # Honour the real gate: the *check* lives inside fire_challenge_completed,
+        # so a double that skipped it would "complete" anything at all.
+        if cp.check_challenge_completion(ts):
+            fired.append((ts.id, universe))
+
+    monkeypatch.setattr(cp, "fire_challenge_completed", _fire)
+    ts = _ts("portent", [DieType.D4], traitset_id="ts-x",
+             rating_type=RatingType.CHALLENGE, capacity=[DieType.D6])
+    repo = FakeRepo(traits=[FakeTrait("portent", "ts-x")], traitsettings=[ts])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="set",
+                    target="char-1:portent", result="d6")
+
+    apply_effects(_entity(current_universe="earth"), [effect], repo)
+    assert fired == [("char-1:portent", "earth")]
+
+
+def test_setting_a_plain_trait_does_not_complete_anything(monkeypatch):
+    from transversal.services import challenge_pools as cp
+
+    fired = []
+
+    def _fire(ts, universe=""):
+        if cp.check_challenge_completion(ts):
+            fired.append(ts.id)
+
+    monkeypatch.setattr(cp, "fire_challenge_completed", _fire)
+    ts = _ts("fire", [DieType.D6], traitset_id="ts-x")     # STATIC, no capacity
+    repo = FakeRepo(traits=[FakeTrait("fire", "ts-x")], traitsettings=[ts])
+    apply_effects(_entity(), [_effect("modify_trait", "set", "char-1:fire", "d8")], repo)
+    assert fired == []
