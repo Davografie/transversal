@@ -180,7 +180,12 @@ watch(
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 30;
+  /* One below the GM panel layer (`.panel-viewport` 25 / `.gm-toggle` 26): this
+     rail is sheet chrome, so a panel the GM has opened must be able to cover it.
+     At 30 it floated *over* every GM panel, which is what looked wrong. It stays
+     above the centred page overlays (LocationViewer 22, PoolDiceRing 23) so the
+     left edge keeps reading while they are up. */
+  z-index: 24;
   display: flex;
   flex-direction: column;
   gap: 6px;
