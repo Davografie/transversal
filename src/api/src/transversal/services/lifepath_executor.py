@@ -18,7 +18,7 @@ from transversal.domain import (
     PendingTerm,
 )
 from transversal.services.effects_applier import apply_effects, EffectsResult
-from transversal.services.roll_table import resolve_table
+from transversal.services.roll_table import resolve_applicable_entry
 
 
 def start_term(entity: Entity, faction_id: str, path_id: str, repo) -> PendingTerm:
@@ -64,9 +64,14 @@ def resolve_step(
     if table is None:
         return {"done": True, "error": f"table '{pt.current_table_id}' not found"}
 
-    entry = resolve_table(table, roll=roll, tier=tier, index=index)
+    # The entry the roll picked, or the previous one whose conditions hold, or
+    # nothing — see `resolve_applicable_entry` ([[B179]]).
+    entry = resolve_applicable_entry(
+        table, entity, repo, roll=roll, tier=tier, index=index,
+        source=table, source_element="roll_table",
+    )
     if entry is None:
-        return {"done": True, "error": "no entry resolved"}
+        return {"done": True, "error": "no applicable entry resolved"}
 
     # Append the outcome to the entity's historical record (append-only event log).
     lp = repo.get_lifepath(pt.path_id)
