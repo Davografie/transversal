@@ -3338,3 +3338,50 @@ def test_setting_a_rating_from_an_unresolved_path_does_not_write_d4():
     assert ts.dice == [DieType.D8]          # untouched
     assert result.updated_trait_settings == []
     assert "no die rating to set" in result.applied[0].summary
+
+
+# ── The owner path is the anchor, or it is missing (B164) ───
+#
+# A declared owner path that resolves to nothing must **say so**. Falling back to
+# the subject entity would write the trait in the wrong place and report success —
+# and the legacy context branch this replaces answered ("missing", …) for an
+# absent edge, so a migrated rule has to behave the same.
+
+def _owner_spec_for(faction):
+    from transversal.services.target_spec import TargetSpec
+
+    return TargetSpec.model_validate({"steps": [
+        {"kind": "select", "collection": "self"},
+        {"kind": "navigate", "edge": "relationships"},
+        {"kind": "filter", "field": "contact_id", "operator": "==", "value": faction},
+    ]})
+
+
+def test_an_owner_path_that_resolves_to_nothing_is_reported_not_guessed():
+    from transversal.services.effects_applier.datatypes import OWNER_ID_CONTEXT_KEY
+    from transversal.services.effects_applier.trait_helpers import _trait_owner
+
+    entity = _entity(id="char-1")
+    # `resolve_effect_owner` clears the spec only on a hit, so a surviving spec is
+    # exactly "this was authored and matched nothing".
+    unresolved = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                        action="gain_relationship", target="trait-rel-tenure",
+                        result="d4", owner_spec=_owner_spec_for("fac-absent"))
+    assert _trait_owner(entity, unresolved, FakeRepo()) == (
+        "missing", "no relationship matched the anchor path")
+
+    # And a path that did resolve is used, as before.
+    resolved = unresolved.model_copy(update={
+        "owner_spec": None,
+        "context": {OWNER_ID_CONTEXT_KEY: "edge-key"},
+    })
+    assert _trait_owner(entity, resolved, FakeRepo()) == ("relationship", "edge-key")
+
+
+def test_an_effect_with_no_owner_path_still_anchors_to_the_entity():
+    """The fail-open that matters: "no path authored" is the common case."""
+    from transversal.services.effects_applier.trait_helpers import _trait_owner
+
+    plain = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                   action="gain_relationship", target="trait-rel-tenure", result="d4")
+    assert _trait_owner(_entity(id="char-1"), plain, FakeRepo()) == ("entity", "char-1")

@@ -52,6 +52,17 @@ def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
     if resolved_owner and declared:
         return (declared[0], resolved_owner)
 
+    # A declared owner **path** that resolved to nothing is not "no owner": it is a
+    # missing anchor, and falling back to the subject entity would write the trait
+    # in the wrong place — silently, because the effect then reports success. The
+    # spec survives resolution exactly when it resolved nothing
+    # (`resolve_effect_owner` clears it only on a hit), so that is the signal.
+    # This is also what keeps the [[B164]] migration faithful: the legacy branch
+    # below answers ``("missing", …)`` for an absent edge, and a migrated rule must
+    # not quietly behave worse while looking better.
+    if declared and getattr(effect, "owner_spec", None) is not None:
+        return ("missing", f"no {declared[0]} matched the anchor path")
+
     rel_target = (effect.context or {}).get("relationship")
     if rel_target == "{term_faction}":
         # Shared tables can't hardcode a faction; resolve to the faction the
