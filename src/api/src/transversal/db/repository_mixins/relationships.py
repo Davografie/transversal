@@ -5,6 +5,7 @@ from __future__ import annotations
 from transversal.db.arango import ENTITIES
 from transversal.db.arango import PROJECTIONS
 from transversal.db.arango import RELATIONSHIPS
+from transversal.db.arango import TRAITS
 from transversal.db.arango import TRAITSETTINGS
 from transversal.domain import Entity
 from transversal.domain import EntityType
@@ -281,6 +282,65 @@ class RepositoryRelationships:
             return  # already registered
         loc.nav_positions["portal"] = dict(DEFAULT_PORTAL_NAV_POSITION)
         self.update_entity(loc)
+
+    def list_member_factions_with_sfx(self, entity_id: str) -> list["Entity"]:
+        """The factions this entity is on the roster of that **own SFX**.
+
+        The membership scope ([[B109]]), mirroring :meth:`list_ancestor_locations_with_sfx`
+        for places: a rule owned by a faction reaches its members.
+
+        Goes through :meth:`get_entity_factions` rather than re-deriving the tie —
+        that read already knows the two shapes a roster slot takes (``membership``,
+        or a ``relation`` tie carrying ``role``/``rank``) and that direction
+        matters, and a second query here is a second chance to disagree with the
+        roster. Only factions that actually carry rules come back, so an entity in
+        no faction costs a handful of id reads and nothing else.
+        """
+        out: list[Entity] = []
+        for faction_id in self.get_entity_factions(entity_id):
+            faction = self.get_entity(faction_id)
+            if faction is not None and (faction.sfx_ids or []):
+                out.append(faction)
+        return out
+
+    def list_member_factions_with_sfx_bulk(self, entity_ids: list[str]) -> dict[str, list[str]]:
+        """``entity_id → sfx ids`` its factions grant, in one read.
+
+        The bulk half, for the availability prefetch: the global fan-out visits
+        every entity, so asking each about its own roster would put a query back on
+        that path. The roster test is repeated in AQL rather than approximated —
+        ``membership`` always counts, a ``relation`` only when it carries a
+        ``role`` or ``rank`` trait, and only member → faction. Using the *broader*
+        :meth:`get_factions_for_entities` here would hand a faction's rules to
+        everyone it merely holds a posture toward, which is the one thing this
+        scope must never do.
+        """
+        if not entity_ids:
+            return {}
+        refs = [f"{ENTITIES}/{eid}" for eid in entity_ids]
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+              FILTER r._from IN @refs
+              FILTER r.type IN ['membership', 'relation']
+              LET f = DOCUMENT({ENTITIES}, PARSE_IDENTIFIER(r._to).key)
+              FILTER f != null AND f.type == 'faction'
+              FILTER LENGTH(f.sfx_ids || []) > 0
+              LET roster = r.type == 'membership' OR LENGTH(
+                  FOR ts IN {TRAITSETTINGS}
+                    FILTER ts._from == CONCAT('relationships/', r._key)
+                    LET t = DOCUMENT({TRAITS}, ts.trait_id)
+                    FILTER t != null AND LOWER(t.name) IN ['role', 'rank']
+                    LIMIT 1 RETURN 1) > 0
+              FILTER roster
+              COLLECT member = PARSE_IDENTIFIER(r._from).key AGGREGATE granted = UNIQUE(f.sfx_ids)
+              RETURN {{ member, granted }}
+        """
+        out: dict[str, list[str]] = {}
+        for row in self.db.aql.execute(query, bind_vars={"refs": refs}):
+            ids = [i for i in (row.get("granted") or []) if i]
+            if ids:
+                out[row["member"]] = list(dict.fromkeys(ids))
+        return out
 
     def list_ancestor_locations_with_sfx(self, location_id: str, max_depth: int = 8) -> list["Entity"]:
         """The location and its ancestors that own SFX — the *location scope*.

@@ -60,6 +60,12 @@ class CultivationRepo:
     def get_effective_traitsettings(self, entity_id, universes=None):
         return [self.ts] if entity_id == "kael" else []
 
+    def list_member_factions_with_sfx(self, entity_id):
+        return []
+
+    def list_member_factions_with_sfx_bulk(self, entity_ids):
+        return {}
+
     def update_entity(self, entity):
         self.updated_entities.append(entity.id)
 

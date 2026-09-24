@@ -164,6 +164,12 @@ class SeedRepo:
         return []
 
 
+    def list_member_factions_with_sfx(self, entity_id):
+        return []
+
+    def list_member_factions_with_sfx_bulk(self, entity_ids):
+        return {}
+
 def _apply_spy():
     """A recording handler for a test-only effect action."""
     from transversal.services.effects_applier import effect_registry

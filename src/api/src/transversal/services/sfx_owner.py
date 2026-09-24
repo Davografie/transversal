@@ -702,6 +702,7 @@ class SfxAvailabilityPrefetch:
     traitsettings: dict[str, list] = field(default_factory=dict)     # entity_id → [TraitSetting]
     traitsetsettings: dict[str, list] = field(default_factory=dict)  # entity_id → [TraitSetSetting]
     location_rules: dict[str, list] = field(default_factory=dict)    # location_id → [sfx_id] in scope
+    faction_rules: dict[str, list] = field(default_factory=dict)     # entity_id → [sfx_id] from its factions
     sfx_by_id: dict[str, Any] = field(default_factory=dict)          # sfx_id → SFX
 
 
@@ -828,6 +829,7 @@ def build_sfx_availability_prefetch(
 
     return SfxAvailabilityPrefetch(
         entities={e.id: e for e in entities},
+        faction_rules=repo.list_member_factions_with_sfx_bulk(entity_ids),
         projections=projections,
         table_bucket=repo.get_sfx_owner("table"),
         traitsettings=traitsettings,
@@ -932,6 +934,20 @@ def get_available_sfx_ids(
     # Trait-set-as-unit grants, universe-gated via effective set settings.
     for tss in traitset_settings:
         ids.update(tss.sfx_ids or [])
+
+    # Membership scope: a rule owned by a *faction* reaches its members
+    # ([[B109]]). Read-time only, exactly like the place scope below — nothing is
+    # written on the member, so leaving the roster ends the rule by itself, and a
+    # **rank** gate is a condition the author writes rather than a second
+    # mechanism here. `list_member_factions_with_sfx` returns only the factions the
+    # entity is on the roster of that actually carry rules, so an entity in no
+    # faction costs a handful of id reads.
+    if entity is not None:
+        if prefetch is not None:
+            ids.update(prefetch.faction_rules.get(entity_id, []))
+        else:
+            for faction in repo.list_member_factions_with_sfx(entity_id):
+                ids.update(faction.sfx_ids or [])
 
     # Location scope: a rule owned by a *place* reaches the entities under it.
     # Read-time only — nothing is written to the occupant, so walking out ends
@@ -1091,6 +1107,15 @@ def resolve_sfx_source(repo, entity_id: str, universe: str, sfx_id: str, source_
 
     element = tc.source_element(source_kind) if source_kind else None
     if element is None or repo is None:
+        return None
+    if source_kind == "faction":
+        # Which of the entity's factions owns this rule ([[B109]]). Branches on the
+        # *kind*, not the element: a faction resolves to the ``entity`` element, so
+        # the element alone cannot tell it from an entity-owned rule — and a
+        # faction-owned rule's source is the faction, never the member.
+        for faction in repo.list_member_factions_with_sfx(entity_id):
+            if sfx_id in (faction.sfx_ids or []):
+                return (faction, "faction")
         return None
     if element == "entity":
         entity = repo.get_entity(entity_id)

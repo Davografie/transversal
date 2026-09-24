@@ -129,7 +129,8 @@ def test_source_kinds_are_declared_and_consistent():
     from transversal.services import target_catalog as tc
 
     assert {s.value for s in tc.SOURCE_KINDS} == {
-        "trait_setting", "traitset_setting", "entity", "location", "projection", "table", "gm",
+        "trait_setting", "traitset_setting", "entity", "location", "projection", "faction",
+        "table", "gm",
     }
     surfaces = {"trait_instance", "trait", "trait_set", "entity", "location", "projection", "table", "gm"}
     for s in tc.SOURCE_KINDS:

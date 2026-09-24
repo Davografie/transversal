@@ -66,6 +66,12 @@ class Repo:
     def get_effective_traitsettings(self, entity_id, universes):
         return self.trait_settings
 
+    def list_member_factions_with_sfx(self, entity_id):
+        return []
+
+    def list_member_factions_with_sfx_bulk(self, entity_ids):
+        return {}
+
     def get_trait(self, trait_id):
         return self.traits.get(trait_id)
 
@@ -1849,3 +1855,118 @@ def test_a_place_with_no_arrival_rules_reports_nothing():
 
     assert get_arrival_sfx_rules("loc-none", _arrival_world()) == []
     assert get_arrival_sfx_rules("", _arrival_world()) == []
+
+
+# ── Membership scope: a faction's rules reach its members (B109) ───
+#
+# The mirror of the place scope. A rule owned by a faction applies to the entities
+# on its roster; **rank** gates are conditions the author writes, not a second
+# mechanism here.
+
+class MembershipRepo(Repo):
+    """A repo where an entity is on the roster of some factions."""
+
+    def __init__(self, factions=None, memberships=None):
+        super().__init__()
+        self.faction_rows = list(factions or [])
+        self.memberships = memberships or {}
+
+    def get_projections_for_entities(self, entity_ids):
+        return {}
+
+    def get_effective_traitsettings_bulk(self, entity_ids, universes):
+        return {}
+
+    def get_effective_traitsetsettings_bulk(self, entity_ids, universes):
+        return {}
+
+    def get_all_sfxs(self):
+        return []
+
+    def get_sub_traitsettings_for_parents(self, parent_ids):
+        return {}
+
+    def list_member_factions_with_sfx(self, entity_id):
+        if entity_id not in self.memberships:
+            return []
+        return [f for f in self.faction_rows if f.id in self.memberships[entity_id]]
+
+    def list_member_factions_with_sfx_bulk(self, entity_ids):
+        return {eid: [s for f in self.list_member_factions_with_sfx(eid) for s in f.sfx_ids]
+                for eid in entity_ids if self.list_member_factions_with_sfx(eid)}
+
+
+def _faction(fid, name, sfx_ids):
+    return SimpleNamespace(id=fid, name=name, sfx_ids=list(sfx_ids))
+
+
+def test_a_factions_rule_reaches_its_member():
+    repo = MembershipRepo(
+        factions=[_faction("fac-1", "Iron Roots", ["sfx-standing"])],
+        memberships={"char-1": ["fac-1"]},
+    )
+    repo.entity = _entity()
+    assert get_available_sfx_ids("char-1", "earth", repo) == ["sfx-standing"]
+
+
+def test_a_factions_rule_does_not_reach_a_non_member():
+    repo = MembershipRepo(
+        factions=[_faction("fac-1", "Iron Roots", ["sfx-standing"])],
+        memberships={"char-1": ["fac-1"]},
+    )
+    repo.entity = _entity()
+    assert get_available_sfx_ids("char-9", "earth", repo) == []
+
+
+def test_the_faction_is_the_source_not_the_member():
+    """`{faction}` has to mean the organisation: "the faction whose roster you are
+    on" is a different thing from "you", and a rank gate is written against it."""
+    from transversal.services.sfx_owner import resolve_sfx_source
+    from transversal.services import target_catalog as tc
+
+    declared = next(s for s in tc.SOURCE_KINDS if s.value == "faction")
+    # A faction *is* an entity, so paths from it walk entity edges...
+    assert declared.element == "entity"
+    # ...but the variable is what makes the token mean the organisation.
+    assert declared.variable == "faction"
+    assert declared.owner_surfaces == ("entity",)
+
+    repo = MembershipRepo(
+        factions=[_faction("fac-1", "Iron Roots", ["sfx-standing"])],
+        memberships={"char-1": ["fac-1"]},
+    )
+    source, element = resolve_sfx_source(repo, "char-1", "earth", "sfx-standing", "faction")
+    assert (source.id, element) == ("fac-1", "faction")
+
+
+def test_a_faction_that_owns_the_rule_is_found_by_source_resolution_only_once():
+    """Two factions, one owning the rule — the resolution names the owner."""
+    from transversal.services.sfx_owner import resolve_sfx_source
+
+    repo = MembershipRepo(
+        factions=[_faction("fac-1", "Iron Roots", []),
+                  _faction("fac-2", "Verdant Steps", ["sfx-technique"])],
+        memberships={"char-1": ["fac-1", "fac-2"]},
+    )
+    source, element = resolve_sfx_source(repo, "char-1", "earth", "sfx-technique", "faction")
+    assert (source.id, element) == ("fac-2", "faction")
+    # Nothing owning it is not an error, and not a guess.
+    assert resolve_sfx_source(repo, "char-1", "earth", "sfx-nowhere", "faction") is None
+
+
+def test_the_prefetch_agrees_with_the_per_entity_scope():
+    """The bulk path exists so the global fan-out costs one read; it must not
+    resolve a different set from the per-entity path."""
+    from transversal.services.sfx_owner import build_sfx_availability_prefetch
+
+    repo = MembershipRepo(
+        factions=[_faction("fac-1", "Iron Roots", ["sfx-standing"])],
+        memberships={"char-1": ["fac-1"]},
+    )
+    entity = SimpleNamespace(id="char-1", current_universe="earth", sfx_ids=[],
+                             current_projection=None, current_location=None)
+    repo.entity = entity
+    without = get_available_sfx_ids("char-1", "earth", repo)
+    prefetch = build_sfx_availability_prefetch(repo, [entity])
+    with_prefetch = get_available_sfx_ids("char-1", "earth", repo, prefetch=prefetch)
+    assert with_prefetch == without == ["sfx-standing"]

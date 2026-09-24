@@ -261,6 +261,12 @@ class InMemoryRepository(EntityRepository):
             if d["entity_id"] == eid and (d["trait_id"] in universe_trait_ids or d.get("from_type") == "entity")
         ]
 
+    def list_member_factions_with_sfx(self, entity_id):
+        return []
+
+    def list_member_factions_with_sfx_bulk(self, entity_ids):
+        return {}
+
     def get_effective_traitsetsettings(self, eid: str, universes: list[str]) -> list:
         return []
 

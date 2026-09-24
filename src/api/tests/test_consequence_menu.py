@@ -27,6 +27,12 @@ class MenuRepo:
     def get_effective_traitsettings(self, entity_id, universes):
         return self.trait_settings
 
+    def list_member_factions_with_sfx(self, entity_id):
+        return []
+
+    def list_member_factions_with_sfx_bulk(self, entity_ids):
+        return {}
+
     def get_sub_traitsettings_for_parents(self, parent_ids):
         return {pid: [] for pid in parent_ids}
 

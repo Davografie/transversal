@@ -37,6 +37,12 @@ class Repo:
     def get_effective_traitsettings(self, entity_id, universes):
         return []
 
+    def list_member_factions_with_sfx(self, entity_id):
+        return []
+
+    def list_member_factions_with_sfx_bulk(self, entity_ids):
+        return {}
+
     def get_trait(self, trait_id):
         return None
 

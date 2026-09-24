@@ -114,6 +114,12 @@ class Repo:
         return [ts for ts in self.traitsettings.values() if ts.entity_id == entity_id]
 
 
+    def list_member_factions_with_sfx(self, entity_id):
+        return []
+
+    def list_member_factions_with_sfx_bulk(self, entity_ids):
+        return {}
+
 def event(added: list[dict], rolls: list[dict]) -> GameEvent:
     """The context `on_pool_change` builds, with the author's source resolved."""
     return GameEvent(

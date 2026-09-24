@@ -853,6 +853,12 @@ SOURCE_KINDS: tuple[SourceKind, ...] = (
     # attached to a character is caught rather than silently resolving to them.
     SourceKind("location", "Location", "location", "location", ("location",)),
     SourceKind("projection", "Projection", "projection", "projection", ("projection",)),
+    # A *faction* is its own kind of source for the same reason a place is: the
+    # rule is attached to the faction and applies to its members, so the source is
+    # the faction — not the member it reaches. Its element is ``entity`` because a
+    # faction **is** an entity (paths from it walk entity edges), and the variable
+    # is what makes `{faction}` mean the organisation rather than the character.
+    SourceKind("faction", "Faction", "entity", "faction", ("entity",)),
     # Bucket sources: attached to the table/GM owner buckets, not a typed
     # instance. Non-resolving — empty element/variable, so ``source_element``
     # and ``source_variable`` return None and there is no ``select source`` /
