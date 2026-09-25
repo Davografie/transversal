@@ -95,23 +95,40 @@ def resolve_trait_display_name(
     """Resolve the dynamic display name for a trait given an entity's dice
     and current universe.
 
-    Returns the first matching ``TraitDisplayName.name`` whose ``universe``
-    matches (or is ``"*"``) and whose ``ratings`` contains the entity's
-    exact dice combination (order-independent).  If no match is found,
-    returns ``trait.name``.
+    A ``TraitDisplayName`` applies when its ``universe`` matches (or is ``"*"``).
+    Within that, an entry declaring the entity's **exact** dice combination
+    (order-independent) wins; an entry declaring **no** ratings is the universe's
+    general alias and matches any dice. A specific entry therefore always beats a
+    general one, whatever order they are stored in. If nothing matches, returns
+    ``trait.name``.
 
-    When ``dice`` is empty, returns ``trait.name`` immediately.
+    The general alias is what the registry editor has always promised — its own
+    label is *"No ratings — matches any dice"* — but this function used to skip
+    those entries entirely (an empty list has nothing to iterate), so an alias
+    authored without dice never rendered anywhere. Reported 2026-09-25 on
+    ``trait-saber``, which is the only trait carrying a display name.
+
+    When ``dice`` is empty, returns ``trait.name`` immediately: there is no
+    rating to match, and the guard is kept as it was rather than silently
+    widening the general alias to dice-less traits.
     """
     if not trait.display_names or not dice:
         return trait.name
     sorted_dice = sorted(die.value for die in dice)
+    general = None
     for dn in trait.display_names:
         if dn.universe != universe and dn.universe != "*":
+            continue
+        if not dn.ratings:
+            # The universe's general alias. Held rather than returned, so a later
+            # entry that names these dice exactly still wins.
+            if general is None:
+                general = dn.name
             continue
         for rating in dn.ratings:
             if sorted(r.value for r in rating) == sorted_dice:
                 return dn.name
-    return trait.name
+    return general or trait.name
 
 class TraitSetting(BaseModel):
     """Entity-specific configuration of a trait.
