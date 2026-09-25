@@ -2044,6 +2044,12 @@ onMounted(() => {
   top: calc(env(safe-area-inset-top, 16px) + 44px);
   left: 16px;
   display: flex; flex-direction: column; gap: 10px;
+  /* Each chip sizes to ITS own content, the width it would have if it were placed in
+     the scene. A column flex container stretches its items across the cross axis by
+     default, so without this every chip took the width of the WIDEST one in the stack
+     (and, capped by the max-width below, the same 40vw on a phone) — a two-word trait
+     drawn as wide as the longest sentence in the room. */
+  align-items: flex-start;
   max-width: 40vw;
   z-index: 2;
   pointer-events: none;
