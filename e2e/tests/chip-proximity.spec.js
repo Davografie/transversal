@@ -184,3 +184,45 @@ test('a tap opens a closed chip, and the next tap plays it', async ({ page }) =>
   await target.dispatchEvent('click')
   await expect.poll(() => pool.count()).toBe(before + 1)
 })
+
+test('arrange mode opens every chip, and a chip can then be dragged', async ({ page }) => {
+  // Arrange mode is architect-only, and the role comes from the player read: mock that
+  // read rather than logging in as one of the human's own devices. This is also the one
+  // way to reach the chip DRAG, which until now was the role's only hand-check.
+  await page.route('**/api/v1/players/*', async (route) => {
+    const body = await (await route.fetch()).json()
+    return route.fulfill({ json: { ...body, role: 'architect' } })
+  })
+  // The drag persists the whole positions map; accept it and record it, so the test
+  // proves the write happened without touching the location's real placements.
+  const writes = []
+  await page.route('**/trait-positions', (route) => {
+    writes.push(route.request().postDataJSON())
+    return route.fulfill({ json: { status: 'ok', count: 2 } })
+  })
+
+  const { chip } = await open(page, FAR)
+  await expect(page.locator('.scene-chip')).toHaveCount(2)
+  // At rest, with the character away, nothing is open…
+  await expect(page.locator('.scene-chip.expanded')).toHaveCount(0)
+
+  // …and arranging the map opens them all: you cannot place what you cannot read.
+  await page.locator('.arrange-btn').click()
+  await expect(page.locator('.scene-chip.expanded')).toHaveCount(2)
+  await page.mouse.move(5, 5)
+  await expect(page.locator('.scene-chip.expanded')).toHaveCount(2)
+
+  // The gesture itself: grab a chip and move it.
+  const target = chip(WITH_IMAGE)
+  await expect(target).toHaveClass(/draggable/)
+  const before = await target.boundingBox()
+  await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(before.x + before.width / 2 + 90, before.y + before.height / 2 + 40, { steps: 12 })
+  await page.mouse.up()
+
+  await expect.poll(() => writes.length).toBe(1)
+  const moved = await target.boundingBox()
+  expect(moved.x).toBeGreaterThan(before.x + 40)
+  console.log('dragged:', JSON.stringify({ from: [before.x, before.y], to: [moved.x, moved.y] }))
+})

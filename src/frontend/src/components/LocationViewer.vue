@@ -1367,6 +1367,10 @@ function traitChipExpanded(t) {
   // The stack is never collapsed: nothing can be approached there, and it is the
   // legend you read the map against.
   if (!traitPositions.value[t.id]) return true
+  // Arrange mode opens every chip, the way it already opens every zone and nav dot:
+  // the GM is placing these, and you cannot place what you cannot read. Without it,
+  // dragging a chip means chasing an unlabelled marker around the map.
+  if (props.editZones) return true
   if (hoveredTraitId.value === t.id || peekTraitId.value === t.id) return true
   return (traitProximity.value[t.id] || 0) >= TRAIT_EXPANDED_AT
 }
