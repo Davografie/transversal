@@ -231,7 +231,7 @@ def test_delete_projection_cascades_dependents():
     repo.create_traitsetsetting(TraitSetSetting(
         id=PTSS3, entity_id=E3, traitset_id=TRAITSET3, from_type="projection", projection_id=PROJ3,
     ))
-    repo.create_entity_image(MediaImage(
+    repo.create_image(MediaImage(
         id=IMG3, entity_id=E3, projection_id=PROJ3, universe="earth", image_type=ImageType.IMAGEN,
     ))
     repo.create_relationship(PROJ3, E3B, "morph", from_projection=True)
@@ -241,7 +241,7 @@ def test_delete_projection_cascades_dependents():
     assert repo.get_projection(PROJ3) is None
     assert repo.get_traitsetting(PTS3) is None
     assert repo.get_traitsetsetting(PTSS3) is None
-    assert repo.get_entity_image(IMG3) is None
+    assert repo.get_image(IMG3) is None
     assert repo.get_relationship(PROJ3, E3B, "morph", from_projection=True) is None
     assert repo.get_entity(E3) is not None  # the soul survives
 

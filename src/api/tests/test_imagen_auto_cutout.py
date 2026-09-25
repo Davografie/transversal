@@ -29,12 +29,12 @@ class _FakeRepo:
     def get_images_for_owner(self, entity_id, projection_id=None):
         return [i for i in self._images if (i.projection_id or None) == projection_id]
 
-    def create_entity_image(self, image):
+    def create_image(self, image):
         self.created.append(image)
         self._images.append(image)
         return image
 
-    def update_entity_image(self, image_id, updates):
+    def update_image(self, image_id, updates):
         self.updates.setdefault(image_id, {}).update(updates)
         for img in self._images:
             if img.id == image_id:
@@ -43,7 +43,7 @@ class _FakeRepo:
                 return img
         return None
 
-    def get_entity_image(self, image_id):
+    def get_image(self, image_id):
         return next((i for i in self._images if i.id == image_id), None)
 
 

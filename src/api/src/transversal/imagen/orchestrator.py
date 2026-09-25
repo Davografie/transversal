@@ -286,7 +286,7 @@ class ImagenOrchestrator:
             extension="webp",
             created_at=datetime.now(timezone.utc).isoformat(),
         )
-        self.repo.create_entity_image(entity_image)
+        self.repo.create_image(entity_image)
 
         # 5. First image for a projection → also cut it out (B129). A cutout
         # needs a source, so this hangs off the first *generated image* rather
@@ -331,8 +331,8 @@ class ImagenOrchestrator:
             )
             return
 
-        self.repo.update_entity_image(source.id, {"roles": ["background"]})
-        self.repo.update_entity_image(cutout.id, {"roles": ["navdot", "sheet"]})
+        self.repo.update_image(source.id, {"roles": ["background"]})
+        self.repo.update_image(cutout.id, {"roles": ["navdot", "sheet"]})
         source.roles = ["background"]
         logger.info(
             f"Auto-cutout for projection {source.projection_id}: "
@@ -529,7 +529,7 @@ class ImagenOrchestrator:
             extension=ext.lstrip("."),
             created_at=datetime.now(timezone.utc).isoformat(),
         )
-        self.repo.create_entity_image(entity_image)
+        self.repo.create_image(entity_image)
 
         await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
                            f"/media/animated/{output_subpath}/{base_name}{ext}", 100)
@@ -620,7 +620,7 @@ class ImagenOrchestrator:
         entity_id = entity.id
         gen_type = report_gen_type or GenerationType.REMOVE_BG
 
-        src = self.repo.get_entity_image(image_id)
+        src = self.repo.get_image(image_id)
         if not src:
             raise FileNotFoundError(f"Image '{image_id}' not found")
         if src.image_type == ImageType.ANIMATED:
@@ -686,7 +686,7 @@ class ImagenOrchestrator:
             extension="webp",
             created_at=datetime.now(timezone.utc).isoformat(),
         )
-        self.repo.create_entity_image(entity_image)
+        self.repo.create_image(entity_image)
 
         await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
                            f"/media/imagen/{output_subpath}/{variants['large']}", 100)
@@ -697,7 +697,7 @@ class ImagenOrchestrator:
 
     async def delete_image(self, image_id: str) -> bool:
         """Delete an image and its variants from disk and DB."""
-        img = self.repo.get_entity_image(image_id)
+        img = self.repo.get_image(image_id)
         if not img:
             return False
 
@@ -712,4 +712,4 @@ class ImagenOrchestrator:
             if p.exists():
                 p.unlink()
 
-        return self.repo.delete_entity_image(image_id)
+        return self.repo.delete_image(image_id)

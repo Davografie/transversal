@@ -297,7 +297,7 @@ async def generate_animation(
     if request and request.image_id:
         from transversal.db.repository import EntityRepository
         repo = EntityRepository()
-        img = repo.get_entity_image(request.image_id)
+        img = repo.get_image(request.image_id)
         if img:
             existing_image_path = f"{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
             source_transparent = img.transparent
@@ -334,7 +334,7 @@ async def remove_background(
 
     from transversal.db.repository import EntityRepository
     repo = EntityRepository()
-    img = repo.get_entity_image(request.image_id)
+    img = repo.get_image(request.image_id)
     if not img:
         raise HTTPException(status_code=404, detail=f"Image '{request.image_id}' not found")
     if img.image_type == ImageType.ANIMATED:
@@ -415,7 +415,7 @@ async def list_images(entity_id: str, universe: str | None = None):
     from transversal.db.repository import EntityRepository
 
     repo = EntityRepository()
-    images = repo.get_entity_images(entity_id, universe=universe)
+    images = repo.get_images(entity_id, universe=universe)
 
     # Resolve universe display names from universe entities
     universe_names: dict[str, str] = {}
@@ -467,7 +467,7 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
     from transversal.db.repository import EntityRepository
     repo = EntityRepository()
 
-    img = repo.get_entity_image(image_id)
+    img = repo.get_image(image_id)
     if not img:
         raise HTTPException(status_code=404, detail=f"Image '{image_id}' not found")
 
@@ -479,26 +479,29 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
         old_roles = set(img.roles)
         added = new_roles - old_roles
         if added:
-            siblings = repo.get_images_for_owner(img.entity_id, img.projection_id)
+            siblings = repo.get_images_for_owner(img.owner_id, img.variant_id)
             for sib in siblings:
                 if sib.id == image_id:
                     continue
                 sib_roles = [r for r in sib.roles if r not in added]
                 if sib_roles != sib.roles:
-                    repo.update_entity_image(sib.id, {"roles": sib_roles})
+                    repo.update_image(sib.id, {"roles": sib_roles})
         updates["roles"] = payload["roles"]
 
-    # ── Projection ownership ──
-    if "projection_id" in payload:
-        new_owner = payload.get("projection_id")
-        updates["projection_id"] = new_owner or None
+    # ── Ownership tier (the variant below the owner) ──
+    # `projection_id` is the long-standing request field and is still accepted;
+    # `variant_id` is the generalised name (a projection for an entity, a
+    # traitsetting for a trait). Either way the model syncs the legacy pair.
+    if "variant_id" in payload or "projection_id" in payload:
+        new_owner = payload.get("variant_id", payload.get("projection_id"))
+        updates["variant_id"] = new_owner or None
 
     # ── Auto-select all three roles when a drop leaves the image as the
     # sole image for its (new) owner (entity or projection). This is a drop
-    # (projection_id present, roles absent) landing in an empty owner scope.
-    if "projection_id" in payload and "roles" not in payload:
-        owner = payload.get("projection_id") or None
-        others = [s for s in repo.get_images_for_owner(img.entity_id, owner) if s.id != image_id]
+    # (ownership tier present, roles absent) landing in an empty owner scope.
+    if ("variant_id" in payload or "projection_id" in payload) and "roles" not in payload:
+        owner = payload.get("variant_id", payload.get("projection_id")) or None
+        others = [s for s in repo.get_images_for_owner(img.owner_id, owner) if s.id != image_id]
         if not others:
             updates["roles"] = ["background", "sheet", "navdot"]
 
@@ -510,8 +513,8 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
         # Move files to new universe directory
         import shutil
         for base in ("/app/media/imagen", "/app/media/animated"):
-            old_dir = f"{base}/{img.entity_id}/{img.universe}"
-            new_dir = f"{base}/{img.entity_id}/{new_universe}"
+            old_dir = f"{base}/{img.owner_id}/{img.universe}"
+            new_dir = f"{base}/{img.owner_id}/{new_universe}"
             if os.path.isdir(old_dir):
                 os.makedirs(os.path.dirname(new_dir), exist_ok=True)
                 shutil.move(old_dir, new_dir)
@@ -519,7 +522,7 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
     if not updates:
         return {"success": True, "roles": img.roles, "universe": img.universe, "projection_id": img.projection_id}
 
-    updated = repo.update_entity_image(image_id, updates)
+    updated = repo.update_image(image_id, updates)
 
     return {
         "success": True,

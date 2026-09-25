@@ -1,4 +1,11 @@
-"""Images — split out of src/api/src/transversal/db/repository.py."""
+"""Images — split out of src/api/src/transversal/db/repository.py.
+
+An image is owned by an **entity** or a **trait** (`owner_kind` + `owner_id`),
+and may belong to one rung below it: a projection for an entity, a traitsetting
+for a trait (`variant_id`; empty means the owner-level *definition* image). The
+id spaces are type-prefixed (`character-…`, `loc-…`, `trait-…`) so resolution
+does not need the kind — see [[Trait Images Design Log]].
+"""
 
 from __future__ import annotations
 
@@ -11,16 +18,17 @@ from transversal.domain import ImageType
 class RepositoryImages:
     """Mixin contributing 12 member(s) to the repository."""
 
-    def create_entity_image(self, image: MediaImage) -> MediaImage:
+    def create_image(self, image: MediaImage) -> MediaImage:
         doc = image.model_dump()
         doc["_key"] = image.id
         self._images.insert(doc)
         return image
 
-    def get_entity_images(
-        self, entity_id: str, universe: str | None = None, image_type: ImageType | None = None
+    def get_images(
+        self, owner_id: str, universe: str | None = None, image_type: ImageType | None = None
     ) -> list[MediaImage]:
-        filters = [("owner_id", entity_id)]
+        """Every image owned by ``owner_id`` — an entity or a trait, newest first."""
+        filters = [("owner_id", owner_id)]
         if universe:
             filters.append(("universe", universe))
         if image_type:
@@ -40,49 +48,73 @@ class RepositoryImages:
             for doc in self.db.aql.execute(query, bind_vars=binds)
         ]
 
-    def get_entity_image(self, image_id: str) -> MediaImage | None:
+    def get_image(self, image_id: str) -> MediaImage | None:
         doc = self._images.get(image_id)
         return MediaImage.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
-    def update_entity_image(self, image_id: str, updates: dict) -> MediaImage | None:
+    def update_image(self, image_id: str, updates: dict) -> MediaImage | None:
+        """Patch a row, normalising through the model.
+
+        The merge is validated back through ``MediaImage`` on purpose: the owner
+        fields and the legacy ``entity_id``/``projection_id`` pair are two
+        representations of one fact, and a raw dict merge is how they would drift
+        apart — a caller updating ``projection_id`` alone would leave
+        ``variant_id`` (which resolution actually reads) stale.
+        """
         doc = self._images.get(image_id)
         if not doc:
             return None
-        self._images.update({**doc, **updates})
-        return self.get_entity_image(image_id)
+        merged = {**doc, **updates}
+        normalised = MediaImage.model_validate({**merged, "id": doc["_key"]}).model_dump()
+        self._images.update({**merged, **normalised})
+        return self.get_image(image_id)
 
-    def delete_entity_image(self, image_id: str) -> bool:
+    def delete_image(self, image_id: str) -> bool:
         return self._images.delete(image_id)
 
-    def get_images_for_owner(self, entity_id: str, projection_id: str | None = None) -> list[MediaImage]:
-        """Images belonging to an owner: a specific projection, or the entity.
+    def get_images_for_owner(self, owner_id: str, variant_id: str | None = None) -> list[MediaImage]:
+        """Images on one rung of the ladder: a variant, or the owner's default.
 
-        ``projection_id=None`` returns entity-level images only (those with an
-        empty ``projection_id``); a concrete id returns that projection's images.
+        ``variant_id=None`` returns the **definition**-level images only (those
+        with an empty ``variant_id``); a concrete id returns that variant's
+        images — a projection's, or a traitsetting's.
         """
-        images = self.get_entity_images(entity_id)
+        images = self.get_images(owner_id)
         return [
             img for img in images
-            if (img.projection_id or None) == projection_id
+            if (img.variant_id or None) == variant_id
         ]
 
     def _image_url(self, img: MediaImage, variant: str = "Large") -> str:
         """Public media URL for an image, honoring animated vs static variant."""
         if img.image_type == ImageType.ANIMATED:
-            return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
-        return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_{variant}.{img.extension}"
+            return f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}"
+        return f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_{variant}.{img.extension}"
 
     def resolve_role_image_entry(
-        self, entity_id: str, role: str, projection_id: str | None = None
+        self, owner_id: str, role: str, variant_id: str | None = None
     ) -> MediaImage | None:
-        """Resolve the MediaImage carrying ``role`` — same order as
-        ``resolve_role_image`` (projection-scoped with entity fallback)."""
-        images = self.get_entity_images(entity_id)
-        if projection_id:
+        """Resolve the MediaImage carrying ``role`` for an owner.
+
+        One ladder for both owner kinds:
+
+        1. the **variant's** own image carrying ``role`` (newest first) — a
+           projection's for an entity, a traitsetting's for a trait;
+        2. the owner-level image carrying ``role`` whose ``universe`` matches the
+           variant's current, then origin, universe;
+        3. any owner-level image carrying ``role``.
+
+        Rung 2 needs a projection to supply a universe, so it is simply skipped
+        for a trait — which is what lets one canonical trait image serve every
+        universe the trait belongs to. With no ``variant_id`` only owner-level
+        images are considered, exactly as before.
+        """
+        images = self.get_images(owner_id)
+        if variant_id:
             for img in images:
-                if (img.projection_id or None) == projection_id and role in img.roles:
+                if (img.variant_id or None) == variant_id and role in img.roles:
                     return img
-            proj = self.get_projection(projection_id)
+            proj = self.get_projection(variant_id)
             universes: list[str] = []
             if proj is not None:
                 if proj.universe:
@@ -91,27 +123,18 @@ class RepositoryImages:
                     universes.append(proj.origin_universe)
             for u in universes:
                 for img in images:
-                    if not img.projection_id and role in img.roles and img.universe == u:
+                    if not img.variant_id and role in img.roles and img.universe == u:
                         return img
         for img in images:
-            if not img.projection_id and role in img.roles:
+            if not img.variant_id and role in img.roles:
                 return img
         return None
 
     def resolve_role_image(
-        self, entity_id: str, role: str, projection_id: str | None = None, variant: str = "Large"
+        self, owner_id: str, role: str, variant_id: str | None = None, variant: str = "Large"
     ) -> str | None:
-        """Resolve a role image URL, projection-scoped with entity fallback.
-
-        Resolution order:
-        1. The projection's own image carrying ``role`` (newest first).
-        2. Entity-level image carrying ``role`` whose universe matches the
-           projection's current, then origin, universe.
-        3. Any entity-level image carrying ``role``.
-
-        With no ``projection_id`` only entity-level images are considered.
-        """
-        entry = self.resolve_role_image_entry(entity_id, role, projection_id)
+        """Resolve a role image URL — see ``resolve_role_image_entry`` for order."""
+        entry = self.resolve_role_image_entry(owner_id, role, variant_id)
         return self._image_url(entry, variant) if entry else None
 
     def get_navdot_images(

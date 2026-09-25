@@ -189,7 +189,7 @@ def _write_image(repo: EntityRepository, entity: dict, source: Path, roles: list
     # Use the source file's mtime so migrated images sort OLDER than the
     # survived new-app images (resolver picks newest-first).
     created_at = datetime.fromtimestamp(source.stat().st_mtime, tz=timezone.utc).isoformat()
-    repo.create_entity_image(MediaImage(
+    repo.create_image(MediaImage(
         id=short_hash,
         entity_id=entity_id,
         projection_id=None,

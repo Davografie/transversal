@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from transversal.db.arango import IMAGES
 from transversal.db.arango import TRAITS
 from transversal.db.arango import TRAITSETS
 from transversal.db.arango import TRAITSETSETTINGS
@@ -198,6 +199,17 @@ class RepositoryTraits:
         ))
         self._delete_traitsettings_subtree(keys)
         self._cleanup_lifepath_trait_refs(trait_id)
+        # Images the trait owns (`B200`): the owner is going away, so its rows
+        # and files go with it, exactly as an entity's do. Without this a deleted
+        # trait leaves image records pointing at an owner that no longer exists —
+        # the orphan class [[data-migration]] is already carrying 25 rows of.
+        self.db.aql.execute(
+            f"FOR img IN {IMAGES} FILTER img.owner_id == @tid REMOVE img IN {IMAGES}",
+            bind_vars={"tid": trait_id},
+        )
+        import shutil
+        shutil.rmtree(f"/app/media/imagen/{trait_id}", ignore_errors=True)
+        shutil.rmtree(f"/app/media/animated/{trait_id}", ignore_errors=True)
         try:
             self._traits.delete(trait_id)
             self._invalidate_traits_index()
