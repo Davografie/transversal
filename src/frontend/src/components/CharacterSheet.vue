@@ -1016,6 +1016,17 @@ const { dragging, source, over, touchStart, dragStart, dragOver, dragLeave, drop
   },
 })
 
+// Dropping a trait into a container is **direct manipulation**: any trait the
+// sheet is showing may go in, not only the ones the container's definition
+// nominates. That is deliberate, not an oversight — the write path refuses only
+// cycles and cross-entity parents, and says the same thing in
+// `mutations_traitsettings` under `from_type: 'traitsetting'`. The editor's
+// sub-trait list offers the nomination as a *shortcut* to the traits a container
+// was authored for (see `availableSubtraits` in useTraitEditor); it is guidance,
+// not a gate. The two paths disagree about the list and agree about the intent,
+// which is the decision B142 asked to have recorded rather than left as an
+// accident. Changing that — gating the drop or widening the editor — is a design
+// call, not a cleanup.
 async function moveTraitInto(traitSettingId, containerId) {
   if (!traitSettingId || !containerId || traitSettingId === containerId) return
   perfMark('trait-move-start', { traitSettingId, containerId })

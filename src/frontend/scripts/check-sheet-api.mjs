@@ -161,5 +161,40 @@ report(orphanHandlers.length === 0,
     'useTraitEditor.js: resolves trait ids with the recursive findSetting')
 }
 
+// ── 6. one predicate for "is this a container?" (B142) ───────────────────
+// Container-ness is a tag, and a tag test is the kind of thing a surface
+// reinvents: the sheet, a picker and the GM panel would each spell
+// `…tags.includes('container')` and drift. The test needs the union of registry
+// and instance tags (B116), so a copy that forgets one half silently stops
+// matching — which is exactly how "a container nested inside a container was
+// unreachable" happened. The predicate is `isContainer` in `utils/traitTree.js`
+// (over `traitTags`); a bare tag comparison anywhere else is what a copy looks
+// like. The check is on the *comparison*, not the bare word, so a class name
+// such as `pool-dice-container` is not a hit.
+{
+  const OWNER = 'src/utils/traitTree.js'
+  const TAG_COMPARISON = /(?:includes\(\s*|===?\s*|!==?\s*)(['"])container\1|(['"])container\2\s*(?:===?|!==?)/g
+  const offenders = []
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) { walk(path); continue }
+      if (!/\.(js|mjs|vue)$/.test(entry.name)) continue
+      if (path.replace(/\\/g, '/') === OWNER) continue
+      const src = withoutComments(readFileSync(path, 'utf8'))
+      for (const m of src.matchAll(TAG_COMPARISON)) {
+        offenders.push(`${path}:${src.slice(0, m.index).split('\n').length}`)
+      }
+    }
+  }
+  walk('src')
+  report(offenders.length === 0,
+    `"is this a container?" is asked only in ${OWNER}` +
+    (offenders.length ? ` — a second tag test at ${offenders.join(', ')}; use isContainer (its tags are registry ∪ instance)` : ''))
+  const ownerSrc = readFileSync(OWNER, 'utf8')
+  report(/export function isContainer\(trait\)\s*\{[\s\S]*?traitTags\(/.test(ownerSrc),
+    `${OWNER}: isContainer resolves tags through traitTags (registry ∪ instance)`)
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)
