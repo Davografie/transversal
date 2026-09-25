@@ -13,6 +13,20 @@ aliases:
 
 # UI-UX Refactor Plan (B46)
 
+> [!note] State as of 2026-09-25 — a historical map, not a to-do
+> Landed since the *Slices landed* section below: the **settings/login overlay is
+> componentised** (`app/LoginPrompt`, `IdentitySwitchBlock`, `CharacterListBlock`,
+> `SupportBlock`, `FindCharacterBlock`, `ModeAndMediaBlock`; App.vue 1832 → 1666), and
+> **`sheet/TraitRow` landed** (the whole list item — known row, unknown row and sub-trait
+> list, moved together because their class family is shared).
+> **Genuinely still open — the only parts worth reading the plan for:**
+> - the **support-cast paths**, blocked on `activeMains` being empty on the dev server, so
+>   there is nothing to click and nothing to verify;
+> - the optional **`useSheetData`** slice, a judgement call rather than an owed extraction.
+> The overlay markup is **deliberately not fully extracted** (the switch-progress strip, the
+> lab toggle, Back-to-game): 7–8 props would cost more than the ~20 lines they save.
+> **File sizes in the section headings are the 2026-09-11 numbers, not current.**
+
 Working plan for [[B46]] (owner: [[ui-ux]]).
 Line numbers are from the census below; **re-verify them before slicing** — the
 files move.
