@@ -255,26 +255,73 @@ def test_a_cutout_keeps_the_artworks_citation(stub_gpu, monkeypatch):
     assert cutout.credits[0] is not source.credits[0], "independent rows, not shared objects"
 
 
-def test_an_animated_loop_keeps_the_artworks_citation(stub_gpu, monkeypatch):
-    """Same rule as the cutout: a loop of a credited picture is that picture."""
-    source = _image("src-4", PROJECTION)
-    source.filename = "src4"
-    source.credits = [ImageCredit(role="artist", name="Jane Doe", url="https://example.org/jane")]
-    source.license = "CC BY-SA 4.0"
-    source.credit_text = "Art by Jane Doe, CC BY-SA 4.0"
-    repo = _FakeRepo(existing=[source])
-
-    src_dir = orch.IMAGEN_DIR / "char-1" / "earth"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "src4_Large.png").write_bytes(b"bytes")
-
+def _run_animate(repo, monkeypatch, source_image_id=""):
+    """Drive the real `run_animate` with the GPU and Ollama stubbed."""
     monkeypatch.setattr(orch, "inject_wan_params", lambda wf, **kw: wf)
     orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
     orchestrator.ollama = _FakeOllama()
-    image = asyncio.run(orchestrator.run_animate(_entity(), "earth", source_image_id="src-4"))
+    return asyncio.run(orchestrator.run_animate(_entity(), "earth", source_image_id=source_image_id))
+
+
+def _animatable_source(repo, image_id, filename, **fields):
+    """An existing image on disk, ready to be animated."""
+    source = _image(image_id, PROJECTION)
+    source.filename = filename
+    for key, value in fields.items():
+        setattr(source, key, value)
+    repo._images.append(source)
+
+    src_dir = orch.IMAGEN_DIR / "char-1" / "earth"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / f"{filename}_Large.png").write_bytes(b"bytes")
+    return source
+
+
+def test_a_freshly_generated_loop_declares_generated_and_animated(stub_gpu, monkeypatch):
+    """A fresh loop is Flux *and* WanVideo, so both of the pipeline's claims hold."""
+    repo = _FakeRepo()
+
+    image = _run_animate(repo, monkeypatch)
+
+    assert image.flags == ["ai_animated", "ai_generated"]
+
+
+def test_a_loop_of_an_ai_generated_picture_keeps_that_label_too(stub_gpu, monkeypatch):
+    repo = _FakeRepo()
+    _animatable_source(repo, "src-5", "src5", flags=["ai_generated"])
+
+    image = _run_animate(repo, monkeypatch, source_image_id="src-5")
+
+    assert image.flags == ["ai_animated", "ai_generated"]
+
+
+def test_a_loop_of_a_hand_made_upload_declares_only_the_motion(stub_gpu, monkeypatch):
+    """Animating a hand-made picture does not make the picture AI-generated.
+
+    Only the motion is; labelling the imagery too would be the over-claim the
+    cutout rule already ruled out."""
+    repo = _FakeRepo()
+    _animatable_source(repo, "src-6", "src6")
+
+    image = _run_animate(repo, monkeypatch, source_image_id="src-6")
+
+    assert image.flags == ["ai_animated"]
+
+
+def test_an_animated_loop_keeps_the_artworks_citation(stub_gpu, monkeypatch):
+    """Same rule as the cutout: a loop of a credited picture is that picture."""
+    repo = _FakeRepo()
+    _animatable_source(
+        repo, "src-4", "src4",
+        credits=[ImageCredit(role="artist", name="Jane Doe", url="https://example.org/jane")],
+        license="CC BY-SA 4.0",
+        credit_text="Art by Jane Doe, CC BY-SA 4.0",
+    )
+
+    image = _run_animate(repo, monkeypatch, source_image_id="src-4")
 
     assert image.image_type == ImageType.ANIMATED
-    assert image.flags == ["ai_animated"]
+    assert image.flags == ["ai_animated"], "a hand-made upload declares only the motion"
     assert [(c.role, c.name, c.url) for c in image.credits] == [
         ("artist", "Jane Doe", "https://example.org/jane"),
     ]

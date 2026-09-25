@@ -640,8 +640,16 @@ rather than quietly mean "no disclosure".
 | flag | who sets it | meaning |
 | --- | --- | --- |
 | `ai` | **a human** | AI was somewhere in this image's workflow — your call to make, e.g. art made elsewhere with AI in the chain |
-| `ai_generated` | the imagen pipeline | Flux made the picture |
+| `ai_generated` | the imagen pipeline, and the animate pipeline when it generates the still | Flux made the picture |
 | `ai_animated` | the animate pipeline | WanVideo made the motion |
+
+Both of the animate pipeline's own claims apply when it generated the still: a
+**fresh loop is Flux *and* WanVideo**, so it carries `ai_generated` *and*
+`ai_animated`. Animating an **existing** picture declares only the motion and
+inherits whatever that picture already said about itself — a hand-made upload
+stays unlabelled, an AI-generated one keeps its label. Labelling the imagery of a
+sourced animation as generated would be the same over-claim the cutout rule
+rejected.
 
 **`flags` is deliberately a separate field from `roles`.** Roles are unique per
 (owner, role) — assigning one strips it from sibling images — which is right for
@@ -749,9 +757,9 @@ faithful copy of it.
   loop** inherit their source's `credits`, `license` and `credit_text`: the file
   has a new id, but it is not a new work, and losing the artist because you
   removed a background is exactly the silent-omission these fields exist to
-  prevent. (A cutout also inherits its `flags`; an animated loop is labelled
-  `ai_animated` by its own pipeline.) Credits are copied per record, so the two
-  rows are independent afterwards.
+  prevent. Both also inherit the source's `flags` and add their own pipeline's
+  label on top (see [[#Provenance flags (AI)]]). Credits are copied per record, so
+  the two rows are independent afterwards.
 - **Where it is set:** the GM image viewer's *Credits & source* block, and each
   row of the trait editor's gallery. Both use `ImageCreditsEditor.vue`; the
   server validates regardless.

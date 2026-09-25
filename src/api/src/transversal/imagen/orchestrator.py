@@ -529,7 +529,13 @@ class ImagenOrchestrator:
             entity_id=entity_id,
             universe=universe,
             image_type=ImageType.ANIMATED,
-            flags=["ai_animated"],  # the animate pipeline made the motion
+            # Both of the animate pipeline's own claims apply when it generated the
+            # still — a fresh loop is Flux *and* WanVideo, so it is generated as
+            # well as animated. Animating an existing picture declares only the
+            # motion and inherits whatever that picture already said about itself:
+            # a hand-made upload stays unlabelled, an AI-generated one keeps its
+            # label. Same rule as the cutout, one label further on.
+            flags=sorted((set(source.flags) if source else {"ai_generated"}) | {"ai_animated"}),
             # The citation follows the artwork, exactly as it does for a cutout:
             # a loop made from a credited picture is still that picture, so it
             # must not silently lose the artist, the source link or the licence.
