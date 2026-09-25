@@ -1298,7 +1298,7 @@ const unplacedTraits = computed(
 // Fan geometry for a group's staircase. The sheet overlaps each die onto the one
 // before it by 20px and steps it down 4px, at 32×34 dice; these are the same
 // proportions at this chip's 22×24 (see `.trait-die-icon`).
-const CHIP_DIE_FAN_X = '-14px'
+const CHIP_DIE_FAN_X = '-15px'
 const CHIP_DIE_FAN_Y = 3
 
 // The rating's dice, grouped exactly as the sheet groups them — one staircase per
@@ -1922,7 +1922,7 @@ onMounted(() => {
   position: absolute;
   top: calc(env(safe-area-inset-top, 16px) + 44px);
   left: 16px;
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; flex-direction: column; gap: 10px;
   max-width: 40vw;
   z-index: 2;
   pointer-events: none;
@@ -1933,8 +1933,13 @@ onMounted(() => {
 }
 
 .trait-chip {
+  position: relative;           /* the rating is absolutely placed against this */
   display: flex; align-items: center; gap: 8px;
-  padding: 3px 8px 3px 9px;
+  /* The right padding is a LANE for the dice, not part of the chip's own size: the
+     height here is the text and its padding, nothing else. The dice are taken out
+     of flow (`.trait-chip-rating`) so they can stand taller than the chip and
+     straddle its right border without the chip growing or clipping them. */
+  padding: 3px 22px 3px 9px;
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 11px;          /* the ordinary chip edge, on every corner */
   background: rgba(10,10,20,0.55);
@@ -1959,7 +1964,18 @@ onMounted(() => {
 
 .trait-chip-inherited { color: var(--map-text-dim); opacity: 0.75; margin-right: 4px; }
 
-.trait-chip-rating { display: flex; align-items: center; }
+/* Out of flow, so the chip's height stays the TEXT's and the dice may be taller than
+   it. `right` is slightly negative and the z-index sits above the border: the dice
+   straddle the chip's right edge and paint over it, which is what hides that piece
+   of the border behind them. */
+.trait-chip-rating {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  display: flex; align-items: center;
+}
 
 /* ── The rating's dice, as the SHEET draws them ───────────────────────────────
    Same markup and treatment as `TraitRow`: one `.trait-die-group` per die type,
@@ -1979,8 +1995,9 @@ onMounted(() => {
 }
 
 .trait-die-icon {
-  width: 22px;
-  height: 24px;
+  /* Deliberately taller than a one-row chip (~21px), so the glyphs overhang it. */
+  width: 24px;
+  height: 26px;
 }
 
 /* ── Overlay switcher ────────────────────────────── */
