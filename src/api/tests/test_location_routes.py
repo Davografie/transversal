@@ -78,6 +78,15 @@ def _seed(repo):
             id=loc, type=EntityType.LOCATION, name=loc, current_universe=U,
             hidden=loc in _HIDDEN,
         ))
+    # A fixture left behind by an interrupted run can survive the cleanup with its
+    # flag unset, and then the hidden shortcut wins the route and the assertion fails
+    # — observed once, passing on every later run. Assert the fixture instead of
+    # trusting that creation set it.
+    for loc in _ALL:
+        e = repo.get_entity(loc)
+        if e is not None and bool(e.hidden) != (loc in _HIDDEN):
+            e.hidden = loc in _HIDDEN
+            repo.update_entity(e)
     for a, b in (
         (A1, AH), (AH, A3),
         (A1, A2), (A2, A4), (A4, A3),
