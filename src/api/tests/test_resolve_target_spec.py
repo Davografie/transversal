@@ -32,11 +32,11 @@ def _repo():
                             traitset_id="ts-qi", default_die_type=DieType.D6))
     repo.create_traitsetting(TraitSetting(
         id="kael:trait-martial", entity_id=ENTITY_ID, trait_id="trait-martial",
-        traitset_id="ts-combat", dice=[DieType.D8], statement="martial arts",
+         dice=[DieType.D8], statement="martial arts",
     ))
     repo.create_traitsetting(TraitSetting(
         id="kael:trait-qi", entity_id=ENTITY_ID, trait_id="trait-qi",
-        traitset_id="ts-qi", dice=[DieType.D6], statement="qi",
+         dice=[DieType.D6], statement="qi",
     ))
     return repo
 

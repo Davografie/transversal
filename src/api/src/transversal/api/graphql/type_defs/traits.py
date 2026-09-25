@@ -234,7 +234,6 @@ class TraitSetting:
     id: strawberry.ID
     entity_id: strawberry.ID
     trait_id: strawberry.ID
-    traitset_id: strawberry.ID
     rating_type: RatingType
     dice: list[DieType]
     spent_dice: list[DieType] = strawberry.field(default_factory=list)
@@ -323,11 +322,28 @@ class TraitSetting:
         universe = entity.current_universe if entity else ""
         return resolve_trait_display_name(trait, self.dice, universe)
 
+    def _set_id(self, info: strawberry.Info) -> str:
+        """This setting's trait set — reached through the **registry trait**.
+
+        A setting does not record one of its own ([[B200]]): the set is a fact
+        about the trait, and the copy the setting used to keep could only drift
+        the moment a trait moved between sets. ``get_trait`` reads the memoized
+        registry index, so this is a dict lookup, not a query.
+        """
+        em = info.context["entity_manager"]
+        trait = em.repo.get_trait(self.trait_id)
+        return trait.traitset_id if trait else ""
+
+    @strawberry.field
+    def traitset_id(self, info: strawberry.Info) -> strawberry.ID:
+        """The trait set this setting belongs to, via its registry trait."""
+        return strawberry.ID(self._set_id(info))
+
     @strawberry.field
     def traitset_name(self, info: strawberry.Info) -> str:
         from transversal.services.entity_manager import EntityManager
         em = info.context["entity_manager"]
-        ts = em.repo.get_traitset_by_id(self.traitset_id)
+        ts = em.repo.get_traitset_by_id(self._set_id(info))
         return ts.name if ts else ""
 
     @strawberry.field
@@ -341,7 +357,7 @@ class TraitSetting:
     def traitset_order(self, info: strawberry.Info) -> int:
         from transversal.services.entity_manager import EntityManager
         em = info.context["entity_manager"]
-        ts = em.repo.get_traitset_by_id(self.traitset_id)
+        ts = em.repo.get_traitset_by_id(self._set_id(info))
         return ts.order if ts else 0
 
     @strawberry.field
@@ -354,17 +370,17 @@ class TraitSetting:
         """
         from transversal.services.entity_manager import EntityManager
         em = info.context["entity_manager"]
-        ts = em.repo.get_traitset_by_id(self.traitset_id)
+        ts = em.repo.get_traitset_by_id(self._set_id(info))
         return ts.sheet_tab if ts else SheetTab.TRAITS
 
     @strawberry.field
     async def traitset_limit(self, info: strawberry.Info) -> int:
         """Effective trait-set limit: per-entity override, else registry default."""
         repo = info.context["entity_manager"].repo
-        ts = repo.get_traitset_by_id(self.traitset_id)
+        ts = repo.get_traitset_by_id(self._set_id(info))
         default = ts.limit if ts else 1
         for tss in await info.context["loaders"].traitsetsettings.load(str(self.entity_id)):
-            if tss.traitset_id == self.traitset_id and tss.from_type == "entity" and tss.limit is not None:
+            if tss.traitset_id == self._set_id(info) and tss.from_type == "entity" and tss.limit is not None:
                 return tss.limit
         return default
 
@@ -488,7 +504,6 @@ def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
     contact = contact or {}
     return TraitSetting(
         id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
-        traitset_id=s.traitset_id,
         rating_type=s.rating_type, dice=rating_dice(s),
         spent_dice=s.spent_dice,
         capacity=s.capacity,

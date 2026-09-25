@@ -69,7 +69,7 @@ def _place(key, name):
 def _appearance(text):
     return TraitSetting(
         id=f"ts-{text}", entity_id="x", trait_id="t-appearance",
-        traitset_id="set1", notes=text,
+         notes=text,
     )
 
 

@@ -84,16 +84,16 @@ def batch_data():
         ))
 
     repo.create_traitsetting(TraitSetting(
-        id=TS_A1, entity_id=ENTITY_A, trait_id=TRAIT_1, traitset_id=TRAITSET,
+        id=TS_A1, entity_id=ENTITY_A, trait_id=TRAIT_1,
         dice=[DieType.D6],
     ))
     repo.create_traitsetting(TraitSetting(
-        id=TS_B2, entity_id=ENTITY_B, trait_id=TRAIT_2, traitset_id=TRAITSET,
+        id=TS_B2, entity_id=ENTITY_B, trait_id=TRAIT_2,
         dice=[DieType.D8],
     ))
     # Sub-trait — from_type='traitsetting', anchored to the parent setting.
     repo.create_traitsetting(TraitSetting(
-        id=TS_A_SUB, entity_id=ENTITY_A, trait_id=TRAIT_SUB, traitset_id=TRAITSET,
+        id=TS_A_SUB, entity_id=ENTITY_A, trait_id=TRAIT_SUB,
         from_type="traitsetting", parent_traitsetting_id=TS_A1, dice=[DieType.D4],
     ))
     repo.create_traitsetsetting(TraitSetSetting(
@@ -106,7 +106,7 @@ def batch_data():
     if edge is not None:
         repo.create_traitsetting(TraitSetting(
             id=REL_TS, entity_id=edge["_key"], trait_id=TRAIT_2,
-            traitset_id=TRAITSET, from_type="relationship", dice=[DieType.D6],
+             from_type="relationship", dice=[DieType.D6],
         ))
 
     yield repo
@@ -198,7 +198,7 @@ def test_collision_and_id_resolution(batch_data):
     # With duplicates allowed, only a same-statement instance collides.
     repo.create_traitsetting(TraitSetting(
         id=f"{ENTITY_A}:{TRAIT_2}", entity_id=ENTITY_A, trait_id=TRAIT_2,
-        traitset_id=TRAITSET, statement="fencing", dice=[DieType.D6],
+         statement="fencing", dice=[DieType.D6],
     ))
     assert repo.find_traitsetting_collision(
         ENTITY_A, TRAIT_2, statement="archery", allow_duplicates=True) is None
@@ -320,10 +320,10 @@ def test_re_parenting_a_sub_trait_under_its_own_descendant_is_refused():
                                 universes=[CYCLE_UNIVERSE], traitset_id=CYCLE_TS))
         repo.create_traitsetting(TraitSetting(
             id=CYCLE_S1, entity_id=CYCLE_ENTITY, trait_id=CYCLE_TRAITS[0],
-            traitset_id=CYCLE_TS, dice=[DieType.D6]))
+             dice=[DieType.D6]))
         repo.create_traitsetting(TraitSetting(
             id=CYCLE_S2, entity_id=CYCLE_ENTITY, trait_id=CYCLE_TRAITS[1],
-            traitset_id=CYCLE_TS, from_type="traitsetting",
+             from_type="traitsetting",
             parent_traitsetting_id=CYCLE_S1, dice=[DieType.D6]))
 
         # An ordinary child is not a cycle.

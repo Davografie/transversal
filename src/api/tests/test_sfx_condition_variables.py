@@ -66,7 +66,6 @@ def _ts(trait_id, die, entity_id="char-1"):
         id=f"{entity_id}:{trait_id}",
         entity_id=entity_id,
         trait_id=trait_id,
-        traitset_id="ts-martial",
         dice=[die],
     )
 

@@ -203,15 +203,16 @@ class MutationsMessaging:
         """Create a rated trait on a relationship edge.
 
         Attaches to the *real* ArangoDB edge key (not a synthetic key), so the
-        faction canvas can read rank/role traits back. The trait set is derived
-        from the trait registry entry unless explicitly overridden. Personal
+        faction canvas can read rank/role traits back. The trait set is the
+        **registry trait's** ([[B200]]), so the ``traitset_id`` argument is accepted
+        for compatibility and ignored — a setting records no set of its own, which
+        is what used to let an instance name a set its trait is not in. Personal
         relationship types resolve to projection→projection by default, or
         entity→entity when ``elevated`` and both sides are multiversal.
         """
         repo = _em(info).repo
         trait = repo.get_trait(str(trait_id))
-        ts_id = traitset_id or (trait.traitset_id if trait else None)
-        if not ts_id:
+        if trait is None or not getattr(trait, "traitset_id", ""):
             raise ValueError(f"Cannot resolve traitset for trait '{trait_id}'")
 
         if not is_structural_relationship_type(rel_type):
@@ -230,7 +231,6 @@ class MutationsMessaging:
             id=f"{edge_key}:{trait_id}",
             entity_id=edge_key,
             trait_id=str(trait_id),
-            traitset_id=ts_id,
             from_type="relationship",
             dice=[die],
             statement=statement,

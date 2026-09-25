@@ -1615,7 +1615,10 @@ def register_default_edges() -> None:
     register_edge("die", "owner", _die_owner)
 
     register_edge("traitsetting", "trait", lambda ts, ctx: _maybe(ctx.repo.get_trait(ts.trait_id)))
-    register_edge("traitsetting", "traitset", lambda ts, ctx: _maybe(ctx.repo.get_traitset_by_id(ts.traitset_id)))
+    # The set belongs to the *trait*, so it is reached through it.
+    register_edge("traitsetting", "traitset",
+                  lambda ts, ctx: _maybe(ctx.repo.get_traitset_by_id(
+                      getattr(ctx.repo.get_trait(ts.trait_id), "traitset_id", ""))))
     register_edge("traitsetting", "entity", lambda ts, ctx: _maybe(ctx.repo.get_entity(ts.entity_id)))
     register_edge("traitsetting", "projection",
                   lambda ts, ctx: _maybe(ctx.repo.get_projection(ts.projection_id)) if ts.projection_id else [])

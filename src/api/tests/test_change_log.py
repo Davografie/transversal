@@ -114,7 +114,7 @@ class TestChangeLogIntegration:
 
         ts = TraitSetting(
             id=f"{kael.id}:hacking", entity_id=kael.id, trait_id="t-hack",
-            traitset_id="ts-skills", dice=[DieType.D6],
+             dice=[DieType.D6],
         )
         em.add_traitsetting(ts)
 

@@ -39,7 +39,6 @@ def _setting(ts_id: str, order=None, statement: str = "") -> TraitSetting:
         id=ts_id,
         entity_id=ENTITY_ID,
         trait_id="trait-3160510",          # the container-tagged registry trait
-        traitset_id="ts-2200695",
         from_type="traitsetting",
         parent_traitsetting_id=CONTAINER_ID,
         rating_type=RatingType.EMPTY,
@@ -55,7 +54,6 @@ def _container() -> TraitSetting:
         id=CONTAINER_ID,
         entity_id=ENTITY_ID,
         trait_id="trait-3160510",
-        traitset_id="ts-2200695",
         rating_type=RatingType.EMPTY,
         dice=[],
     )
@@ -132,7 +130,7 @@ class TestConverterCarriesFields:
         from transversal.api.graphql.type_defs.traits import _gql_trait_setting
 
         s = TraitSetting(
-            id="ts-1", entity_id="e-1", trait_id="trait-1", traitset_id="tset-1",
+            id="ts-1", entity_id="e-1", trait_id="trait-1",
             rating_type=RatingType.STATIC, dice=[DieType.D8],
             enabled=False, order=4, statement="a step", notes="gm only",
         )

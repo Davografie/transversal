@@ -95,7 +95,6 @@ def qi_ts():
         id="kael-1:qi",
         entity_id="kael-1",
         trait_id="trait-qi",
-        traitset_id="ts-cult",
         rating_type=RatingType.RESOURCE,
         dice=[DieType.D4, DieType.D4, DieType.D4, DieType.D4],
     )
@@ -135,7 +134,7 @@ class TestRecoverDie:
     def test_capacity_is_preserved(self, em, qi_ts):
         # 6d6 pool: spend 2, capacity (dice + spent) stays 6.
         ts = TraitSetting(
-            id="x:res", entity_id="x", trait_id="t", traitset_id="ts",
+            id="x:res", entity_id="x", trait_id="t",
             rating_type=RatingType.RESOURCE,
             dice=[DieType.D6] * 6,
         )

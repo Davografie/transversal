@@ -69,7 +69,6 @@ def _ts(tsid: str, entity_id: str, trait_id: str, dice: list[DieType] | None = N
         id=tsid,
         entity_id=entity_id,
         trait_id=trait_id,
-        traitset_id="ts-test",
         dice=dice or [],
     )
 

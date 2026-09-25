@@ -387,7 +387,7 @@ def test_scheduled_event_kind_lists_entity_timers():
 def test_scheduled_event_kind_includes_owned_trait_setting_timers():
     repo = TargetRepo()
     repo.traitsettings_by_id = {
-        "ts-1": TraitSetting(id="ts-1", entity_id="char-1", trait_id="iron-will", traitset_id="ts-x"),
+        "ts-1": TraitSetting(id="ts-1", entity_id="char-1", trait_id="iron-will"),
     }
     owned = ScheduledEvent(
         id="se-2", target_type="trait_setting", target_id="ts-1",

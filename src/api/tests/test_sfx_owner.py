@@ -856,7 +856,7 @@ def test_create_traitsetting_provisions_defaults():
     trait = SimpleNamespace(default_sfx_ids=["sfx-a", "sfx-b"])
     repo = R(trait)
     ts = TraitSetting(
-        id="e1:t1", entity_id="e1", trait_id="t1", traitset_id="ts-x",
+        id="e1:t1", entity_id="e1", trait_id="t1",
         dice=[DieType.D6], sfx_ids=["sfx-c"],
     )
     out = repo._provision_trait_default_sfx(ts)

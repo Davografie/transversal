@@ -74,13 +74,13 @@ def test_relationship_traitsettings_for_entity_readback(data):
     e1 = repo.create_relationship(A_ID, B_ID, "relation")
     ts1 = repo.create_traitsetting(TraitSetting(
         id=f"{e1['_key']}:trust", entity_id=e1["_key"], trait_id="trait-relation-trust",
-        traitset_id="ts-relations-b114", from_type="relationship", dice=[DieType.D6],
+         from_type="relationship", dice=[DieType.D6],
     ))
     # Projection-target edge + trait.
     e2 = repo.create_relationship(A_ID, PROJ_ID, "relation", to_projection=True)
     ts2 = repo.create_traitsetting(TraitSetting(
         id=f"{e2['_key']}:fear", entity_id=e2["_key"], trait_id="trait-relation-fear",
-        traitset_id="ts-relations-b114", from_type="relationship", dice=[DieType.D6],
+         from_type="relationship", dice=[DieType.D6],
     ))
 
     try:
@@ -125,7 +125,7 @@ def test_cascade_cleanup_removes_projection_target_edges():
         edge = repo.create_relationship(A, PROJ, "relation", to_projection=True)
         ts = repo.create_traitsetting(TraitSetting(
             id=f"{edge['_key']}:trust", entity_id=edge["_key"], trait_id="trait-relation-trust",
-            traitset_id="ts-relations-b114", from_type="relationship", dice=[DieType.D6],
+             from_type="relationship", dice=[DieType.D6],
         ))
 
         # Deleting the *target* must remove the incoming projection edge + its trait.
@@ -196,7 +196,7 @@ def test_p2p_relationship_is_directional():
         edge = repo.create_relationship(APROJ, BPROJ, "relation", from_projection=True, to_projection=True)
         repo.create_traitsetting(TraitSetting(
             id=f"{edge['_key']}:trust", entity_id=edge["_key"], trait_id="trait-relation-trust",
-            traitset_id="ts-relations-b114", from_type="relationship", dice=[DieType.D6],
+             from_type="relationship", dice=[DieType.D6],
         ))
 
         # The from-side (A) must see the trait, with B as its contact.
@@ -225,12 +225,12 @@ def test_relationship_traitsettings_lookup_by_edge_key(data):
     reverse = repo.create_relationship(B_ID, A_ID, "relation")
     ts_fwd = repo.create_traitsetting(TraitSetting(
         id=f"{forward['_key']}:trust", entity_id=forward["_key"],
-        trait_id="trait-relation-trust", traitset_id="ts-relations-b114",
+        trait_id="trait-relation-trust",
         from_type="relationship", dice=[DieType.D6],
     ))
     ts_rev = repo.create_traitsetting(TraitSetting(
         id=f"{reverse['_key']}:fear", entity_id=reverse["_key"],
-        trait_id="trait-relation-fear", traitset_id="ts-relations-b114",
+        trait_id="trait-relation-fear",
         from_type="relationship", dice=[DieType.D8],
     ))
     try:

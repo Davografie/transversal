@@ -179,7 +179,6 @@ def migrate(apply: bool = False, include_archetypes: bool = False) -> int:
                         entity_id=new_id,
                         trait_id=DESCRIPTION_TRAIT,
                         from_type="entity",
-                        traitset_id=DESCRIPTION_TRAITSET,
                         rating_type=RatingType.EMPTY,
                         dice=[],
                         notes=desc,

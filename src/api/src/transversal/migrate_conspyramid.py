@@ -57,7 +57,6 @@ def _ensure_rank_role(
             entity_id=edge_key,
             trait_id=rank_trait,
             from_type="relationship",
-            traitset_id=RELATIONS_TRAITSET,
             rating_type=RatingType.STATIC,
             dice=[rank_die],
         ))
@@ -70,7 +69,6 @@ def _ensure_rank_role(
             entity_id=edge_key,
             trait_id=role_trait,
             from_type="relationship",
-            traitset_id=RELATIONS_TRAITSET,
             rating_type=RatingType.STATIC,
             dice=[DieType.D4],
             statement=role_text,

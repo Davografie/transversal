@@ -21,7 +21,7 @@ from transversal.domain import DieType, Polarity, RatingType, TraitSetting
 def _populated() -> TraitSetting:
     """Every field set to something a default would not be."""
     return TraitSetting(
-        id="ts-1", entity_id="e-1", trait_id="trait-1", traitset_id="tset-1",
+        id="ts-1", entity_id="e-1", trait_id="trait-1",
         rating_type=RatingType.CHALLENGE, dice=[DieType.D8], spent_dice=[DieType.D6],
         capacity=[DieType.D6, DieType.D6], polarity=Polarity.NEGATIVE,
         statement="a step", notes="gm only", order=7, tags=["coming"],

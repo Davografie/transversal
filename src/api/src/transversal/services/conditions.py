@@ -205,7 +205,9 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
 
     if condition.type == ConditionType.HAS_TRAIT_IN_TRAITSET:
         for ts in repo.get_traitsettings_for_entity(subject.id):
-            if ts.traitset_id == target:
+            # The set is the registry trait's; the setting does not record one.
+            trait = repo.get_trait(ts.trait_id)
+            if trait is not None and trait.traitset_id == target:
                 return True
         return False
 

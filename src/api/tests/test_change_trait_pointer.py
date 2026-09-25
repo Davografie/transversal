@@ -61,7 +61,7 @@ def data():
 def test_the_registry_pointer_follows_a_changed_definition(data):
     repo = data
     repo.create_traitsetting(TraitSetting(
-        id=TS_ID, entity_id=ENTITY_ID, trait_id=TRAIT_A, traitset_id=TSET_A,
+        id=TS_ID, entity_id=ENTITY_ID, trait_id=TRAIT_A,
         dice=[DieType.D8], statement="my blade",
     ))
     doc = repo._traitsettings.get(TS_ID)
@@ -72,7 +72,6 @@ def test_the_registry_pointer_follows_a_changed_definition(data):
     # and let the commit write it.
     ts = repo.get_traitsetting(TS_ID)
     ts.trait_id = TRAIT_B
-    ts.traitset_id = TSET_B
     repo.update_traitsetting(ts)
 
     doc = repo._traitsettings.get(TS_ID)
@@ -81,12 +80,13 @@ def test_the_registry_pointer_follows_a_changed_definition(data):
     # The instance's own state is untouched by the re-pointing.
     read_back = repo.get_traitsetting(TS_ID)
     assert read_back.trait_id == TRAIT_B
-    assert read_back.traitset_id == TSET_B
+    # The set is not copied onto the instance ([[B200]]) — it is read through the
+    # trait, so pointing at TRAIT_B *is* being in TSET_B.
+    assert repo.get_trait(read_back.trait_id).traitset_id == TSET_B
     assert read_back.dice == [DieType.D8]
     assert read_back.statement == "my blade"
 
     # ...and the same write moves it back, which is what a timed revert does.
     read_back.trait_id = TRAIT_A
-    read_back.traitset_id = TSET_A
     repo.update_traitsetting(read_back)
     assert repo._traitsettings.get(TS_ID)["_to"] == f"{TRAITS}/{TRAIT_A}"

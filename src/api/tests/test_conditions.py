@@ -6,6 +6,7 @@ from transversal.domain import (
     DieType,
     Entity,
     EntityType,
+    Trait,
     TraitSetting,
 )
 from transversal.services.conditions import (
@@ -57,7 +58,7 @@ def _entity(**overrides):
 def _ts(trait_id, entity_id="char-1"):
     return TraitSetting(
         id=f"{entity_id}:{trait_id}", entity_id=entity_id, trait_id=trait_id,
-        traitset_id="ts-x", dice=[DieType.D6],
+         dice=[DieType.D6],
     )
 
 
@@ -87,11 +88,11 @@ def test_has_trait():
 def test_has_effective_trait():
     enabled_ts = TraitSetting(
         id="char-1:iron-will", entity_id="char-1", trait_id="iron-will",
-        traitset_id="ts-x", dice=[DieType.D6], enabled=True,
+         dice=[DieType.D6], enabled=True,
     )
     disabled_ts = TraitSetting(
         id="char-1:scar", entity_id="char-1", trait_id="scar",
-        traitset_id="ts-x", dice=[DieType.D6], enabled=False,
+         dice=[DieType.D6], enabled=False,
     )
     repo = FakeRepo(traitsettings=[enabled_ts, disabled_ts])
 
@@ -104,7 +105,11 @@ def test_has_effective_trait():
 
 
 def test_has_trait_in_traitset():
-    repo = FakeRepo(traitsettings=[_ts("iron-will")])  # _ts uses traitset_id "ts-x"
+    # The set is the registry trait's ([[B200]]), so the fixture declares it there.
+    repo = FakeRepo(
+        traitsettings=[_ts("iron-will")],
+        traits=[Trait(id="iron-will", name="Iron Will", traitset_id="ts-x", universes=["earth"])],
+    )
     assert evaluate_condition(_entity(), Condition(type=ConditionType.HAS_TRAIT_IN_TRAITSET, target="ts-x"), repo)
     assert not evaluate_condition(_entity(), Condition(type=ConditionType.HAS_TRAIT_IN_TRAITSET, target="ts-y"), repo)
 
@@ -392,13 +397,13 @@ def test_target_path_source_rating():
     cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
     source = TraitSetting(
         id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
-        traitset_id="ts-x", dice=[DieType.D8],
+         dice=[DieType.D8],
     )
     assert evaluate_condition(_entity(), cond, FakeRepo(), source=source, source_element="traitsetting")
 
     lower = TraitSetting(
         id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
-        traitset_id="ts-x", dice=[DieType.D6],
+         dice=[DieType.D6],
     )
     assert not evaluate_condition(_entity(), cond, FakeRepo(), source=lower, source_element="traitsetting")
 
@@ -458,7 +463,7 @@ def test_target_path_can_start_from_the_opposing_dice():
     ])
     cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
     metal_tech = TraitSetting(id="guard:metal", entity_id="guard", trait_id="trait-metal-palm",
-                              traitset_id="ts-tech", dice=[DieType.D8])
+                               dice=[DieType.D8])
     trait = Trait(id="trait-metal-palm", name="Metal Palm", traitset_id="ts-tech", tags=["metal"])
     repo = FakeRepo(traitsettings=[metal_tech], traits=[trait])
     die = {"ts_id": "guard:metal", "source_kind": "trait", "die": "d8"}
@@ -496,7 +501,7 @@ def test_target_path_gates_on_a_trait_tag():
     cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
 
     anger = TraitSetting(id="char-1:anger", entity_id="char-1", trait_id="trait-anger",
-                         traitset_id="ts-emotion", dice=[DieType.D8])
+                          dice=[DieType.D8])
     violent = Trait(id="trait-anger", name="Anger", traitset_id="ts-emotion", tags=["violent"])
     calm = Trait(id="trait-calm", name="Calm", traitset_id="ts-emotion", tags=[])
 
@@ -531,12 +536,12 @@ def test_target_path_evaluate_exists():
     cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
     source = TraitSetting(
         id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
-        traitset_id="ts-x", dice=[DieType.D8],
+         dice=[DieType.D8],
     )
     assert evaluate_condition(_entity(), cond, FakeRepo(), source=source, source_element="traitsetting")
     lower = TraitSetting(
         id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
-        traitset_id="ts-x", dice=[DieType.D6],
+         dice=[DieType.D6],
     )
     assert not evaluate_condition(_entity(), cond, FakeRepo(), source=lower, source_element="traitsetting")
 
@@ -566,12 +571,12 @@ def test_target_path_evaluate_scalar_die():
     cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
     source = TraitSetting(
         id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
-        traitset_id="ts-x", dice=[DieType.D8],
+         dice=[DieType.D8],
     )
     assert evaluate_condition(_entity(), cond, FakeRepo(), source=source, source_element="traitsetting")
     lower = TraitSetting(
         id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
-        traitset_id="ts-x", dice=[DieType.D6],
+         dice=[DieType.D6],
     )
     assert not evaluate_condition(_entity(), cond, FakeRepo(), source=lower, source_element="traitsetting")
 

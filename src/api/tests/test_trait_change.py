@@ -108,7 +108,9 @@ def test_the_set_follows_the_definition():
     ts = _setting("trait-blade", traitset_id="ts-weapons")
     change = repoint_trait_setting(ts, "trait-fire-blade", repo)
 
-    assert ts.traitset_id == "ts-elements"
+    # Nothing is copied onto the setting any more ([[B200]]): the set follows
+    # because the pointer moved, and is read through the trait from then on.
+    assert ts.trait_id == "trait-fire-blade"
     assert change.was_traitset_id == "ts-weapons"
     assert change.is_traitset_id == "ts-elements"
     assert change.traitset_moved

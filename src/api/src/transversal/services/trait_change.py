@@ -146,14 +146,15 @@ def repoint_trait_setting(ts: TraitSetting, trait_id: str, repo) -> TraitChange:
 
     _refuse_collision(ts, wanted, repo)
 
-    was_traitset = str(ts.traitset_id or "")
+    # Both sets are read off the *traits* — the old definition and the wanted one.
+    # Nothing is copied onto the setting, because it records no set of its own: the
+    # set follows the definition by construction ([[B200]]).
+    was_traitset = str(getattr(_get_trait(repo, was), "traitset_id", "") or "")
     ts.trait_id = str(wanted.id)
-    traitset_id = getattr(wanted, "traitset_id", "")
-    if traitset_id:
-        ts.traitset_id = str(traitset_id)
     return TraitChange(
         setting=ts, was_trait_id=was, is_trait_id=str(wanted.id),
-        was_traitset_id=was_traitset, is_traitset_id=str(ts.traitset_id or ""),
+        was_traitset_id=was_traitset,
+        is_traitset_id=str(getattr(wanted, "traitset_id", "") or ""),
         changed=True, requested_trait_id=str(wanted.id),
     )
 

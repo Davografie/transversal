@@ -57,7 +57,6 @@ def _setting(trait_id: str, statement: str = "", notes: str = "") -> TraitSettin
         id=f"ts-{trait_id}",
         entity_id="e1",
         trait_id=trait_id,
-        traitset_id="set1",
         statement=statement,
         notes=notes,
     )

@@ -26,7 +26,14 @@ class MutationsTraitSettings:
         repo = _em(info).repo
         if input.parent_traitsetting_id is not None and input.from_type != "traitsetting":
             raise ValueError("parentTraitsettingId requires fromType 'traitsetting'")
-        traitset = repo.get_traitset_by_id(str(input.traitset_id))
+        # The set is the **trait's**, never the caller's: a setting does not record
+        # one ([[B200]]). `input.traitset_id` is still accepted and deliberately
+        # ignored, so an older client that sends it keeps working — and it always
+        # sent the trait's own set anyway, because the setting's copy could not be
+        # anything else without drifting.
+        trait = repo.get_trait(str(input.trait_id))
+        traitset = repo.get_traitset_by_id(
+            getattr(trait, "traitset_id", "") or "")
         allow_duplicates = traitset.allow_duplicates if traitset is not None else False
         parent = None
         if input.from_type == "traitsetting":
@@ -88,7 +95,6 @@ class MutationsTraitSettings:
             id=ts_id,
             entity_id=str(entity_id),
             trait_id=str(input.trait_id),
-            traitset_id=str(input.traitset_id),
             dice=input.dice,
             rating_type=input.rating_type,
             capacity=input.capacity,
@@ -239,7 +245,6 @@ class MutationsTraitSettings:
             id=repo.resolve_subtrait_id(str(parent.id), str(trait_id), statement),
             entity_id=parent.entity_id,
             trait_id=str(trait_id),
-            traitset_id=traitset_id,
             from_type="traitsetting",
             parent_traitsetting_id=parent.id,
             dice=[die],

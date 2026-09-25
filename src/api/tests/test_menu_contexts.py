@@ -213,7 +213,7 @@ def test_fire_challenge_completed_populates_context(monkeypatch):
     )
     ts = TraitSetting(
         id="e1:trait-gate", entity_id="e1", trait_id="trait-gate",
-        traitset_id="ts-location", rating_type=RatingType.CHALLENGE,
+         rating_type=RatingType.CHALLENGE,
         dice=[DieType.D6, DieType.D6, DieType.D6],
         capacity=[DieType.D6, DieType.D6, DieType.D6],
         polarity=Polarity.POSITIVE,

@@ -38,8 +38,7 @@ def _publish_trait_changed(ts, universe: str) -> None:
     # `trait` alone cannot tell step 3 from step 5. The SSE payload above always
     # carried it; the effects context dropped it.
     dispatch_event(None, "trait_updated", entity_id=ts.entity_id, universe=universe,
-                   context={"trait": ts.trait_id, "traitset": ts.traitset_id,
-                            "trait_setting": ts.id})
+                   context={"trait": ts.trait_id, "trait_setting": ts.id})
 
 
 def _publish_trait_removed(ts, universe: str) -> None:

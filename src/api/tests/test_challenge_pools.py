@@ -74,7 +74,7 @@ class TestSpendChallengeDie:
 
     def test_spend_non_challenge_raises(self, em):
         ts = TraitSetting(
-            id="x:res", entity_id="x", trait_id="t", traitset_id="ts",
+            id="x:res", entity_id="x", trait_id="t",
             rating_type=RatingType.RESOURCE, dice=[DieType.D6],
         )
         with pytest.raises(ChallengePoolError, match="not challenge-rated"):
@@ -108,7 +108,7 @@ class TestCheckChallengeCompletion:
 
     def test_non_challenge_never_completes(self):
         ts = TraitSetting(
-            id="x:res", entity_id="x", trait_id="t", traitset_id="ts",
+            id="x:res", entity_id="x", trait_id="t",
             rating_type=RatingType.RESOURCE, dice=[DieType.D6],
             capacity=[DieType.D6], polarity=Polarity.POSITIVE,
         )
@@ -163,7 +163,7 @@ class TestRecoverChallengeDie:
 
     def test_refund_rejects_a_non_challenge_trait(self, em):
         ts = TraitSetting(
-            id="x:res", entity_id="x", trait_id="t", traitset_id="ts",
+            id="x:res", entity_id="x", trait_id="t",
             rating_type=RatingType.RESOURCE, dice=[DieType.D6],
             capacity=[DieType.D6], polarity=Polarity.POSITIVE,
         )

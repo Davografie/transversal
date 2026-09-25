@@ -163,9 +163,10 @@ def test_trait_updated_context_names_the_instance_that_changed(monkeypatch):
     event, kwargs = captured["dispatch"]
     assert event == "trait_updated"
     assert kwargs["context"]["trait_setting"] == "e1:portent-3"
-    # The registry trait and set still ride along.
+    # The registry trait still rides along. `traitset` no longer does: a setting
+    # records no set of its own ([[B200]]), it is not a declared context key for
+    # this trigger, and no rule references `{traitset}`.
     assert kwargs["context"]["trait"] == "trait-portent"
-    assert kwargs["context"]["traitset"] == "ts-agenda"
 
 
 def test_the_trait_change_trigger_declares_the_instance():

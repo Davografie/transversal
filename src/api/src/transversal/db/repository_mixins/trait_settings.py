@@ -259,9 +259,17 @@ class RepositoryTraitSettings:
     def get_traitsettings_by_traitset(
         self, entity_id: str, traitset_id: str
     ) -> list[TraitSetting]:
+        """Settings of one entity whose **trait** belongs to ``traitset_id``.
+
+        The set is the registry's fact, reached *through the trait*: a setting
+        does not record one of its own. It used to, and that copy could only ever
+        drift the moment a trait moved between sets.
+        """
         query = f"""
             FOR ts IN {TRAITSETTINGS}
-            FILTER ts.entity_id == @eid AND ts.traitset_id == @tsid
+            FILTER ts.entity_id == @eid
+            FOR t IN {TRAITS}
+            FILTER t._key == ts.trait_id AND t.traitset_id == @tsid
             RETURN ts
         """
         return [
@@ -285,7 +293,8 @@ class RepositoryTraitSettings:
             FOR ts IN {TRAITSETTINGS}
             FILTER ts.from_type == 'projection'
                 AND ts.projection_id == @pid
-            SORT ts.traitset_id, ts.trait_id, ts._key
+            LET t = DOCUMENT({TRAITS}, ts.trait_id)
+            SORT t.traitset_id, ts.trait_id, ts._key
             RETURN ts
         """
         return [
@@ -308,7 +317,8 @@ class RepositoryTraitSettings:
             FOR ts IN {TRAITSETTINGS}
             FILTER ts.from_type == 'traitsetting'
                 AND ts.parent_traitsetting_id == @pid
-            SORT ts.order == null, ts.order, ts.traitset_id, ts.trait_id, ts._key
+            LET t = DOCUMENT({TRAITS}, ts.trait_id)
+            SORT ts.order == null, ts.order, t.traitset_id, ts.trait_id, ts._key
             RETURN ts
         """
         return [
@@ -328,7 +338,8 @@ class RepositoryTraitSettings:
             FOR ts IN {TRAITSETTINGS}
             FILTER ts.from_type == 'traitsetting'
                 AND ts.parent_traitsetting_id IN @pids
-            SORT ts.order == null, ts.order, ts.traitset_id, ts.trait_id, ts._key
+            LET t = DOCUMENT({TRAITS}, ts.trait_id)
+            SORT ts.order == null, ts.order, t.traitset_id, ts.trait_id, ts._key
             RETURN ts
         """
         grouped: dict[str, list[TraitSetting]] = {pid: [] for pid in parent_ids}
@@ -350,10 +361,11 @@ class RepositoryTraitSettings:
         ]
 
     def get_traitsettings_by_traitset_all(self, traitset_id: str) -> list[TraitSetting]:
-        """Return every trait setting belonging to a trait set (across entities)."""
+        """Every trait setting whose **trait** belongs to a set (across entities)."""
         query = f"""
             FOR ts IN {TRAITSETTINGS}
-            FILTER ts.traitset_id == @tsid
+            FOR t IN {TRAITS}
+            FILTER t._key == ts.trait_id AND t.traitset_id == @tsid
             RETURN ts
         """
         return [

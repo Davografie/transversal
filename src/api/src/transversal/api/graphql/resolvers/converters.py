@@ -136,7 +136,6 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
     from transversal.api.graphql.type_defs.traits import rating_dice
     return TraitSetting(
         id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
-        traitset_id=s.traitset_id,
         rating_type=s.rating_type, dice=rating_dice(s),
         spent_dice=s.spent_dice,
         capacity=s.capacity,

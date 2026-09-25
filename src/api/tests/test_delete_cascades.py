@@ -173,7 +173,7 @@ def test_rmtree_prune_cascades_occupants():
     ))
     repo.create_traitsetting(TraitSetting(
         id="test-cascade-ts-occ", entity_id=OCCUPANT, trait_id=TRAIT1,
-        traitset_id=TRAITSET1, rating_type=RatingType.STATIC, dice=[DieType.D8],
+         rating_type=RatingType.STATIC, dice=[DieType.D8],
     ))
     repo.create_scheduled_event(_event(OCCUPANT))
     repo.create_relationship(OCCUPANT, OTHER, "associate")
@@ -224,7 +224,7 @@ def test_delete_projection_cascades_dependents():
         transversal_type=TransversalType.NATIVE,
     ))
     repo.create_traitsetting(TraitSetting(
-        id=PTS3, entity_id=E3, trait_id=TRAIT3, traitset_id=TRAITSET3,
+        id=PTS3, entity_id=E3, trait_id=TRAIT3,
         from_type="projection", projection_id=PROJ3,
         rating_type=RatingType.STATIC, dice=[DieType.D8],
     ))
@@ -259,7 +259,7 @@ def test_delete_relationship_cascades_traitsettings():
     repo.create_entity(_char(E4B))
     edge = repo.create_relationship(E4A, E4B, "relation")
     repo.create_traitsetting(TraitSetting(
-        id=RTS4, entity_id=edge["_key"], trait_id=TRAIT4, traitset_id=TRAITSET4,
+        id=RTS4, entity_id=edge["_key"], trait_id=TRAIT4,
         from_type="relationship", rating_type=RatingType.STATIC, dice=[DieType.D8],
     ))
 
@@ -327,7 +327,7 @@ def test_delete_sfx_strips_owner_references():
         transversal_type=TransversalType.NATIVE, sfx_ids=[SFX7],
     ))
     repo.create_traitsetting(TraitSetting(
-        id=TS7, entity_id=E7, trait_id=TRAIT7, traitset_id=TRAITSET7,
+        id=TS7, entity_id=E7, trait_id=TRAIT7,
         rating_type=RatingType.STATIC, dice=[DieType.D8], sfx_ids=[SFX7],
     ))
     repo.create_traitsetsetting(TraitSetSetting(

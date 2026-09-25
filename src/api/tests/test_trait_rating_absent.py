@@ -64,7 +64,7 @@ _ALL = (ENTITY,)
 
 def _setting(rt, dice, sid="s-1", trait_id=TRAIT_EMPTY) -> TraitSetting:
     return TraitSetting(
-        id=sid, entity_id=ENTITY, trait_id=trait_id, traitset_id=TSET,
+        id=sid, entity_id=ENTITY, trait_id=trait_id,
         rating_type=rt, dice=dice, polarity=Polarity.POSITIVE,
     )
 

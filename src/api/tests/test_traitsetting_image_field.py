@@ -68,7 +68,7 @@ def _image(image_id, *, variant_id=None, roles=("sheet",), transparent=False):
 def _setting(setting_id=SETTING):
     return TraitSetting(
         id=setting_id, entity_id="character-probe", trait_id=TRAIT,
-        traitset_id="ts-probe", rating_type=RatingType.STATIC, dice=[DieType.D6],
+         rating_type=RatingType.STATIC, dice=[DieType.D6],
         statement="", sfx_ids=[], polarity="POSITIVE",
     )
 

@@ -93,7 +93,7 @@ def test_set_statement_rewrites_the_instance_and_records_the_prior():
     from transversal.domain import TraitSetting
 
     ts = TraitSetting(id="char-1:trait-challenge", entity_id="char-1",
-                      traitset_id="ts-challenge", trait_id="trait-challenge",
+                       trait_id="trait-challenge",
                       statement="the mountain endures", dice=["d8"])
     entity = _entity()
 

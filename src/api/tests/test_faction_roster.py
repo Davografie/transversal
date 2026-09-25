@@ -76,7 +76,6 @@ def _tie(repo, frm, to, rel_type, trait_name=None, statement=""):
             id=f"{edge['_key']}:{trait_id}",
             entity_id=edge["_key"],
             trait_id=trait_id,
-            traitset_id=RELATIONS_TRAITSET,
             from_type="relationship",
             dice=[DieType.D4],
             statement=statement,

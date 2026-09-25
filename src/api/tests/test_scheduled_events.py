@@ -182,7 +182,7 @@ def test_build_revert_no_inverse_returns_none():
 
 
 def test_trait_setting_target_fires_via_entity(monkeypatch):
-    ts = TraitSetting(id="ts-1", entity_id="kael", trait_id="trait-1", traitset_id="tset")
+    ts = TraitSetting(id="ts-1", entity_id="kael", trait_id="trait-1")
     repo = FakeRepo(entities=[_entity()], traitsettings=[ts])
     revert = Effect(type="modify_trait", action="set", target="trait-1", result="d6")
     schedule_event(repo, "trait_setting", "ts-1", revert, [Timer(event="beat", remaining=1)], TimerCombine.FIRST_TO_FIRE)

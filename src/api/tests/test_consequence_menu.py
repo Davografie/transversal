@@ -256,10 +256,13 @@ def test_hitch_menu_filters_by_buyer_condition():
     buyer = Entity(id="buyer-1", type=EntityType.CHARACTER, name="Buyer", current_universe="earth")
     repo.locations["buyer-1"] = buyer  # get_entity resolves the buyer via locations
 
+    # The complication's *trait* carries the set ([[B200]]); the setting does not.
+    repo.traits["comp"] = SimpleNamespace(default_sfx_ids=[], traitset_id="ts-complications")
+
     # Buyer has a complication → the SFX appears.
     repo.trait_settings = [
         TraitSetting(id="buyer-1:comp", entity_id="buyer-1", trait_id="comp",
-                     traitset_id="ts-complications", dice=[]),
+                      dice=[]),
     ]
     assert [o.id for o in assemble_hitch_menu(repo, roller_id="roller-1", buyer_id="buyer-1")] == [
         "sfx:opportunity-step-down-complication"

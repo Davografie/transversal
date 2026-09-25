@@ -114,7 +114,6 @@ class TestTraitSettingFromType:
             id="ts-test-1",
             entity_id="char-1",
             trait_id="trait-x",
-            traitset_id="ts-skills",
         )
         assert ts.from_type == "entity"
 
@@ -124,7 +123,6 @@ class TestTraitSettingFromType:
             id="ts-test-2",
             entity_id="edge:kael-1:mira-1:relation",
             trait_id="trait-relation-trust",
-            traitset_id="ts-relations",
             from_type="relationship",
         )
         assert ts.from_type == "relationship"
@@ -145,7 +143,6 @@ class TestRelationshipTraitSettings:
             id="ts-rel-trust-1",
             entity_id=edge_key,
             trait_id="trait-relation-trust",
-            traitset_id="ts-relations",
             from_type="relationship",
             rating_type=RatingType.STATIC,
             dice=[DieType.D8],
@@ -168,7 +165,6 @@ class TestRelationshipTraitSettings:
             id="ts-entity-1",
             entity_id=kael.id,
             trait_id="trait-earth-strength",
-            traitset_id="ts-earth-attributes",
             dice=[DieType.D6],
         )
         repo.create_traitsetting(ts)
@@ -188,7 +184,6 @@ class TestRelationshipTraitSettings:
             id="ts-trust-km",
             entity_id=edge_km,
             trait_id="trait-relation-trust",
-            traitset_id="ts-relations",
             from_type="relationship",
             dice=[DieType.D6],
         )
@@ -210,12 +205,12 @@ class TestRelationshipTraitSettings:
 
         ts1 = TraitSetting(
             id="ts-trust-1", entity_id=edge_key,
-            trait_id="trait-relation-trust", traitset_id="ts-relations",
+            trait_id="trait-relation-trust",
             from_type="relationship", dice=[DieType.D8],
         )
         ts2 = TraitSetting(
             id="ts-debt-1", entity_id=edge_key,
-            trait_id="trait-relation-debt", traitset_id="ts-relations",
+            trait_id="trait-relation-debt",
             from_type="relationship", dice=[DieType.D6, DieType.D6],
         )
         repo.create_traitsetting(ts1)
@@ -244,7 +239,6 @@ class TestEntityManagerStub:
             id="ts-trust-stub",
             entity_id=edge_key,
             trait_id="trait-relation-trust",
-            traitset_id="ts-relations",
             from_type="relationship",
             dice=[DieType.D10],
         )

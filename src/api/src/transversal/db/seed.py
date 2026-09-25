@@ -265,7 +265,6 @@ def seed_locations(em) -> None:
                 repo.create_traitsetting(TraitSetting(
                     id=ts_key, entity_id=loc_id,
                     trait_id=trait_id,
-                    traitset_id="ts-location-afd2",
                     rating_type=RatingType.CHALLENGE,
                     dice=list(dice),
                     polarity=polarity,

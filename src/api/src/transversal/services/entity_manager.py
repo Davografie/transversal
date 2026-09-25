@@ -477,7 +477,7 @@ class EntityManager:
         resync_pool_dice_for_trait(ts.entity_id, ts.id, new_dice)
         from transversal.services.scheduled_events import dispatch_event
         dispatch_event(None, "trait_updated", entity_id=ts.entity_id,
-                       context={"trait": ts.trait_id, "traitset": ts.traitset_id})
+                       context={"trait": ts.trait_id})
 
         return result
 
@@ -502,7 +502,7 @@ class EntityManager:
         resync_pool_dice_for_trait(ts.entity_id, ts.id, new_dice)
         from transversal.services.scheduled_events import dispatch_event
         dispatch_event(None, "trait_updated", entity_id=ts.entity_id,
-                       context={"trait": ts.trait_id, "traitset": ts.traitset_id})
+                       context={"trait": ts.trait_id})
 
         return result
 

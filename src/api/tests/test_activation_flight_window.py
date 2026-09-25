@@ -294,7 +294,7 @@ def test_a_trait_owned_hold_commits_with_its_owner():
     """A trait-setting row belongs to the entity that owns the trait (Sect Cultivation's shape)."""
     from transversal.domain import TraitSetting
 
-    ts = TraitSetting(id="ts-1", entity_id="kael", trait_id="trait-fire", traitset_id="tset")
+    ts = TraitSetting(id="ts-1", entity_id="kael", trait_id="trait-fire")
     repo = FakeRepo(entities=[_entity()], traitsettings=[ts])
     with activation_booking("sfx-x", cancelable=True):
         event = schedule_revert(repo, "trait_setting", "ts-1", _invertible_effect())
@@ -307,7 +307,7 @@ def test_a_trait_owned_hold_commits_with_its_owner():
 def test_ending_a_trait_owned_hold_applies_through_the_owner(monkeypatch):
     from transversal.domain import TraitSetting
 
-    ts = TraitSetting(id="ts-1", entity_id="kael", trait_id="trait-fire", traitset_id="tset")
+    ts = TraitSetting(id="ts-1", entity_id="kael", trait_id="trait-fire")
     repo = FakeRepo(entities=[_entity()], traitsettings=[ts])
     fired = []
     _spy_applier(monkeypatch, fired)
@@ -404,7 +404,7 @@ def test_a_trait_rating_add_books_a_removable_undo():
     store = get_scene_store()
     store.clear_all()
     ts = TraitSetting(id="ts-1", entity_id="kael", trait_id="trait-fire",
-                      traitset_id="tset", dice=[DieType.D4])
+                       dice=[DieType.D4])
     repo = FakeRepo(entities=[_entity(current_location="loc-1")], traitsettings=[ts])
     entity = _entity(current_location="loc-1")
     effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_trait_rating",

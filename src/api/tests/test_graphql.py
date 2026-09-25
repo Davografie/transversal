@@ -170,7 +170,7 @@ class TestGraphQLQueries:
         repo.create_entity(Entity(id=eid, type=EntityType.CHARACTER, name="Limit", current_universe="earth"))
         repo.create_traitsetting(TraitSetting(
             id=f"{eid}:trait-earth-strength", entity_id=eid, trait_id="trait-earth-strength",
-            traitset_id="ts-earth-attributes", dice=[DieType.D6],
+             dice=[DieType.D6],
         ))
 
         def _limit():

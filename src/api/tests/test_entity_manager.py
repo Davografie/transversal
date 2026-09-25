@@ -223,8 +223,13 @@ class InMemoryRepository(EntityRepository):
     def get_relationship_traitsettings_for_entities(self, entity_ids: list[str]) -> dict[str, list[dict]]:
         return {eid: self.get_relationship_traitsettings_for_entity(eid) for eid in entity_ids}
     def get_traitsettings_by_traitset(self, eid, tsid) -> list[TraitSetting]:
+        # The set is the registry trait's, exactly as the real repository reads it
+        # after the join ([[B200]]) — a setting does not record one.
+        def _in_set(d: dict) -> bool:
+            trait = self.get_trait(d["trait_id"])
+            return getattr(trait, "traitset_id", None) == tsid
         return [TraitSetting.model_validate(d) for d in self._traitsettings.values()
-                if d["entity_id"] == eid and d["traitset_id"] == tsid]
+                if d["entity_id"] == eid and _in_set(d)]
     def update_traitsetting(self, ts: TraitSetting) -> TraitSetting:
         self._store(self._traitsettings, ts.id, ts.model_dump())
         return ts
@@ -378,7 +383,6 @@ class TestTraitSettings:
         ts = TraitSetting(
             id=f"{kael.id}:hacking",
             entity_id=kael.id, trait_id=hacking_trait.id,
-            traitset_id="ts-earth-skills",
             dice=[DieType.D10],
         )
         em.add_traitsetting(ts)
@@ -389,7 +393,6 @@ class TestTraitSettings:
     def test_step_up(self, em, kael, hacking_trait):
         ts = TraitSetting(
             id=f"{kael.id}:hacking", entity_id=kael.id, trait_id=hacking_trait.id,
-            traitset_id="ts-earth-skills",
             dice=[DieType.D10],
         )
         em.add_traitsetting(ts)
@@ -398,9 +401,11 @@ class TestTraitSettings:
 
     def test_filter_by_traitset(self, em, kael, hacking_trait):
         ts1 = TraitSetting(id=f"{kael.id}:hacking", entity_id=kael.id, trait_id=hacking_trait.id,
-                           traitset_id="ts-earth-skills", dice=[DieType.D10])
+                            dice=[DieType.D10])
+        em.repo.create_trait(Trait(id="trait-earth-stealth", name="stealth", universe="earth",
+                                   traitset_id="ts-earth-skills", default_die_type=DieType.D6))
         ts2 = TraitSetting(id=f"{kael.id}:stealth", entity_id=kael.id, trait_id="trait-earth-stealth",
-                           traitset_id="ts-earth-skills", dice=[DieType.D6])
+                            dice=[DieType.D6])
         em.add_traitsetting(ts1)
         em.add_traitsetting(ts2)
         result = em.get_traitsettings_by_set(kael.id, "ts-earth-skills")
@@ -408,7 +413,7 @@ class TestTraitSettings:
 
     def test_character_view(self, em, kael, hacking_trait):
         ts = TraitSetting(id=f"{kael.id}:hacking", entity_id=kael.id, trait_id=hacking_trait.id,
-                          traitset_id="ts-earth-skills", dice=[DieType.D10])
+                           dice=[DieType.D10])
         em.add_traitsetting(ts)
         cv = em.get_character(kael.id)
         assert cv.entity.name == "Kael Drift"
@@ -431,12 +436,12 @@ class TestAllowDuplicates:
         assert repo.resolve_traitsetting_id("kael", "trait-x", statement="", allow_duplicates=True) == "kael:trait-x"
 
     def test_collision_default_blocks_duplicate(self, repo):
-        repo.create_traitsetting(TraitSetting(id="kael:trait-x", entity_id="kael", trait_id="trait-x", traitset_id="ts"))
+        repo.create_traitsetting(TraitSetting(id="kael:trait-x", entity_id="kael", trait_id="trait-x"))
         assert repo.find_traitsetting_collision("kael", "trait-x") is not None
         assert repo.find_traitsetting_collision("kael", "trait-y") is None
 
     def test_collision_allow_duplicates_by_statement(self, repo):
-        repo.create_traitsetting(TraitSetting(id="kael:trait-x", entity_id="kael", trait_id="trait-x", traitset_id="ts", statement="computers"))
+        repo.create_traitsetting(TraitSetting(id="kael:trait-x", entity_id="kael", trait_id="trait-x",  statement="computers"))
         assert repo.find_traitsetting_collision("kael", "trait-x", statement="networks", allow_duplicates=True) is None
         assert repo.find_traitsetting_collision("kael", "trait-x", statement="computers", allow_duplicates=True) is not None
 
@@ -480,12 +485,12 @@ class TestEgoTraits:
 
         em.add_traitsetting(TraitSetting(
             id=f"{kael.id}:hacking", entity_id=kael.id, trait_id="trait-earth-hacking",
-            traitset_id="ts-earth-skills", dice=[DieType.D10],
+             dice=[DieType.D10],
             from_type="projection", projection_id=f"{kael.id}:earth",
         ))
         em.add_traitsetting(TraitSetting(
             id=f"{kael.id}:curious", entity_id=kael.id, trait_id="trait-ego-curious",
-            traitset_id="ts-earth-distinctions", dice=[DieType.D8],
+             dice=[DieType.D8],
         ))
 
         # On Earth: both available

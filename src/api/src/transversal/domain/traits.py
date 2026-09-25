@@ -158,14 +158,11 @@ class TraitSetting(BaseModel):
     from_type: str = "entity"  # "entity" | "projection" | "relationship" | "traitsetting" — anchor collection for _from
     projection_id: Optional[str] = None  # projection anchor id when from_type == "projection"
     parent_traitsetting_id: Optional[str] = None  # parent TraitSetting id when from_type == "traitsetting" (sub-trait)
-    #: Not required, deliberately. Six live rows were found with an empty
-    #: ``traitset_id`` — three of them ``source_type: "effect"`` grants whose trait
-    #: is not in the registry at all — and because this field was required, the
-    #: **first malformed row aborted every read**, including the startup backfill,
-    #: so the whole API refused to boot. Reads must survive bad data; a missing
-    #: traitset belongs to the code that *grants* the setting, which should copy
-    #: it from the trait. See [[B208]].
-    traitset_id: str = ""
+    # Which trait set this belongs to is **not** recorded here: it is a fact about
+    # the registry trait, reached through ``trait_id``. The setting used to carry a
+    # copy, which could only ever drift — and did, the moment a trait moved between
+    # sets, leaving its instances naming a set their trait is not in. Nothing
+    # propagated it, and nothing could have: the copy had no owner.
     rating_type: RatingType = RatingType.STATIC
     dice: list[DieType] = Field(default_factory=list)
     spent_dice: list[DieType] = Field(default_factory=list)  # spent-but-recoverable (resource pools)

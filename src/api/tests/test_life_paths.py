@@ -107,7 +107,6 @@ class TestTraitSettingProvenance:
             id="kael:hacking",
             entity_id="kael-1",
             trait_id="trait-hacking",
-            traitset_id="ts-skills",
             dice=[DieType.D8],
         )
         assert ts.source_type is None
@@ -121,7 +120,6 @@ class TestTraitSettingProvenance:
             id="kael:hacking",
             entity_id="kael-1",
             trait_id="trait-hacking",
-            traitset_id="ts-skills",
             dice=[DieType.D6],
             source_type="taught",
             source_entity_id="mira-1",
@@ -135,7 +133,6 @@ class TestTraitSettingProvenance:
             id="kael:qi-reserves",
             entity_id="kael-1",
             trait_id="trait-qi-reserves",
-            traitset_id="ts-cultivation",
             dice=[DieType.D4, DieType.D4],
             source_type="life_path_term",
             source_life_path_id="lp-verdant",
@@ -150,7 +147,6 @@ class TestTraitSettingProvenance:
             id="kael:jian",
             entity_id="kael-1",
             trait_id="trait-jian",
-            traitset_id="ts-assets",
             dice=[DieType.D12],
             source_type="taken",
             source_entity_id="yuan-1",

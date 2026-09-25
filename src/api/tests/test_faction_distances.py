@@ -73,7 +73,6 @@ def _control(repo, faction_id: str, location_id: str, trait_id: str, die=DieType
         id=f"{edge['_key']}:{trait_id}",
         entity_id=edge["_key"],
         trait_id=trait_id,
-        traitset_id=RELATIONS_TRAITSET,
         from_type="relationship",
         dice=[die],
         statement="seat",
@@ -115,7 +114,7 @@ def _seed(repo):
     edge = repo.create_relationship(L2, F5, "relation")
     repo.create_traitsetting(TraitSetting(
         id=f"{edge['_key']}:{trait_id}", entity_id=edge["_key"], trait_id=trait_id,
-        traitset_id=RELATIONS_TRAITSET, from_type="relationship",
+         from_type="relationship",
         dice=[DieType.D10], statement="not a claim",
     ))
 

@@ -23,7 +23,6 @@ def _ts(setting_id, owner, trait_id, rating=RatingType.CHALLENGE, dice=None, cap
         id=setting_id,
         entity_id=owner,
         trait_id=trait_id,
-        traitset_id="set-1",
         rating_type=rating,
         polarity=polarity,
         dice=[DieType(d) for d in (dice or ["d8"])],

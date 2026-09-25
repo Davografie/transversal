@@ -61,7 +61,6 @@ def _appearance(statement: str = "", notes: str = "", owner: str = "x") -> Trait
         id=f"ts-{owner}",
         entity_id=owner,
         trait_id="t-appearance",
-        traitset_id="set1",
         statement=statement,
         notes=notes,
     )

@@ -228,7 +228,8 @@ def test_gain_creates_traitsetting():
     assert len(result.new_trait_settings) == 1
     ts = result.new_trait_settings[0]
     assert ts.trait_id == "iron-will"
-    assert ts.traitset_id == "ts-distinctions"
+    # The set is the trait's, read through it ([[B200]]) — the gain never invents one.
+    assert repo.get_trait(ts.trait_id).traitset_id == "ts-distinctions"
     assert ts.dice == [DieType.D6]
     assert ts.polarity == Polarity.POSITIVE
     assert result.applied[0].summary == "gained iron-will at d6"
@@ -254,7 +255,7 @@ def test_change_trait_points_the_instance_at_another_definition():
     assert len(result.updated_trait_settings) == 1
     ts = result.updated_trait_settings[0]
     assert ts.trait_id == "trait-fire-blade"
-    assert ts.traitset_id == "ts-elements"
+    assert repo.get_trait(ts.trait_id).traitset_id == "ts-elements"
     assert ts.dice == [DieType.D8] and ts.statement == "my blade"
     assert ts.notes == "gm only" and ts.polarity == Polarity.POSITIVE
     assert ts.entity_id == "char-1"
@@ -280,7 +281,8 @@ def test_change_trait_with_duration_queues_a_change_back_revert():
     )
     result = apply_effects(_entity(), [effect], repo)
     ts = result.updated_trait_settings[0]
-    assert ts.trait_id == "trait-fire-blade" and ts.traitset_id == "ts-elements"
+    assert ts.trait_id == "trait-fire-blade"
+    assert repo.get_trait(ts.trait_id).traitset_id == "ts-elements"
 
     assert len(repo.scheduled_events) == 1
     event = repo.scheduled_events[0]
@@ -296,7 +298,7 @@ def test_change_trait_with_duration_queues_a_change_back_revert():
     # back.
     apply_effects(_entity(), [event.effect], repo)
     assert ts.trait_id == "trait-blade"
-    assert ts.traitset_id == "ts-weapons"
+    assert repo.get_trait(ts.trait_id).traitset_id == "ts-weapons"
     assert ts.dice == [DieType.D8] and ts.statement == "my blade"
 
 
@@ -530,7 +532,7 @@ def test_copy_trait_carries_the_instance_to_the_recipient():
     assert ts.id == "char-2:medicine"
     assert ts.entity_id == "char-2"
     assert ts.dice == [DieType.D8]
-    assert ts.traitset_id == "ts-med"
+    assert repo.get_trait(ts.trait_id).traitset_id == "ts-med"
     assert ts.statement == "Field surgery"
     assert ts.notes == "from the war"
     assert result.applied[0].summary == "copied medicine to char-2"
@@ -1548,7 +1550,7 @@ def test_gain_negative_sets_negative():
     result = apply_effects(entity, [effect], repo)
     ts = result.new_trait_settings[0]
     assert ts.polarity == Polarity.NEGATIVE
-    assert ts.traitset_id == "ts-complications"
+    assert repo.get_trait(ts.trait_id).traitset_id == "ts-complications"
 
 
 def test_gain_or_step_up_negative_creates_when_absent():
@@ -1905,7 +1907,6 @@ def test_step_down_relationship_trait():
             id="edge:char-1:fac-1:membership:trait-rel-rank",
             entity_id="edge:char-1:fac-1:membership",
             trait_id="trait-rel-rank",
-            traitset_id="ts-rel",
             from_type="relationship",
             dice=[DieType.D8],
         )
@@ -2571,7 +2572,7 @@ def test_publishing_an_output_binds_the_produced_trait():
     effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
                     target="trait-beast", output="beast")
     ts = TraitSetting(id="char-1:beast", entity_id="char-1", trait_id="trait-beast",
-                      traitset_id="ts-x", dice=[DieType.D6])
+                       dice=[DieType.D6])
     ctx: dict = {}
 
     publish_effect_output(effect, EffectsResult(new_trait_settings=[ts]), ctx)
@@ -2587,7 +2588,7 @@ def test_a_named_result_is_selectable_by_a_later_step():
     from transversal.services.target_spec import TargetSpec
 
     ts = TraitSetting(id="char-1:beast", entity_id="char-1", trait_id="trait-beast",
-                      traitset_id="ts-x", dice=[DieType.D6])
+                       dice=[DieType.D6])
     repo = FakeRepo(traitsettings=[ts])
     spec = TargetSpec(steps=[{"kind": "select", "collection": "variable", "variable": "beast"}])
     context = TargetContext(repo=repo, bindings={
@@ -2722,17 +2723,18 @@ def test_invert_polarity_flips_back():
 
 
 def test_invert_polarity_keeps_the_instances_identity():
-    """Explicitly *not* a re-home: the id, traitset and dice are untouched, which is
-    why a definition change is a separate Change Trait."""
+    """Explicitly *not* a re-home: the id, trait and dice are untouched, which is
+    why a definition change is a separate Change Trait. There is no set of its own
+    to disturb ([[B200]]) — it follows the trait, which this does not touch."""
     ts = _ts("hazard", [DieType.D8], traitset_id="ts-1", polarity=Polarity.NEGATIVE,
              statement="Twisted ankle")
     ts.sfx_ids = ["sfx-legacy"]
-    before = (ts.id, ts.traitset_id, [d.value for d in ts.dice], ts.statement)
+    before = (ts.id, ts.trait_id, [d.value for d in ts.dice], ts.statement)
     repo = FakeRepo(traits=[FakeTrait("hazard", "ts-1")], traitsettings=[ts])
     effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
                     action="invert_polarity", target="char-1:hazard")
     apply_effects(_entity(), [effect], repo)
-    assert (ts.id, ts.traitset_id, [d.value for d in ts.dice], ts.statement) == before
+    assert (ts.id, ts.trait_id, [d.value for d in ts.dice], ts.statement) == before
     assert ts.sfx_ids == ["sfx-legacy"]
 
 

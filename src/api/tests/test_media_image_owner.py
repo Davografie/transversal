@@ -127,7 +127,7 @@ def _fixtures(repo):
         transversal_type=TransversalType.NATIVE,
     ))
     repo.create_traitsetting(TraitSetting(
-        id=SETTING, entity_id=ENTITY, trait_id=TRAIT, traitset_id=TRAITSET,
+        id=SETTING, entity_id=ENTITY, trait_id=TRAIT,
         from_type="projection", projection_id=PROJ,
         rating_type=RatingType.STATIC, dice=[DieType.D8],
     ))

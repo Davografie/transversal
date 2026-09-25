@@ -63,7 +63,6 @@ def _appearance(statement: str = "", notes: str = "") -> TraitSetting:
         id="ts1",
         entity_id="e1",
         trait_id="t-appearance",
-        traitset_id="set1",
         statement=statement,
         notes=notes,
     )
@@ -120,7 +119,6 @@ def test_notes_on_other_traits_are_not_injected(build_prompt):
         id="ts2",
         entity_id="e1",
         trait_id="t-asset",
-        traitset_id="set1",
         statement="a battered compass",
         notes="SECRET-NOTES-TEXT",
     )

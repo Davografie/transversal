@@ -62,7 +62,7 @@ def _entity(eid="char-1", etype=EntityType.CHARACTER, sfx_ids=None, location=Non
 
 def _trait_instance(ts_id="char-1:trait-power", entity_id="char-1", sfx_ids=None):
     return TraitSetting(
-        id=ts_id, entity_id=entity_id, trait_id="trait-power", traitset_id="ts-attributes",
+        id=ts_id, entity_id=entity_id, trait_id="trait-power",
         rating_type=RatingType.STATIC, dice=[],
         sfx_ids=list(sfx_ids or []),
     )

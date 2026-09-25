@@ -57,12 +57,17 @@ def _trait_entry(repo, ts, location_id: str, viewer: str):
     # not of the trait or the entity (`TraitSet.sheet_tab`), and it is the same
     # read-through the GraphQL `traitsetTab` field does — the viewer needs it to keep
     # profile traits (a location's "appearance", say) off the map ([[B92]]).
-    traitset = repo.get_traitset_by_id(ts.traitset_id)
+    #
+    # The set comes from the *registry trait* (`registry` is already in hand above):
+    # a setting does not record one, because a copy could only drift the moment a
+    # trait moved between sets.
+    set_id = getattr(registry, "traitset_id", "") or ""
+    traitset = repo.get_traitset_by_id(set_id)
     return {
         "id": ts.id,
         "trait_id": ts.trait_id,
         "name": getattr(registry, "name", "") or ts.trait_id,
-        "traitset_id": ts.traitset_id,
+        "traitset_id": set_id,
         "sheet_tab": getattr(getattr(traitset, "sheet_tab", None), "value", None) or "traits",
         "rating_type": ts.rating_type.value,
         "polarity": ts.polarity.value,

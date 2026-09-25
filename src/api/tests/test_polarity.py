@@ -21,7 +21,6 @@ def _ts(trait_id="trait-a", polarity=Polarity.POSITIVE, id_suffix=""):
         id=f"e:{trait_id}{id_suffix}",
         entity_id="e",
         trait_id=trait_id,
-        traitset_id="ts-1",
         polarity=polarity,
     )
 

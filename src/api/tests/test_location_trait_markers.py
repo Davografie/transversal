@@ -89,7 +89,7 @@ def data(monkeypatch):
     repo.create_trait(Trait(id=TRAIT, name="spirit herb", traitset_id=TSET,
                             universes=[U], default_die_type=DieType.D6))
     repo.create_traitsetting(TraitSetting(
-        id=SETTING, entity_id=LOC, trait_id=TRAIT, traitset_id=TSET,
+        id=SETTING, entity_id=LOC, trait_id=TRAIT,
         dice=[DieType.D6], rating_type=RatingType.STATIC,
     ))
     # `location_traits` builds its own repository; hand it this one so the fixture
@@ -136,7 +136,7 @@ def test_the_page_resolves_every_marker_in_one_query(data, monkeypatch):
     data.create_trait(Trait(id=TRAIT2, name="blessing", traitset_id=TSET,
                             universes=[U], default_die_type=DieType.D8))
     data.create_traitsetting(TraitSetting(
-        id=SETTING2, entity_id=LOC, trait_id=TRAIT2, traitset_id=TSET,
+        id=SETTING2, entity_id=LOC, trait_id=TRAIT2,
         dice=[DieType.D8], rating_type=RatingType.STATIC,
     ))
     data.create_image(_image(MARKER, ["navdot"]))

@@ -86,7 +86,6 @@ def _parent_setting(repo) -> TraitSetting:
         id=f"{ENTITY_ID}:{PARENT_TRAIT}",
         entity_id=ENTITY_ID,
         trait_id=PARENT_TRAIT,
-        traitset_id=PARENT_TSET,
         from_type="entity",
         dice=[DieType.D8],
     )
@@ -99,7 +98,6 @@ def test_sub_trait_anchor_and_readback(repo):
         id=f"{parent.id}:{CHILD_TRAIT}",
         entity_id=ENTITY_ID,
         trait_id=CHILD_TRAIT,
-        traitset_id=CHILD_TSET,
         from_type="traitsetting",
         parent_traitsetting_id=parent.id,
         dice=[DieType.D6],
@@ -132,7 +130,6 @@ def test_recursive_cascade_on_parent_delete(repo):
         id=f"{parent.id}:{CHILD_TRAIT}",
         entity_id=ENTITY_ID,
         trait_id=CHILD_TRAIT,
-        traitset_id=CHILD_TSET,
         from_type="traitsetting",
         parent_traitsetting_id=parent.id,
         dice=[DieType.D6],
@@ -141,7 +138,6 @@ def test_recursive_cascade_on_parent_delete(repo):
         id=f"{sub.id}:{GRANDCHILD_TRAIT}",
         entity_id=ENTITY_ID,
         trait_id=GRANDCHILD_TRAIT,
-        traitset_id=CHILD_TSET,
         from_type="traitsetting",
         parent_traitsetting_id=sub.id,
         dice=[DieType.D4],
@@ -160,7 +156,6 @@ def test_entity_cascade_removes_sub_traits(repo):
         id=f"{parent.id}:{CHILD_TRAIT}",
         entity_id=ENTITY_ID,
         trait_id=CHILD_TRAIT,
-        traitset_id=CHILD_TSET,
         from_type="traitsetting",
         parent_traitsetting_id=parent.id,
         dice=[DieType.D6],
@@ -201,15 +196,15 @@ def test_trait_definition_delete_cascades_subtree():
     repo.create_entity(Entity(id=E, type=EntityType.CHARACTER, name="E", current_universe="earth"))
     try:
         parent = repo.create_traitsetting(TraitSetting(
-            id=f"{E}:{P}", entity_id=E, trait_id=P, traitset_id=P_TS,
+            id=f"{E}:{P}", entity_id=E, trait_id=P,
             from_type="entity", dice=[DieType.D8],
         ))
         sub = repo.create_traitsetting(TraitSetting(
-            id=f"{parent.id}:{C}", entity_id=E, trait_id=C, traitset_id=C_TS,
+            id=f"{parent.id}:{C}", entity_id=E, trait_id=C,
             from_type="traitsetting", parent_traitsetting_id=parent.id, dice=[DieType.D6],
         ))
         grand = repo.create_traitsetting(TraitSetting(
-            id=f"{sub.id}:{G}", entity_id=E, trait_id=G, traitset_id=C_TS,
+            id=f"{sub.id}:{G}", entity_id=E, trait_id=G,
             from_type="traitsetting", parent_traitsetting_id=sub.id, dice=[DieType.D4],
         ))
 
@@ -239,11 +234,11 @@ def test_entity_delete_cascades_relationship_subtraits(repo):
         edge = repo.create_relationship(A, B, "relation")
         rel_ts = repo.create_traitsetting(TraitSetting(
             id=f"{edge['_key']}:trust", entity_id=edge["_key"], trait_id="trait-rel-trust",
-            traitset_id="ts-relations-b114", from_type="relationship", dice=[DieType.D6],
+             from_type="relationship", dice=[DieType.D6],
         ))
         sub = repo.create_traitsetting(TraitSetting(
             id=f"{rel_ts.id}:{CHILD_TRAIT}", entity_id=rel_ts.entity_id, trait_id=CHILD_TRAIT,
-            traitset_id=CHILD_TSET, from_type="traitsetting",
+             from_type="traitsetting",
             parent_traitsetting_id=rel_ts.id, dice=[DieType.D6],
         ))
 

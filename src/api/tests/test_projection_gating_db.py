@@ -128,29 +128,29 @@ def gating_data():
     # Trait settings: entity-anchored ego, projection-anchored morphs.
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:alpha", entity_id=CHAR_ID, trait_id=TRAIT_ALPHA,
-        traitset_id=TRAITSET_ALPHA, dice=[DieType.D6],
+         dice=[DieType.D6],
     ))
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:beta", entity_id=CHAR_ID, trait_id=TRAIT_BETA,
         from_type="projection", projection_id=f"{CHAR_ID}:{UNIVERSE_BETA}",
-        traitset_id=TRAITSET_BETA, dice=[DieType.D8],
+         dice=[DieType.D8],
     ))
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:gamma", entity_id=CHAR_ID, trait_id=TRAIT_GAMMA,
         from_type="projection", projection_id=f"{CHAR_ID}:{UNIVERSE_GAMMA}",
-        traitset_id=TRAITSET_GAMMA, dice=[DieType.D10],
+         dice=[DieType.D10],
     ))
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:ego", entity_id=CHAR_ID, trait_id=TRAIT_EGO,
-        traitset_id=TRAITSET_EGO, dice=[DieType.D8],
+         dice=[DieType.D8],
     ))
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:ego-universal", entity_id=CHAR_ID, trait_id=TRAIT_EGO_UNIVERSAL,
-        traitset_id=TRAITSET_EGO_UNIVERSAL, dice=[DieType.D8],
+         dice=[DieType.D8],
     ))
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:ego-dark", entity_id=CHAR_ID, trait_id=TRAIT_EGO_DARK,
-        traitset_id=TRAITSET_EGO_DARK, dice=[DieType.D8],
+         dice=[DieType.D8],
     ))
 
     yield repo
@@ -255,7 +255,7 @@ def test_effective_traitsettings_are_projection_native(gating_data):
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:alpha-twin", entity_id=CHAR_ID, trait_id=TRAIT_ALPHA_TWIN,
         from_type="projection", projection_id=ALPHA_TWIN,
-        traitset_id=TRAITSET_ALPHA_TWIN, dice=[DieType.D6],
+         dice=[DieType.D6],
     ))
     try:
         live = repo.get_effective_traitsettings_for_projections(

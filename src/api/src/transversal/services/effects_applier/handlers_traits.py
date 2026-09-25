@@ -105,8 +105,13 @@ def _replicate_traitsetting(src: TraitSetting, subject: Entity, repo, effect: Ef
     (``from_type``/``projection_id``/``parent_traitsetting_id``) does not: the
     recipient is an entity, so the new setting is anchored to it.
     """
+    # The set is the **trait's** ([[B200]]), so it is resolved from the registry
+    # rather than copied off the source setting — the copy carries the trait, and
+    # the set follows it. This is also what `allow_duplicates` is asked about.
     get_traitset = getattr(repo, "get_traitset_by_id", None)
-    traitset = get_traitset(src.traitset_id) if src.traitset_id and get_traitset else None
+    source_trait = repo.get_trait(src.trait_id)
+    traitset_id = getattr(source_trait, "traitset_id", "") or ""
+    traitset = get_traitset(traitset_id) if traitset_id and get_traitset else None
     allow_duplicates = bool(getattr(traitset, "allow_duplicates", False))
     if repo.find_traitsetting_collision(subject.id, src.trait_id, src.statement, allow_duplicates):
         result.applied.append(
@@ -116,7 +121,6 @@ def _replicate_traitsetting(src: TraitSetting, subject: Entity, repo, effect: Ef
         id=repo.resolve_traitsetting_id(subject.id, src.trait_id, src.statement, allow_duplicates),
         entity_id=subject.id,
         trait_id=src.trait_id,
-        traitset_id=src.traitset_id,
         rating_type=src.rating_type,
         dice=list(src.dice),
         capacity=list(src.capacity) if src.capacity else None,
