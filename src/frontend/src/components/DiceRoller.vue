@@ -178,6 +178,40 @@
         </div>
       </div>
 
+      <div v-else-if="isManual()" class="manual-entry">
+        <div class="manual-hint">
+          Roll your dice and set each face — tap to type it, drag up or down to scroll.
+        </div>
+        <div class="manual-dice">
+          <div
+            v-for="(d, i) in manualDice"
+            :key="i"
+            class="manual-die"
+            :class="{ set: manualFaces[i] != null }"
+            :title="`${d.label || d.die} · ${dieSize(d.die)} faces`"
+            @pointerdown="manualDragStart($event, i)"
+            @pointermove="manualDragMove"
+            @pointerup="manualDragEnd"
+            @pointercancel="manualDragEnd"
+          >
+            <DieIcon :die="d.die" :result="manualFaces[i] || 0" :label="d.label || d.die" />
+            <input
+              :ref="el => setManualInput(i, el)"
+              class="manual-face-input"
+              type="number"
+              inputmode="numeric"
+              :min="1"
+              :max="dieSize(d.die)"
+              :value="manualFaces[i] ?? ''"
+              :aria-label="`${d.label || d.die} result`"
+              @pointerdown.stop
+              @input="setManualFace(i, $event.target.value)"
+            />
+          </div>
+        </div>
+        <div class="manual-count">{{ manualSetCount }} / {{ manualDice.length }} set</div>
+      </div>
+
       <div v-else-if="result && isPicking()" class="roll-pick">
         <div class="roll-dice">
           <div
@@ -243,9 +277,16 @@
       </template>
     </div>
 
-    <div class="controls" v-if="isAdding() || isPicking() || isRolling()">
+    <div class="controls" v-if="isAdding() || isPicking() || isRolling() || isManual()">
       <button v-if="(isAdding() || isRolling()) && (pool.length > 0 || loading)" @click="doRoll" :disabled="loading || isRolling()" class="roll-btn">
         {{ loading || isRolling() ? 'Rolling…' : 'Roll' }}
+      </button>
+      <!-- Physical play ([[B17]]): roll them yourself and type the faces in. -->
+      <button v-if="isAdding() && pool.length > 0 && mode !== 'roll_table' && !loading" @click="enterManual" class="roll-btn manual-btn">
+        Enter results
+      </button>
+      <button v-if="isManual()" @click="commitManual" :disabled="!manualComplete" class="roll-btn commit-btn">
+        Use these results
       </button>
       <button v-if="isPicking()" @click="onPickCommit" class="roll-btn commit-btn">
         {{ challenged ? 'Set' : 'Done' }}
@@ -379,7 +420,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange', 'offered-change', 'poolSaved'])
 
-const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest, cancelContest: apiCancelContest, getPendingContestEffects: apiPendingEffects } = useApi()
+const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest, cancelContest: apiCancelContest, getPendingContestEffects: apiPendingEffects, manualRoll: apiManualRoll } = useApi()
 const { resolveEffectTargets, resolveSfxLoop } = useEffectApplication()
 const { applyOption: applyHitchEffect } = useHitchMenu()
 const pool = reactive([])
@@ -530,7 +571,7 @@ const tabGroups = computed(() => {
     let status
     if (c.pending) status = `waiting on ${nameOf(c.pending)}`
     else if (parties.every(committedOf)) status = 'resolving'
-    else if (phases.includes('rolling')) status = 'rolling'
+    else if (phases.includes('rolling') || phases.includes('manual')) status = 'rolling'
     else if (phases.some(p => p === 'rolled' || p === 'selected' || p === 'resolved')) status = 'setting'
     else status = 'adding'
     return {
@@ -1128,7 +1169,7 @@ function onPanelTouchEnd(e) {
 }
 
 // ── Phases ──────────────────────────────────────────
-const Phase = { ADDING: 'adding', ROLLING: 'rolling', PICKING: 'picking', RESOLVED: 'resolved' }
+const Phase = { ADDING: 'adding', ROLLING: 'rolling', MANUAL: 'manual', PICKING: 'picking', RESOLVED: 'resolved' }
 const phase = ref(Phase.ADDING)
 
 function setPhase(p) {
@@ -1139,6 +1180,9 @@ function setPhase(p) {
 
 function isAdding()  { return phase.value === Phase.ADDING }
 function isRolling() { return phase.value === Phase.ROLLING }
+// Physical play ([[B17]]): the dice are rolled away from the screen and the
+// player enters each face, so there is no roll in flight to animate.
+function isManual()  { return phase.value === Phase.MANUAL }
 function isPicking() { return phase.value === Phase.PICKING }
 function isResolved(){ return phase.value === Phase.RESOLVED }
 
@@ -1774,6 +1818,10 @@ const beatsOpposition = computed(() => {
 const FIRST_LOCK_MS = 900
 const LOCK_STAGGER_MS = 1000
 const FINAL_HOLD_MS = 300
+// Physical-play face entry ([[B17]]): how far a drag must travel before it counts
+// as scrolling rather than a tap, and how much travel is one face.
+const DRAG_THRESHOLD_PX = 8
+const DRAG_STEP_PX = 16
 
 function rollFace(die) {
   const sides = Number(die.replace(/^d/, '')) || 6
@@ -1803,40 +1851,10 @@ function lockDie(i, result_) {
 
 async function doRoll() {
   youTabBlink.value = false
+  const prep = await prepareRollPool()
+  if (!prep) return
   setPhase(Phase.ROLLING)
-  const dice = pool.map(d => {
-    const spec = {
-      die: d.die,
-      source_kind: d.sourceKind || 'manual',
-      source_id: d.tsId || d.source || '',
-      label: d.label || d.source || d.die,
-      ts_id: d.tsId || null,
-      armed_sfx_ids: d.armedSfxIds || [],
-    }
-    if (d.resource) spec.resource = true
-    return spec
-  })
-  const hasResource = dice.some(d => d.resource)
-  const isDifficulty = props.gmMode && !props.entityId && poolPurpose.value === 'difficulty'
-  // A set test difficulty (player or GM-as-entity) or an active contest must
-  // resolve as a full Cortex test (keep-2 + effect die), never the simplified
-  // 1-2 die pipeline.
-  const hasTestDifficulty = props.difficulty != null && !isDifficulty
-  const inContest = challenged.value
-  const useCortex = hasResource || hasTestDifficulty || inContest || dice.length > 2
-  // A Cortex test always needs at least 3 dice (2 to keep + 1 effect); pad
-  // short pools with d4s. The GM difficulty roll keeps its exact dice.
-  if (useCortex && !isDifficulty && dice.length < 3) {
-    while (dice.length < 3) {
-      dice.push({ die: 'd4', source_kind: 'manual', source_id: '', label: 'd4', ts_id: null })
-    }
-  }
-  const key = poolEntityKey()
-
-  // Persist the assembled pool (entity or difficulty) before the server rolls it.
-  if (props.locationId && key) {
-    await apiSavePool(props.locationId, key, dice)
-  }
+  const { dice, key, isDifficulty, useCortex } = prep
 
   // Blink random faces while the request is in flight, then lock each die
   // left-to-right so the player can see the numbers fall into place.
@@ -1868,6 +1886,132 @@ async function doRoll() {
     setPhase(Phase.RESOLVED)
   }
   emit('rolled', result.value)
+}
+
+/** Assemble the wire dice for a roll and persist the pool.
+ *
+ * Shared by the server roll and the manual entry ([[B17]]) so both address the
+ * *same* stored pool, in the same order — the manual results are positional, and
+ * a padded or reordered pool would put a face on the wrong die.
+ */
+async function prepareRollPool() {
+  const dice = pool.map(d => {
+    const spec = {
+      die: d.die,
+      source_kind: d.sourceKind || 'manual',
+      source_id: d.tsId || d.source || '',
+      label: d.label || d.source || d.die,
+      ts_id: d.tsId || null,
+      armed_sfx_ids: d.armedSfxIds || [],
+    }
+    if (d.resource) spec.resource = true
+    return spec
+  })
+  const hasResource = dice.some(d => d.resource)
+  const isDifficulty = props.gmMode && !props.entityId && poolPurpose.value === 'difficulty'
+  // A set test difficulty (player or GM-as-entity) or an active contest must
+  // resolve as a full Cortex test (keep-2 + effect die), never the simplified
+  // 1-2 die pipeline.
+  const hasTestDifficulty = props.difficulty != null && !isDifficulty
+  const inContest = challenged.value
+  const useCortex = hasResource || hasTestDifficulty || inContest || dice.length > 2
+  // A Cortex test always needs at least 3 dice (2 to keep + 1 effect); pad
+  // short pools with d4s. The GM difficulty roll keeps its exact dice.
+  if (useCortex && !isDifficulty && dice.length < 3) {
+    while (dice.length < 3) {
+      dice.push({ die: 'd4', source_kind: 'manual', source_id: '', label: 'd4', ts_id: null })
+    }
+  }
+  const key = poolEntityKey()
+
+  // Persist the assembled pool (entity or difficulty) before it is rolled.
+  if (props.locationId && key) {
+    await apiSavePool(props.locationId, key, dice)
+  }
+  return { dice, key, isDifficulty, useCortex }
+}
+
+// ── Physical play: the player's own dice ([[B17]]) ───────────────────
+// No roll is sent; each face is entered. Tapping a die focuses its number box,
+// and dragging up/down scrolls the face within the die's own size.
+const manualDice = ref([])      // the specs, in the order the pool was saved
+const manualFaces = ref([])     // null = not entered yet
+const manualInputs = []
+let manualDrag = null
+
+const manualSetCount = computed(() => manualFaces.value.filter(v => v !== null && v !== undefined).length)
+const manualComplete = computed(() =>
+  manualDice.value.length > 0 && manualSetCount.value === manualDice.value.length
+)
+function dieSize(die) {
+  return parseInt(String(die || 'd6').slice(1), 10) || 6
+}
+function setManualInput(i, el) { manualInputs[i] = el }
+
+function setManualFace(i, raw) {
+  if (raw === '' || raw === null || raw === undefined) { manualFaces.value[i] = null; return }
+  const n = parseInt(raw, 10)
+  if (Number.isNaN(n)) { manualFaces.value[i] = null; return }
+  manualFaces.value[i] = Math.max(1, Math.min(dieSize(manualDice.value[i]?.die), n))
+}
+
+function manualDragStart(e, i) {
+  manualDrag = { i, y: e.clientY, moved: false, start: manualFaces.value[i] ?? 1 }
+  e.currentTarget?.setPointerCapture?.(e.pointerId)
+}
+function manualDragMove(e) {
+  if (!manualDrag) return
+  const dy = manualDrag.y - e.clientY  // up = higher
+  if (!manualDrag.moved && Math.abs(dy) < DRAG_THRESHOLD_PX) return
+  manualDrag.moved = true
+  const step = Math.trunc(dy / DRAG_STEP_PX)
+  const size = dieSize(manualDice.value[manualDrag.i]?.die)
+  manualFaces.value[manualDrag.i] = Math.max(1, Math.min(size, manualDrag.start + step))
+}
+function manualDragEnd() {
+  if (!manualDrag) return
+  const { i, moved } = manualDrag
+  manualDrag = null
+  // A tap (no movement) means "I want to type this one".
+  if (!moved) manualInputs[i]?.focus?.()
+}
+
+async function enterManual() {
+  if (props.mode === 'roll_table') return
+  const prep = await prepareRollPool()
+  if (!prep) return
+  manualDice.value = prep.dice
+  manualFaces.value = prep.dice.map(() => null)
+  setPhase(Phase.MANUAL)
+}
+
+async function commitManual() {
+  if (!manualComplete.value || !props.locationId) return
+  const key = poolEntityKey()
+  const res = await apiManualRoll(
+    props.locationId,
+    key,
+    manualFaces.value.map(v => Number(v)),
+    { hitches: !(props.gmMode && !props.entityId && poolPurpose.value === 'difficulty') },
+  )
+  if (!res) {
+    // The API helper already surfaced the server's reason (an out-of-range face
+    // reads as such); only fall back when it said nothing.
+    if (!error.value) error.value = 'Could not record those results'
+    return
+  }
+  result.value = res
+  pool.length = 0
+  emit('poolChange', [])
+  if (res.pipeline === 'pool' && props.mode !== 'roll_table') {
+    setPhase(Phase.PICKING)
+    ensureSlots()
+  } else {
+    setPhase(Phase.RESOLVED)
+  }
+  emit('rolled', res)
+  manualDice.value = []
+  manualFaces.value = []
 }
 
 function commitPicks() {
@@ -2331,6 +2475,23 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .roll-pick {
   display: flex; flex-direction: column; gap: 8px; align-items: center;
 }
+/* Physical play ([[B17]]): each die carries its own face box. `touch-action:
+   none` is what lets a vertical drag scroll the face instead of the panel. */
+.manual-entry { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.manual-hint { font-size: 11px; color: var(--text-dim); text-align: center; }
+.manual-dice { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.manual-die {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  cursor: ns-resize; touch-action: none; user-select: none;
+}
+.manual-face-input {
+  width: 46px; text-align: center; font-size: 16px; font-weight: 700; padding: 3px;
+  border-radius: 6px; border: 1px solid var(--overlay-12);
+  background: var(--bg-input); color: var(--text);
+}
+.manual-die:not(.set) .manual-face-input { border-color: var(--accent-dim); }
+.manual-count { font-size: 11px; color: var(--text-dim); }
+.manual-btn { color: var(--text-dim); }
 .resource-rolls {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   flex-wrap: wrap; padding-top: 6px;

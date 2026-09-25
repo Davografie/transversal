@@ -61,6 +61,12 @@ export function useApi() {
     return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/difficulty-roll`, {})
   }
 
+  // Physical play ([[B17]]): record the faces the table rolled, one per pool die,
+  // in the pool's own order. Same response shape as a server roll.
+  async function manualRoll(locationId, entityId, results, { hitches = true } = {}) {
+    return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/manual-roll`, { results, hitches })
+  }
+
   async function selectDice(locationId, entityId, totalIndices, effectIndex) {
     return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/select`, {
       total_indices: totalIndices,
@@ -444,5 +450,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, cancelContest, getPendingContestEffects, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, cancelContest, getPendingContestEffects, manualRoll, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

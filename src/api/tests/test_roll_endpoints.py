@@ -139,3 +139,64 @@ def test_activity_returns_grouped_pools_and_difficulties(client):
     assert data["pools"]["loc-2"]["b"][0]["die"] == "d6"
     assert data["difficulties"] == {"loc-1": 12}
     assert data["contests"] == []
+
+
+class TestManualRoll:
+    """[[B17]]: the faces come from physical dice, not the server."""
+
+    def test_records_the_given_faces_and_enriches_the_pool(self, client):
+        _save(client, "loc-1", "e1", [_die("d8"), _die("d6"), _die("d4")])
+        r = client.post("/api/v1/locations/loc-1/pools/e1/manual-roll",
+                        json={"results": [7, 1, 4]})
+        assert r.status_code == 200, r.text
+        data = r.json()
+
+        assert data["pipeline"] == "pool"
+        assert [d["result"] for d in data["rolls"]] == [7, 1, 4]
+        # A 1 is a hitch, and the tier table maps the face exactly as a server roll would.
+        assert [d["hitch"] for d in data["rolls"]] == [False, True, False]
+        assert data["rolls"][0]["tier"] == "success" and data["rolls"][0]["effect_die"] == "d6"
+        assert data["rolls"][2]["tier"] == "marginal" and data["rolls"][2]["effect_die"] == "d4"
+        assert [d["role"] for d in data["rolls"]] == [None, None, None]
+        assert [h["result"] for h in data["hitches"]] == [1]
+
+    def test_the_pool_is_persisted_with_the_recorded_faces(self, client):
+        _save(client, "loc-1", "e1", [_die("d10")])
+        client.post("/api/v1/locations/loc-1/pools/e1/manual-roll", json={"results": [9]})
+
+        stored = ss_module.get_scene_store().get_pool("loc-1", "e1")
+        assert stored[0]["result"] == 9
+        assert stored[0]["tier"] == "exceptional"
+
+    def test_a_face_larger_than_its_die_is_refused(self, client):
+        _save(client, "loc-1", "e1", [_die("d4"), _die("d8")])
+        r = client.post("/api/v1/locations/loc-1/pools/e1/manual-roll",
+                        json={"results": [5, 3]})
+        assert r.status_code == 400
+        assert "cannot show" in r.json()["detail"]
+        # Nothing was recorded — a rejected entry must not half-apply.
+        assert ss_module.get_scene_store().get_pool("loc-1", "e1")[0].get("result") is None
+
+    def test_a_missing_face_is_refused(self, client):
+        _save(client, "loc-1", "e1", [_die("d6"), _die("d6")])
+        r = client.post("/api/v1/locations/loc-1/pools/e1/manual-roll",
+                        json={"results": [3, None]})
+        assert r.status_code == 400
+
+    def test_a_count_mismatch_is_refused(self, client):
+        _save(client, "loc-1", "e1", [_die("d6"), _die("d6")])
+        r = client.post("/api/v1/locations/loc-1/pools/e1/manual-roll",
+                        json={"results": [3]})
+        assert r.status_code == 400
+        assert "2 dice" in r.json()["detail"]
+
+    def test_hitches_can_be_switched_off_for_a_difficulty_pool(self, client):
+        _save(client, "loc-1", "loc-1", [_die("d6", "difficulty")])
+        r = client.post("/api/v1/locations/loc-1/pools/loc-1/manual-roll",
+                        json={"results": [1], "hitches": False})
+        assert r.json()["hitches"] == [] and r.json()["botch"] is False
+        assert r.json()["rolls"][0]["result"] == 1
+
+    def test_no_pool_is_refused(self, client):
+        r = client.post("/api/v1/locations/loc-1/pools/e1/manual-roll", json={"results": []})
+        assert r.status_code == 400

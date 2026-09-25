@@ -19,7 +19,7 @@ concept — the location is its own "entity" for that pool).
 from types import SimpleNamespace
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from transversal.domain import DieSpec, DieType, DicePoolRequest, RollResult
@@ -119,6 +119,73 @@ async def cortex_roll(location_id: str, entity_id: str):
         "hitches": hitches,
         "botch": botch,
         "opposition_total": get_scene_store().get_difficulty(location_id),
+    }
+
+
+class ManualRollRequest(BaseModel):
+    """Faces the table rolled physically, one per stored pool die ([[B17]])."""
+
+    results: list[Optional[int]]
+    hitches: bool = True
+
+
+@router.post("/locations/{location_id}/pools/{entity_id}/manual-roll")
+async def manual_roll(location_id: str, entity_id: str, req: ManualRollRequest):
+    """Enrich the stored pool with faces the *player* rolled ([[B17]]).
+
+    Same contract as ``cortex-roll`` — the pool comes back with ``result``,
+    ``hitch``, ``tier`` and ``effect_die`` per die — so picking, resolution and
+    contests cannot tell the two apart. The difference is where the numbers come
+    from: physical dice, typed or scrolled into the roller, instead of a server
+    roll. Every value is checked against its own die's size, so a d6 can never
+    show a 9.
+    """
+    store = get_scene_store()
+    dice = store.get_pool(location_id, entity_id)
+    if not dice:
+        raise HTTPException(status_code=400, detail="There is no pool to record results for")
+    if len(req.results) != len(dice):
+        raise HTTPException(
+            status_code=400,
+            detail=f"That pool has {len(dice)} dice, but {len(req.results)} results arrived",
+        )
+
+    enriched = []
+    for d, value in zip(dice, req.results):
+        try:
+            size = int(str(d.get("die", "")).lstrip("dD"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Unknown die {d.get('die')!r}")
+        if value is None or not (1 <= int(value) <= size):
+            raise HTTPException(
+                status_code=400,
+                detail=f"A {d.get('die')} cannot show {value!r} (1–{size})",
+            )
+        face = int(value)
+        tier = determine_tier(face)
+        enriched.append({
+            **d,
+            "result": face,
+            "hitch": face == 1,
+            "role": None,
+            "bought": False,
+            "tier": tier.value if tier else None,
+            "effect_die": tier.effect_die.value if tier and tier.effect_die else None,
+        })
+
+    store.save_pool(location_id, entity_id, enriched)
+    # Mirrors `_roll_stored_pool`: a difficulty determination has no hitches, so
+    # its caller turns them off — and a botch is every die showing a 1.
+    hitches = [d for d in enriched if d.get("hitch")] if req.hitches else []
+    botch = bool(req.hitches) and all(d["hitch"] for d in enriched)
+    _fire_entity_roll_sfx(entity_id, enriched, hitches, botch)
+    broadcast_pool_change(location_id, entity_id, dice=enriched, phase="rolled")
+    return {
+        "pipeline": "pool",
+        "rolls": enriched,
+        "hitches": hitches,
+        "botch": botch,
+        "opposition_total": store.get_difficulty(location_id),
     }
 
 
