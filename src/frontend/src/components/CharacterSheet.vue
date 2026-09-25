@@ -2238,13 +2238,15 @@ async function fetchPlaceSfxRules() {
 // A place's rule wears the same card as the entity's own, with one difference:
 // a rule that fires on its own when the world moves isn't something you press,
 // so it reads its rules line and stays inert instead of looking like a button.
+// `readonly` rather than `blocked`: it is not a control that is unavailable, it
+// is a statement — and the dimming `blocked` carries made the name unreadable,
+// which is the one thing a reader wants from it (B189).
 function placeCardModel(sfxId) {
-  const model = sfxCardModel(sfxId)
   const trigger = sfxCatalog.value[sfxId]?.trigger
   if (trigger && trigger !== 'manual') {
-    return { ...sfxCardModel(sfxId, 'full'), disabled: true, blocked: true, title: 'Fires by itself.' }
+    return { ...sfxCardModel(sfxId, 'full'), readonly: true, title: 'Fires by itself.' }
   }
-  return model
+  return sfxCardModel(sfxId)
 }
 
 async function fetchSfxCatalog() {
