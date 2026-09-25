@@ -261,8 +261,9 @@ exist.
 `scripts/check-choice-table.mjs` (52 assertions, no browser) pins the scheme's
 key column and its fallback order, the condition/effect/cost phrasing, and — as
 shipped text — the resolver's registry-wide read. `e2e/tests/choice-table.spec.js`
-measures the layout at all four viewports and drives the two gates and the
-roll-then-confirm against the live app.
+measures the layout at all four viewports **plus the two-column state between
+them** — the modal is `min(560px, 96vw)`, so the named viewports alone never reach
+it — and drives the two gates and the roll-then-confirm against the live app.
 
 ### Button
 
