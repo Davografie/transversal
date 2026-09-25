@@ -253,8 +253,16 @@ const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop-to-travel zone
 // apart where the same location gave 86px in the docked desktop view. Scaling by the
 // width puts a comparable distance between them on both, and leaves the wide layout —
 // which is not the crowded one — exactly as it was.
-const LOCATION_SCALE_REF = 760   // viewer width that needs no extra scale
-const LOCATION_SCALE_MAX = 1.5   // cap, so a very narrow phone still shows a map
+//
+// ⚠ This is bounded by the BACKGROUND ART, not by taste. Every location background in
+// the database is 832×1216 or smaller (median 832 wide; none reaches 1500), and the
+// `background` role is served as the `_Large` variant — 478×700 — while an 832×1216
+// `_Original` sits beside it. A phone draws the scene at ~2.4k×3.5k device pixels, so
+// the background is already several times its native size before this multiplier
+// applies: ~2.2× at scale 1, and ~5-7× at the cap below. Raising these makes the map
+// bigger and the art softer in proportion — see [[Location Viewer]] for the table.
+const LOCATION_SCALE_REF = 880   // viewer width that needs no extra scale (the docked view)
+const LOCATION_SCALE_MAX = 2.2   // cap, so a very narrow phone still shows a map
 const locationScale = (viewerW) =>
   Math.min(LOCATION_SCALE_MAX, Math.max(1, LOCATION_SCALE_REF / Math.max(viewerW, 1)))
 const CONTROLLED_SCALE = 1.4     // actively-controlled dots render this much bigger
