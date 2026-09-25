@@ -52,6 +52,15 @@ Every image is tagged with one or more **canonical roles**:
 
 ## Data model
 
+> [!info] Planned change — derived files become **tiers** ([[B210]])
+> A cutout is currently a separate record with its own base name, which is the
+> cause of every cutout defect fixed in September 2026 — credits lost, AI
+> mislabelled, roles redistributed, loops with no roles. It is really a render of
+> the same picture, and the files already say so: **all 43 loops keep their still
+> under the same base name**, and all 224 cutouts name their source in `prompt`.
+> [[Image Tiers Design Log]] carries the target model and the migration; the
+> section below describes the model **as built today**.
+
 > [!info] The owner model (`B200`, landed 2026-09-25)
 > An image is owned by an **entity** or a **trait**, and may sit one tier below
 > its owner. The same change renamed the collection `entity_images` → `images`
