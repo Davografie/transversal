@@ -40,6 +40,22 @@ export function useMobileBands({ wrapperEl, gmMode, entityId, viewingEntityId })
   dockMq.addEventListener('change', syncSheetDock)
   onUnmounted(() => dockMq.removeEventListener('change', syncSheetDock))
 
+  // ── "Large height" ───────────────────────────────────────────────────
+  // A second kind of gate, for callers that change *shape* rather than width:
+  // the sheet's trait-set accordion is only for a sheet with height to spare
+  // (the human's rule, 2026-09-25). Landscape alone is not enough — the phone
+  // landscape dock is 390px tall — so height is the missing conjunct.
+  //
+  // Same threshold as the CSS rule that swaps in `--dock-w-short`
+  // (`@media (max-height: 500px)`), deliberately: "short" should mean one thing
+  // across the stage rather than two numbers free to drift apart.
+  const shortViewport = ref(false)
+  const shortMq = window.matchMedia('(max-height: 500px)')
+  function syncShortViewport() { shortViewport.value = shortMq.matches }
+  syncShortViewport()
+  shortMq.addEventListener('change', syncShortViewport)
+  onUnmounted(() => shortMq.removeEventListener('change', syncShortViewport))
+
   // GM with no acting/viewed entity has an empty sheet band on mobile — it is
   // fully collapsed (peers bar is enough) and the sheet focus is unreachable.
   const sheetEmpty = computed(() => mobileStackActive.value && gmMode.value && !entityId.value && !viewingEntityId.value)
@@ -262,7 +278,7 @@ export function useMobileBands({ wrapperEl, gmMode, entityId, viewingEntityId })
 
   return {
     isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobileFocus,
-    rollerContentH, syncRollerContentH,
+    shortViewport, rollerContentH, syncRollerContentH,
     onBandDragStart, tapBand,
   }
 }

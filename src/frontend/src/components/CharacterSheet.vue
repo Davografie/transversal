@@ -329,8 +329,14 @@
              (B60) — the list below then shows every set's traits at once. The
              two things that live only here and are therefore absent flat: a
              set's limit dots and its trait-set-unit SFX cards (0 rows in the
-             live data carry the latter — flagged, not yet designed). -->
-        <div v-else-if="activeSheetView === 'traits' && !flatTraitList && traitSets.length && !showAddTrait" class="trait-sets">
+             live data carry the latter — flagged, not yet designed).
+
+             Two shapes, by the sheet's height (the human's rule, 2026-09-25):
+             the **accordion** where there is height to spare — a landscape
+             desktop or tablet, several sets open at once — and the **drill-in**
+             everywhere else, where the set list is navigation and one set's
+             traits replace it. -->
+        <div v-else-if="activeSheetView === 'traits' && !flatTraitList && traitSetAccordion && traitSets.length && !showAddTrait" class="trait-sets">
           <div v-for="entry in accordionSets" :key="entry.ts.name" class="trait-set" :class="{ open: isSetOpen(entry.ts.name) }">
             <h4 class="set-header">
               <button
@@ -372,11 +378,38 @@
           </div>
         </div>
 
-        <!-- The whole-sheet flat list (B60), the profile tab, or the relation tab.
-             A sheet with few traits keeps this: the sets are a navigation device
-             and with a handful of traits there is nothing to navigate, so the two
-             are the same list with and without the set layer rather than a choice. -->
+        <!-- The drill-in's first phase: the sets as navigation, shown only until
+             one is entered. No `[+]` here — a set you hold nothing in is reached
+             through `+ Add Trait` below, which is the pre-accordion path and
+             still the only one that can add to a set the list has no entry for. -->
+        <div v-else-if="activeSheetView === 'traits' && !flatTraitList && !drilledSet && traitSets.length && !showAddTrait" class="trait-sets">
+          <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
+            <h4 class="set-header set-header-link" @click="openSet(ts.name)">
+              <span class="set-chevron">▸</span>
+              <span class="set-name">{{ ts.name }}</span>
+              <span v-if="ts.limit" class="limit-dots">
+                <span v-for="i in ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(ts) }">{{ i <= inPoolCount(ts) ? '●' : '○' }}</span>
+              </span>
+            </h4>
+            <div v-if="traitsetSfxIds(ts).length" class="sfx-cards">
+              <SfxCard v-for="sfxId in traitsetSfxIds(ts)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
+                       @activate="activateSfx(sfxId, traitsetSettingSourceId(ts))" />
+            </div>
+          </div>
+        </div>
+
+        <!-- The whole-sheet flat list (B60), the profile tab, the relation tab, or
+             the set the reader drilled into. A sheet with few traits keeps the flat
+             list: the sets are a navigation device and with a handful of traits
+             there is nothing to navigate, so the two are the same list with and
+             without the set layer rather than a choice. -->
         <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
+            <h4
+              v-if="activeSheetView === 'traits' && !flatTraitList"
+              class="trait-list-title"
+              @click="closeSet"
+              title="Back to trait sets"
+            >← {{ drilledSet?.name }}</h4>
             <TraitRow
               v-for="t in currentTraits"
               :key="t.id"
@@ -387,6 +420,13 @@
               :wrap="activeSheetView === 'profile'"
               :hide-contact="traitContinuations.has(t.id)"
             />
+          <!-- The set order, so a reader can walk a sheet's sets without going back
+               to the list each time. `align-self: stretch` on the row is what lets a
+               lone Prev sit left and a lone Next right. -->
+          <div v-if="activeSheetView === 'traits' && !flatTraitList && (prevSet || nextSet)" class="set-nav">
+            <Button v-if="prevSet" class="set-nav-prev" variant="neutral" @click="goToPrevSet">← Previous: {{ prevSet.name }}</Button>
+            <Button v-if="nextSet" class="set-nav-next" variant="neutral" @click="goToNextSet">Next: {{ nextSet.name }} →</Button>
+          </div>
         </div> <!-- .trait-list -->
       <div v-else-if="!showAddTrait" class="empty">{{ activeSheetView === 'profile' ? 'No profile traits' : 'No traits configured' }}</div>
       <Button v-if="canAddTraits && !showAddTrait" class="add-trait-btn" variant="secondary" block @click="openAddTrait">+ Add Trait</Button>
@@ -504,6 +544,12 @@ const props = defineProps({
   universe: { type: String, default: 'earth' },
   phase: { type: String, default: 'adding' },
   embedded: { type: Boolean, default: false },
+  // Whether the traits tab draws the sets as an accordion (B178) or as a drill-in
+  // (the shape B178 replaced). The host owns the layout, so it owns this; the
+  // rule is the human's — accordion only for landscape views with a large height,
+  // i.e. desktops and tablets. Default `false`, the drill-in, because that is the
+  // shape that does not need height to work.
+  traitSetAccordion: { type: Boolean, default: false },
   gmMode: { type: Boolean, default: false },
   externalPoolSources: { type: Array, default: null },
   overrideEntityId: { type: String, default: null },
@@ -1120,9 +1166,63 @@ function collapseContainersIn(name) {
   expandedContainers.value = expandedContainers.value.filter(id => !inside.has(id))
 }
 
+// ── The set drill-in ────────────────────────────────────────────────────
+// The shape the sets take where there is **no height to spare** — every view but
+// a landscape desktop or tablet (`props.traitSetAccordion`). The accordion shows
+// every set at once, which needs a tall sheet; a phone has a short one, so it
+// gets the list-then-one-set shape instead: the set list as navigation, then that
+// set's traits on their own.
+//
+// One name, not a stack: this is "which set am I looking at", and the back
+// control and the set list are the only two places you can be. Persisted like the
+// accordion's open sets, because it is the reader's position on the sheet and
+// losing it on reload is the same surprise the human reported there.
+const drilledSetName = usePersistedRef('sheet.traitSetDrill', null)
+
+const drilledSet = computed(() =>
+  drilledSetName.value ? traitSets.value.find(ts => ts.name === drilledSetName.value) || null : null)
+
+function openSet(name) {
+  if (!name) return
+  drilledSetName.value = name
+  // Containers start closed every time a set is entered: their contents are
+  // something you look into deliberately, not state carried over from last time.
+  collapseContainersIn(name)
+}
+
+function closeSet() {
+  drilledSetName.value = null
+}
+
+// Where you were in the set order, for the two buttons under a set's traits. The
+// order is the sheet's own (`traitSets` is sorted by the set's `order`).
+const drilledSetIndex = computed(() =>
+  drilledSet.value ? traitSets.value.indexOf(drilledSet.value) : -1)
+const prevSet = computed(() => (drilledSetIndex.value > 0 ? traitSets.value[drilledSetIndex.value - 1] : null))
+const nextSet = computed(() => {
+  const i = drilledSetIndex.value
+  return i >= 0 && i < traitSets.value.length - 1 ? traitSets.value[i + 1] : null
+})
+const goToPrevSet = () => prevSet.value && openSet(prevSet.value.name)
+const goToNextSet = () => nextSet.value && openSet(nextSet.value.name)
+
+/**
+ * Put the reader on a set's traits, in whichever shape the tab is drawing — the
+ * accordion opens the section, the drill-in enters it. One call site for each
+ * intent, so the two shapes cannot drift into different behaviour.
+ */
+function landOnSet(name) {
+  if (!name) return
+  if (props.traitSetAccordion) expandSet(name)
+  else openSet(name)
+}
+
+// The 🎲 pill is "the traits, from the top": with a drill-in the top is the set
+// list, so it also comes back out of whichever set was open.
 function goToTraitSets() {
   activeSheetView.value = 'traits'
   cancelEdit()
+  drilledSetName.value = null
 }
 
 // The accordion's rows: each set's traits, grouped so a relationship's rows sit
@@ -1144,12 +1244,25 @@ const canAddTraits = computed(() => !props.overrideEntityId || props.gmMode)
 const flatTraits = computed(() => traitSets.value.flatMap(ts => ts.traits))
 const flatTraitList = computed(() => usesFlatTraitList(traitSets.value))
 
-// The single-list views only. The traits tab splits into the flat list (B60) and
-// the accordion, and the accordion renders each set itself.
+// A stale drill must not survive the set it named. Two ways it goes stale: the
+// sheet drops under the flat limit (there is no set layer then), or the sets are
+// rebuilt without it (a universe change replaces every set). Placed here rather
+// than with the drill state because it reads `flatTraitList`, and `watch` runs
+// its source getters during setup — above this line that is a TDZ error.
+watch([traitSets, flatTraitList], () => {
+  if (drilledSetName.value && (!drilledSet.value || flatTraitList.value)) drilledSetName.value = null
+})
+
+// The list a single-list branch renders: the profile tab, the relation tab, the
+// flat sheet (B60), or the set the reader has drilled into. The accordion renders
+// each set itself, so on the traits tab under the accordion there is no
+// single list — `visibleRows` is what knows about the open sets.
 const currentTraits = computed(() => {
   if (activeSheetView.value === 'relation') return relationTraits.value
   if (activeSheetView.value === 'profile') return profileTraits.value
-  return groupRelationRows(flatTraits.value)
+  if (flatTraitList.value) return groupRelationRows(flatTraits.value)
+  if (props.traitSetAccordion) return []
+  return groupRelationRows(drilledSet.value?.traits || [])
 })
 
 // Rows whose `→ contact` the row above already states. Computed over whatever
@@ -1159,11 +1272,11 @@ const currentTraits = computed(() => {
 const traitContinuations = computed(() => relationContinuations(currentTraits.value))
 
 // Every root row the traits area is showing, however it is scoped: the flat list
-// (B60), the accordion's open sets, the profile tab or the relation tab. Drag
-// destinations and the move-out anchor ask this rather than `currentTraits`,
-// which is the single-list views only.
+// (B60), the accordion's open sets, the drilled set, the profile tab or the
+// relation tab. Drag destinations and the move-out anchor ask this rather than
+// `currentTraits`, which is the single-list views only.
 const visibleRows = computed(() => {
-  if (activeSheetView.value === 'traits' && !flatTraitList.value) {
+  if (activeSheetView.value === 'traits' && !flatTraitList.value && props.traitSetAccordion) {
     return accordionSets.value.filter(e => isSetOpen(e.ts.name)).flatMap(e => e.traits)
   }
   return currentTraits.value || []
@@ -1207,11 +1320,12 @@ function backToSetList(t) {
   // that the reader never asked for.
   if (activeSheetView.value !== 'traits' || flatTraitList.value) return
   const set = setOfTrait(t)
-  // Belt and braces: a row can only be clicked while its own set is open, so this
-  // is normally already satisfied. It states the requirement rather than relying
-  // on that, so a future entry point into the detail cannot land on a collapsed
-  // header and read as "the trait vanished".
-  if (set) expandSet(set.name)
+  // Belt and braces: a row can only be clicked from inside its own set — open in
+  // the accordion, entered in the drill-in — so this is normally already
+  // satisfied. It states the requirement rather than relying on that, so a future
+  // entry point into the detail cannot land on a collapsed header or the set list
+  // and read as "the trait vanished".
+  if (set) landOnSet(set.name)
 }
 
 // SFX usage tracking — reset per dice pool cycle
@@ -1621,9 +1735,9 @@ function openEditorForNewTrait(id, { relation = false } = {}) {
     activeSheetView.value = 'profile'
   } else {
     activeSheetView.value = 'traits'
-    // The set it landed in is expanded, so the new row is on screen. A flat sheet
-    // has no set layer to expand and already shows it.
-    if (!flatTraitList.value) expandSet(setting.traitsetName)
+    // The set it landed in is on screen: the accordion opens that section, the
+    // drill-in enters it. A flat sheet has no set layer and already shows it.
+    if (!flatTraitList.value) landOnSet(setting.traitsetName)
   }
   startEdit(setting)
 }
@@ -2884,6 +2998,19 @@ watch(() => props.externalPoolSources, (sources) => {
   transition: color 0.15s;
 }
 .set-toggle:hover {
+  color: var(--text);
+}
+/* The drill-in's set row: the whole header is the tap target, because the list is
+   navigation rather than a set of sections to expand. The accordion's row is not
+   clickable itself — its `.set-toggle` button is — so this lives on the modifier,
+   not on `.set-header`. */
+.set-header-link {
+  padding: 4px 0;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+.set-header-link:hover {
   color: var(--text);
 }
 .set-chevron {
