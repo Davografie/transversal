@@ -269,6 +269,9 @@ async def test_deleting_a_trait_image_removes_its_files(tmp_path, monkeypatch):
     assert await orchestrator.delete_image(DEF_ID)
 
     assert not variant.exists()
+    # And the empty tree it lived in goes too, rather than leaving a bare
+    # owner/universe pair behind for every deleted image.
+    assert not image_dir.exists()
     assert repo.get_image(DEF_ID) is None
     _cleanup(repo)
 

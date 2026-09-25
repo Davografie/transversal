@@ -716,4 +716,14 @@ class ImagenOrchestrator:
             if p.exists():
                 p.unlink()
 
+        # Tidy the directories the variants lived in, so a deleted image does not
+        # leave an empty tree behind. `rmdir` refuses a non-empty directory, which
+        # is exactly the guard wanted: another universe's or another image's files
+        # keep it alive.
+        for directory in (base, base.parent):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+
         return self.repo.delete_image(image_id)
