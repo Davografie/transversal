@@ -24,7 +24,7 @@ from pathlib import Path
 from PIL import Image, ImageChops
 
 from transversal.db.repository import EntityRepository
-from transversal.domain import Entity, EntityImage, EntityType, ImageType
+from transversal.domain import Entity, MediaImage, EntityType, ImageType
 from transversal.imagen.comfyui import (
     ComfyUIClient,
     inject_bg_removal_params,
@@ -158,7 +158,7 @@ class ImagenOrchestrator:
         universe: str,
         session_id: str = "",
         projection_id: str = "",
-    ) -> EntityImage:
+    ) -> MediaImage:
         """Generate a static Flux image for an entity or a projection."""
         entity_id = entity.id
         gen_type = GenerationType.IMAGEN
@@ -267,7 +267,7 @@ class ImagenOrchestrator:
         existing = self.repo.get_images_for_owner(entity_id, owner)
         roles = ["background", "sheet", "navdot"] if not existing else []
 
-        entity_image = EntityImage(
+        entity_image = MediaImage(
             id=short_hash,
             entity_id=entity_id,
             projection_id=owner,
@@ -299,7 +299,7 @@ class ImagenOrchestrator:
 
         return entity_image
 
-    async def _auto_cutout_for_projection(self, entity: Entity, source: EntityImage) -> None:
+    async def _auto_cutout_for_projection(self, entity: Entity, source: MediaImage) -> None:
         """Cut out a projection's first image and tag the pair background/cutout.
 
         The generated image becomes the ``background``; the transparent cutout
@@ -350,7 +350,7 @@ class ImagenOrchestrator:
         existing_image_path: str = "",
         motion_hint: str = "",
         source_transparent: bool = False,
-    ) -> EntityImage:
+    ) -> MediaImage:
         """Generate a video loop for an entity.
 
         Pipeline (fresh): Flux → gemma3 vision → WanVideo loop
@@ -512,7 +512,7 @@ class ImagenOrchestrator:
         video_file.write_bytes(video_data)
 
         # 5. Record metadata
-        entity_image = EntityImage(
+        entity_image = MediaImage(
             id=image_id,
             entity_id=entity_id,
             universe=universe,
@@ -606,7 +606,7 @@ class ImagenOrchestrator:
         entity: Entity,
         image_id: str,
         report_gen_type: GenerationType | None = None,
-    ) -> EntityImage:
+    ) -> MediaImage:
         """Remove the background from an existing static image via BiRefNet.
 
         Produces a new transparent cutout image owned by the same entity or
@@ -667,7 +667,7 @@ class ImagenOrchestrator:
         with Image.open(output_full / variants["original"]) as _im:
             width, height = _im.size
 
-        entity_image = EntityImage(
+        entity_image = MediaImage(
             id=short_hash,
             entity_id=src.entity_id,
             projection_id=src.projection_id,

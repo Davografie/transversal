@@ -1,7 +1,7 @@
 """One-off backfill: mark EntityImages whose files have transparent backgrounds.
 
 Detects transparency from each image's ``_Original.webp`` (an alpha channel
-with any non-opaque pixel) and sets ``EntityImage.transparent`` accordingly.
+with any non-opaque pixel) and sets ``MediaImage.transparent`` accordingly.
 Animated images are skipped (videos have no alpha). Idempotent — only writes
 rows whose flag differs — and dry-run by default.
 

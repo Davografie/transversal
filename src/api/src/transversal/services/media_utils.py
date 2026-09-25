@@ -10,7 +10,7 @@ from PIL import Image
 def has_transparency(data: bytes) -> bool:
     """Return True if the image has an alpha channel with any non-opaque pixel.
 
-    Used to tag ``EntityImage.transparent`` at ingestion time (uploads,
+    Used to tag ``MediaImage.transparent`` at ingestion time (uploads,
     generated cutouts). Opaque formats (JPEG, Flux PNG output) return False.
     """
     try:

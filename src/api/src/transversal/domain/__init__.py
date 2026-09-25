@@ -119,7 +119,7 @@ from transversal.domain.rolltables import (  # noqa: F401
 
 from transversal.domain.views import (  # noqa: F401
     CharacterView,
-    EntityImage,
+    MediaImage,
 )
 
 from transversal.domain.messaging import (  # noqa: F401

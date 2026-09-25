@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from transversal.db.arango import ENTITIES
 from transversal.db.arango import ENTITY_IMAGES
-from transversal.domain import EntityImage
+from transversal.domain import MediaImage
 from transversal.domain import ImageType
 
 
 class RepositoryImages:
     """Mixin contributing 12 member(s) to the repository."""
 
-    def create_entity_image(self, image: EntityImage) -> EntityImage:
+    def create_entity_image(self, image: MediaImage) -> MediaImage:
         doc = image.model_dump()
         doc["_key"] = image.id
         self._entity_images.insert(doc)
@@ -19,7 +19,7 @@ class RepositoryImages:
 
     def get_entity_images(
         self, entity_id: str, universe: str | None = None, image_type: ImageType | None = None
-    ) -> list[EntityImage]:
+    ) -> list[MediaImage]:
         filters = [("entity_id", entity_id)]
         if universe:
             filters.append(("universe", universe))
@@ -36,15 +36,15 @@ class RepositoryImages:
             RETURN doc
         """
         return [
-            EntityImage.model_validate({**doc, "id": doc["_key"]})
+            MediaImage.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(query, bind_vars=binds)
         ]
 
-    def get_entity_image(self, image_id: str) -> EntityImage | None:
+    def get_entity_image(self, image_id: str) -> MediaImage | None:
         doc = self._entity_images.get(image_id)
-        return EntityImage.model_validate({**doc, "id": doc["_key"]}) if doc else None
+        return MediaImage.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
-    def update_entity_image(self, image_id: str, updates: dict) -> EntityImage | None:
+    def update_entity_image(self, image_id: str, updates: dict) -> MediaImage | None:
         doc = self._entity_images.get(image_id)
         if not doc:
             return None
@@ -54,7 +54,7 @@ class RepositoryImages:
     def delete_entity_image(self, image_id: str) -> bool:
         return self._entity_images.delete(image_id)
 
-    def get_images_for_owner(self, entity_id: str, projection_id: str | None = None) -> list[EntityImage]:
+    def get_images_for_owner(self, entity_id: str, projection_id: str | None = None) -> list[MediaImage]:
         """Images belonging to an owner: a specific projection, or the entity.
 
         ``projection_id=None`` returns entity-level images only (those with an
@@ -66,7 +66,7 @@ class RepositoryImages:
             if (img.projection_id or None) == projection_id
         ]
 
-    def _image_url(self, img: EntityImage, variant: str = "Large") -> str:
+    def _image_url(self, img: MediaImage, variant: str = "Large") -> str:
         """Public media URL for an image, honoring animated vs static variant."""
         if img.image_type == ImageType.ANIMATED:
             return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
@@ -74,8 +74,8 @@ class RepositoryImages:
 
     def resolve_role_image_entry(
         self, entity_id: str, role: str, projection_id: str | None = None
-    ) -> EntityImage | None:
-        """Resolve the EntityImage carrying ``role`` — same order as
+    ) -> MediaImage | None:
+        """Resolve the MediaImage carrying ``role`` — same order as
         ``resolve_role_image`` (projection-scoped with entity fallback)."""
         images = self.get_entity_images(entity_id)
         if projection_id:

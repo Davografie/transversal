@@ -15,7 +15,7 @@ from transversal.domain import (
     DieType,
     Effect,
     Entity,
-    EntityImage,
+    MediaImage,
     EntityType,
     ImageType,
     LifePath,
@@ -231,7 +231,7 @@ def test_delete_projection_cascades_dependents():
     repo.create_traitsetsetting(TraitSetSetting(
         id=PTSS3, entity_id=E3, traitset_id=TRAITSET3, from_type="projection", projection_id=PROJ3,
     ))
-    repo.create_entity_image(EntityImage(
+    repo.create_entity_image(MediaImage(
         id=IMG3, entity_id=E3, projection_id=PROJ3, universe="earth", image_type=ImageType.IMAGEN,
     ))
     repo.create_relationship(PROJ3, E3B, "morph", from_projection=True)

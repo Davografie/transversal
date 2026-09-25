@@ -1,4 +1,4 @@
-"""Media migration: old ``media/uploads`` → new ``EntityImage`` + ``media/imagen``.
+"""Media migration: old ``media/uploads`` → new ``MediaImage`` + ``media/imagen``.
 
 Per [[Media Migration Proposal]] and media's response:
 
@@ -6,14 +6,14 @@ Per [[Media Migration Proposal]] and media's response:
   and ``{key}.{ext}`` (flat files). ``{key}/{location_key}/…`` subdirs are
   per-location (per-universe) appearance.
 - Role mapping: ``portrait``/``portrait_small`` → ``sheet``; ``original``/
-  ``large``/``small``/``mini`` → ``background`` (one EntityImage per image, not
+  ``large``/``small``/``mini`` → ``background`` (one MediaImage per image, not
   per variant). Flat files: ``sheet`` for character/GMC, ``background`` for
   location/asset/faction.
 - Ownership: entity-level (``projection_id`` empty).
 - Universe: entity's ``current_universe`` for its own dir/flat file; for a
   per-location subdir, the universe of that location (via the super chain).
 - Format: re-encode to WebP via ``_save_image_variants`` (Original/Large/Small/
-  Mini), one EntityImage with ``extension="webp"``, ``image_type=uploaded``.
+  Mini), one MediaImage with ``extension="webp"``, ``image_type=uploaded``.
 
 Flags:
 - ``--include-archetypes`` — also migrate image folders for the Phase 2b
@@ -38,7 +38,7 @@ from pathlib import Path
 
 from transversal.db.arango import ENTITY_IMAGES, get_db
 from transversal.db.repository import EntityRepository
-from transversal.domain import EntityImage, ImageType
+from transversal.domain import MediaImage, ImageType
 from transversal.imagen.orchestrator import _safe_filename, _save_image_variants
 from transversal.services.media_utils import has_transparency
 from transversal.migrate_common import (
@@ -189,7 +189,7 @@ def _write_image(repo: EntityRepository, entity: dict, source: Path, roles: list
     # Use the source file's mtime so migrated images sort OLDER than the
     # survived new-app images (resolver picks newest-first).
     created_at = datetime.fromtimestamp(source.stat().st_mtime, tz=timezone.utc).isoformat()
-    repo.create_entity_image(EntityImage(
+    repo.create_entity_image(MediaImage(
         id=short_hash,
         entity_id=entity_id,
         projection_id=None,

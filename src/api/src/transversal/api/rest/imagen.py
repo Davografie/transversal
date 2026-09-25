@@ -16,7 +16,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
-from transversal.domain import EntityImage, ImageType
+from transversal.domain import MediaImage, ImageType
 from transversal.imagen.models import (
     AnimateRequest,
     GenerationStatus,
@@ -422,7 +422,7 @@ async def list_images(entity_id: str, universe: str | None = None):
     for doc in repo._entities.find({"type": "universe"}):
         universe_names[doc.get("current_universe", doc["_key"])] = doc.get("name", doc["_key"])
 
-    def _file_size(img: EntityImage) -> int:
+    def _file_size(img: MediaImage) -> int:
         try:
             if img.image_type == ImageType.ANIMATED:
                 path = f"/app/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"

@@ -14,7 +14,7 @@ import asyncio
 
 import pytest
 
-from transversal.domain import Entity, EntityImage, EntityType, ImageType
+from transversal.domain import Entity, MediaImage, EntityType, ImageType
 from transversal.imagen import orchestrator as orch
 
 PROJECTION = "proj-1"
@@ -83,7 +83,7 @@ def _entity():
 
 
 def _image(image_id, projection_id):
-    return EntityImage(
+    return MediaImage(
         id=image_id,
         entity_id="char-1",
         projection_id=projection_id or None,

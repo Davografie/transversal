@@ -1,6 +1,6 @@
 """Media upload endpoint — saves files as WebP with deterministic, collision-safe names.
 
-Uploaded images are also registered as EntityImage records so they appear in the
+Uploaded images are also registered as MediaImage records so they appear in the
 gallery alongside generated images and can be animated.
 """
 
@@ -22,7 +22,7 @@ try:
 except ImportError:
     pass
 
-from transversal.domain import EntityImage, ImageType
+from transversal.domain import MediaImage, ImageType
 from transversal.db.repository import EntityRepository
 from transversal.services.media_utils import has_transparency
 
@@ -97,7 +97,7 @@ def _save_image_variants(image_data: bytes, output_dir: Path, base_name: str) ->
 async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile = File(...)):
     """Upload a media file. Converts to WebP, returns the public path on success.
 
-    Also registers the image as an EntityImage so it appears in the gallery
+    Also registers the image as an MediaImage so it appears in the gallery
     and can be animated.
 
     If `universe` is provided, the image is registered under that universe.
@@ -130,7 +130,7 @@ async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile
     filepath = MEDIA_DIR / flat_filename
     filepath.write_bytes(converted)
 
-    # ── Register as EntityImage for gallery + animation ──
+    # ── Register as MediaImage for gallery + animation ──
     image_id = None
     if entity_id:
         try:
@@ -151,7 +151,7 @@ async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile
                 img = Image.open(io.BytesIO(converted))
                 w, h = img.size
 
-                entity_image = EntityImage(
+                entity_image = MediaImage(
                     id=image_id,
                     entity_id=entity_id,
                     universe=resolved_universe,

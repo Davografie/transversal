@@ -24,7 +24,7 @@ import pytest
 from transversal.db.repository import EntityRepository
 from transversal.domain import (
     Entity,
-    EntityImage,
+    MediaImage,
     EntityType,
     ImageType,
     Projection,
@@ -91,7 +91,7 @@ def _seed(repo):
         (BODY_STAYED, EARTH, STAYED_FACE, True),
         (BODY_ACTIVE, THREE_REALMS, ACTIVE_FACE, False),
     ):
-        repo.create_entity_image(EntityImage(
+        repo.create_entity_image(MediaImage(
             id=f"img-{filename}", entity_id=ENTITY, projection_id=body_id,
             universe=universe, image_type=ImageType.IMAGEN, roles=["navdot"],
             filename=filename, transparent=transparent,
@@ -180,7 +180,7 @@ def test_a_body_without_its_own_art_falls_back_to_the_entity():
     repo = _repo
     _seed(repo)
     try:
-        repo.create_entity_image(EntityImage(
+        repo.create_entity_image(MediaImage(
             id="img-entitylevel", entity_id=ENTITY, universe=EARTH,
             image_type=ImageType.IMAGEN, roles=["navdot"], filename="EntityLevel",
         ))

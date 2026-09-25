@@ -48,7 +48,7 @@ class AnimateRequest(BaseModel):
 
 class RemoveBackgroundRequest(BaseModel):
     """Remove the background from an existing static image."""
-    image_id: str = ""  # the static EntityImage to cut out
+    image_id: str = ""  # the static MediaImage to cut out
 
 
 class GenerationProgress(BaseModel):
