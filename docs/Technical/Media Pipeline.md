@@ -71,6 +71,8 @@ Every image is tagged with one or more **canonical roles**:
 - `universe` — the universe the image was generated/uploaded in.
 - `image_type` — see above.
 - `roles` — subset of `background` / `sheet` / `navdot`.
+- `flags` — provenance labels (`ai`, `ai_generated`, `ai_animated`). **Not roles**
+  — see [[#Provenance flags (AI)]].
 - `transparent` — the file has a transparent background (an alpha channel with
   non-opaque pixels). Detected at ingestion, never hand-set. See
   [[#Transparency]].
@@ -266,9 +268,11 @@ the rollback.
 
 - `POST /media/upload` — upload a file; convert to WebP, save variants, register
   a `MediaImage`, auto-select all three roles when it is the sole image on its
-  rung. Takes `owner_kind` (`entity` | `trait`), `owner_id`, `variant_id` and
-  `universe`; `entity_id` / `projection_id` are still accepted as aliases
-  because two frontend callers send them. Registration is **best-effort**: if
+  rung. Takes `owner_kind` (`entity` | `trait`), `owner_id`, `variant_id`,
+  `universe` and `flags` (comma-separated provenance labels — send `ai` for art
+  you know involved AI); `entity_id` / `projection_id` are still accepted as
+  aliases because two frontend callers send them. Registration is
+  **best-effort**: if
   the owner does not exist, or a trait belongs to no universe and none was
   named, the file is still written and `image_id` comes back null rather than
   failing an upload whose file already landed.
@@ -285,10 +289,11 @@ the rollback.
 - `GET /imagen/loras` — available Flux LoRAs.
 - `GET /entities/images?role=&ids=` — batch role-image resolution (used by the
   peers bar to avoid loading images for the whole entity list).
-- `GET /imagen/{entity_id}` — list images (with `projection_id`, `roles`,
-  `transparent`, `path_large`, `path_animated`).
-- `PATCH /imagen/{image_id}` — update `roles`, `universe`, and/or
-  `projection_id` (ownership reassignment).
+- `GET /imagen/{entity_id}` — list images (with `projection_id`, `roles`, `flags`,
+  `transparent`, `path_large`, `path_animated`). Any owner id works — a trait's
+  gallery reads through the same endpoint.
+- `PATCH /imagen/{image_id}` — update `roles`, `flags`, `universe`, and/or
+  `projection_id` (ownership reassignment). Roles strip siblings; `flags` do not.
 - `DELETE /imagen/{image_id}` — delete an image and its variants.
 
 All three generation endpoints return `202` immediately and publish progress on
@@ -624,6 +629,51 @@ The one case where that three-role result is deliberately redistributed is a
 **projection's first generated image**: the generated image keeps `background`
 and a new transparent cutout takes `navdot` + `sheet` (`B166`; see
 [[#Imagen (static)]]). Upload and drop do not cut out.
+
+## Provenance flags (AI)
+
+`MediaImage.flags` labels how an image came to exist. The vocabulary is fixed —
+`IMAGE_FLAGS` in `domain/views.py` — because these labels are read by the UI and
+by anything asking whether an image involved AI, so a typo should fail loudly
+rather than quietly mean "no disclosure".
+
+| flag | who sets it | meaning |
+| --- | --- | --- |
+| `ai` | **a human** | AI was somewhere in this image's workflow — your call to make, e.g. art made elsewhere with AI in the chain |
+| `ai_generated` | the imagen pipeline | Flux made the picture |
+| `ai_animated` | the animate pipeline | WanVideo made the motion |
+
+**`flags` is deliberately a separate field from `roles`.** Roles are unique per
+(owner, role) — assigning one strips it from sibling images — which is right for
+"where does this render" and catastrophic for a provenance label: putting `ai` in
+`roles` would make ticking one image's `[AI]` silently untag every other image of
+that owner. So flags are additive, not unique per owner, and resolution never
+consults them. (`tests/test_media_image_owner.py` pins both halves of that
+contrast in one test.)
+
+A **cutout is a derivative**: it keeps whatever its source disclosed and gains
+`ai`, because BiRefNet is itself a model. So hand-made art cut out here does
+declare AI in its workflow, which is the honest answer.
+
+Surfaces: the GM image viewer and the GM trait editor both show the three labels;
+`[AI]` is a checkbox and the two pipeline labels are read-only, because the
+pipelines own them. The upload endpoint takes `flags` (comma-separated) and
+`PATCH /imagen/{image_id}` sets them, both validated against the vocabulary.
+
+> [!warning] Existing rows were backfilled from `image_type`
+> `image_type` already recorded how most images were made, so
+> `backfill_image_flags.py` derives the pipeline label from it — `imagen` →
+> `ai_generated`, `animated` → `ai_animated`, `cutout` → `ai` — and leaves
+> `uploaded` alone, because the provenance of an upload is genuinely unknown and
+> that is what the manual `ai` label is for. **439 of 1140 live rows** carried a
+> derivable label; the 701 uploads did not. It is additive (a row keeps flags it
+> already has) and idempotent, so re-run it after this branch merges to catch
+> images the older code wrote in the meantime:
+>
+> ```bash
+> docker compose exec api python -m transversal.backfill_image_flags          # dry run
+> docker compose exec api python -m transversal.backfill_image_flags --apply
+> ```
 
 ## Frontend
 

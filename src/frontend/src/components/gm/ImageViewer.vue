@@ -27,6 +27,18 @@
       <label class="role-check" title="Use as character sheet portrait"><input type="checkbox" :checked="hasRole('sheet')" @change="toggleRole('sheet')" /> Sheet</label>
       <label class="role-check" title="Use as navigation dot"><input type="checkbox" :checked="hasRole('navdot')" @change="toggleRole('navdot')" /> Nav</label>
     </div>
+    <div class="flag-assign">
+      <label class="flag-check" title="AI was somewhere in this image's workflow — tick this for art you know involved AI">
+        <input type="checkbox" :checked="hasFlag('ai')" @change="toggleFlag('ai')" />
+        <span class="flag-pill" :class="{ 'is-on': hasFlag('ai') }">[AI]</span>
+      </label>
+      <span
+        v-for="f in autoFlags"
+        :key="f"
+        class="flag-pill is-on is-auto"
+        :title="f === 'ai_generated' ? 'Made by the imagen pipeline' : 'Motion made by the animate pipeline'"
+      >{{ AUTO_FLAG_LABELS[f] }}</span>
+    </div>
     <div class="body-assign">
       <label class="body-label">Body</label>
       <select v-model="imageProjection" class="body-select" @change="onProjectionChange">
@@ -79,6 +91,30 @@ const deleting = ref(false)
 const message = ref('')
 const motionHint = ref('')
 const fetchedRoles = ref([])
+// Provenance labels — separate from roles: not unique, and nothing strips
+// siblings, so several images of one owner can carry [AI] at once.
+const fetchedFlags = ref([])
+
+//: Machine-set labels are shown, never editable: the pipelines own them.
+const AUTO_FLAG_LABELS = { ai_generated: '[AI-generated]', ai_animated: '[AI-animated]' }
+
+const autoFlags = computed(() => fetchedFlags.value.filter(f => f in AUTO_FLAG_LABELS))
+
+function hasFlag(f) { return fetchedFlags.value.includes(f) }
+
+async function toggleFlag(f) {
+  const current = fetchedFlags.value
+  const next = current.includes(f) ? current.filter(x => x !== f) : [...current, f]
+  fetchedFlags.value = next
+  try {
+    await fetch(`/api/v1/imagen/${props.imageId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ flags: next }),
+    })
+    emit('refresh')
+  } catch {}
+}
 
 async function fetchRoles() {
   const entityId = props.entityId
@@ -90,7 +126,10 @@ async function fetchRoles() {
       const data = await r.json()
       if (imageId !== props.imageId) return   // the viewer moved on while in flight
       const img = (data.images || []).find(i => i.id === imageId)
-      if (img) fetchedRoles.value = img.roles || []
+      if (img) {
+        fetchedRoles.value = img.roles || []
+        fetchedFlags.value = img.flags || []
+      }
     }
   } catch {}
 }
@@ -312,6 +351,18 @@ async function onDelete() {
 .section-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
 .role-check { font-size: 10px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 2px; }
 .role-check input { margin: 0; cursor: pointer; }
+
+/* Provenance labels — deliberately unlike the role row, since these do not
+   assign the image anywhere. */
+.flag-assign { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.flag-check { display: flex; align-items: center; gap: 3px; cursor: pointer; }
+.flag-check input { margin: 0; cursor: pointer; }
+.flag-pill {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.02em;
+  border: 1px solid var(--border); color: var(--text-dim); opacity: 0.65;
+}
+.flag-pill.is-on { opacity: 1; color: var(--text); border-color: var(--accent, #6c8cff); }
+.flag-pill.is-auto { cursor: default; }
 
 .body-assign { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 4px; }
 .body-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; }

@@ -22,7 +22,7 @@ try:
 except ImportError:
     pass
 
-from transversal.domain import MediaImage, ImageType
+from transversal.domain import IMAGE_FLAGS, ImageType, MediaImage
 from transversal.db.repository import EntityRepository
 from transversal.services.media_utils import has_transparency
 
@@ -47,6 +47,20 @@ def _safe_component(value: str, field: str) -> str:
     if not _SAFE_COMPONENT.match(value):
         raise HTTPException(status_code=400, detail=f"Invalid {field}")
     return value
+
+
+def _parse_flags(raw: str) -> list[str]:
+    """Parse a comma-separated provenance flag list. Raises 400 on an unknown one.
+
+    A fixed vocabulary rather than free text: these labels are read by the UI and
+    by anything deciding whether an image involved AI, so a typo would silently
+    mean "no disclosure" instead of failing.
+    """
+    values = [f.strip() for f in (raw or "").split(",") if f.strip()]
+    unknown = [f for f in values if f not in IMAGE_FLAGS]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown image flag(s): {', '.join(unknown)}")
+    return values
 
 
 def _convert_to_webp(data: bytes, source_ext: str) -> bytes:
@@ -99,6 +113,7 @@ async def upload_media(
     owner_kind: str = "entity",
     variant_id: str = "",
     universe: str = "",
+    flags: str = "",  # comma-separated IMAGE_FLAGS, e.g. "ai" for known-AI art
     entity_id: str = "",  # legacy alias for owner_id, still sent by existing callers
     projection_id: str = "",  # legacy alias for variant_id
     file: UploadFile = File(...),
@@ -112,6 +127,10 @@ async def upload_media(
     the image may sit on the tier below it (`variant_id` — a projection or a
     traitsetting); empty means the owner-level *definition* image.
 
+    ``flags`` carries provenance labels (`IMAGE_FLAGS`) — ``ai`` is the one a
+    human sets, for art whose workflow they know involved AI. The pipeline labels
+    are set by the pipelines themselves, never here.
+
     If `universe` is provided, the image is registered under that universe.
     If empty, the owner's own universe is used — an entity's `current_universe`,
     or a trait's first listed universe.
@@ -121,6 +140,7 @@ async def upload_media(
     entity_id = entity_id or ""
     owner_id = owner_id or entity_id
     variant_id = variant_id or projection_id or ""
+    requested_flags = _parse_flags(flags)
 
     if owner_kind not in ("entity", "trait"):
         raise HTTPException(status_code=400, detail="owner_kind must be 'entity' or 'trait'")
@@ -199,6 +219,7 @@ async def upload_media(
                         variant_id=variant_id or None,
                         universe=resolved_universe,
                         image_type=ImageType.UPLOADED,
+                        flags=requested_flags,
                         transparent=has_transparency(converted),
                         width=w,
                         height=h,

@@ -22,6 +22,17 @@ class CharacterView(BaseModel):
     projections: list[Projection] = Field(default_factory=list)
     trait_settings: list[TraitSetting] = Field(default_factory=list)
 
+#: Provenance labels an image may carry.
+#:
+#: **Not render roles.** These describe how an image came to exist, not where it
+#: renders, so unlike `roles` they are not unique per owner, assigning one never
+#: strips it from sibling images, and resolution ignores them entirely.
+#: ``ai`` is set by a human who knows AI was somewhere in the workflow;
+#: ``ai_generated`` by the imagen pipeline; ``ai_animated`` by the animate
+#: pipeline.
+IMAGE_FLAGS = ("ai", "ai_generated", "ai_animated")
+
+
 class MediaImage(BaseModel):
     """Metadata for an image stored against an **owner**, per-universe.
 
@@ -44,6 +55,13 @@ class MediaImage(BaseModel):
     universe: str
     image_type: ImageType
     roles: list[str] = Field(default_factory=list)  # ["background", "sheet", "navdot"]
+    #: Provenance labels — see ``IMAGE_FLAGS``. A separate field from ``roles`` on
+    #: purpose: roles are unique per (owner, role) and assigning one strips it
+    #: from sibling images, so putting ``ai`` in there would make ticking one
+    #: image's [AI] silently untag every other image of the same owner. A cutout
+    #: inherits its source's flags and gains ``ai``, because BiRefNet is itself a
+    #: model.
+    flags: list[str] = Field(default_factory=list)
     transparent: bool = False  # image has a transparent background (alpha channel)
     prompt: str = ""
     negative_prompt: str = ""

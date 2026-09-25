@@ -16,7 +16,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
-from transversal.domain import MediaImage, ImageType
+from transversal.domain import IMAGE_FLAGS, ImageType, MediaImage
 from transversal.imagen.models import (
     AnimateRequest,
     GenerationStatus,
@@ -472,6 +472,7 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "size_bytes": _file_size(img),
                 "roles": img.roles,
                 "transparent": img.transparent,
+                "flags": img.flags,
                 "path_large": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}",
                 "path_animated": f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
             }
@@ -512,6 +513,19 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
                     repo.update_image(sib.id, {"roles": sib_roles})
         updates["roles"] = payload["roles"]
 
+    # ── Provenance flags (independent of roles) ──
+    # No sibling stripping here, on purpose: a provenance label describes how an
+    # image was made, so many images of one owner can carry it at once. Only the
+    # vocabulary is enforced.
+    if "flags" in payload:
+        new_flags = payload.get("flags") or []
+        if not isinstance(new_flags, list):
+            raise HTTPException(status_code=400, detail="flags must be a list")
+        unknown = [f for f in new_flags if f not in IMAGE_FLAGS]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"Unknown image flag(s): {', '.join(unknown)}")
+        updates["flags"] = new_flags
+
     # ── Ownership tier (the variant below the owner) ──
     # `projection_id` is the long-standing request field and is still accepted;
     # `variant_id` is the generalised name (a projection for an entity, a
@@ -544,7 +558,10 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
                 shutil.move(old_dir, new_dir)
 
     if not updates:
-        return {"success": True, "roles": img.roles, "universe": img.universe, "projection_id": img.projection_id}
+        return {
+            "success": True, "roles": img.roles, "universe": img.universe,
+            "projection_id": img.projection_id, "flags": img.flags,
+        }
 
     updated = repo.update_image(image_id, updates)
 
@@ -553,6 +570,7 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
         "roles": updated.roles if updated else img.roles,
         "universe": updated.universe if updated else img.universe,
         "projection_id": updated.projection_id if updated else img.projection_id,
+        "flags": updated.flags if updated else img.flags,
     }
 
 

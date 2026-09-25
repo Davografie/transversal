@@ -77,6 +77,22 @@
               {{ tag.label }}
             </label>
           </div>
+          <div class="trait-image-flags">
+            <label class="trait-flag-check" title="AI was somewhere in this image's workflow">
+              <input
+                type="checkbox"
+                :checked="(img.flags || []).includes('ai')"
+                @change="toggleFlag(img, 'ai')"
+              />
+              <span class="trait-flag-pill" :class="{ 'is-on': (img.flags || []).includes('ai') }">[AI]</span>
+            </label>
+            <span
+              v-for="f in autoFlagsOf(img)"
+              :key="f"
+              class="trait-flag-pill is-on is-auto"
+              :title="f === 'ai_generated' ? 'Made by the imagen pipeline' : 'Motion made by the animate pipeline'"
+            >{{ AUTO_FLAG_LABELS[f] }}</span>
+          </div>
           <div class="trait-image-actions">
             <button
               v-if="canCutOut(img)"
@@ -420,6 +436,33 @@ async function toggleRole(img, role) {
     if (!res.ok) throw new Error(`Tag failed (${res.status})`)
     await fetchTraitImages()
     await fetchTraitsConfig()
+  } catch (e) {
+    imageError.value = e?.message || 'Tag failed'
+  }
+}
+
+// ── Provenance flags (independent of the role tags) ──
+// `[AI]` is the human's label for art whose workflow they know involved AI;
+// `[AI-generated]` / `[AI-animated]` are set by the pipelines and only shown.
+// Flags never strip siblings, unlike roles.
+const AUTO_FLAG_LABELS = { ai_generated: '[AI-generated]', ai_animated: '[AI-animated]' }
+
+function autoFlagsOf(img) {
+  return (img.flags || []).filter(f => f in AUTO_FLAG_LABELS)
+}
+
+async function toggleFlag(img, flag) {
+  const current = img.flags || []
+  const next = current.includes(flag) ? current.filter(f => f !== flag) : [...current, flag]
+  imageError.value = ''
+  try {
+    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(img.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ flags: next }),
+    })
+    if (!res.ok) throw new Error(`Tag failed (${res.status})`)
+    await fetchTraitImages()
   } catch (e) {
     imageError.value = e?.message || 'Tag failed'
   }
@@ -968,6 +1011,15 @@ async function onDelete() {
 .trait-image-roles { display: flex; gap: 8px; }
 .trait-role-check { font-size: 10px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 3px; }
 .trait-role-check input { margin: 0; cursor: pointer; }
+.trait-image-flags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.trait-flag-check { display: flex; align-items: center; gap: 3px; cursor: pointer; }
+.trait-flag-check input { margin: 0; cursor: pointer; }
+.trait-flag-pill {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  border: 1px solid var(--border); color: var(--text-dim); opacity: 0.65;
+}
+.trait-flag-pill.is-on { opacity: 1; color: var(--text); border-color: var(--accent, #6c8cff); }
+.trait-flag-pill.is-auto { cursor: default; }
 .trait-image-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .trait-image-upload { position: relative; overflow: hidden; display: inline-flex; }
 .trait-image-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

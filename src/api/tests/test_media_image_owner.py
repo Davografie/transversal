@@ -510,3 +510,100 @@ def test_remove_background_rejects_an_unknown_trait_and_kind(monkeypatch):
     finally:
         _drain_job(imagen_mod, TRAIT)
         _cleanup(repo)
+
+
+# ── Provenance flags: [AI], [AI-generated], [AI-animated] ──
+#
+# Labels, not roles. They live in their own field precisely because `roles` is
+# unique per (owner, role) and strips siblings — so putting `ai` in `roles` would
+# make flagging one image silently untag every other image of the same owner.
+# `test_flags_do_not_strip_siblings_the_way_roles_do` pins both halves of that.
+
+
+@requires_db
+def test_upload_carries_the_manual_ai_flag():
+    repo = _repo
+    _fixtures(repo)
+    client = TestClient(app)
+
+    r = client.post(
+        f"/api/v1/media/upload?owner_kind=trait&owner_id={TRAIT}"
+        "&universe=three_realms&flags=ai",
+        files={"file": ("ai-art.png", _png_bytes(), "image/png")},
+    )
+    assert r.status_code == 200, r.text
+    image_id = r.json()["image_id"]
+
+    try:
+        assert repo.get_image(image_id).flags == ["ai"]
+    finally:
+        if repo.get_image(image_id) is not None:
+            repo.delete_image(image_id)
+        _cleanup(repo)
+
+
+@requires_db
+def test_flags_do_not_strip_siblings_the_way_roles_do():
+    repo = _repo
+    _fixtures(repo)
+    repo.create_image(_trait_image(DEF_ID, roles=("sheet",)))
+    repo.create_image(_trait_image(NEWER_ID, roles=("background",), created_at=LATE))
+    client = TestClient(app)
+
+    try:
+        for image_id in (DEF_ID, NEWER_ID):
+            r = client.patch(f"/api/v1/imagen/{image_id}", json={"flags": ["ai"]})
+            assert r.status_code == 200, r.text
+
+        assert repo.get_image(DEF_ID).flags == ["ai"]
+        assert repo.get_image(NEWER_ID).flags == ["ai"], (
+            "a provenance label is not unique per owner — both images keep it"
+        )
+
+        # The contrast, pinned in the same test: a ROLE does move.
+        r = client.patch(f"/api/v1/imagen/{NEWER_ID}", json={"roles": ["background", "sheet"]})
+        assert r.status_code == 200, r.text
+        assert repo.get_image(DEF_ID).roles == []
+        assert sorted(repo.get_image(NEWER_ID).roles) == ["background", "sheet"]
+    finally:
+        _cleanup(repo)
+
+
+@requires_db
+def test_an_unknown_flag_is_rejected_everywhere():
+    repo = _repo
+    _fixtures(repo)
+    repo.create_image(_trait_image(DEF_ID))
+    client = TestClient(app)
+
+    try:
+        up = client.post(
+            f"/api/v1/media/upload?owner_kind=trait&owner_id={TRAIT}"
+            "&universe=three_realms&flags=ai,definitely_not_a_flag",
+            files={"file": ("x.png", _png_bytes(), "image/png")},
+        )
+        assert up.status_code == 400
+        assert "Unknown image flag" in up.json()["detail"]
+
+        patch = client.patch(f"/api/v1/imagen/{DEF_ID}", json={"flags": ["nope"]})
+        assert patch.status_code == 400
+        assert repo.get_image(DEF_ID).flags == [], "a rejected write leaves the row alone"
+    finally:
+        _cleanup(repo)
+
+
+@requires_db
+def test_patch_clears_the_ai_flag():
+    repo = _repo
+    _fixtures(repo)
+    repo.create_image(_trait_image(DEF_ID))
+    client = TestClient(app)
+
+    try:
+        assert client.patch(f"/api/v1/imagen/{DEF_ID}", json={"flags": ["ai"]}).status_code == 200
+        assert repo.get_image(DEF_ID).flags == ["ai"]
+
+        assert client.patch(f"/api/v1/imagen/{DEF_ID}", json={"flags": []}).status_code == 200
+        assert repo.get_image(DEF_ID).flags == []
+    finally:
+        _cleanup(repo)

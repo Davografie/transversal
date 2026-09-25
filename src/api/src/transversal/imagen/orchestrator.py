@@ -274,6 +274,7 @@ class ImagenOrchestrator:
             universe=universe,
             image_type=ImageType.IMAGEN,
             roles=roles,
+            flags=["ai_generated"],  # the imagen pipeline made this
             transparent=has_transparency(image_data),
             prompt=prompt,
             negative_prompt=negative,
@@ -518,6 +519,7 @@ class ImagenOrchestrator:
             entity_id=entity_id,
             universe=universe,
             image_type=ImageType.ANIMATED,
+            flags=["ai_animated"],  # the animate pipeline made the motion
             transparent=source_transparent,
             prompt=prompt,
             negative_prompt=anim_negative,
@@ -685,6 +687,10 @@ class ImagenOrchestrator:
             universe=src.universe,
             image_type=ImageType.CUTOUT,
             roles=[],
+            # A cutout is a derivative: it keeps whatever its source disclosed and
+            # adds `ai`, because BiRefNet is itself a model — so an upload that was
+            # hand-made but cut out here still declares AI in its workflow.
+            flags=sorted(set(src.flags) | {"ai"}),
             transparent=has_transparency(cutout_bytes),
             prompt=f"background removed from {src.filename}",
             negative_prompt="",
