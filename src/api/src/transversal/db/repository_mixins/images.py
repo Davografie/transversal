@@ -114,22 +114,31 @@ class RepositoryImages:
         entry = self.resolve_role_image_entry(entity_id, role, projection_id)
         return self._image_url(entry, variant) if entry else None
 
-    def get_navdot_images(self, entity_ids: list[str]) -> dict[str, str]:
+    def get_navdot_images(
+        self, entity_ids: list[str], bodies: dict[str, str] | None = None
+    ) -> dict[str, str]:
         """Resolve navdot role image URLs for many entities.
 
-        Resolves through each entity's active projection (body) first, falling
-        back to entity-level images. Returns ``{entity_id: media_url}``. The
-        location navigate endpoint uses this for occupants, children,
-        transversal destinations, and the parent.
-        """
-        return self._navdot_urls(entity_ids)
+        Resolves through a body first, falling back to entity-level images.
+        Returns ``{entity_id: media_url}``. The location navigate endpoint uses
+        this for occupants, children, transversal destinations, and the parent.
 
-    def get_navdot_transparency(self, entity_ids: list[str]) -> dict[str, bool]:
+        ``bodies`` chooses **which** body per entity (``{entity_id: body_id}``),
+        defaulting to the entity's active body. A caller listing the entities at a
+        *place* must pass the body standing there — a left-behind body would
+        otherwise wear the face of the body the consciousness travelled to
+        ([[B137]] S1).
+        """
+        return self._navdot_urls(entity_ids, bodies=bodies)
+
+    def get_navdot_transparency(
+        self, entity_ids: list[str], bodies: dict[str, str] | None = None
+    ) -> dict[str, bool]:
         """Map entity_id → whether its resolved navdot image is transparent.
 
-        Same resolution order as ``get_navdot_images`` (active projection
-        first, then entity-level fallback). Entities without a navdot image
-        are omitted from the result.
+        Same resolution order as ``get_navdot_images`` — the body given in
+        ``bodies``, else the active one, then entity-level fallback. Entities
+        without a navdot image are omitted from the result.
         """
         if not entity_ids:
             return {}
@@ -142,6 +151,9 @@ class RepositoryImages:
             row["id"]: row.get("current_projection")
             for row in self.db.aql.execute(proj_query, bind_vars={"ids": entity_ids})
         }
+        for eid, body_id in (bodies or {}).items():
+            if body_id:
+                current_proj[eid] = body_id
         result: dict[str, bool] = {}
         for eid in entity_ids:
             entry = self.resolve_role_image_entry(eid, "navdot", current_proj.get(eid))

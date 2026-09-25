@@ -73,8 +73,17 @@ async def navigate(location_id: str, entity_id: str | None = None):
     if parent:
         nav_targets.append(parent)
     nav_target_ids = [eid for eid in (_eid(e) for e in nav_targets) if eid]
-    navdot_images = repo.get_navdot_images(nav_target_ids)
-    navdot_transparent = repo.get_navdot_transparency(nav_target_ids)
+    # An occupant resolves through the body standing *there*, not the entity's
+    # active one: a body left behind when the consciousness travelled away is the
+    # one on the map, and it must wear its own face ([[B137]] S1). Children, the
+    # parent and portal destinations are places, not bodies, so they are untouched.
+    bodies = {
+        o["id"]: o["body_id"]
+        for o in result.get("occupants", [])
+        if o.get("body_id")
+    }
+    navdot_images = repo.get_navdot_images(nav_target_ids, bodies=bodies)
+    navdot_transparent = repo.get_navdot_transparency(nav_target_ids, bodies=bodies)
 
     for occ in result.get("occupants", []):
         nav = navdot_images.get(_eid(occ))

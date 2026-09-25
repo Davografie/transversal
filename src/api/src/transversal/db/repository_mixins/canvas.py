@@ -230,14 +230,28 @@ class RepositoryCanvas:
         """
         return set(self.db.aql.execute(query, bind_vars={"mids": member_ids}))
 
-    def _role_urls(self, entity_ids: list[str], role: str, variant: str = "Large") -> dict[str, str]:
+    def _role_urls(
+        self,
+        entity_ids: list[str],
+        role: str,
+        variant: str = "Large",
+        bodies: dict[str, str] | None = None,
+    ) -> dict[str, str]:
         """Resolve one image URL per entity for a role tag.
 
-        Each entity is resolved through its active projection (body) first,
-        falling back to entity-level images. ``role`` is a canonical role tag
+        Each entity is resolved through a body first, falling back to
+        entity-level images. ``role`` is a canonical role tag
         (background/sheet/navdot); ``variant`` is the static size suffix
         (Large/Small). Animated images return their video URL regardless of
         variant.
+
+        ``bodies`` overrides **which** body, per entity: ``{entity_id: body_id}``.
+        Default is the entity's *active* body (``current_projection``) — right for
+        a sheet or a roster, where "this entity's face" is what is wanted. A caller
+        drawing a **place** must pass the body standing *there* instead: an entity
+        that consciousness-travelled away is present on the map as the body it left
+        behind, and resolving through the active body dresses that body in the face
+        of the one the consciousness went to ([[B137]] S1).
         """
         if not entity_ids:
             return {}
@@ -251,15 +265,18 @@ class RepositoryCanvas:
             row["id"]: row.get("current_projection")
             for row in self.db.aql.execute(proj_query, bind_vars={"ids": entity_ids})
         }
+        for eid, body_id in (bodies or {}).items():
+            if body_id:
+                current_proj[eid] = body_id
         return {
             eid: url
             for eid in entity_ids
             if (url := self.resolve_role_image(eid, role, current_proj.get(eid), variant)) is not None
         }
 
-    def _navdot_urls(self, entity_ids: list[str]) -> dict[str, str]:
-        """Resolve one navdot image URL per entity, projection-scoped first."""
-        return self._role_urls(entity_ids, "navdot")
+    def _navdot_urls(self, entity_ids: list[str], bodies: dict[str, str] | None = None) -> dict[str, str]:
+        """Resolve one navdot image URL per entity, from the body given (or active)."""
+        return self._role_urls(entity_ids, "navdot", bodies=bodies)
 
     def _occupants_for_locations(self, location_ids: list[str], faction_id: str | None = None) -> dict:
         """Map location key → occupant dicts, optionally filtered to a faction."""
@@ -281,7 +298,13 @@ class RepositoryCanvas:
                 FILTER e.type IN ['character', 'gmc', 'asset']
                   AND e.current_location IN @lids
                   {member_filter}
-                RETURN {{ id: e._key, name: e.name, type: e.type, location_id: e.current_location }}
+                LET here = FIRST(
+                    FOR p IN {PROJECTIONS}
+                    FILTER p.entity_id == e._key AND p.current_location == e.current_location
+                    RETURN p._key
+                )
+                RETURN {{ id: e._key, name: e.name, type: e.type, location_id: e.current_location,
+                          body_id: here }}
             )
             LET projected = (
                 FOR p IN {PROJECTIONS}
@@ -289,24 +312,37 @@ class RepositoryCanvas:
                 FOR e IN {ENTITIES}
                 FILTER e._key == p.entity_id AND e.type IN ['character', 'gmc', 'asset']
                   {member_filter}
-                RETURN {{ id: e._key, name: e.name, type: e.type, location_id: p.current_location }}
+                RETURN {{ id: e._key, name: e.name, type: e.type, location_id: p.current_location,
+                          body_id: p._key }}
             )
             FOR o IN UNION(direct, projected)
             RETURN o
         """
         rows = list(self.db.aql.execute(query, bind_vars=binds))
 
-        result: dict = {}
-        seen: set = set()
+        # One row per (location, entity). The two branches can name the same pair —
+        # an occupant both standing there and with a body there — so keep the body
+        # either branch found rather than whichever row happened to arrive first.
+        by_key: dict = {}
         for row in rows:
             key = (row["location_id"], row["id"])
-            if key in seen:
-                continue
-            seen.add(key)
-            result.setdefault(row["location_id"], []).append(row)
+            existing = by_key.get(key)
+            if existing is None:
+                by_key[key] = row
+            elif not existing.get("body_id") and row.get("body_id"):
+                existing["body_id"] = row["body_id"]
+
+        result: dict = {}
+        for (loc_id, _eid), row in by_key.items():
+            result.setdefault(loc_id, []).append(row)
 
         occupant_ids = [row["id"] for loc_rows in result.values() for row in loc_rows]
-        navdots = self._navdot_urls(occupant_ids)
+        bodies = {
+            row["id"]: row["body_id"]
+            for loc_rows in result.values() for row in loc_rows
+            if row.get("body_id")
+        }
+        navdots = self._navdot_urls(occupant_ids, bodies=bodies)
         memberships = self._faction_memberships_for(occupant_ids)
         for loc_rows in result.values():
             for row in loc_rows:
@@ -441,18 +477,28 @@ class RepositoryCanvas:
                 FILTER r._from == @loc_ref AND r.type == 'transversal'
                 RETURN MERGE(DOCUMENT(r._to), {{ transversal_type: r.transversal_type, effects: r.effects || [] }})
             )
-            LET occupant_ids = (
+            LET bodies = (
                 FOR p IN {PROJECTIONS}
                 FILTER p.current_location == @lid
-                RETURN DISTINCT p.entity_id
+                RETURN {{ entity_id: p.entity_id, body_id: p._key }}
+            )
+            LET occupant_ids = (
+                FOR b IN bodies
+                RETURN DISTINCT b.entity_id
             )
             LET occupants = (
                 FOR e IN {ENTITIES}
                 FILTER e.type IN ['character', 'gmc', 'asset']
                 FILTER e._key IN occupant_ids OR e.current_location == @lid
+                LET here = FIRST(
+                    FOR b IN bodies
+                    FILTER b.entity_id == e._key
+                    RETURN b.body_id
+                )
                 RETURN {{
                     name: e.name, type: e.type, id: e._key,
-                    map_x: e.map_x, map_y: e.map_y, unpublished: e.unpublished == true
+                    map_x: e.map_x, map_y: e.map_y, unpublished: e.unpublished == true,
+                    body_id: here
                 }}
             )
             RETURN {{
@@ -474,9 +520,16 @@ class RepositoryCanvas:
         # Resolve occupant navdot images from the role tag (not the legacy
         # background_image field). The REST layer can still override with a
         # more specific resolution, but this is the canonical source.
-        occ_ids = [o["id"] for o in result.get("occupants", [])]
-        navdots = self._navdot_urls(occ_ids)
-        for occ in result.get("occupants", []):
+        #
+        # Each occupant resolves through the body standing **here** (``body_id``),
+        # not the entity's active body: an entity that travelled away is present as
+        # the body it left behind, and the active body's face is not its face
+        # ([[B137]] S1).
+        occupants = result.get("occupants", [])
+        occ_ids = [o["id"] for o in occupants]
+        bodies = {o["id"]: o["body_id"] for o in occupants if o.get("body_id")}
+        navdots = self._navdot_urls(occ_ids, bodies=bodies)
+        for occ in occupants:
             occ["image"] = navdots.get(occ["id"])
 
         return result
