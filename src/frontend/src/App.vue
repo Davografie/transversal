@@ -129,7 +129,7 @@
   />
   <div class="stage" :style="{ '--roller-h': rollerContentH + 'px', '--dock-w-short': dockWShort }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '', sheetDock ? 'dock-sheet' : '']">
     <ArmedSfxRail
-      v-if="playerId && !showLoginOverlay && !fullCanvas"
+      v-if="playerId && !showLoginOverlay && !fullCanvas && locationViewerOnScreen"
       :entity-id="entityId"
       :phase="phase"
       :refresh-key="armedSfxRefresh"
@@ -1622,6 +1622,21 @@ const { colorMode } = useThemeMode()
 const { isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobileFocus, rollerContentH, onBandDragStart, tapBand } = useMobileBands({
   wrapperEl, gmMode, entityId, viewingEntityId,
 })
+
+// Is the LocationViewer the surface a floating overlay would land on?
+//
+// The Active SFX rail (`ArmedSfxRail`) is chrome for the map it floats over, so it
+// does not belong on a surface that has taken the screen. The settings/login
+// overlay and the full canvas were already excluded where the rail is mounted; the
+// state that slipped through is the **band stack's sheet focus**, where the sheet
+// fills the middle of the viewport and the rail rendered straight over it.
+// Measured at 390×844: `document.elementsFromPoint` at the rail's centre returned
+// `.trait-sets` / `.sheet-scroll` at `focus-sheet`, and `.location-viewer` at both
+// other focuses — which is why this is `!== 'sheet'` rather than `=== 'location'`.
+// `focus-dice` keeps the roller in the bottom band with the map still behind the
+// rail, and `focus-location` *is* the map, so narrowing it to the location focus
+// would delete a working read to fix a bug that does not exist there.
+const locationViewerOnScreen = computed(() => !mobileStackActive.value || mobileFocus.value !== 'sheet')
 
 // Is there a sheet to show? One expression, shared by the sheet's v-show and by
 // the pop-out's own reasoning.
