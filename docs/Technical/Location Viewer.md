@@ -171,6 +171,16 @@ and the pan (`panX`/`panY`) that anchors the self character (50/50 in the mobile
 `camera`/teaser mode, otherwise its `map_x`/`map_y`, with `TEASER_ZOOM` scaling
 the scene in teaser mode).
 
+**The scene also scales to the viewer's WIDTH** (`locationScale`: `760 / viewerWidth`,
+clamped 1–1.5, folded into `zoom`). Since everything in the scene layer is positioned in
+`image-%`, the scene's size is what decides how far apart two chips or dots really sit:
+a chip is a fixed number of pixels, so the narrower the viewer, the smaller the share of
+the scene those pixels cover. The same location gave its nearest chip pair 44px apart on
+a 390px phone against 86px in the docked desktop view; the width compensation puts 66px
+between them on the phone and leaves the wide layout at exactly 1.0, so travel dots stay
+reachable where there is room. Raising the scale *flat* instead costs map coverage
+everywhere — at 1.1 the docked view stopped offering a reachable travel dot.
+
 ```
 <viewer (overflow:hidden)>
   <scene-layer transform:translate3d(-panX,-panY,0)>
