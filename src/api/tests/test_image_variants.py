@@ -112,3 +112,52 @@ def test_the_graphql_resolvers_share_one_map():
     from transversal.api.graphql.type_defs import entities, traits
     assert entities.Entity._ROLE_RENDER is ROLE_RENDER
     assert traits._ROLE_RENDER is ROLE_RENDER
+
+
+# ── The URL a role resolves to, from the record alone ([[B210]]) ──────
+
+
+def _record(**fields):
+    from transversal.domain import ImageType, MediaImage
+    base = dict(
+        id="x", owner_id="loc-1", universe="three_realms",
+        image_type=ImageType.UPLOADED, filename="pic", extension="webp",
+    )
+    base.update(fields)
+    return MediaImage(**base)
+
+
+def test_a_picture_with_a_matte_serves_it_without_a_second_record():
+    from transversal.db.repository_mixins.images import RepositoryImages
+
+    repo = RepositoryImages()
+    img = _record(renders=["cutout", "animated"], animated_extension="webm")
+
+    assert repo.role_image_url(img, "sheet") == "/media/imagen/loc-1/three_realms/pic_Cutout_Small.webp"
+    assert repo.role_image_url(img, "navdot") == "/media/imagen/loc-1/three_realms/pic_Cutout_Large.webp"
+    # The loop wins the backdrop even though the matte is also present.
+    assert repo.role_image_url(img, "background") == "/media/animated/loc-1/three_realms/pic.webm"
+
+
+def test_a_picture_without_renders_serves_the_plain_ladder():
+    from transversal.db.repository_mixins.images import RepositoryImages
+
+    repo = RepositoryImages()
+    img = _record()
+
+    assert repo.role_image_url(img, "background") == "/media/imagen/loc-1/three_realms/pic_XLarge.webp"
+    assert repo.role_image_url(img, "sheet") == "/media/imagen/loc-1/three_realms/pic_Small.webp"
+    assert repo.role_image_url(img, "navdot") == "/media/imagen/loc-1/three_realms/pic_Large.webp"
+
+
+def test_a_pre_b210_loop_row_still_serves_its_video():
+    """`available_renders` reads the old row shape in, so nothing 404s mid-migration."""
+    from transversal.db.repository_mixins.images import RepositoryImages
+    from transversal.domain import ImageType
+
+    repo = RepositoryImages()
+    img = _record(image_type=ImageType.ANIMATED, filename="oldloop", extension="webm",
+                  roles=["background"])
+
+    assert img.renders == [], "the row itself carries no renders"
+    assert repo.role_image_url(img, "background") == "/media/animated/loc-1/three_realms/oldloop.webm"

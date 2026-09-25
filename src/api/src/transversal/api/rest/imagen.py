@@ -396,7 +396,7 @@ async def remove_background(
     img = repo.get_image(request.image_id)
     if not img:
         raise HTTPException(status_code=404, detail=f"Image '{request.image_id}' not found")
-    if img.image_type == ImageType.ANIMATED:
+    if img.image_type == ImageType.ANIMATED or "animated" in img.available_renders:
         raise HTTPException(status_code=400, detail="Background removal only works on static images")
     if img.owner_id != owner_id:
         raise HTTPException(status_code=400, detail=f"Image '{request.image_id}' does not belong to '{owner_id}'")
@@ -429,7 +429,7 @@ async def upscale_image(image_id: str, background_tasks: BackgroundTasks):
     img = repo.get_image(image_id)
     if not img:
         raise HTTPException(status_code=404, detail=f"Image '{image_id}' not found")
-    if img.image_type == ImageType.ANIMATED:
+    if img.image_type == ImageType.ANIMATED or "animated" in img.available_renders:
         raise HTTPException(status_code=400, detail="Upscaling works on still images; a loop has no tiers")
     if img.width and img.height and max(img.width, img.height) >= UPSCALE_MASTER_CAP:
         raise HTTPException(
@@ -555,8 +555,9 @@ async def list_images(entity_id: str, universe: str | None = None):
 
     def _file_size(img: MediaImage) -> int:
         try:
-            if img.image_type == ImageType.ANIMATED:
-                path = f"/app/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}"
+            if "animated" in img.available_renders:
+                ext = img.animated_extension or img.extension
+                path = f"/app/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{ext}"
             else:
                 path = f"/app/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}"
             return os.path.getsize(path)
@@ -581,22 +582,30 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "roles": img.roles,
                 "transparent": img.transparent,
                 "flags": img.flags,
+                # Which derived renders this picture carries, so a gallery can badge
+                # a matte or a loop and hide an action that no longer applies.
+                "renders": img.available_renders,
                 "credits": [c.model_dump() for c in img.credits],
                 "license": img.license,
                 "credit_text": img.credit_text,
                 "path_large": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}",
                 "path_xlarge": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_XLarge.{img.extension}",
+                "path_cutout": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Cutout_Large.webp",
                 # What an "Upscale" button needs to know: is there anything left
                 # to gain, and has this one already been through the pass?
                 "can_upscale": bool(
-                    img.image_type != ImageType.ANIMATED
+                    "animated" not in img.available_renders
                     and max(img.width, img.height) < UPSCALE_MASTER_CAP
                 ),
                 "upscaled": os.path.exists(
                     f"/app/media/imagen/{img.owner_id}/{img.universe}/"
                     f"{img.filename}_PreUpscale.{img.extension}"
                 ),
-                "path_animated": f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
+                "path_animated": (
+                    f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}."
+                    f"{img.animated_extension or img.extension}"
+                    if "animated" in img.available_renders else ""
+                ),
             }
             for img in images
         ],

@@ -276,44 +276,36 @@ class ImagenOrchestrator:
         return entity_image
 
     async def _auto_cutout_for_projection(self, entity: Entity, source: MediaImage) -> None:
-        """Cut out a projection's first image and tag the pair background/cutout.
+        """Give a projection's first image a matte, so its small roles float.
 
-        The generated image becomes the ``background``; the transparent cutout
-        becomes both the ``navdot`` and the ``sheet`` portrait, which is what
-        lets a body show a floating cutout rather than a cropped circle.
+        The generated image keeps every role auto-select gave it; the matte is a
+        **render of that picture**, so ``sheet`` and ``navdot`` begin serving it the
+        moment it exists. No role has to be moved onto a second record — which is
+        what the old shape did, and what [[B166]]'s redistribution was really about.
 
         Best-effort by design: the generation that triggered this has already
-        succeeded and its image is recorded, so a missing BiRefNet model or a
-        busy ComfyUI must not fail the job. On failure the source keeps the
-        roles auto-select gave it (all three), so the body still has an image
-        for every role — strictly better than stripping them with no cutout to
-        put in their place.
-
-        No sibling cleanup is needed: this only runs when the owner had no
-        images at all, so there is nothing holding ``background``/``sheet``/
-        ``navdot`` to strip.
+        succeeded and its image is recorded, so a missing BiRefNet model or a busy
+        ComfyUI must not fail the job. On failure the picture simply renders opaque,
+        which is exactly what it did before the matte existed.
         """
         entity_id = entity.id
         try:
             await self._report(entity_id, GenerationType.IMAGEN,
                                GenerationStatus.SAVING, "Cutting out navdot...", 90)
-            cutout = await self.run_remove_background(
+            await self.run_remove_background(
                 entity.id, source.id, display_name=entity.name,
                 report_gen_type=GenerationType.IMAGEN,
             )
         except Exception:
             logger.exception(
                 f"Auto-cutout failed for {source.id} (projection {source.projection_id}); "
-                "keeping the generated image with all three roles"
+                "the picture keeps rendering without a matte"
             )
             return
 
-        self.repo.update_image(source.id, {"roles": ["background"]})
-        self.repo.update_image(cutout.id, {"roles": ["navdot", "sheet"]})
-        source.roles = ["background"]
         logger.info(
             f"Auto-cutout for projection {source.projection_id}: "
-            f"{source.id} → background, {cutout.id} → navdot+sheet"
+            f"{source.id} gained a cutout render"
         )
 
     # ── Animate (video loop) ───────────────────────────
@@ -381,7 +373,11 @@ class ImagenOrchestrator:
             output_full.mkdir(parents=True, exist_ok=True)
 
             if source is not None:
-                # Use existing image — skip Flux generation
+                # Animating an existing picture: no still is generated and none is
+                # written — the picture's own ladder *is* the still, and the loop
+                # becomes one more render on it (below). Writing a second still
+                # ladder here is what used to make a loop look like its own picture
+                # with its own credits and flags to keep in sync.
                 await self._report(entity_id, gen_type, GenerationStatus.GENERATING, "Using existing image...", 15)
                 img_path = IMAGEN_DIR / (
                     f"{source.owner_id}/{source.universe}/{source.filename}_Large.{source.extension}"
@@ -390,10 +386,10 @@ class ImagenOrchestrator:
                     raise FileNotFoundError(f"Existing image not found: {img_path}")
                 static_image = img_path.read_bytes()
                 short_hash = uuid.uuid4().hex[:8]
-                safe_name = _safe_filename(entity.name)
-                safe_universe = _safe_filename(universe)
-                base_name = f"{safe_name}_{safe_universe}_anim_{short_hash}"
-                _save_image_variants(static_image, output_full, base_name)
+                output_subpath = f"{source.owner_id}/{source.universe}"
+                output_full = IMAGEN_DIR / output_subpath
+                output_full.mkdir(parents=True, exist_ok=True)
+                base_name = source.filename
             else:
                 # Generate new Flux image from traits
                 await self._report(entity_id, gen_type, GenerationStatus.GENERATING, "Generating static image...", 15)
@@ -499,24 +495,38 @@ class ImagenOrchestrator:
         video_file.write_bytes(video_data)
 
         # 5. Record metadata
+        #
+        # A loop made from an existing picture is that picture **with motion**, not
+        # a new picture: the render is added to the source record and nothing is
+        # copied, because there is nothing to copy it to. The citation, the labels
+        # and the id stay the artwork's by construction — the old shape kept three
+        # copies in sync by hand, and this is the defect class [[B210]] removes.
+        if source is not None:
+            updated = self.repo.update_image(source.id, {
+                "renders": sorted(set(source.available_renders) | {"animated"}),
+                "animated_extension": ext.lstrip("."),
+                # Only the animate pipeline's motion claim is added. It generated no
+                # still here, so `ai_generated` is not its to assert: the picture
+                # already said what it is, and a hand-made upload stays unlabelled.
+                "flags": sorted(set(source.flags) | {"ai_animated"}),
+            })
+            await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
+                               f"/media/animated/{output_subpath}/{base_name}{ext}", 100)
+            return updated or source
+
         entity_image = MediaImage(
             id=image_id,
             entity_id=entity_id,
             universe=universe,
-            image_type=ImageType.ANIMATED,
+            # The still was Flux-generated by this pipeline, so the picture's
+            # provenance is `imagen`; that it is also a loop lives in `renders`.
+            image_type=ImageType.IMAGEN,
+            renders=["animated"],
+            animated_extension=ext.lstrip("."),
             # Both of the animate pipeline's own claims apply when it generated the
             # still — a fresh loop is Flux *and* WanVideo, so it is generated as
-            # well as animated. Animating an existing picture declares only the
-            # motion and inherits whatever that picture already said about itself:
-            # a hand-made upload stays unlabelled, an AI-generated one keeps its
-            # label. Same rule as the cutout, one label further on.
-            flags=sorted((set(source.flags) if source else {"ai_generated"}) | {"ai_animated"}),
-            # The citation follows the artwork, exactly as it does for a cutout:
-            # a loop made from a credited picture is still that picture, so it
-            # must not silently lose the artist, the source link or the licence.
-            credits=[c.model_copy() for c in source.credits] if source else [],
-            license=source.license if source else "",
-            credit_text=source.credit_text if source else "",
+            # well as animated.
+            flags=sorted({"ai_generated", "ai_animated"}),
             transparent=source_transparent,
             prompt=prompt,
             negative_prompt=anim_negative,
@@ -622,7 +632,7 @@ class ImagenOrchestrator:
         img = self.repo.get_image(image_id)
         if not img:
             raise FileNotFoundError(f"Image '{image_id}' not found")
-        if img.image_type == ImageType.ANIMATED:
+        if img.image_type == ImageType.ANIMATED or "animated" in img.available_renders:
             raise ValueError("Upscaling works on still images; a loop has no tiers")
 
         out_dir = IMAGEN_DIR / img.owner_id / img.universe
@@ -697,19 +707,23 @@ class ImagenOrchestrator:
         display_name: str = "",
         report_gen_type: GenerationType | None = None,
     ) -> MediaImage:
-        """Remove the background from an existing static image via BiRefNet.
+        """Add the transparent (``cutout``) render to an existing static picture.
 
-        Produces a new transparent cutout image owned by the same owner **and the
-        same tier** as the source. Non-destructive: the source is untouched.
+        The matte is a **render of the picture**, not a second picture: its tiers are
+        written beside the picture's own as ``{filename}_Cutout_{Tier}.webp`` and
+        recorded in ``renders``. Nothing is created to copy anything to, which is how
+        a cutout used to lose its credits, its flags and its id — see [[B210]].
 
-        ``owner_id`` is the progress key, and ``display_name`` merely names the
-        file. Neither decides the cutout's owner — the **source image** does
-        (`src.owner_kind` / `owner_id` / `variant_id`), so a trait image yields a
-        trait-owned cutout with no special case. ``owner_id`` is only the caller's
-        assertion of who owns it, which the REST layer validates.
+        Which roles serve the matte is the role map's decision (``ROLE_RENDER``),
+        never this method's: the old shape had to move ``navdot``/``sheet`` onto the
+        new record to make it render at all.
 
-        ``report_gen_type`` lets a caller that is already running a job of its
-        own (the auto-cutout under imagen, B129) report under *that* type —
+        ``owner_id`` is the progress key and ``display_name`` names the job in the
+        log; neither decides the picture — the **source image id** does, so a trait
+        image is cut out under its trait with no special case.
+
+        ``report_gen_type`` lets a caller that is already running a job of its own
+        (the auto-cutout under imagen, [[B129]]) report under *that* type —
         otherwise the progress stream would flip back to a second job type
         mid-generation.
         """
@@ -718,7 +732,7 @@ class ImagenOrchestrator:
         src = self.repo.get_image(image_id)
         if not src:
             raise FileNotFoundError(f"Image '{image_id}' not found")
-        if src.image_type == ImageType.ANIMATED:
+        if src.image_type == ImageType.ANIMATED or "animated" in src.available_renders:
             raise ValueError("Background removal only works on static images")
 
         source_path = IMAGEN_DIR / f"{src.owner_id}/{src.universe}/{src.filename}_Large.{src.extension}"
@@ -727,9 +741,6 @@ class ImagenOrchestrator:
         source_bytes = source_path.read_bytes()
 
         short_hash = uuid.uuid4().hex[:8]
-        safe_name = _safe_filename(display_name or owner_id)
-        safe_universe = _safe_filename(src.universe)
-        base_name = f"{safe_name}_{safe_universe}_cut_{short_hash}"
         output_subpath = f"{src.owner_id}/{src.universe}"
         output_full = IMAGEN_DIR / output_subpath
         output_full.mkdir(parents=True, exist_ok=True)
@@ -758,79 +769,60 @@ class ImagenOrchestrator:
 
         await self._report(owner_id, gen_type, GenerationStatus.SAVING, "Saving cutout...", 85)
 
-        variants = _save_image_variants(cutout_bytes, output_full, base_name)
-        with Image.open(output_full / variants["original"]) as _im:
-            width, height = _im.size
+        # The matte gets the picture's own base name, so it is a render *of* it —
+        # the name is the whole ownership story.
+        variants = _save_image_variants(cutout_bytes, output_full, f"{src.filename}_Cutout")
 
-        entity_image = MediaImage(
-            id=short_hash,
-            # The cutout belongs to the same owner and the same tier as its
-            # source, whatever kind that owner is — never assumed to be an
-            # entity with a projection.
-            owner_kind=src.owner_kind,
-            owner_id=src.owner_id,
-            variant_id=src.variant_id,
-            universe=src.universe,
-            image_type=ImageType.CUTOUT,
-            roles=[],
-            # Inherit ONLY. The cutter asserts nothing of its own: BiRefNet is not
-            # one of the pipelines that declares AI (imagen's `ai_generated`,
-            # animate's `ai_animated`), so an image is not tagged as AI merely for
-            # having been cut out here. It still carries its source's labels
-            # forward, so a cutout of a Flux image stays `ai_generated` — that
-            # label describes the picture's origin, which removing the background
-            # does not change.
-            flags=list(src.flags),
-            # The citation follows the artwork. A cutout is the same picture with
-            # its background removed, so it must not silently lose the artist, the
-            # source link or the licence: the file has a new id, but it is not a
-            # new work. Copied per record — the two rows are independent from here.
-            credits=[c.model_copy() for c in src.credits],
-            license=src.license,
-            credit_text=src.credit_text,
-            transparent=has_transparency(cutout_bytes),
-            prompt=f"background removed from {src.filename}",
-            negative_prompt="",
-            loras=[],
-            width=width,
-            height=height,
-            seed=0,
-            steps=0,
-            filename=base_name,
-            extension="webp",
-            created_at=datetime.now(timezone.utc).isoformat(),
-        )
-        self.repo.create_image(entity_image)
+        # The cutter asserts nothing of its own. BiRefNet is not one of the pipelines
+        # that declares AI (imagen's `ai_generated`, animate's `ai_animated`), so a
+        # picture is not labelled as AI merely for having been cut out; its existing
+        # flags simply stay, because removing a background does not change where the
+        # picture came from. `transparent` is set because the picture now has a
+        # transparent render — which is what a portrait surface asks about.
+        updated = self.repo.update_image(src.id, {
+            "renders": sorted(set(src.available_renders) | {"cutout"}),
+            "transparent": src.transparent or has_transparency(cutout_bytes),
+        })
 
         await self._report(owner_id, gen_type, GenerationStatus.COMPLETE,
                            f"/media/imagen/{output_subpath}/{variants['large']}", 100)
 
-        return entity_image
+        return updated or src
 
     # ── Cleanup ─────────────────────────────────────────
 
     async def delete_image(self, image_id: str) -> bool:
-        """Delete an image and its variants from disk and DB."""
+        """Delete a picture: every file it owns, then its record.
+
+        Every render under the base name goes — the static ladder, the matte's
+        ladder, the pre-upscale backup and the loop — because a merged picture keeps
+        them all under one name. Globbing the base name rather than listing suffixes
+        is deliberate: the suffix list fell behind the ladder once already (`XLarge`
+        was missing, so every delete leaked it), and a stray file nothing references
+        is exactly the orphan class this pipeline keeps producing.
+        """
         img = self.repo.get_image(image_id)
         if not img:
             return False
 
-        if img.image_type == ImageType.ANIMATED:
-            base = ANIMATED_DIR / f"{img.owner_id}/{img.universe}"
-        else:
-            base = IMAGEN_DIR / f"{img.owner_id}/{img.universe}"
+        imagen = IMAGEN_DIR / f"{img.owner_id}/{img.universe}"
+        animated = ANIMATED_DIR / f"{img.owner_id}/{img.universe}"
 
-        # Remove all variants (flat files by basename)
-        for suffix in ["_Original.webp", "_Large.webp", "_Small.webp", "_Mini.webp", f".{img.extension}"]:
-            p = base / f"{img.filename}{suffix}"
-            if p.exists():
-                p.unlink()
+        for directory in (imagen, animated):
+            if not directory.exists():
+                continue
+            # `_*` is every tier (static, cutout, backup); `.*` is the loop, which
+            # sits beside its still under the same base name.
+            for pattern in (f"{img.filename}_*", f"{img.filename}.*"):
+                for path in directory.glob(pattern):
+                    if path.is_file():
+                        path.unlink()
 
         # Tidy the directories the variants lived in, so a deleted image does not
         # leave an empty tree behind. `rmdir` refuses a non-empty directory, which
         # is exactly the guard wanted: another universe's or another image's files
         # keep it alive.
-        for directory in (base, base.parent):
+        for directory in (imagen, animated, imagen.parent, animated.parent):
             try:
                 directory.rmdir()
             except OSError:

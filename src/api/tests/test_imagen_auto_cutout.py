@@ -1,13 +1,14 @@
-"""The first image generated for a projection is cut out and tagged (B129).
+"""A projection's first generated image gains a matte, and a loop is a render.
 
-A cutout needs a source, so the trigger hangs off the first *generated image*
-for a projection — not off entity creation, which has no image yet. The
-generated image becomes the body's ``background``; the transparent cutout
-becomes its ``navdot`` and ``sheet``, which is what lets a body render a
-floating cutout instead of a cropped circle.
+A matte needs a source, so the trigger hangs off the first *generated image* for a
+projection — not off entity creation, which has no image yet. Under the tier model
+([[B210]]) the matte is a **render of that picture**, not a second one: the picture
+keeps every role auto-select gave it, and ``sheet``/``navdot`` begin serving the
+matte the moment it exists. Likewise a loop is a render of the picture it came
+from, so its citation and labels cannot be lost.
 
-The GPU path is stubbed: these tests are about the trigger, the tagging, and
-the failure policy, not about ComfyUI.
+The GPU path is stubbed: these tests are about the trigger, the renders, and the
+failure policy, not about ComfyUI.
 """
 
 import asyncio
@@ -77,10 +78,15 @@ class _FakeComfyUI:
 def stub_gpu(monkeypatch, tmp_path):
     """Replace everything that would touch ComfyUI, disk or the DB."""
     monkeypatch.setattr(orch, "IMAGEN_DIR", tmp_path)
+    # The loop is written beside its still under the picture's base name, so this
+    # must be redirected too — otherwise a sourced-loop test writes into the real
+    # media tree at a name a live picture owns.
+    monkeypatch.setattr(orch, "ANIMATED_DIR", tmp_path / "animated")
     monkeypatch.setattr(orch, "_load_workflow", lambda name: {})
     monkeypatch.setattr(orch, "inject_flux_params", lambda wf, **kwargs: wf)
-    monkeypatch.setattr(orch, "_save_image_variants", lambda data, out, base: {"large": "L.webp"})
+    monkeypatch.setattr(orch, "_save_image_variants", _fake_variants)
     monkeypatch.setattr(orch, "has_transparency", lambda data: True)
+    monkeypatch.setattr(orch, "inject_bg_removal_params", lambda wf, **kw: wf)
     monkeypatch.setattr(
         orch,
         "build_imagen_prompt",
@@ -88,6 +94,21 @@ def stub_gpu(monkeypatch, tmp_path):
             "prompt": "p", "negative": "n", "loras": [], "steps": 4, "width": 8, "height": 8,
         },
     )
+
+
+def _fake_variants(data, out, base):
+    """Write a real tier file, because the next stage reads `_Large` off disk.
+
+    The cutout and the animate paths both open the picture's own ``_Large`` file
+    rather than carrying the bytes, so a stub that only returns names would hide
+    exactly the wiring these tests are for.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    name = f"{base}_Large.webp"
+    Image.new("RGB", (8, 8)).save(out / name)
+    original = f"{base}_Original.webp"
+    (out / original).write_bytes((out / name).read_bytes())
+    return {"original": original, "large": name}
 
 
 def _entity():
@@ -105,8 +126,12 @@ def _image(image_id, projection_id):
     )
 
 
-def _generate(repo, monkeypatch, projection=PROJECTION, cutout=None):
-    """Run one generation, stubbing the cutout; return (image, cutout_calls)."""
+def _generate(repo, monkeypatch, projection=PROJECTION, cutout=None, real_cutout=False):
+    """Run one generation; return (image, cutout_calls).
+
+    The cutout is stubbed unless ``real_cutout`` — those tests are about the trigger
+    and the failure policy, and the real cutter is exercised on its own below.
+    """
     calls = []
 
     async def fake_cutout(owner_id, image_id, display_name="", report_gen_type=None):
@@ -119,20 +144,23 @@ def _generate(repo, monkeypatch, projection=PROJECTION, cutout=None):
         return cutout if cutout is not None else _image("cutout-1", projection)
 
     orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
-    monkeypatch.setattr(orchestrator, "run_remove_background", fake_cutout)
+    if not real_cutout:
+        monkeypatch.setattr(orchestrator, "run_remove_background", fake_cutout)
     image = asyncio.run(orchestrator.run_imagen(_entity(), "earth", projection_id=projection))
     return image, calls
 
 
-def test_first_image_for_a_projection_is_cut_out_and_tagged(stub_gpu, monkeypatch):
+def test_first_image_for_a_projection_gains_a_matte_without_a_second_record(stub_gpu, monkeypatch):
     repo = _FakeRepo()
 
-    image, calls = _generate(repo, monkeypatch)
+    image, _ = _generate(repo, monkeypatch, real_cutout=True)
 
-    assert calls == [image.id], "the cutout should run on the image just generated"
-    assert repo.updates[image.id]["roles"] == ["background"]
-    assert repo.updates["cutout-1"]["roles"] == ["navdot", "sheet"]
-    assert image.roles == ["background"], "the returned image should reflect the reassignment"
+    # The matte is a render of this picture: no row is created and no role moves —
+    # `sheet`/`navdot` serve the matte the moment the source carries it.
+    assert repo.created == [image], "no cutout record is created"
+    assert image.renders == ["cutout"]
+    assert image.transparent is True, "the picture now has a transparent render"
+    assert image.roles == ["background", "sheet", "navdot"], "roles are untouched"
 
 
 def test_second_image_for_the_same_projection_is_not_cut_out(stub_gpu, monkeypatch):
@@ -182,24 +210,16 @@ def test_a_generated_image_declares_ai_generated(stub_gpu, monkeypatch):
     assert image.flags == ["ai_generated"]
 
 
-def _run_cutout(repo, source, monkeypatch):
+def _run_cutout(repo, source):
     """Drive the real `run_remove_background` with the GPU stubbed.
 
     The source must already be in `repo`; its `Large` variant is put on disk here
-    because the cutout reads it, and the saving stub leaves an openable file
-    behind because the real one measures the result.
+    because the cutout reads it, and the saving stub leaves an openable file behind
+    because the real one measures the result.
     """
     src_dir = orch.IMAGEN_DIR / source.owner_id / source.universe
     src_dir.mkdir(parents=True, exist_ok=True)
     (src_dir / f"{source.filename}_Large.{source.extension}").write_bytes(b"bytes")
-
-    def _fake_variants(data, out, base):
-        out.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (4, 4)).save(out / "o.webp")
-        return {"original": "o.webp", "large": "L.webp"}
-
-    monkeypatch.setattr(orch, "inject_bg_removal_params", lambda wf, **kw: wf)
-    monkeypatch.setattr(orch, "_save_image_variants", _fake_variants)
 
     orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
     return asyncio.run(orchestrator.run_remove_background(source.owner_id, source.id, display_name="Kael"))
@@ -211,9 +231,12 @@ def test_a_cutout_inherits_its_source_flags_and_adds_nothing(stub_gpu, monkeypat
     source.filename = "src"
     repo = _FakeRepo(existing=[source])
 
-    cutout = _run_cutout(repo, source, monkeypatch)
+    cutout = _run_cutout(repo, source)
 
-    assert cutout.image_type == ImageType.CUTOUT
+    # The matte is a render on the source record, so the flags are inherited by
+    # construction — the cutter has no row of its own to stamp.
+    assert cutout is source
+    assert cutout.renders == ["cutout"]
     assert cutout.flags == ["ai_generated"], (
         "a cutout carries its source's disclosure forward, and adds nothing: only "
         "imagen and animate declare AI, and cutting out is neither"
@@ -230,14 +253,16 @@ def test_a_cutout_of_an_unlabelled_upload_stays_unlabelled(stub_gpu, monkeypatch
     source.filename = "src2"
     repo = _FakeRepo(existing=[source])
 
-    cutout = _run_cutout(repo, source, monkeypatch)
+    cutout = _run_cutout(repo, source)
 
+    assert cutout is source
     assert cutout.flags == []
 
 
 def test_a_cutout_keeps_the_artworks_citation(stub_gpu, monkeypatch):
     """A cutout is the same picture with its background removed, so the artist,
-    the source link and the licence must survive the new file id."""
+    the source link and the licence cannot be lost — there is no second row to
+    forget to copy them to."""
     source = _image("src-3", PROJECTION)
     source.filename = "src3"
     source.credits = [ImageCredit(role="artist", name="Jane Doe", url="https://example.org/jane")]
@@ -245,14 +270,14 @@ def test_a_cutout_keeps_the_artworks_citation(stub_gpu, monkeypatch):
     source.credit_text = "Art by Jane Doe, CC BY-SA 4.0"
     repo = _FakeRepo(existing=[source])
 
-    cutout = _run_cutout(repo, source, monkeypatch)
+    cutout = _run_cutout(repo, source)
 
+    assert cutout is source, "the matte is a render, not a new record"
     assert [(c.role, c.name, c.url) for c in cutout.credits] == [
         ("artist", "Jane Doe", "https://example.org/jane"),
     ]
     assert cutout.license == "CC BY-SA 4.0"
     assert cutout.credit_text == "Art by Jane Doe, CC BY-SA 4.0"
-    assert cutout.credits[0] is not source.credits[0], "independent rows, not shared objects"
 
 
 def _run_animate(repo, monkeypatch, source_image_id=""):
@@ -277,12 +302,15 @@ def _animatable_source(repo, image_id, filename, **fields):
     return source
 
 
-def test_a_freshly_generated_loop_declares_generated_and_animated(stub_gpu, monkeypatch):
-    """A fresh loop is Flux *and* WanVideo, so both of the pipeline's claims hold."""
+def test_a_freshly_generated_loop_is_an_imagen_picture_with_an_animated_render(stub_gpu, monkeypatch):
+    """A fresh loop is Flux *and* WanVideo, so the picture is `imagen` with an
+    `animated` render — a loop is not a separate kind of picture ([[B210]])."""
     repo = _FakeRepo()
 
     image = _run_animate(repo, monkeypatch)
 
+    assert image.image_type == ImageType.IMAGEN
+    assert image.renders == ["animated"]
     assert image.flags == ["ai_animated", "ai_generated"]
 
 
@@ -309,9 +337,10 @@ def test_a_loop_of_a_hand_made_upload_declares_only_the_motion(stub_gpu, monkeyp
 
 
 def test_an_animated_loop_keeps_the_artworks_citation(stub_gpu, monkeypatch):
-    """Same rule as the cutout: a loop of a credited picture is that picture."""
+    """Same rule as the cutout: a loop of a credited picture is that picture, so
+    the render is added to the source and the citation is untouched."""
     repo = _FakeRepo()
-    _animatable_source(
+    source = _animatable_source(
         repo, "src-4", "src4",
         credits=[ImageCredit(role="artist", name="Jane Doe", url="https://example.org/jane")],
         license="CC BY-SA 4.0",
@@ -320,10 +349,27 @@ def test_an_animated_loop_keeps_the_artworks_citation(stub_gpu, monkeypatch):
 
     image = _run_animate(repo, monkeypatch, source_image_id="src-4")
 
-    assert image.image_type == ImageType.ANIMATED
+    assert image is source, "the loop merges into the picture, it is not a new one"
+    assert image.image_type == ImageType.IMAGEN
+    assert image.renders == ["animated"]
     assert image.flags == ["ai_animated"], "a hand-made upload declares only the motion"
     assert [(c.role, c.name, c.url) for c in image.credits] == [
         ("artist", "Jane Doe", "https://example.org/jane"),
     ]
     assert image.license == "CC BY-SA 4.0"
     assert image.credit_text == "Art by Jane Doe, CC BY-SA 4.0"
+
+
+def test_a_sourced_loop_lands_under_the_pictures_own_name(stub_gpu, monkeypatch):
+    """One picture is true on disk too, not only in the record: the loop shares the
+    still's base name, so a role can serve either from one name."""
+    repo = _FakeRepo()
+    _animatable_source(repo, "src-7", "src7")
+
+    image = _run_animate(repo, monkeypatch, source_image_id="src-7")
+
+    assert image.filename == "src7"
+    loop = orch.ANIMATED_DIR / "char-1" / "earth" / f"{image.filename}.png"
+    assert loop.exists(), "the loop sits beside the still under one base name"
+    # And no second still ladder was written for the loop.
+    assert not (orch.IMAGEN_DIR / "char-1" / "earth" / "src7_anim_Large.webp").exists()
