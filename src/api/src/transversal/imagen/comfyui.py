@@ -363,6 +363,33 @@ def inject_bg_removal_params(
     return wf
 
 
+def inject_upscale_params(
+    workflow: dict,
+    input_image: str,  # filename already uploaded to ComfyUI's input dir
+    model_name: str = "4x-UltraSharp.pth",
+    filename_prefix: str = "upscaled",
+) -> dict:
+    """Inject the input and model into the ESRGAN upscale workflow.
+
+    Node 1 (LoadImage): image filename
+    Node 2 (UpscaleModelLoader): checkpoint name
+    Node 4 (SaveImage): filename_prefix
+
+    The model is a parameter rather than baked into the JSON because the choice
+    was measured, not assumed: `4x-UltraSharp` beat `RealESRGAN_x4plus` on both
+    art styles in the library — it keeps the illustrated line work crisp where
+    the photographic model smears it, and resolves more texture in the painted
+    ink landscapes. `RealESRGAN_x4plus_anime_6B` is the third option on disk.
+    """
+    wf = json.loads(json.dumps(workflow))  # deep copy
+
+    wf["1"]["inputs"]["image"] = input_image
+    wf["2"]["inputs"]["model_name"] = model_name
+    wf["4"]["inputs"]["filename_prefix"] = filename_prefix
+
+    return wf
+
+
 def inject_bg_removal_video_params(
     workflow: dict,
     input_video: str,  # filename already uploaded to ComfyUI's input dir

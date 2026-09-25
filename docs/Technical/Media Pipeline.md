@@ -163,10 +163,52 @@ download is a one-time cost per device. What recurs is **decode and memory**:
 > Re-rendering fixed *delivery*: it recovers the resolution the masters already
 > had (846 of 848 backgrounds went from ~0.3–0.7 MP to their master, ≈2.4× the
 > pixels). It does not add detail, because most masters are 832×1216 (1.0 MP).
-> Going beyond that needs either an ML upscale or regeneration at a larger size —
-> the container has `RealESRGAN_x4plus_anime_6B.pth` (anime-tuned, so a poor fit
-> for the photoreal Earth backgrounds) plus `ComfyUI_UltimateSDUpscale`, and Flux
-> can render larger natively. **Undecided**, deliberately.
+
+### Putting detail back into the masters
+
+The human's call: upscale the masters with a model, **backgrounds only** — those
+are drawn full-bleed, and they are what big screens expose.
+
+**The model was chosen by measuring, and the measurement contradicted the
+reputation.** Three were available; two were put against real Transversal art at
+the size actually served (2048 long side), with a plain Lanczos resize to the
+same size as the control:
+
+| model | illustrated art (Earth) | painted ink (three_realms) |
+| --- | --- | --- |
+| *(no model — Lanczos)* | clean but soft | mushy foliage, flat cliff |
+| `RealESRGAN_x4plus` | **smears the line work** — the ink hatching goes to soft blobs | better: rock structure appears |
+| **`4x-UltraSharp`** | **crispest — keeps the illustrated lines** | **most texture: rock striations, resolved foliage, defined terraces** |
+
+So **`4x-UltraSharp`**, on both styles. Worth noting Earth's backgrounds are not
+all photographic — the sampled one is a flat-colour illustrated piece with ink
+hatching, which is exactly the case the photographic model mishandles. The
+`anime_6B` checkpoint is still on disk as a third option.
+
+**The master is capped at 2048**, equal to `XLarge`: the model is 4×, so an
+832×1216 master returns 3328×4864 (16 MP), and storing that would cost ~1 MB per
+image and slow every tier re-render for pixels nothing ever serves. Resampling
+the 4× result *down* to 2048 is a better 2048 than upscaling straight to it —
+there is more information to resample from. The **pre-upscale master is kept** as
+`{filename}_PreUpscale.{ext}` (~150 KB each): upscaling is irreversible and this
+is the only copy of the art. It can be deleted once the result is trusted.
+
+`upscale_backgrounds.py` drives ComfyUI directly and therefore does **not** hold
+the orchestrator's `_gpu_lock` — that lock is per-process and this is a separate
+one — so before each image it waits while ComfyUI's own queue has anyone else's
+work in it. ComfyUI's queue is the honest signal and covers every submitter, not
+just this app. Skipping that guard would put a 849-image batch on the same 4090
+as a user's generation and have the two fight for VRAM.
+
+```bash
+docker compose exec api python -m transversal.upscale_backgrounds --limit 5 --apply  # trial
+docker compose exec api python -m transversal.upscale_backgrounds --apply            # the batch
+```
+
+It is idempotent — an image already at the cap is skipped, so a re-run costs
+nothing — and `--force` re-does them, e.g. to try another model. Measured at
+**~7 s per image** on the 4090, so ~100 minutes for the ~845 backgrounds that
+need it.
 
 ```bash
 docker compose exec api python -m transversal.rerender_image_variants          # dry run
