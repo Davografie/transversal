@@ -1,8 +1,12 @@
 import { ref } from 'vue'
+import { buildAgencyIndex, entityTypeRank } from '@/constants/entityTypes.js'
 
 // Peers shown in the strip above the sheet/roller bands: every entity at the
-// current location (plus the location itself), the entity you act as first,
-// then by type. Sheet thumbnails resolve lazily in one batched request.
+// current location (plus the location itself). The entity you act as comes first
+// — the strip scrolls, so your own tab has to be reachable without hunting — and
+// **everything after it is in the sheet's own order**: mains, supports, then by
+// type, alphabetical inside each group. The same order the relationship list and
+// the location tree use, through the same helper, so the three cannot drift.
 //
 // The full entity list is cached for PEERS_TTL_MS; SSE and location events call
 // `fetchPeers(true)` to bypass it, panel opens reuse it.
@@ -10,10 +14,9 @@ const PEERS_TTL_MS = 30_000
 
 export function usePeers({ graphql, currentLocationId, entityId, gmMode, entityNames, diag = () => {} }) {
   const peers = ref([])
-  let peersCache = null  // { entities, at }
+  let peersCache = null  // { entities, agency, at }
 
-  function applyPeers(entities) {
-    const TYPE_ORDER = { CHARACTER: 0, GMC: 1, ASSET: 2, LOCATION: 3 }
+  function applyPeers(entities, agency) {
     const atLocation = entities
       .filter(e => e.currentLocation === currentLocationId.value)
       .filter(e => gmMode.value || !e.unpublished)
@@ -21,27 +24,47 @@ export function usePeers({ graphql, currentLocationId, entityId, gmMode, entityN
     const combined = here && !atLocation.some(e => e.id === here.id)
       ? [here, ...atLocation]
       : atLocation
+    // The type order needs `agency` to tell a main from a support character — it
+    // is where that distinction lives, not in the type. `entityTypeRank` falls
+    // back to a plain `PC` for an entity nobody holds, and sorts an unknown type
+    // last, so this is total: no peer can end up without a rank.
+    const byName = { sensitivity: 'base' }
     peers.value = combined.sort((a, b) => {
       if (a.id === entityId.value) return -1
       if (b.id === entityId.value) return 1
-      return (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)
+      // Rank, then name, then id. The name is what makes the order
+      // *deterministic* rather than merely grouped — the entity list arrives
+      // unsorted (the query has no SORT) and a stable sort would preserve that
+      // arbitrary order inside a type. The id is the last resort so two names
+      // that compare equal (they differ only in case, which `base` ignores)
+      // still land in a fixed order. Same three keys as `_sortOccupants`.
+      return (entityTypeRank(a.type, agency?.get(a.id)) - entityTypeRank(b.type, agency?.get(b.id)))
+        || String(a.name || '').localeCompare(String(b.name || ''), undefined, byName)
+        || String(a.id).localeCompare(String(b.id))
     })
   }
 
   async function fetchPeers(force = false) {
     if (!force && peersCache && Date.now() - peersCache.at < PEERS_TTL_MS) {
-      applyPeers(peersCache.entities)
+      applyPeers(peersCache.entities, peersCache.agency)
       resolvePeerFaces()
       return
     }
     diag('fetchPeers-start', { currentLocationId: currentLocationId.value })
+    // `players` rides along in the same request because the type order needs it
+    // (main vs support lives on the agency edge, not on the entity). Measured at
+    // ~35ms against the entity list's ~90–145ms, so it is far cheaper than the
+    // second round trip it replaces; it shares this cache's TTL, which is what
+    // keeps a character switch re-bucketing promptly.
     const data = await graphql(`query {
     entities { id type name currentLocation unpublished }
+    players { id name agency { entityId main } }
   }`)
     if (data?.entities) {
-      peersCache = { entities: data.entities, at: Date.now() }
+      const agency = buildAgencyIndex(data.players)
+      peersCache = { entities: data.entities, agency, at: Date.now() }
       entityNames.value = Object.fromEntries(data.entities.map(e => [e.id, e.name]).filter(([id]) => id))
-      applyPeers(data.entities)
+      applyPeers(data.entities, agency)
       resolvePeerFaces()
       diag('fetchPeers-done', { total: data.entities.length, atLocation: peers.value.length })
     } else {
