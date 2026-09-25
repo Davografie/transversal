@@ -310,35 +310,35 @@ def _spec_is_static(spec) -> bool:
     return True
 
 
-# Condition types that read trigger/roll context rather than entity state, and
-# therefore can never be evaluated for availability (listing) without a context.
-_CONTEXT_TYPES = frozenset({
-    ConditionType.PHASE,
-    ConditionType.CONTEST_OUTCOME,
-    ConditionType.ROLL_TIER,
-    ConditionType.TEST_OUTCOME,
-    ConditionType.USER_ROLE,
-    ConditionType.HITCH,
-    ConditionType.HIGH_STAKES,
-})
-
-
 def static_conditions(conditions: list[Condition]) -> list[Condition]:
     """Conditions evaluable without trigger/menu context.
 
-    Excludes context-dependent types (``phase`` / ``contest_outcome`` /
-    ``roll_tier`` / ``test_outcome``) by type, and variable-gated conditions by
-    token presence. Used by availability resolution to gate *listing* on entity
-    state (``entity_type``, ``in_universe``, ``source_rating``, …) while leaving
+    Used by availability resolution to gate *listing* on entity state
+    (``entity_type``, ``in_universe``, ``source_rating``, …) while leaving
     context/variable-gated conditions to fire/menu time.
+
+    "Reads no context" is answered by :func:`condition_context_keys` — the
+    declaration the catalog's own type definitions drive — plus the
+    variable-token test. It used to be a hand-maintained ``_CONTEXT_TYPES``
+    membership test, and that set was wrong in **both** directions ([[B195]]):
+
+    * it **omitted** ``arrival_kind``, which declares ``arrival_kind`` as context.
+      Such a condition survived this filter, was then evaluated with no context,
+      matched nothing, and so made a gated rule — or a gated life path ([[B194]])
+      — **permanently unavailable, silently**, with no error anywhere;
+    * it **listed** ``user_role``, which reads *no* context (it prefers
+      ``context["role"]`` but falls back to the entity's controlling player). It
+      was therefore dropped here and **never evaluated at all**, so a role gate
+      was silently ignored — a rule or path offered to everyone.
+
+    Deriving the set from the declaration cannot drift either way: a condition
+    type declares what it reads and this follows.
     """
     out: list[Condition] = []
     for c in (conditions or []):
-        if c.type in _CONTEXT_TYPES:
+        if condition_context_keys(c):
             continue
-        if c.type == ConditionType.TARGET_PATH:
-            if _spec_is_static(c.spec):
-                out.append(c)
+        if c.type == ConditionType.TARGET_PATH and not _spec_is_static(c.spec):
             continue
         if _has_variable(c.subject) or _has_variable(c.target) or _has_variable(c.value):
             continue

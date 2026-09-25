@@ -3,6 +3,7 @@
 from pydantic import BaseModel
 from pydantic import Field
 from typing import Optional
+from transversal.domain.effects import Condition
 from transversal.domain.enums import (
     DieType,
 )
@@ -21,6 +22,14 @@ class LifePath(BaseModel):
 
     Stored in the `life_paths` collection. Term structure lives in RollTable
     documents linked by ``next_step`` effects; discovery gating is optional.
+
+    Two gates, deliberately separate (the human, 2026-09-23):
+
+    * ``discovery`` — has the character found out this path **exists**? A one-time
+      reveal, ORed across its conditions.
+    * ``conditions`` — may the character **walk** it *now*? An entity-scoped gate
+      evaluated with the effects condition model ([[B194]]), all-of, reusing
+      ``services/lifepath_walkability.py``. Empty → always walkable.
     """
     id: str
     name: str
@@ -28,6 +37,7 @@ class LifePath(BaseModel):
     description: str = ""
     entry_table_id: str = ""  # _key of the first RollTable in the flow
     discovery: Optional[DiscoveryBlock] = None  # null → always visible
+    conditions: list[Condition] = Field(default_factory=list)  # empty → always walkable
 
 class Enrollment(BaseModel):
     """A character's membership in a faction's life path."""

@@ -17,14 +17,49 @@ class QueriesLifepath:
     """Mixin contributing 4 field(s) to the root type."""
 
     @strawberry.field
-    def life_paths(self, info: strawberry.Info, universe: Optional[str] = None) -> list[GqlLifePath]:
-        """List life paths, optionally filtered by universe."""
+    def life_paths(
+        self,
+        info: strawberry.Info,
+        universe: Optional[str] = None,
+        entity_id: Optional[strawberry.ID] = None,
+    ) -> list[GqlLifePath]:
+        """List life paths, optionally filtered by universe.
+
+        Pass ``entity_id`` to also get **walkability** for that character
+        ([[B194]]): each path carries ``walkable`` and, when it is not, the
+        ``unwalkableReasons`` that stop it. Without an entity both stay absent
+        (``walkable`` is null), because a gate nobody asked about has no answer —
+        this field used to take no entity at all, which is why it could only ever
+        offer every path to everyone.
+
+        The gate is the effects **conditions** model, not ``discovery``: discovery
+        is a one-time reveal of the path's existence, walkability is whether this
+        character may take it *now*. See ``services/lifepath_walkability``.
+        """
         repo = _em(info).repo
         if universe:
             lps = repo.list_lifepaths_by_universe(universe)
         else:
             lps = repo.list_all_lifepaths()
-        return [_life_path_to_gql(lp) for lp in lps]
+        if entity_id is None:
+            return [_life_path_to_gql(lp) for lp in lps]
+
+        from transversal.services.lifepath_walkability import unwalkable_reasons
+
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            # No such entity: nothing was evaluated, so report nothing rather than
+            # "every path is walkable" — the latter would be a silent yes.
+            return [_life_path_to_gql(lp) for lp in lps]
+        reasons = unwalkable_reasons(repo, entity, lps)
+        return [
+            _life_path_to_gql(
+                lp,
+                walkable=str(lp.id) not in reasons,
+                reasons=reasons.get(str(lp.id), ()),
+            )
+            for lp in lps
+        ]
 
     @strawberry.field
     def roll_tables(self, info: strawberry.Info, life_path_id: Optional[str] = None) -> list[RollTable]:

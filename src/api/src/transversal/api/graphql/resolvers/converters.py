@@ -660,8 +660,13 @@ def _gql_field_def(fdef, repo) -> GqlEffectFieldDef:
                              hidden_when_ref=fdef.hidden_when_ref,
                              description=getattr(fdef, "description", "") or "")
 
-def _life_path_to_gql(lp) -> GqlLifePath:
-    """Convert a domain LifePath to the GraphQL type."""
+def _life_path_to_gql(lp, *, walkable=None, reasons=()) -> GqlLifePath:
+    """Convert a domain LifePath to the GraphQL type.
+
+    ``walkable``/``reasons`` come from the entity-scoped read ([[B194]]); both are
+    omitted by callers that did not ask about an entity, which is why ``walkable``
+    stays ``None`` ("not evaluated") rather than defaulting to true.
+    """
     return GqlLifePath(
         id=lp.id,
         name=lp.name,
@@ -669,4 +674,7 @@ def _life_path_to_gql(lp) -> GqlLifePath:
         description=lp.description if hasattr(lp, 'description') else "",
         entry_table_id=lp.entry_table_id,
         discovery=lp.discovery,
+        conditions=[_condition_to_gql(c) for c in (getattr(lp, "conditions", None) or [])],
+        walkable=walkable,
+        unwalkable_reasons=list(reasons),
     )

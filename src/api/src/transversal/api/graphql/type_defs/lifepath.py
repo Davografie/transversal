@@ -4,6 +4,9 @@ import strawberry
 
 from transversal.domain import EntityType as DomainEntityType
 from typing import Optional
+from transversal.api.graphql.type_defs.conditions import (
+    Condition,
+)
 from transversal.api.graphql.type_defs.entities import (
     PendingTerm,
 )
@@ -25,6 +28,14 @@ class LifePath:
     description: str
     entry_table_id: str
     discovery: Optional[DiscoveryBlock]
+    conditions: list[Condition] = strawberry.field(default_factory=list)
+    # Entity-scoped walkability ([[B194]]). `walkable` is null when the query was
+    # not given an entity: "not evaluated" is not the same as "walkable", and
+    # defaulting it true would let a client read a gate it never asked about.
+    # `unwalkableReasons` carries why, because an unwalkable path is shown
+    # **visible and disabled with a reason**, never hidden (the human, 2026-09-25).
+    walkable: Optional[bool] = None
+    unwalkable_reasons: list[str] = strawberry.field(default_factory=list)
 
     @strawberry.field
     def faction_ids(self, info: strawberry.Info) -> list[strawberry.ID]:

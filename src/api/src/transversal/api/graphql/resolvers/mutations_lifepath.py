@@ -5,6 +5,9 @@ import strawberry
 from transversal.api.graphql.types import RollTable
 from transversal.api.graphql.types import RollTableInput
 from typing import Optional
+from transversal.api.graphql.type_defs.conditions import (
+    ConditionInput as GqlConditionInput,
+)
 from transversal.api.graphql.resolvers.converters import (
     _em,
     _roll_table_input_to_domain,
@@ -20,8 +23,22 @@ class MutationsLifepath:
     def save_life_path(self, info: strawberry.Info, id: str, name: str, universe: str,
                        description: str,
                        entry_table_id: str = "",
-                       discovery: Optional[strawberry.scalars.JSON] = None) -> strawberry.scalars.JSON:
-        """Create or update a life path definition. For GM content authoring."""
+                       discovery: Optional[strawberry.scalars.JSON] = None,
+                       conditions: Optional[list[GqlConditionInput]] = None) -> strawberry.scalars.JSON:
+        """Create or update a life path definition. For GM content authoring.
+
+        ``conditions`` is the **walkability** gate ([[B194]]) — may a character
+        walk this path now? It is not ``discovery``, which is the one-time reveal
+        that the path exists.
+
+        ``None`` means **leave the stored gate alone** and an explicit empty list
+        means **clear it**. That is the convention every other update mutation here
+        uses, and it matters more for a gate than for a label: a caller editing
+        only the name would otherwise wipe it. Note this differs from ``discovery``
+        above, which is rebuilt from the argument every time — that is pre-existing
+        behaviour and is left alone.
+        """
+        from transversal.api.graphql.resolvers.converters import _condition_input_to_domain
         from transversal.domain import DiscoveryBlock, LifePath
 
         d = None
@@ -37,13 +54,17 @@ class MutationsLifepath:
         import uuid
         if not id:
             id = f"lp-{uuid.uuid4().hex[:8]}"
-        lp = LifePath(
-            id=id, name=name, universe=universe, description=description,
-            entry_table_id=entry_table_id, discovery=d,
-        )
-
         repo = info.context["entity_manager"].repo
         existing = repo.get_lifepath(id)
+        if conditions is None:
+            gate = list(getattr(existing, "conditions", None) or []) if existing else []
+        else:
+            gate = [_condition_input_to_domain(c) for c in conditions]
+        lp = LifePath(
+            id=id, name=name, universe=universe, description=description,
+            entry_table_id=entry_table_id, discovery=d, conditions=gate,
+        )
+
         if existing:
             repo.update_lifepath(lp)
         else:
