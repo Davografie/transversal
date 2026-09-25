@@ -1138,7 +1138,7 @@ const isSetOpen = (name) => openSets.value.includes(name)
 
 function toggleSet(name) {
   if (isSetOpen(name)) {
-    openSets.value = openSets.value.filter(n => n !== name)
+    collapseSet(name)
     return
   }
   openSets.value = [...openSets.value, name]
@@ -1147,6 +1147,12 @@ function toggleSet(name) {
   // rule the drill-in applied on set entry; per set now, because several sets can
   // be open at once and one set's entry must not close another's.
   collapseContainersIn(name)
+}
+
+/** Close a set without opening it if it was already shut. */
+function collapseSet(name) {
+  if (!isSetOpen(name)) return
+  openSets.value = openSets.value.filter(n => n !== name)
 }
 
 /** Open a set without toggling it shut, for landing on a trait that just appeared. */
@@ -1217,6 +1223,45 @@ function landOnSet(name) {
   else openSet(name)
 }
 
+/**
+ * Hand the reader the next set when the one they just picked from fills its
+ * limit — in **both** shapes: the drill-in enters the next set's list, the
+ * accordion closes the finished section and opens the next.
+ *
+ * The check belongs *here*, on the pool update, and not where the pick was made.
+ * `isInPool` reads the pool the **host** owns, so at click time the new die is
+ * not in it yet and any count taken there is a guess — which is the race that
+ * made this look unsafe to build. `setPoolSources` runs when the host pushes the
+ * changed sources back, which is the first moment the answer is true and the same
+ * trigger the sheet used before the accordion.
+ *
+ * The finished set is closed so the next one takes its place rather than being
+ * pushed below the reader's eye — "the next set appears" has to mean it is where
+ * they are looking. Several sets can be open at once, so closing this one costs
+ * nothing the reader did not just finish with.
+ */
+function advanceToNextSetIfFull() {
+  const name = justPickedSet.value
+  justPickedSet.value = null
+  if (!name) return
+  // A flat sheet has no set layer: there is no next set to be handed.
+  if (flatTraitList.value) return
+  const i = traitSets.value.findIndex(ts => ts.name === name)
+  if (i === -1) return
+  const set = traitSets.value[i]
+  if (!setIsFull(set)) return
+  const next = traitSets.value[i + 1]
+  if (!next) {
+    // Nothing left to fill. The drill-in comes back out to the list rather than
+    // sitting on a set that cannot take another pick; the accordion already has
+    // every set on screen, so there is nowhere to go and nothing to do.
+    if (!props.traitSetAccordion) closeSet()
+    return
+  }
+  if (props.traitSetAccordion) collapseSet(name)
+  landOnSet(next.name)
+}
+
 // The 🎲 pill is "the traits, from the top": with a drill-in the top is the set
 // list, so it also comes back out of whichever set was open.
 function goToTraitSets() {
@@ -1243,6 +1288,37 @@ const canAddTraits = computed(() => !props.overrideEntityId || props.gmMode)
 
 const flatTraits = computed(() => traitSets.value.flatMap(ts => ts.traits))
 const flatTraitList = computed(() => usesFlatTraitList(traitSets.value))
+
+// ── Filling a set hands the reader the next one ──────────────────────────
+// Which set the reader has just put a pick into, remembered so `setPoolSources`
+// can answer "did that fill it?" — see `advanceToNextSetIfFull` for why the
+// answer cannot be computed where the pick was made.
+const justPickedSet = ref(null)
+
+/**
+ * The set a pick belongs to, found **at any depth**.
+ *
+ * A sub-trait rides its parent's set, so playing one fills that set rather than
+ * nothing. `setOfTrait` scans a set's *roots* only, which is right for the
+ * row-level questions it answers and wrong for this one.
+ */
+function setNameOfPick(tsId) {
+  if (!tsId) return null
+  return traitSets.value.find(ts => (ts.traits || []).some(root => subtreeContains(root, tsId)))?.name || null
+}
+
+/** Remember the set a pick just went into; consumed by the next pool update. */
+function notePick(tsId) {
+  justPickedSet.value = setNameOfPick(tsId)
+}
+
+/**
+ * Whether a set's picks are all in the pool — the same test the limit dots fill
+ * on, so the readout and the behaviour cannot disagree.
+ */
+function setIsFull(set) {
+  return !!set?.limit && countSetPicks(set.traits, isInPool) >= set.limit
+}
 
 // A stale drill must not survive the set it named. Two ways it goes stale: the
 // sheet drops under the flat limit (there is no set layer then), or the sets are
@@ -1320,12 +1396,19 @@ function backToSetList(t) {
   // that the reader never asked for.
   if (activeSheetView.value !== 'traits' || flatTraitList.value) return
   const set = setOfTrait(t)
+  if (!set) return
+  // When that pick filled the set, the advance owns where the reader lands — it
+  // moves them on to the next set, or out to the list. Re-opening the set they
+  // have just finished with would undo it. Both orders need this: if the pool has
+  // already come back, this sees a full set and stands aside; if it has not, it
+  // opens the set and the advance closes it again a moment later.
+  if (setIsFull(set)) return
   // Belt and braces: a row can only be clicked from inside its own set — open in
   // the accordion, entered in the drill-in — so this is normally already
   // satisfied. It states the requirement rather than relying on that, so a future
   // entry point into the detail cannot land on a collapsed header or the set list
   // and read as "the trait vanished".
-  if (set) landOnSet(set.name)
+  landOnSet(set.name)
 }
 
 // SFX usage tracking — reset per dice pool cycle
@@ -2039,6 +2122,7 @@ function cascadeGroup(t) {
 function emitTraitDice(t) {
   const dice = (t.dice || []).map(d => (typeof d === 'string' ? d.toLowerCase() : d))
   if (!dice.length) return  // no die rating — nothing to add
+  notePick(t.id)
   const payload = {
     source: t.name,
     label: displayName(t.name),
@@ -2084,6 +2168,7 @@ async function spendResourceGroup(t, dieType) {
   await spendResourceDie(t.id, dieType)
   if (!refundableSpends.value[t.id]) refundableSpends.value[t.id] = []
   refundableSpends.value[t.id].push({ die: dieType, kind: 'resource' })
+  notePick(t.id)
   emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative: t.polarity === 'NEGATIVE', resource: true, armedSfxIds: armedSfxIdsForTrait(t) })
   await fetchEntity('resource-spend')
 }
@@ -2106,6 +2191,7 @@ async function spendChallengeGroup(t, dieType) {
     if (!refundableSpends.value[t.id]) refundableSpends.value[t.id] = []
     refundableSpends.value[t.id].push({ die: res.die.toLowerCase(), kind: 'challenge' })
   }
+  notePick(t.id)
   emit('addToPool', {
     die: res.die.toLowerCase(),
     source: t.name,
@@ -2232,9 +2318,9 @@ function setPoolSources(sources) {
   // sources is now [{ die, label, tsId }, ...] — track by tsId
   poolSources.value = sources.map(s => s.tsId).filter(Boolean)
 
-  // The old drill-in advanced to the *next* set's list once the current one filled
-  // its limit. Every set is on screen at once now, so there is no next set to step
-  // to and nothing to move — the limit dots and `limit-reached` carry the signal.
+  // A set that has just filled its limit hands the reader the next one. This is
+  // the moment the count is truthful — see `advanceToNextSetIfFull`.
+  advanceToNextSetIfFull()
 
   // Auto-recover dice that were removed from the pool before rolling
   // (e.g. via chip click in DiceRoller).  Only during adding phase —
