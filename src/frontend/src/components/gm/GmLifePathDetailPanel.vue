@@ -101,7 +101,13 @@ function addTable() {
 }
 
 function editPath() {
-  panel.open({ component: GmLifePathEditPanel, title: 'Edit ' + props.lp.name, props: { lp: props.lp } })
+  panel.open({
+    component: GmLifePathEditPanel,
+    title: 'Edit ' + props.lp.name,
+    id: props.lp.id,
+    badge: 'LIFE-PATH',
+    props: { lp: props.lp },
+  })
 }
 
 function openFullCanvas() {

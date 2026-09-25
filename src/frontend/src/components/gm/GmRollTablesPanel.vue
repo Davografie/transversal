@@ -94,12 +94,12 @@ function openShared() {
 }
 
 function openDetail(lp) {
-  panel.open({ component: GmLifePathDetailPanel, title: lp.name, props: { lp } })
+  panel.open({ component: GmLifePathDetailPanel, title: lp.name, id: lp.id, badge: 'LIFE-PATH', props: { lp } })
 }
 
 function addNew() {
   const blank = { id: '', name: '', description: '', universe: props.universe, entryTableId: '' }
-  panel.open({ component: GmLifePathEditPanel, title: 'New Life Path', props: { lp: blank } })
+  panel.open({ component: GmLifePathEditPanel, title: 'New Life Path', badge: 'LIFE-PATH', props: { lp: blank } })
 }
 </script>
 
