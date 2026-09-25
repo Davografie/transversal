@@ -560,6 +560,37 @@ async def update_zones(location_id: str, zones: list[ZoneUpdate]):
     return {"status": "ok", "count": len(entity.zones)}
 
 
+class TraitPositionsUpdate(BaseModel):
+    # Keyed by trait-setting id: {"<ts-id>": {"x": 30, "y": 55}}. The whole map is
+    # replaced, like the zone list above; an absent id keeps meaning "not placed
+    # yet", which is what leaves that chip in the viewer's auto-stack.
+    trait_positions: dict
+
+
+@router.put("/locations/{location_id}/trait-positions")
+async def update_trait_positions(location_id: str, body: TraitPositionsUpdate):
+    """Replace a location's trait-chip positions ([[B92]], [[Location Trait Chips]]).
+
+    Placement is per **location**, deliberately, not per trait setting: an inherited
+    trait's chip sits where *this* place wants it, and nothing is written onto the
+    owner — the same reasoning that puts ``nav_positions`` here. Values are
+    image-space percentages exactly like a nav dot's, so a chip pans and zooms with
+    the scene.
+    """
+    repo = _repo()
+    entity = repo.get_entity(location_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"Location '{location_id}' not found")
+
+    entity.trait_positions = {
+        str(k): {"x": float(v.get("x", 50.0)), "y": float(v.get("y", 50.0))}
+        for k, v in (body.trait_positions or {}).items()
+    }
+    repo.update_entity(entity)
+
+    return {"status": "ok", "count": len(entity.trait_positions)}
+
+
 # ── Entity Map Position ──────────────────────────────
 
 from pydantic import BaseModel as PydanticBaseModel

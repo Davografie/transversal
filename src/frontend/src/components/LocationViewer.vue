@@ -7,6 +7,21 @@
       <video v-if="currentImage && isVideoBg" ref="videoBgEl" :src="currentImage" class="scene-media" autoplay loop muted playsinline />
       <img v-else-if="currentImage" ref="bgImgEl" :src="currentImage" class="scene-media" alt="" />
 
+      <!-- Placed trait chips (B92): scene elements at their stored image-space x/y,
+           so they pan and zoom with the map exactly like the dots. Unplaced ones
+           stay in the stack beside the labels. -->
+      <TraitChip
+        v-for="t in placedTraits"
+        :key="'tc-' + t.id"
+        v-show="showElements"
+        :trait="t"
+        :x="traitPositions[t.id].x"
+        :y="traitPositions[t.id].y"
+        :draggable="editZones"
+        @mousedown="editZones && onTraitChipDragStart($event, t)"
+        @touchstart="editZones && onTraitChipDragStart($event, t)"
+      />
+
       <!-- Zone dots -->
       <template v-for="(z, i) in zones" :key="'z-' + zoneId(z, i)">
       <MapDot
@@ -101,29 +116,14 @@
       class="loc-traits fade-in"
       :class="{ 'has-switcher': gmMode }"
     >
-      <div v-for="t in unplacedTraits" :key="t.id" class="trait-chip">
-        <div class="trait-chip-text">
-          <span class="trait-chip-name">
-            <span v-if="t.inherited" class="trait-chip-inherited" aria-hidden="true">↳</span>{{ t.name }}
-          </span>
-          <span v-if="t.statement" class="trait-chip-statement">{{ t.statement }}</span>
-        </div>
-        <!-- The rating renders exactly as the sheet's trait rows do: one fanned
-             staircase per die type (see `traitDiceGroups`), not a flat row. -->
-        <div v-if="t.dice.length" class="trait-chip-rating">
-          <div class="trait-die-groups">
-            <div v-for="(group, gi) in traitDiceGroups(t)" :key="gi" class="trait-die-group">
-              <DieIcon
-                v-for="(die, i) in group"
-                :key="i"
-                :die="die"
-                class="trait-die-icon"
-                :style="i ? { marginLeft: CHIP_DIE_FAN_X, marginTop: `${i * CHIP_DIE_FAN_Y}px` } : null"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
+      <TraitChip
+        v-for="t in unplacedTraits"
+        :key="t.id"
+        :trait="t"
+        :draggable="editZones"
+        @mousedown="editZones && onTraitChipDragStart($event, t)"
+        @touchstart="editZones && onTraitChipDragStart($event, t)"
+      />
     </div>
 
     <!-- Overlay preset switcher (architect only) -->
@@ -215,7 +215,7 @@ import SceneEffectsLayer from './location/SceneEffectsLayer.vue'
 import ArrivalRings from './location/ArrivalRings.vue'
 import TravelOverlay from './location/TravelOverlay.vue'
 import MapDot from './MapDot.vue'
-import DieIcon from './DieIcon.vue'
+import TraitChip from './location/TraitChip.vue'
 import { usePercentDrag } from '../composables/usePercentDrag.js'
 import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
@@ -1258,6 +1258,7 @@ async function fetchNav() {
     zones.value = data.location?.zones || []
     occupants.value = data.occupants || []
     loadNavPositions()
+    loadTraitPositions()
     perfMark('location-nav-loaded', { locationId: props.locationId, occupants: occupants.value.length })
 
     // Lazy pre-fetch destination nav data in background (doesn't block render)
@@ -1285,43 +1286,69 @@ async function fetchNav() {
 // leaves the block empty, like every other background read here.
 const locationTraits = ref([])
 
-// A chip is a SCENE element once it has a stored position — image-space x/y in the
-// location's `trait_positions`, keyed by trait-setting id, exactly like a nav dot's
-// `nav_positions`. Until then it sits in the auto-stack beside the labels, so
-// nothing has to be placed by hand to be readable. (Drawing the placed ones in the
-// scene, and the GM's arrange-mode drag that writes the position, are the next
-// slice — see [[Location Trait Chips]].)
-const traitPositions = computed(() => nav.value.location?.trait_positions || {})
-const unplacedTraits = computed(
-  () => locationTraits.value.filter(t => !traitPositions.value[t.id])
-)
+// Chip positions, keyed by trait-setting id — the sibling of `navDotPositions`, and
+// loaded the same way. A **ref**, not a computed, because a drag mutates it live and
+// it is the whole map that gets saved.
+const traitPositions = ref({})
 
-// Fan geometry for a group's staircase. The sheet overlaps each die onto the one
-// before it by 20px and steps it down 4px, at 32×34 dice; these are the same
-// proportions at this chip's 22×24 (see `.trait-die-icon`).
-const CHIP_DIE_FAN_X = '-15px'
-const CHIP_DIE_FAN_Y = 3
-
-// The rating's dice, grouped exactly as the sheet groups them — one staircase per
-// die type, ascending d4 → d12 (`groupByDieType` in `CharacterSheet.vue`), so
-// `d6 d8 d6` draws a pair of d6s and a d8 rather than three loose dice. Mirrored
-// rather than imported because the sheet keeps the helper component-local; if a
-// third surface ever needs it, that is the moment to extract it to a shared util.
-function traitDiceGroups(t) {
-  const groups = []
-  const byType = new Map()
-  for (const d of (t.dice || [])) {
-    const die = String(d).toLowerCase()
-    if (!byType.has(die)) {
-      const group = []
-      byType.set(die, group)
-      groups.push(group)
+function loadTraitPositions() {
+  const raw = nav.value.location?.trait_positions
+  if (!raw) return
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    const out = {}
+    for (const [k, v] of Object.entries(parsed || {})) {
+      if (v && typeof v.x === 'number' && typeof v.y === 'number') out[k] = v
     }
-    byType.get(die).push(die)
-  }
-  groups.sort((a, b) => parseInt(a[0].slice(1), 10) - parseInt(b[0].slice(1), 10))
-  return groups
+    traitPositions.value = out
+  } catch {}
 }
+
+// A placed chip is a scene element; the rest stay in the auto-stack beside the
+// labels, so nothing has to be hand-placed to be readable.
+const placedTraits = computed(() => locationTraits.value.filter(t => traitPositions.value[t.id]))
+const unplacedTraits = computed(() => locationTraits.value.filter(t => !traitPositions.value[t.id]))
+
+// Dragging a chip: the same plumbing the nav dots use, and the same composable — a
+// chip and a dot are both one {x, y} entry in a position map on this location. The
+// map is written whole, like `nav_positions`, so an absent id keeps meaning "not
+// placed yet".
+function onTraitChipDragStart(e, trait) {
+  let from = traitPositions.value[trait.id]
+  if (!from) {
+    // Promoting a chip out of the auto-stack: it has no scene position yet, so it
+    // lands under the pointer and the drag continues from there — grabbing it does
+    // not fling it to a default spot first.
+    const el = viewerEl.value
+    const rect = el?.getBoundingClientRect()
+    if (rect) {
+      const cx = e.touches ? e.touches[0].clientX : e.clientX
+      const cy = e.touches ? e.touches[0].clientY : e.clientY
+      const img = toImagePos(cx - rect.left, cy - rect.top)
+      from = { x: Math.round(img.x), y: Math.round(img.y) }
+      traitPositions.value = { ...traitPositions.value, [trait.id]: from }
+    } else {
+      from = { x: 50, y: 50 }
+    }
+  }
+  percentDrag.start(e, {
+    x: from.x,
+    y: from.y,
+    onMove: (x, y) => { traitPositions.value = { ...traitPositions.value, [trait.id]: { x, y } } },
+    onEnd: async () => {
+      try {
+        await fetch(`/api/v1/locations/${props.locationId}/trait-positions`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trait_positions: traitPositions.value }),
+        })
+      } catch { /* silent: the chip stays where it was dragged locally */ }
+    },
+  })
+}
+
+// (The rating's dice — and the grouping that fans them — live in `TraitChip`, so
+// both the auto-stack and the scene render them identically.)
 
 async function fetchLocationTraits() {
   try {
@@ -1913,73 +1940,9 @@ onMounted(() => {
   top: calc(env(safe-area-inset-top, 16px) + 80px);
 }
 
-.trait-chip {
-  position: relative;           /* the rating is absolutely placed against this */
-  display: flex; align-items: center; gap: 8px;
-  /* The right padding is a LANE for the dice, not part of the chip's own size: the
-     height here is the text and its padding, nothing else. The dice are taken out
-     of flow (`.trait-chip-rating`) so they can stand taller than the chip and
-     straddle its right border without the chip growing or clipping them. */
-  padding: 3px 22px 3px 9px;
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 11px;          /* the ordinary chip edge, on every corner */
-  background: rgba(10,10,20,0.55);
-  backdrop-filter: blur(4px);
-  font-size: 12px;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.85);
-}
-
-.trait-chip-text { display: flex; flex-direction: column; min-width: 0; }
-
-.trait-chip-name { color: var(--map-text); }
-
-.trait-chip-statement {
-  color: var(--map-text-dim);
-  font-size: 11px;
-  font-style: italic;
-  /* Two rows at most: the name is row 1, the statement row 2, and a long statement
-     clips rather than wrapping the chip taller. */
-  max-width: 34vw;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.trait-chip-inherited { color: var(--map-text-dim); opacity: 0.75; margin-right: 4px; }
-
-/* Out of flow, so the chip's height stays the TEXT's and the dice may be taller than
-   it. `right` is slightly negative and the z-index sits above the border: the dice
-   straddle the chip's right edge and paint over it, which is what hides that piece
-   of the border behind them. */
-.trait-chip-rating {
-  position: absolute;
-  right: -6px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 1;
-  display: flex; align-items: center;
-}
-
-/* ── The rating's dice, as the SHEET draws them ───────────────────────────────
-   Same markup and treatment as `TraitRow`: one `.trait-die-group` per die type,
-   each a fanned staircase (every die after the first overlaps its predecessor by
-   `CHIP_DIE_FAN_X` and steps down by `CHIP_DIE_FAN_Y`), groups separated by a
-   gap. Only the scale differs — the sheet draws 32×34 dice, which would make a
-   map chip several times the height of its own text. */
-.trait-die-groups {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.trait-die-group {
-  display: flex;
-  align-items: flex-start;
-}
-
-.trait-die-icon {
-  /* Deliberately taller than a one-row chip (~21px), so the glyphs overhang it. */
-  width: 24px;
-  height: 26px;
-}
+/* The chip's own appearance — the edge, the two text rows, and the fanned dice —
+   lives in `location/TraitChip.vue`, because the same chip renders in two places
+   here (the auto-stack below, and a scene element once placed). */
 
 /* ── Overlay switcher ────────────────────────────── */
 
