@@ -1,13 +1,14 @@
 <template>
   <div
     class="trait-chip"
-    :class="{ 'scene-chip': isPlaced, draggable }"
+    :class="{ 'scene-chip': isPlaced, draggable, expanded, 'no-image': !trait.navdotImage }"
     :style="sceneStyle"
+    :title="expanded ? '' : trait.name"
+    :data-trait-id="trait.id"
   >
     <!-- The trait's `navdot` marker image (`B200`) — the registry trait's picture,
-         when it has one. Leading the chip, so it scans picture → name → rating, the
-         order the sheet's trait rows use. A cutout becomes a RING the subject rises
-         out of, exactly as a cutout occupant dot composes on this map. -->
+         when it has one. At rest this IS the chip; open, it leads it. A cutout stands
+         out of the open chip rather than being contained by it. -->
     <span
       v-if="trait.navdotImage"
       class="trait-chip-marker"
@@ -15,14 +16,18 @@
     >
       <MediaImage :src="trait.navdotImage" class="trait-chip-marker-img" :alt="trait.name" />
     </span>
-    <div class="trait-chip-text">
-      <span class="trait-chip-name">
-        <span v-if="trait.inherited" class="trait-chip-inherited" aria-hidden="true">↳</span>{{ trait.name }}
-      </span>
-      <span v-if="trait.statement" class="trait-chip-statement">{{ trait.statement }}</span>
-    </div>
-    <!-- The rating renders exactly as the sheet's trait rows do: one fanned
-         staircase per die type, not a flat row. -->
+    <!-- The words, only while the chip is open. -->
+    <Transition name="chip-reveal">
+      <div v-if="expanded" class="trait-chip-text">
+        <span class="trait-chip-name">
+          <span v-if="trait.inherited" class="trait-chip-inherited" aria-hidden="true">↳</span>{{ trait.name }}
+        </span>
+        <span v-if="trait.statement" class="trait-chip-statement">{{ trait.statement }}</span>
+      </div>
+    </Transition>
+    <!-- The rating: the whole chip when the trait has no picture, and part of the open
+         chip when it has one. It renders exactly as the sheet's trait rows do — one
+         fanned staircase per die type, not a flat row. -->
     <div v-if="trait.dice && trait.dice.length" class="trait-chip-rating">
       <div class="trait-die-groups">
         <div v-for="(group, gi) in traitDiceGroups(trait)" :key="gi" class="trait-die-group">
@@ -49,10 +54,16 @@ import MediaImage from '../MediaImage.vue'
 // the map — because the two differ only in how they are positioned, and a second
 // copy of this markup would drift from the first.
 //
-// The presentation is the sheet's ([[TraitRow]]): name on row 1, statement on row 2,
-// and the rating as fanned DieIcon staircases. The chip's own height follows its
-// TEXT — the dice are out of flow so they can stand taller than the chip and paint
-// over its right border, which is what hides that piece of it.
+// **Resting, a chip is only its marker**: the trait's picture if it has one, else the
+// rating. The words arrive when the chip opens — on the character's proximity, on the
+// pointer, or on a tap — which is what keeps a busy location readable. The stack's
+// chips are always open, because nothing there can be approached (the human's call,
+// 2026-09-25): the stack is the legend.
+//
+// Open, the presentation is the sheet's ([[TraitRow]]): name on row 1, statement on
+// row 2, and the rating as fanned DieIcon staircases. The chip's own height follows its
+// TEXT — the dice are out of flow so they can stand taller than the chip and paint over
+// its right border, which is what hides that piece of it.
 const props = defineProps({
   trait: { type: Object, required: true },
   // Scene placement, in image-space percentages. Absent ⇒ the chip is unplaced and
@@ -61,6 +72,9 @@ const props = defineProps({
   y: { type: Number, default: null },
   // The GM may drag it (arrange mode) — see `usePercentDrag`.
   draggable: { type: Boolean, default: false },
+  // Open (words showing) or resting (marker only). The parent decides; the stack
+  // leaves it open, placed chips drive it from proximity/pointer/tap.
+  expanded: { type: Boolean, default: true },
 })
 
 const isPlaced = computed(() => props.x !== null && props.y !== null)
@@ -125,13 +139,47 @@ function traitDiceGroups(trait) {
 
 .trait-chip.draggable { cursor: grab; }
 
-.trait-chip-text { display: flex; flex-direction: column; min-width: 0; }
+/* ── Resting: no pill, no words, no dice unless they are the marker ───────────
+   The chip's BOX has to shrink with it, not just its paint: an invisible
+   full-size box would be a large click target sitting over the map. So the pill's
+   padding, border, fill and blur all go, and the words are not rendered at all
+   (the `v-if` above, so they cannot hold the chip open either). */
+.trait-chip:not(.expanded) {
+  padding: 0;
+  gap: 0;
+  border-color: transparent;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+/* With a picture, the rating is part of the OPEN chip only. */
+.trait-chip:not(.expanded):not(.no-image) .trait-chip-rating { display: none; }
+
+/* Without one, the rating IS the resting marker, so it comes back into flow and
+   sizes the chip itself. */
+.trait-chip:not(.expanded).no-image .trait-chip-rating {
+  position: static;
+  transform: none;
+}
+
+/* The words, in flow while open — the reveal animates this in. */
+.trait-chip-text {
+  display: flex; flex-direction: column; min-width: 0;
+  max-width: 40vw;
+}
+
+.chip-reveal-enter-active, .chip-reveal-leave-active {
+  transition: opacity 0.16s ease, max-width 0.16s ease;
+  overflow: hidden; white-space: nowrap;
+}
+.chip-reveal-enter-from, .chip-reveal-leave-to { opacity: 0; max-width: 0; }
+
 .trait-chip-name { color: var(--map-text); }
 
-/* The trait's marker picture (`B200`). Between the text and the rating dice, so it
-   leads the chip without competing with the dice; `flex-shrink: 0` so a long
-   statement cannot squash it. `align-self: stretch` gives it the height the chip's
-   TEXT set, which is what the cutout below measures itself against. */
+/* The trait's marker picture (`B200`). Leading the chip, so it scans picture → name →
+   rating the way the sheet's rows do; `flex-shrink: 0` so a long statement cannot
+   squash it. `align-self: stretch` gives it the height the chip's TEXT set, which is
+   what the cutout below measures itself against. */
 .trait-chip-marker {
   position: relative;
   align-self: stretch;
@@ -154,12 +202,38 @@ function traitDiceGroups(trait) {
 /* A cutout does not sit IN the chip — it stands out of it. No ring and no frame: the
    picture is absolutely placed (so the chip's height stays its text's, exactly as the
    dice are) and sized taller than the chip, measured off the text height plus a fixed
-   overhang, so it breaks the chip's outline above and below whatever the chip's
-   height turns out to be. Same "the art is not confined to the widget" reading as a
-   cutout occupant dot on this map, without its ring. */
+   overhang, so it breaks the chip's outline above and below whatever the chip's height
+   turns out to be. Same "the art is not confined to the widget" reading as a cutout
+   occupant dot on this map, without its ring. */
 .trait-chip-marker.transparent .trait-chip-marker-img {
   width: auto;
   height: calc(100% + 20px);
+  object-fit: contain;
+  border-radius: 0;
+}
+
+/* Resting, the marker IS the chip, so it sizes itself rather than measuring the text
+   it does not have: back into flow, in a box of its own. The box is stated rather than
+   derived from the picture on purpose — a cutout's `width: auto` is its intrinsic
+   ratio, which is 0 until the file decodes, so the marker would be a sliver on first
+   paint and stay one if the file ever 404s. */
+.trait-chip:not(.expanded) .trait-chip-marker {
+  align-self: auto;
+  width: 26px;
+  height: 26px;
+}
+.trait-chip:not(.expanded) .trait-chip-marker.transparent {
+  /* 34px tall at the 512×758 the cutouts are stored at. */
+  width: 23px;
+  height: 34px;
+}
+.trait-chip:not(.expanded) .trait-chip-marker-img {
+  position: static;
+  width: 100%;
+  height: 100%;
+  transform: none;
+}
+.trait-chip:not(.expanded) .trait-chip-marker.transparent .trait-chip-marker-img {
   object-fit: contain;
   border-radius: 0;
 }

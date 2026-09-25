@@ -9,7 +9,8 @@
 
       <!-- Placed trait chips (B92): scene elements at their stored image-space x/y,
            so they pan and zoom with the map exactly like the dots. Unplaced ones
-           stay in the stack beside the labels. -->
+           stay in the stack beside the labels. A placed chip rests as its marker and
+           opens by proximity, pointer or tap — the stack below is always open. -->
       <TraitChip
         v-for="t in placedTraits"
         :key="'tc-' + t.id"
@@ -18,6 +19,9 @@
         :x="traitPositions[t.id].x"
         :y="traitPositions[t.id].y"
         :draggable="editZones"
+        :expanded="traitChipExpanded(t)"
+        @mouseenter="hoveredTraitId = t.id"
+        @mouseleave="hoveredTraitId = ''"
         @mousedown="editZones && onTraitChipDragStart($event, t)"
         @touchstart="editZones && onTraitChipDragStart($event, t)"
         @click="!editZones && onTraitChipClick(t)"
@@ -122,6 +126,7 @@
         :key="t.id"
         :trait="t"
         :draggable="editZones"
+        :expanded="true"
         @mousedown="editZones && onTraitChipDragStart($event, t)"
         @touchstart="editZones && onTraitChipDragStart($event, t)"
         @click="!editZones && onTraitChipClick(t)"
@@ -1317,6 +1322,55 @@ function loadTraitPositions() {
 const placedTraits = computed(() => locationTraits.value.filter(t => traitPositions.value[t.id]))
 const unplacedTraits = computed(() => locationTraits.value.filter(t => !traitPositions.value[t.id]))
 
+// ── A chip opens by proximity, pointer or tap ────────────────────────────────
+//
+// The nav bubbles already expand near the dragged character, but only *while* a
+// drag is running: `updateTravelTargets` is called from the drag frames and
+// `expandLevels` is wiped on release (see `onGmDotDragEnd`). A trait chip has to
+// stay open once the character is beside it — the human's rule, 2026-09-25 — so
+// this is a **computed** over the self position instead of drag-time state, and it
+// therefore holds at rest, after a drag, and when someone else moves the body.
+//
+// Same radius and curve as the bubbles (`EXPAND_PROXIMITY`, quadratic) so a chip and
+// a nav dot near the character open together rather than at two different distances.
+const hoveredTraitId = ref('')
+const peekTraitId = ref('')       // tapped open — the touch path, where there is no hover
+// The level at which an open chip counts as readable, for the click rule below.
+const TRAIT_EXPANDED_AT = 0.5
+
+// Where to measure proximity from: the character's body if it is on this map, else
+// the GM's free-roam dot, else nowhere. Falling back to the location centre (what
+// `selfPos` does for the camera) would open chips in the middle of the room for a
+// viewer who is not standing anywhere.
+const proximityAnchor = computed(() => {
+  if (props.entityId && occupants.value.some(o => o.id === props.entityId)) return selfPos.value
+  return gmSelfPos.value || null
+})
+
+const traitProximity = computed(() => {
+  const anchor = proximityAnchor.value
+  const out = {}
+  if (!anchor) return out
+  for (const t of placedTraits.value) {
+    const p = traitPositions.value[t.id]
+    if (!p) continue
+    const dist = Math.hypot(p.x - anchor.x, p.y - anchor.y)
+    if (dist < EXPAND_PROXIMITY) {
+      const k = dist / EXPAND_PROXIMITY
+      out[t.id] = 1 - k * k           // quadratic: opens fast, like the bubbles
+    }
+  }
+  return out
+})
+
+function traitChipExpanded(t) {
+  // The stack is never collapsed: nothing can be approached there, and it is the
+  // legend you read the map against.
+  if (!traitPositions.value[t.id]) return true
+  if (hoveredTraitId.value === t.id || peekTraitId.value === t.id) return true
+  return (traitProximity.value[t.id] || 0) >= TRAIT_EXPANDED_AT
+}
+
 // Dragging a chip: the same plumbing the nav dots use, and the same composable — a
 // chip and a dot are both one {x, y} entry in a position map on this location. The
 // map is written whole, like `nav_positions`, so an absent id keeps meaning "not
@@ -1510,7 +1564,15 @@ const traitPlay = useTraitPlay({
   refresh: async () => { await fetchLocationTraits() },
 })
 
+// One gesture, two steps: a click on a chip that is not open yet OPENS it, and the
+// click after that plays the trait. Without this a resting chip — which is now a bare
+// marker with no words — would spend a die on a tap that was only meant to read it.
+// The stack's chips are always open, so they still play on the first click.
 function onTraitChipClick(trait) {
+  if (!traitChipExpanded(trait)) {
+    peekTraitId.value = trait.id
+    return
+  }
   traitPlay.playTrait(trait)
 }
 
@@ -1807,6 +1869,9 @@ watch(() => props.backgroundImage, (img) => {
 }, { immediate: true })
 
 watch(() => props.locationId, () => {
+  // A peek belongs to the room it was opened in — the chips are different ones now.
+  peekTraitId.value = ''
+  hoveredTraitId.value = ''
   if (!travelAnim.value.active) fetchNav()
 })
 
