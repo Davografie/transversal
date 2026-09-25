@@ -216,6 +216,7 @@ import ArrivalRings from './location/ArrivalRings.vue'
 import TravelOverlay from './location/TravelOverlay.vue'
 import MapDot from './MapDot.vue'
 import DieIcon from './DieIcon.vue'
+import { usePercentDrag } from '../composables/usePercentDrag.js'
 import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import { isVideoUrl, coverOverscan, probeAspect, preloadMedia } from '@/composables/media.js'
@@ -1449,57 +1450,37 @@ function zoneCache(zone) {
 
 // ── Nav dot drag ───────────────────────────────────
 
+// Everything the GM places by hand drags the same way — a nav dot and a trait chip
+// are both one {x, y} entry in a position map on this location. The pointer plumbing
+// and the image-space conversion live in `usePercentDrag` so the two cannot drift
+// apart; each caller supplies only its own map, key and write.
+const percentDrag = usePercentDrag({ enabled: () => props.editZones, viewerEl })
+
 function onNavDragStart(e, nd) {
-  if (!props.editZones) return
-  e.preventDefault()
-  const el = viewerEl.value
-  if (!el) return
-  const rect = el.getBoundingClientRect()
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY
-  const startX = clientX, startY = clientY
-  const origX = nd.x, origY = nd.y
-
-  function onMove(ev) {
-    ev.preventDefault()
-    const cx = ev.touches ? ev.touches[0].clientX : ev.clientX
-    const cy = ev.touches ? ev.touches[0].clientY : ev.clientY
-    const dx = ((cx - startX) / rect.width) * 100
-    const dy = ((cy - startY) / rect.height) * 100
-    navDotPositions.value[nd.key] = {
-      x: Math.max(2, Math.min(98, Math.round(origX + dx))),
-      y: Math.max(2, Math.min(98, Math.round(origY + dy))),
-    }
-  }
-
-  async function onEnd() {
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onEnd)
-    document.removeEventListener('touchmove', onMove)
-    document.removeEventListener('touchend', onEnd)
-    // Persist to database
-    try {
-      await fetch('/api/v1/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id } }`,
-          variables: {
-            input: {
-              id: nav.value.location?._key || props.locationId,
-              navPositions: JSON.stringify(navDotPositions.value),
+  percentDrag.start(e, {
+    x: nd.x,
+    y: nd.y,
+    onMove: (x, y) => { navDotPositions.value[nd.key] = { x, y } },
+    onEnd: async () => {
+      // Persist to database
+      try {
+        await fetch('/api/v1/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id } }`,
+            variables: {
+              input: {
+                id: nav.value.location?._key || props.locationId,
+                navPositions: JSON.stringify(navDotPositions.value),
+              }
             }
-          }
-        }),
-      })
-    } catch {}
-    invalidateDestCache()  // the arrival point here just changed
-  }
-
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onEnd)
-  document.addEventListener('touchmove', onMove, { passive: false })
-  document.addEventListener('touchend', onEnd)
+          }),
+        })
+      } catch {}
+      invalidateDestCache()  // the arrival point here just changed
+    },
+  })
 }
 
 // ── Two-phase interaction ──────────────────────────
