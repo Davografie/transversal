@@ -687,10 +687,14 @@ class ImagenOrchestrator:
             universe=src.universe,
             image_type=ImageType.CUTOUT,
             roles=[],
-            # A cutout is a derivative: it keeps whatever its source disclosed and
-            # adds `ai`, because BiRefNet is itself a model — so an upload that was
-            # hand-made but cut out here still declares AI in its workflow.
-            flags=sorted(set(src.flags) | {"ai"}),
+            # Inherit ONLY. The cutter asserts nothing of its own: BiRefNet is not
+            # one of the pipelines that declares AI (imagen's `ai_generated`,
+            # animate's `ai_animated`), so an image is not tagged as AI merely for
+            # having been cut out here. It still carries its source's labels
+            # forward, so a cutout of a Flux image stays `ai_generated` — that
+            # label describes the picture's origin, which removing the background
+            # does not change.
+            flags=list(src.flags),
             transparent=has_transparency(cutout_bytes),
             prompt=f"background removed from {src.filename}",
             negative_prompt="",

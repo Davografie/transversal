@@ -651,9 +651,14 @@ that owner. So flags are additive, not unique per owner, and resolution never
 consults them. (`tests/test_media_image_owner.py` pins both halves of that
 contrast in one test.)
 
-A **cutout is a derivative**: it keeps whatever its source disclosed and gains
-`ai`, because BiRefNet is itself a model. So hand-made art cut out here does
-declare AI in its workflow, which is the honest answer.
+A **cutout inherits and adds nothing.** It is tempting to treat BiRefNet as an
+AI step and label every cutout `ai`; the human's call is that it should not —
+only imagen and animate declare AI, and a cutout is the same picture with its
+background removed. A cutout of a Flux image therefore stays `ai_generated`,
+because that label describes the picture's origin, which removing a background
+does not change; but the cutout pipeline never adds a label of its own. (211
+cutouts were stamped `ai` by the first cut of the backfill and corrected; the
+script's `--remove-cutout-ai` is that correction.)
 
 Surfaces: the GM image viewer and the GM trait editor both show the three labels;
 `[AI]` is a checkbox and the two pipeline labels are read-only, because the
@@ -663,10 +668,11 @@ pipelines own them. The upload endpoint takes `flags` (comma-separated) and
 > [!warning] Existing rows were backfilled from `image_type`
 > `image_type` already recorded how most images were made, so
 > `backfill_image_flags.py` derives the pipeline label from it — `imagen` →
-> `ai_generated`, `animated` → `ai_animated`, `cutout` → `ai` — and leaves
-> `uploaded` alone, because the provenance of an upload is genuinely unknown and
-> that is what the manual `ai` label is for. **439 of 1140 live rows** carried a
-> derivable label; the 701 uploads did not. It is additive (a row keeps flags it
+> `ai_generated`, `animated` → `ai_animated` — and derives **nothing** for
+> `cutout` or `uploaded`: a cutout asserts nothing of its own, and an upload's
+> provenance is genuinely unknown, which is exactly what the manual `ai` label is
+> for. **228 of 1140 live rows** carried a derivable label; the 701 uploads and
+> 211 cutouts did not. It is additive (a row keeps flags it
 > already has) and idempotent, so re-run it after this branch merges to catch
 > images the older code wrote in the meantime:
 >

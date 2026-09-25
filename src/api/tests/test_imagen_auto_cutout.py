@@ -162,8 +162,8 @@ def test_a_failing_cutout_does_not_fail_the_generation(stub_gpu, monkeypatch):
 # ── Provenance flags ─────────────────────────────────
 #
 # `ai_generated` is the imagen pipeline's own label; `ai_animated` is animate's
-# (see `run_animate`). A cutout is a *derivative* made by a model itself, so it
-# keeps whatever its source disclosed and adds `ai`.
+# (see `run_animate`). The cutter asserts **nothing of its own** — only imagen and
+# animate declare AI — but a cutout does carry its source's labels forward.
 
 
 def test_a_generated_image_declares_ai_generated(stub_gpu, monkeypatch):
@@ -174,7 +174,7 @@ def test_a_generated_image_declares_ai_generated(stub_gpu, monkeypatch):
     assert image.flags == ["ai_generated"]
 
 
-def test_a_cutout_inherits_its_source_flags_and_declares_ai(stub_gpu, monkeypatch):
+def test_a_cutout_inherits_its_source_flags_and_adds_nothing(stub_gpu, monkeypatch):
     source = _image("src-1", PROJECTION)
     source.flags = ["ai_generated"]
     source.filename = "src"
@@ -198,13 +198,18 @@ def test_a_cutout_inherits_its_source_flags_and_declares_ai(stub_gpu, monkeypatc
     cutout = asyncio.run(orchestrator.run_remove_background("char-1", "src-1", display_name="Kael"))
 
     assert cutout.image_type == ImageType.CUTOUT
-    assert cutout.flags == ["ai", "ai_generated"], (
-        "a cutout keeps its source's disclosure and adds ai — BiRefNet is a model"
+    assert cutout.flags == ["ai_generated"], (
+        "a cutout carries its source's disclosure forward, and adds nothing: only "
+        "imagen and animate declare AI, and cutting out is neither"
     )
 
 
-def test_a_cutout_of_an_unlabelled_upload_still_declares_ai(stub_gpu, monkeypatch):
-    """Hand-made art run through our own cutter has AI in its workflow."""
+def test_a_cutout_of_an_unlabelled_upload_stays_unlabelled(stub_gpu, monkeypatch):
+    """Hand-made art run through our own cutter is still hand-made art.
+
+    BiRefNet is a model, but the human's call is that the cutout pipeline does not
+    declare AI — otherwise every cutout in the app would be labelled AI by
+    default, which would make the label useless."""
     source = _image("src-2", PROJECTION)
     source.filename = "src2"
     repo = _FakeRepo(existing=[source])
@@ -224,4 +229,4 @@ def test_a_cutout_of_an_unlabelled_upload_still_declares_ai(stub_gpu, monkeypatc
     orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
     cutout = asyncio.run(orchestrator.run_remove_background("char-1", "src-2", display_name="Kael"))
 
-    assert cutout.flags == ["ai"]
+    assert cutout.flags == []
