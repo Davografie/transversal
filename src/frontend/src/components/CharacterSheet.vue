@@ -1,9 +1,15 @@
 <template>
   <!-- Embedded: single root for attribute inheritance -->
   <div v-if="embedded" class="sheet-embedded" :class="{ 'transparent-portrait': sheetPortraitTransparent }">
-    <div v-if="loading" class="loading">Loading…</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
-    <template v-else-if="entity">
+    <!-- The loading/error placeholders are gated on `!hasEntity`, not on
+         `loading` alone. `useApi()`'s `loading` ref is set by *every* call, so a
+         plain `v-if="loading"` swaps this branch out during each background
+         refresh — and a `v-if` branch key is its index, so swapping back
+         unmounts and remounts the entire entity subtree (B125). Once an entity
+         is in hand the sheet stays mounted and refreshes in place. -->
+    <div v-if="!hasEntity && loading" class="loading">Loading…</div>
+    <div v-else-if="!hasEntity && error" class="error">{{ error }}</div>
+    <template v-else-if="hasEntity">
       <div class="header">
         <div class="header-top">
           <div class="header-title">
@@ -521,6 +527,12 @@ const { loading, error, graphql, triggerSfx, endSfx, spendResourceDie, recoverRe
 const entityCache = useEntityCache()
 const { fetchFor: fetchScheduledEvents, formatTimers } = useScheduledEvents()
 const entity = ref(null)
+// A primitive gate for the body's `v-if` chain. Binding the branch to the
+// entity *object* kept a stable identity anyway (Vue keys `v-if` branches by
+// index), but read as if a refresh would remount; `hasEntity` says what is
+// meant, and pairs with the `!hasEntity &&` guards above so a refresh patches
+// in place instead of rebuilding (B125).
+const hasEntity = computed(() => !!entity.value)
 const activeProjection = computed(() => {
   const e = entity.value
   if (!e || !e.projections) return null
