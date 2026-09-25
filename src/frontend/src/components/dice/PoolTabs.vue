@@ -1,7 +1,17 @@
 <template>
   <div class="pool-tabs">
     <template v-for="g in groups" :key="g.key">
-      <div v-if="g.label && groups.length > 1" class="pool-tab-group-label">{{ g.label }}</div>
+      <div v-if="showsHeader(g)" class="pool-tab-group-label">
+        <span class="pool-tab-group-name">{{ g.label }}</span>
+        <span v-if="g.status" class="pool-tab-group-status">{{ g.status }}</span>
+        <button
+          v-if="g.stakes"
+          class="pool-stakes"
+          :class="{ high: g.stakes === 'high' }"
+          :title="g.stakes === 'high' ? 'High stakes — click to lower' : 'Low stakes — click to raise'"
+          @click.stop="$emit('toggle-stakes', g)"
+        >{{ g.stakes === 'high' ? 'high stakes' : 'low stakes' }}</button>
+      </div>
       <button
         v-for="e in g.members"
         :key="e.id"
@@ -24,8 +34,11 @@
 // with optional labels. `self` marks your own tab; `blink` is the parent's
 // attention nudge (your tab when someone challenges you, the difficulty tab
 // when the GM's target changes).
-defineProps({
-  groups: { type: Array, default: () => [] },   // [{ key, label, members: [{ id, name }] }]
+//
+// A **contest** group also carries its live status and a stakes toggle ([[B15]]),
+// so the GM's tab row is the active-contests view rather than a bare "X vs Y".
+const props = defineProps({
+  groups: { type: Array, default: () => [] },   // [{ key, label, members: [{ id, name }], status?, stakes? }]
   activeId: { type: String, default: null },
   selfTabId: { type: String, default: null },
   difficultyTab: { type: String, default: null },
@@ -33,16 +46,32 @@ defineProps({
   difficultyTabBlink: { type: Boolean, default: false },
 })
 
-defineEmits(['select'])
+defineEmits(['select', 'toggle-stakes'])
+
+// A group header earns its row when there is more than one event to tell apart,
+// or when it has something to say — a single contest still shows its status and
+// stakes, while a lone test event stays a flat list.
+function showsHeader(g) {
+  return !!g.label && (props.groups.length > 1 || !!g.status)
+}
 </script>
 
 <style scoped>
 .pool-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .pool-tab-group-label {
-  flex-basis: 100%; text-align: center; font-size: 11px; font-weight: 700;
+  flex-basis: 100%; display: flex; align-items: center; justify-content: center;
+  gap: 6px; flex-wrap: wrap;
+  font-size: 11px; font-weight: 700;
   color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase;
   margin: 2px 0 -2px;
 }
+.pool-tab-group-status { font-weight: 600; opacity: 0.75; text-transform: none; letter-spacing: 0; }
+.pool-stakes {
+  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 6px;
+  cursor: pointer; text-transform: none; letter-spacing: 0;
+  border: 1px solid var(--overlay-12); background: var(--overlay-6); color: var(--text-dim);
+}
+.pool-stakes.high { border-color: var(--danger); color: var(--danger); background: var(--danger-8); }
 .pool-tab {
   padding: 6px 10px; font-size: 12px; font-weight: 600; border-radius: 8px;
   cursor: pointer; border: 1px solid transparent; background: var(--overlay-6);

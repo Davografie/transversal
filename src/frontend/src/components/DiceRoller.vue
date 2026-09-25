@@ -9,6 +9,7 @@
       :you-tab-blink="youTabBlink"
       :difficulty-tab-blink="difficultyTabBlink"
       @select="switchTab"
+      @toggle-stakes="onGroupStakes"
     />
 
     <ContestResultWidget
@@ -472,6 +473,15 @@ const tabEntities = computed(() => {
     if (!hasPool && !hasResult) continue
     pushEntity(eid)
   }
+  // An active contest is activity even before either side has rolled ([[B15]]):
+  // a just-declared challenge is exactly what the GM's view is for, and it would
+  // otherwise stay invisible until someone assembled dice. GM only — a player
+  // has no business getting tabs for other people's contests.
+  if (props.gmMode) {
+    for (const c of (props.contests || [])) {
+      for (const p of (c.parties || [c.challenger_id, c.defendant_id])) pushEntity(p)
+    }
+  }
   return list
 })
 
@@ -489,25 +499,54 @@ const tabGroups = computed(() => {
 
   // Contest party → its contest, so we can group the parties together.
   const partyContest = new Map()
-  const contestLabels = new Map()
+  const contestByKey = new Map()
   for (const c of (props.contests || [])) {
     const key = `${c.location_id}:${c.challenger_id}`
-    const label = `${nameOf(c.challenger_id)} vs ${nameOf(c.defendant_id)}`
-    contestLabels.set(key, label)
+    contestByKey.set(key, c)
     for (const p of (c.parties || [c.challenger_id, c.defendant_id])) {
       partyContest.set(p, key)
     }
   }
 
+  // What the GM can actually see about a contest, in the author's vocabulary
+  // ([[B15]]): dice not assembled, a roll in flight, sides committed, a side
+  // owing a give-in/push, or both in. A side's phase comes from its own client
+  // for the entity this panel drives, and from the pool feed for everyone else.
+  const phaseOf = (id) => (id === editingEntityId.value ? phase.value : (props.remotePools?.[id]?.phase || 'adding'))
+  const committedOf = (id) => (
+    id === editingEntityId.value
+      ? phase.value === 'resolved' || !!contestResult.value
+      : !!props.remoteResults?.[id]?.committed
+  )
+  const contestMeta = (c) => {
+    if (!c) return {}
+    const parties = c.parties || [c.challenger_id, c.defendant_id]
+    const phases = parties.map(phaseOf)
+    let status
+    if (c.pending) status = `waiting on ${nameOf(c.pending)}`
+    else if (parties.every(committedOf)) status = 'resolving'
+    else if (phases.includes('rolling')) status = 'rolling'
+    else if (phases.some(p => p === 'rolled' || p === 'selected' || p === 'resolved')) status = 'setting'
+    else status = 'adding'
+    return {
+      status,
+      stakes: c.high_stakes ? 'high' : 'low',
+      locationId: c.location_id,
+      // `set_stakes` addresses either party; the challenger always has state.
+      partyId: c.challenger_id,
+      parties,
+    }
+  }
+
   const groups = new Map()
   const order = []
-  const groupOf = (key, label) => {
-    if (!groups.has(key)) { groups.set(key, { key, label, members: [] }); order.push(key) }
+  const groupOf = (key, label, extra = {}) => {
+    if (!groups.has(key)) { groups.set(key, { key, label, members: [], ...extra }); order.push(key) }
     return groups.get(key)
   }
 
   for (const m of members) {
-    let key, label
+    let key, label, extra = {}
     if (m.id === DIFFICULTY_TAB) {
       // The difficulty pool is the current location's own test event.
       key = `loc:${props.locationId}`
@@ -515,15 +554,17 @@ const tabGroups = computed(() => {
     } else {
       const contestKey = partyContest.get(m.id)
       if (contestKey) {
+        const c = contestByKey.get(contestKey)
         key = `contest:${contestKey}`
-        label = contestLabels.get(contestKey)
+        label = `${nameOf(c?.challenger_id)} vs ${nameOf(c?.defendant_id)}`
+        extra = contestMeta(c)
       } else {
         const loc = props.poolLocations?.[m.id] || props.locationId
         key = `loc:${loc}`
         label = nameOf(loc)
       }
     }
-    groupOf(key, label).members.push(m)
+    groupOf(key, label, extra).members.push(m)
   }
   return order.map((k) => groups.get(k))
 })
@@ -2009,6 +2050,16 @@ async function toggleStakes() {
   if (!props.gmMode || !props.locationId) return
   highStakes.value = !highStakes.value
   await apiSetStakes(props.locationId, editingEntityId.value, highStakes.value)
+}
+
+/** Stakes for a contest the GM is *not* the one driving ([[B15]]): addressed to
+ *  a party of that contest, from the tab group's own row. The server broadcasts
+ *  `contest_stakes`, and App folds it back into the contest list, so the row
+ *  reflects the change without an optimistic guess here. */
+async function onGroupStakes(group) {
+  if (!group?.locationId || !group?.partyId) return
+  const res = await apiSetStakes(group.locationId, group.partyId, group.stakes !== 'high')
+  if (!res || res.status === 'no_contest') contestError.value = 'That contest is no longer active'
 }
 
 async function restorePool() {

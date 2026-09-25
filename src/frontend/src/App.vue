@@ -1391,6 +1391,14 @@ function handleSseEvent(evt) {
       break
     case 'contest_stakes':
       diceRef.value?.setHighStakes(evt.data?.high_stakes)
+      // The GM's contest tabs read stakes per contest ([[B15]]), so the list has
+      // to follow — and the caller's own echo is how its tab row repaints.
+      if (evt.data?.entity_id) {
+        contests.value = contests.value.map(c =>
+          (c.parties || [c.challenger_id, c.defendant_id]).includes(evt.data.entity_id)
+            ? { ...c, high_stakes: !!evt.data.high_stakes }
+            : c)
+      }
       break
     case 'contest_resolved':
       diceRef.value?.setContestOutcome(evt.data)
