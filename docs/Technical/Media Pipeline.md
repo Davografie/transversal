@@ -44,22 +44,22 @@ picture). One entity can have multiple projections even in the same universe
 
 Every image is tagged with one or more **canonical roles**:
 
-| Role | Meaning | Static variant |
+| Role | Meaning | Serves |
 | --- | --- | --- |
-| `background` | location / scene backdrop | `Large` |
-| `sheet` | character-sheet portrait (small render) | `Small` |
-| `navdot` | map dot / occupant marker | `Large` |
+| `background` | location / scene backdrop | the **Animated** render if the picture has one, else `XLarge` |
+| `sheet` | character-sheet portrait (small render) | the **Cutout** render at `Small` if it has one, else `Small` |
+| `navdot` | map dot / occupant marker | the **Cutout** render at `Large` if it has one, else `Large` |
 
 ## Data model
 
-> [!info] Planned change — derived files become **tiers** ([[B210]])
-> A cutout is currently a separate record with its own base name, which is the
-> cause of every cutout defect fixed in September 2026 — credits lost, AI
-> mislabelled, roles redistributed, loops with no roles. It is really a render of
-> the same picture, and the files already say so: **all 43 loops keep their still
-> under the same base name**, and all 224 cutouts name their source in `prompt`.
-> [[Image Tiers Design Log]] carries the target model and the migration; the
-> section below describes the model **as built today**.
+> [!info] Derived files are **renders of the picture** ([[B210]], landed 2026-09-25)
+> A cutout is not a second picture and neither is a loop: both are renders of the
+> picture they came from, carried in `MediaImage.renders` and chosen by the role
+> map. Before this, a derived file modelled as a picture lost its credits
+> (`B204`), was mislabelled as AI (`B203`), had roles redistributed around it
+> (`B166`), and left loops with no roles at all ([[B205]]). [[Image Tiers Design
+> Log]] carries the reasoning, the migration and what the live library changed
+> about it.
 
 > [!info] The owner model (`B200`, landed 2026-09-25)
 > An image is owned by an **entity** or a **trait**, and may sit one tier below
@@ -67,7 +67,11 @@ Every image is tagged with one or more **canonical roles**:
 > and the class `EntityImage` → `MediaImage` (and the constant `ENTITY_IMAGES` →
 > `IMAGES`). [[Trait Images Design Log]] carries the decisions and the reasoning.
 
-`ImageType` (enum): `uploaded` · `imagen` · `animated` · `cutout`.
+`ImageType` (enum): `uploaded` · `imagen` — the **source's** provenance. Since
+[[B210]] a matte and a loop are renders of the picture rather than types of their
+own; `animated` and `cutout` survive only as transitional members so rows the
+older code still writes keep validating, and are retired in the commit after the
+merge.
 
 `MediaImage` (`images` collection) — one record per image file:
 
@@ -82,6 +86,12 @@ Every image is tagged with one or more **canonical roles**:
 - `roles` — subset of `background` / `sheet` / `navdot`.
 - `flags` — provenance labels (`ai`, `ai_generated`, `ai_animated`). **Not roles**
   — see [[#Provenance flags (AI)]].
+- `renders` — the derived renders this picture carries: `cutout` (a matte) and/or
+  `animated` (a loop). The role map reads this, which is why a cutout cannot lose
+  its credits, its flags or its id — there is no second record to copy them to.
+- `animated_extension` — the loop's container when the picture has an `animated`
+  render. `extension` names the **still** (a merged picture is a WebP that also has
+  a video), and one field cannot name both.
 - `transparent` — the file has a transparent background (an alpha channel with
   non-opaque pixels). Detected at ingestion, never hand-set. See
   [[#Transparency]].
@@ -253,6 +263,14 @@ Static images are saved as WebP in one ladder of size variants:
 ```
 media/imagen/{owner_id}/{universe}/{filename}_{variant}.{ext}
     variant ∈ Original · XLarge (≤2048 long side) · Large (≤1024) · Small (≤240) · Mini (≤48)
+```
+
+A picture may carry derived renders beside that ladder, each under the same base
+name — which is the whole ownership story ([[B210]]):
+
+```
+media/imagen/{owner_id}/{universe}/{filename}_Cutout_{tier}.webp   # the matte
+media/animated/{owner_id}/{universe}/{filename}.{ext}              # the loop
 ```
 
 Every tier is scaled to fit its cap on the **long side**, aspect ratio preserved,
@@ -437,6 +455,35 @@ writes during the transition, since the containers at `:3000` keep running
 `release-build` until the branch merges. `entity_images` is **left in place** as
 the rollback.
 
+## Migrating to tiers ([[B210]])
+
+```bash
+docker compose exec api python -m transversal.migrate_image_tiers          # dry run
+docker compose exec api python -m transversal.migrate_image_tiers --apply
+```
+
+One idempotent pass that folds every old-shape cutout and loop into the picture it
+came from, dry-run first. On the live library (2026-09-25) it reported and then
+applied:
+
+| | |
+| --- | --- |
+| records | **1168 → 916** (−224 cutouts, −28 loops) |
+| cutouts | 224 found, **224 merged, 0 unmatched** — 1118 matte tiers renamed |
+| loops | 43 found → **27 sourced**, 1 superseded, 15 fresh (14 stamped `ai_generated`) |
+| files | 27 videos moved onto their pictures, 112 loop still tiers removed, 17 ladders rebuilt |
+
+Nothing is re-rendered: a matte's files are moved byte-for-byte and only a tier
+that was missing is rebuilt from the matte's own `Original`. A loop's source is
+*recovered* rather than assumed — the animate pipeline re-encodes what it copies,
+so byte equality misses almost all of them and a 64-bit average hash finds them.
+
+Re-run it **after this merges**: the `:3000` containers keep running the older code
+until then and still write `image_type=cutout`/`animated` rows, which the pass
+picks up. `ImageType.CUTOUT` and `ImageType.ANIMATED` are retired in the commit
+after that window closes, not before — `MediaImage` has to keep validating what
+the older code writes.
+
 ## REST API
 
 - `POST /media/upload` — upload a file; convert to WebP, save variants, register
@@ -455,16 +502,18 @@ the rollback.
   carry `image_id` to animate an existing image; when that image is
   `transparent`, the finished loop is matted (see below).
 - `POST /remove-background/{owner_id}` — body `{image_id}`; async, static
-  images only. Any owner: `?owner_kind=entity` (default) or `trait`. Produces a
-  new transparent cutout image (see below).
+  pictures only. Any owner: `?owner_kind=entity` (default) or `trait`. Adds the
+  transparent `cutout` **render** to that picture (see below); refuses a picture
+  that already has an `animated` render.
 - `POST /imagen/{entity_id}/cancel` — interrupt the active job.
 - `GET /imagen/jobs` — active generation/animation jobs + queue position.
 - `GET /imagen/loras` — available Flux LoRAs.
 - `GET /entities/images?role=&ids=` — batch role-image resolution (used by the
   peers bar to avoid loading images for the whole entity list).
-- `GET /imagen/{entity_id}` — list images (with `projection_id`, `roles`, `flags`,
-  `transparent`, `path_large`, `path_animated`). Any owner id works — a trait's
-  gallery reads through the same endpoint.
+- `GET /imagen/{entity_id}` — list pictures (with `projection_id`, `roles`,
+  `flags`, `renders`, `transparent`, `path_large`, `path_xlarge`, `path_cutout`,
+  `path_animated`). Any owner id works — a trait's gallery reads through the same
+  endpoint.
 - `PATCH /imagen/{image_id}` — update `roles`, `flags`, `universe`, and/or
   `projection_id` (ownership reassignment). Roles strip siblings; `flags` do not.
 - `DELETE /imagen/{image_id}` — delete an image and its variants.
@@ -609,64 +658,82 @@ exactly the prompt it did before.
 > question, not a requirement). `B168` records it, and a test documents the
 > current behaviour so the gap is visible rather than assumed.
 
+### The role map
+
+`services/media_utils.ROLE_RENDER` is the whole render policy:
+
+```python
+ROLE_RENDER = {
+    "background": ("animated", "XLarge"),   # the loop if present, else the biggest still
+    "sheet":      ("cutout",   "Small"),    # the matte if present, at the small tier
+    "navdot":     ("cutout",   "Large"),
+}
+```
+
+`render_for(role, renders)` falls back to the static tier when the preferred render
+is absent, and `RepositoryImages.role_image_url(img, role)` builds the URL from
+that. **No caller names a tier** — `Entity.image(role)`, `Trait.image(role)`, the
+REST list and the batch endpoints all pass a role and let the record decide. The
+matte is tiered like any other render (`{base}_Cutout_Small.webp`, …), because a
+matte kept only at master size would send a 2048px transparent WebP for a 240px
+portrait.
+
 ### Imagen (static)
 
 `run_imagen` → ComfyUI Flux → `_save_image_variants` (Original/Large/Small/Mini
 WebP) → `MediaImage`. If the result is the sole image for its owner, all three
 roles are auto-selected.
 
-**The first image generated for a projection is also cut out** (`B166`). The
-generated image becomes the projection's `background`; the transparent cutout
-becomes its `navdot` **and** `sheet`, so a body renders a floating portrait
-rather than a cropped circle. The trigger is the first *generated image* for the
-projection, not entity creation — a cutout needs a source, and creation has no
-image. It reuses the sole-image condition above (`owner and not existing`), and
-because the owner had no images there are no siblings holding those roles to
-strip.
+**The first image generated for a projection also gains a matte** (`B166`). The
+generated image keeps every role auto-select gave it and simply gains the `cutout`
+render, so `sheet` and `navdot` serve the floating portrait without any role being
+moved onto a second record. The trigger is the first *generated image* for the
+projection, not entity creation — a matte needs a source, and creation has no
+image. It reuses the sole-image condition above (`owner and not existing`).
 
 Two paths intentionally do **not** trigger it: **uploads**, and **entity-level**
 generation (the gallery's main Imagen button, `projection_id` empty) — the rule
 is scoped per projection. See `B129` for whether to widen it.
 
-If the cutout fails the generation is unaffected: the image is already recorded,
-and the source keeps all three roles rather than giving up `sheet`/`navdot` to a
-cutout that does not exist.
+If the matte fails the generation is unaffected: the picture is already recorded
+and simply renders opaque, exactly as it would have without the render.
 
 ### Remove background (static cutout)
 
-`run_remove_background(owner_id, image_id, display_name)` turns an existing
-static image into a transparent cutout. It is **non-destructive**: the source is
-untouched and the result is a new `MediaImage` of type `cutout`, owned by the
-same owner **and the same tier** as the source — the *source image* decides that,
-never the caller — with `transparent=true` and no role tags.
+`run_remove_background(owner_id, image_id, display_name)` adds a transparent
+`cutout` render to an existing static picture. It is **non-destructive and
+additive**: the picture keeps its file, its id, its roles, its credits and its
+flags — only `renders` gains `cutout` — and the matte is written into the picture's
+own ladder as `{filename}_Cutout_{Tier}.webp`. There is nothing to copy anything
+to, which is why a cutout can no longer lose its citation or its labels
+([[B204]], [[B203]]), and no role has to be moved for it to render: `sheet` and
+`navdot` serve the matte the moment it exists ([[#The role map]]).
 
 It works for **any owner**:
 `POST /remove-background/{owner_id}?owner_kind=entity|trait` (`entity` is the
 default, so the image viewer's call is unchanged), and both the progress stream
 and the job registry at `GET /imagen/jobs` are keyed by `owner_id` — a trait's
 picture is cut out under the trait's id exactly as an entity's is under its own.
-`owner_id` and `display_name` are only the progress key and the file name; a
-trait has no `Entity` and needs none.
+`owner_id` and `display_name` are only the progress key and the log line; the
+**source image id** decides the picture, so a trait has no `Entity` and needs none.
 
-> [!note] A trait's cutout is a second image, tagged like any other
-> A cutout is **added, never swapped in** — the same non-destructive contract an
-> entity cutout has. The source keeps its file and its roles; the new transparent
-> image arrives untagged. The GM trait editor lists **every** image with the three
-> role checkboxes (Sheet / BG / Nav), so placing the cutout is an act the author
-> performs and can undo — the first cut of this editor moved the roles onto the
-> cutout automatically, which read as an in-place edit and buried the original.
+> [!note] A cutout is a render, not a second entry
+> The GM gallery lists one row per **picture** and badges it `CUTOUT`; the trait
+> editor does the same. Its role checkboxes stay on the picture, because the matte
+> is served automatically — an earlier editor moved all three roles onto the
+> cutout, which read as an in-place edit and buried the original.
 >
-> Role assignment is unique per (owner, role), so ticking a role strips it from
-> whichever sibling held it: the tag *moves*. To put the transparent version on
-> the surfaces you tick its boxes; to leave the original alone, you don't.
+> Role assignment is still unique per (owner, role) for the *pictures*: ticking a
+> role strips it from whichever sibling picture held it. What changed is that a
+> second render no longer needs a role of its own to appear.
 >
-> Verified on the live stack: the cutout came back RGBA with all four corners
-> fully transparent and the subject opaque (70% of pixels transparent), while the
-> source stayed RGB and untouched.
+> Verified on the live stack before the merge: the matte came back RGBA with all
+> four corners fully transparent and the subject opaque (70% of pixels
+> transparent), while the picture stayed RGB.
 
-Pipeline: read the source's `Large` variant → upload to ComfyUI →
+Pipeline: read the picture's `Large` variant → upload to ComfyUI →
 `bg_remove.json` → BiRefNet → alpha composite → RGBA PNG →
-`_save_image_variants` → record.
+`_save_image_variants` under `{filename}_Cutout` → the picture's `renders`.
 
 The workflow is `LoadImage → LoadBackgroundRemovalModel → RemoveBackground →
 InvertMask → JoinImageWithAlpha → SaveImage`.
@@ -690,6 +757,20 @@ InvertMask → JoinImageWithAlpha → SaveImage`.
 `run_animate` produces a static Flux image (or reuses an existing one), runs it
 through Ollama (gemma3 vision) to derive a motion description, then feeds that
 to ComfyUI WanVideo. Output is the `.webm`/`.mp4` loop.
+
+**Animating an existing picture adds the loop to that picture** ([[B210]]): no
+still is written, no second record is created, and the video lands beside the
+picture's still under the picture's own base name as `{filename}.{ext}` with
+`animated_extension` recording the container. The picture's credits, flags and id
+are untouched — only `renders` gains `animated` and `flags` gains `ai_animated`.
+The animate pipeline generated no still here, so `ai_generated` is not its to
+assert; a hand-made upload stays unlabelled.
+
+**A fresh loop is its own picture**: Flux generated the still, so it is
+`image_type=imagen` with an `animated` render and both `ai_generated` and
+`ai_animated`. "Fresh" is not guessed: the migration established it by matching
+each legacy loop's still against its owner's pictures (see [[#Migrating to tiers
+(B210)]]).
 
 #### Transparent animations
 
@@ -798,10 +879,9 @@ image in its owner scope:
 - **generation** — sole image for the entity or projection.
 - **drop** — dragging an image onto an empty entity/projection gallery.
 
-The one case where that three-role result is deliberately redistributed is a
-**projection's first generated image**: the generated image keeps `background`
-and a new transparent cutout takes `navdot` + `sheet` (`B166`; see
-[[#Imagen (static)]]). Upload and drop do not cut out.
+Nothing is redistributed any more. A **projection's first generated image** gains
+a matte as a *render* (`B166`), so it keeps all three roles and `sheet`/`navdot`
+serve the matte — see [[#Imagen (static)]]. Upload and drop do not cut out.
 
 ## Provenance flags (AI)
 
@@ -926,13 +1006,12 @@ faithful copy of it.
 - **Not roles, not flags.** Credits are independent of where an image renders,
   and many images can credit the same artist — the same reasoning that keeps
   `flags` out of `roles`.
-- **A derivative carries the citation forward.** A **cutout** and an **animated
-  loop** inherit their source's `credits`, `license` and `credit_text`: the file
-  has a new id, but it is not a new work, and losing the artist because you
-  removed a background is exactly the silent-omission these fields exist to
-  prevent. Both also inherit the source's `flags` and add their own pipeline's
-  label on top (see [[#Provenance flags (AI)]]). Credits are copied per record, so
-  the two rows are independent afterwards.
+- **A derivative keeps the citation by construction.** A matte and a loop are
+  **renders of the picture**, not new records, so they inherit its `credits`,
+  `license`, `credit_text` and `flags` because they *are* it. The old shape copied
+  them onto a second row and a pipeline forgot once ([[B204]]); there is no copy
+  to forget now. A loop adds only `ai_animated` — its own claim — and leaves the
+  picture's `ai_generated` alone (see [[#Provenance flags (AI)]]).
 - **Where it is set:** the GM image viewer's *Credits & source* block, and each
   row of the trait editor's gallery. Both use `ImageCreditsEditor.vue`; the
   server validates regardless.

@@ -219,10 +219,21 @@ class RollSource(str, Enum):
     TRAIT_DICE = "trait_dice"
 
 class ImageType(str, Enum):
+    """How the **picture** came to exist.
+
+    Since [[B210]] these describe only the source: a matte is a ``cutout`` *render*
+    of a picture and a loop an ``animated`` one, carried in ``MediaImage.renders``,
+    not a second picture with a type of its own.
+    """
     UPLOADED = "uploaded"
     IMAGEN = "imagen"
+    # ── Transitional ([[B210]]): no live row carries these after the migration ──
+    # Kept until the tier model has merged, because the containers at `:3000` run
+    # the older code and still write them; `MediaImage` must validate what they
+    # write. `migrate_image_tiers` folds such rows in — re-run it after the merge.
+    # Retired in the commit that follows, per the design log's two-step.
     ANIMATED = "animated"
-    CUTOUT = "cutout"  # background-removed transparent variant of a static image
+    CUTOUT = "cutout"
 
 class MessageKind(str, Enum):
     LETTER = "letter"
