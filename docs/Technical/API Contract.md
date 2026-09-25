@@ -469,7 +469,7 @@ Returns the full location hierarchy as a nested tree from super edges.
 ]
 ```
 
-**`GET /api/v1/locations/{location_id}/navigate`**
+**`GET /api/v1/locations/{location_id}/navigate?entity_id={entity_id}`**
 
 Returns parent (up), children (down), transversal destinations (lateral), zones, and occupants.
 
@@ -479,9 +479,26 @@ Returns parent (up), children (down), transversal destinations (lateral), zones,
   "parent": { "name": "...", "_key": "..." },
   "children": [{ "name": "Verdant Dominion", "_key": "loc-40646134", "current_universe": "three_realms" }],
   "transversal": [{ "name": "The Arrival Platform", "_key": "loc-platform", "current_universe": "three_realms" }],
-  "occupants": [{ "name": "Kael Drift", "type": "character", "id": "kael-1", "image": "/media/kael-1.png", "map_x": 45, "map_y": 60 }]
+  "occupants": [{ "name": "Kael Drift", "type": "character", "id": "kael-1", "image": "/media/kael-1.png", "map_x": 45, "map_y": 60 }],
+  "destination": { "location_id": "loc-40646505", "name": "The Whispering Forest" },
+  "next_hop": "loc-40646505"
 }
 ```
+
+Optional query param **`entity_id`** — the acting character, and the switch for the
+**guided route**. When that character carries a `destination_location` (written by the
+effects system's "set destination" action, which an SFX grants in the fiction) the
+response adds:
+
+- **`destination`** — the objective, `{location_id, name}`. Absent when the character
+  has no directions at all.
+- **`next_hop`** — the single neighbouring location that is the first step toward the
+  objective; `null` when the character is already there or nothing connects the two.
+  This is the navdot the viewer pulses ([[Location Viewer]], [[Guided Route]]).
+
+The hop is measured **from the location being viewed**, not from the character's own
+`current_location` — so a character standing mid-route asks each location what its own
+next step is. That is what makes *every* location on the route light the way onward.
 
 ### Entity Movement
 
