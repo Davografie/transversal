@@ -158,7 +158,14 @@ class TraitSetting(BaseModel):
     from_type: str = "entity"  # "entity" | "projection" | "relationship" | "traitsetting" — anchor collection for _from
     projection_id: Optional[str] = None  # projection anchor id when from_type == "projection"
     parent_traitsetting_id: Optional[str] = None  # parent TraitSetting id when from_type == "traitsetting" (sub-trait)
-    traitset_id: str
+    #: Not required, deliberately. Six live rows were found with an empty
+    #: ``traitset_id`` — three of them ``source_type: "effect"`` grants whose trait
+    #: is not in the registry at all — and because this field was required, the
+    #: **first malformed row aborted every read**, including the startup backfill,
+    #: so the whole API refused to boot. Reads must survive bad data; a missing
+    #: traitset belongs to the code that *grants* the setting, which should copy
+    #: it from the trait. See [[B208]].
+    traitset_id: str = ""
     rating_type: RatingType = RatingType.STATIC
     dice: list[DieType] = Field(default_factory=list)
     spent_dice: list[DieType] = Field(default_factory=list)  # spent-but-recoverable (resource pools)
