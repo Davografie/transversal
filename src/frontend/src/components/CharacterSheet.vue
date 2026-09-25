@@ -524,6 +524,7 @@ import { useScheduledEvents } from '../composables/useScheduledEvents.js'
 import { usePersistedRef } from '../composables/usePersistedState.js'
 import { useTraitEditor } from '../composables/useTraitEditor.js'
 import { useDragDrop } from '../composables/useDragDrop.js'
+import { useTraitPlay } from '../composables/useTraitPlay.js'
 import TraitEditPanel from './sheet/TraitEditPanel.vue'
 import SfxCard from './sheet/SfxCard.vue'
 import TraitDetailPanel from './sheet/TraitDetailPanel.vue'
@@ -571,6 +572,26 @@ function displayName(name) {
 }
 
 const { loading, error, graphql, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie } = useApi()
+
+// Playing a trait lives in `composables/useTraitPlay.js`, so a sheet row and a map
+// chip play by one set of rules. This is the sheet's half of that contract: its pool
+// bookkeeping. The viewer passes no-ops for the parts it does not have (there is no
+// pool tree on the map), and the shared gates/payload shapes come from the composable.
+const traitPlay = useTraitPlay({
+  phase: () => props.phase,
+  cascade: (t) => cascadeGroup(t),
+  addToPool: (payload) => emit('addToPool', payload),
+  notePick,
+  displayName,
+  armedSfxIdsFor: armedSfxIdsForTrait,
+  spendResourceDie,
+  spendChallengeDie,
+  rememberSpend: (tsId, entry) => {
+    if (!refundableSpends.value[tsId]) refundableSpends.value[tsId] = []
+    refundableSpends.value[tsId].push(entry)
+  },
+  refresh: (reason) => fetchEntity(reason),
+})
 const entityCache = useEntityCache()
 const { fetchFor: fetchScheduledEvents, formatTimers } = useScheduledEvents()
 const entity = ref(null)
@@ -1848,7 +1869,7 @@ const projectionChoices = computed(() =>
 const detailApi = {
   canPlayTrait, ratingTypeLabel, challengeProgressLabel, challengeRemainingGroups, detailContext,
   displayName, sfxCardModel, activateSfx,
-  playTrait: async (t) => { await playTrait(t); backToSetList(t) },
+  playTrait: async (t) => { await traitPlay.playTrait(t); backToSetList(t) },
 }
 
 // The inline trait editor's draft state + actions (see composables/useTraitEditor.js).
@@ -1874,9 +1895,9 @@ const {
 const traitRowApi = {
   isKnown, isInPool, isOffered, displayName, traitTimerLabel, isResourceDepleted,
   traitDiceGroups, resourceDiceGroups, resourceSpentGroups, challengeRemainingGroups,
-  spendResourceGroup, spendChallengeGroup, challengeProgressLabel,
+  spendResourceGroup: traitPlay.spendResourceGroup, spendChallengeGroup: traitPlay.spendChallengeGroup, challengeProgressLabel,
   resolvedDieType, resourceDisplay, sfxCardModel, activateSfx,
-  openTraitDetail, startEdit, playTrait, onTouchStart, onTouchEnd,
+  openTraitDetail, startEdit, playTrait: traitPlay.playTrait, onTouchStart, onTouchEnd,
   isContainer, isExpanded, toggleExpand, containerCount, hasContents,
   onTraitDragStart, onGripTouchStart, onTraitDragOver, onTraitDragLeave, onTraitDrop, onTraitDragEnd,
   isDragOver, isDragging, clickSuppressed, canDrag,
@@ -2027,11 +2048,11 @@ function ratingTypeLabel(t) {
   return RATING_TYPES.find(rt => rt.id === t.ratingType)?.label || t.ratingType || ''
 }
 
-// Same gates playTrait() applies — the detail only offers the play affordance
-// when playing would actually do something. An EMPTY (profile) or depleted
+// Same gates the play applies, via `useTraitPlay` — the detail only offers the play
+// affordance when playing would actually do something. An EMPTY (profile) or depleted
 // trait has no die to play, so it gets no hint and no sub-trait play button.
 function canPlayTrait(t) {
-  if (props.phase !== 'adding' || t.enabled === false) return false
+  if (!traitPlay.canPlay(t)) return false
   if (t.ratingType === 'EMPTY') return false
   return (t.dice || []).length > 0
 }
@@ -2079,19 +2100,19 @@ function settingSearchSpace() {
 }
 
 // The negative sub-traits a trait carries when it is played. `skipId` is the
-// trait whose own dice `playTrait` is about to push: without it, playing a
+// trait whose own dice the play is about to push: without it, playing a
 // negative sub-trait would push it once here and once there, and the dice
 // layer's toggle would add then immediately remove it.
 function playBaggage(t, skipId = null) {
   for (const child of carriedNegatives(t)) {
     if (child.id === skipId) continue
     if (child.enabled === false || isInPool(child)) continue
-    emitTraitDice(child)
+    traitPlay.contribute(child)
   }
 }
 
 // The related members of `t`'s group. The clicked trait's own dice are handled
-// by `playTrait`; this only completes (or dismantles) the group around it.
+// by the play; this only completes (or dismantles) the group around it.
 function cascadeGroup(t) {
   if (isInPool(t)) {
     // Removing a trait takes its subtree out of the pool, and the group's
@@ -2116,98 +2137,15 @@ function cascadeGroup(t) {
   for (const ancestor of ancestorsOf(t, settingSearchSpace())) {
     if (ancestor.ratingType === 'RESOURCE' || ancestor.ratingType === 'CHALLENGE') continue
     if (isInPool(ancestor) || !canPlayTrait(ancestor)) continue
-    emitTraitDice(ancestor)
+    traitPlay.contribute(ancestor)
     playBaggage(ancestor, t.id)
   }
   playBaggage(t, t.id)
 }
 
-// Push one trait's rating into the pool. Negativity rides the payload so the
-// dice layer can route it (opposition during a contest).
-function emitTraitDice(t) {
-  const dice = (t.dice || []).map(d => (typeof d === 'string' ? d.toLowerCase() : d))
-  if (!dice.length) return  // no die rating — nothing to add
-  notePick(t.id)
-  const payload = {
-    source: t.name,
-    label: displayName(t.name),
-    tsId: t.id,
-    negative: t.polarity === 'NEGATIVE',
-    armedSfxIds: armedSfxIdsForTrait(t),
-  }
-  // Multi-die traits contribute one pool die per rating entry.
-  if (dice.length > 1) emit('addToPool', { ...payload, dice })
-  else emit('addToPool', { ...payload, die: dice[0] })
-}
-
-async function playTrait(t) {
-  if (props.phase !== 'adding') return
-  if (t.enabled === false) return  // disabled trait contributes no dice
-
-  // Complete (or dismantle) the group before the clicked trait's own dice.
-  cascadeGroup(t)
-
-  // Resource traits: the row click spends only when the pool has a single
-  // die type; mixed-type resources are spent per die group.
-  if (t.ratingType === 'RESOURCE') {
-    const types = [...new Set((t.dice || []).map(d => (typeof d === 'string' ? d.toLowerCase() : d)))]
-    if (types.length === 1) await spendResourceGroup(t, types[0])
-    return
-  }
-
-  // Challenge traits: same single-vs-mixed-type split as resources. The row
-  // click spends one die; mixed-type pools are spent per die group.
-  if (t.ratingType === 'CHALLENGE') {
-    const types = [...new Set((t.dice || []).map(d => (typeof d === 'string' ? d.toLowerCase() : d)))]
-    if (types.length === 1) await spendChallengeGroup(t, types[0])
-    return
-  }
-
-  emitTraitDice(t)
-}
-
-async function spendResourceGroup(t, dieType) {
-  // Spend one die of the chosen type from the resource and add it to the pool.
-  if (props.phase !== 'adding') return
-  if (t.enabled === false) return
-  await spendResourceDie(t.id, dieType)
-  if (!refundableSpends.value[t.id]) refundableSpends.value[t.id] = []
-  refundableSpends.value[t.id].push({ die: dieType, kind: 'resource' })
-  notePick(t.id)
-  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative: t.polarity === 'NEGATIVE', resource: true, armedSfxIds: armedSfxIdsForTrait(t) })
-  await fetchEntity('resource-spend')
-}
-
-async function spendChallengeGroup(t, dieType) {
-  // Spend one die from a challenge pool and route it per polarity:
-  // negative (doom) → destination "opposition" (plain die, routes to opposition);
-  // positive (progress) → destination "pool" (flagged resource, joins own pool).
-  if (props.phase !== 'adding') return
-  if (t.enabled === false) return
-  const destination = t.polarity === 'NEGATIVE' ? 'opposition' : 'pool'
-  const res = await spendChallengeDie(t.id, dieType, destination)
-  if (!res) return
-  t.dice = (res.dice || []).map(d => d.toUpperCase())
-  // Only a die that lands in an editable pool can be pulled back out again —
-  // a doom die routed to the opposition/difficulty pool is tracked by nobody
-  // here, and treating it as "missing from my own pool" would refund it while
-  // it is legitimately sitting in the difficulty pool.
-  if (res.resource) {
-    if (!refundableSpends.value[t.id]) refundableSpends.value[t.id] = []
-    refundableSpends.value[t.id].push({ die: res.die.toLowerCase(), kind: 'challenge' })
-  }
-  notePick(t.id)
-  emit('addToPool', {
-    die: res.die.toLowerCase(),
-    source: t.name,
-    label: displayName(t.name),
-    tsId: t.id,
-    negative: t.polarity === 'NEGATIVE',
-    resource: res.resource,
-    armedSfxIds: armedSfxIdsForTrait(t),
-  })
-  await fetchEntity('challenge-spend')
-}
+// (Playing a trait — its gates, its group cascade's payloads, the single-vs-mixed
+// die-type split and the two spends — is `useTraitPlay`, shared with the map's trait
+// chips. The sheet supplies the pool bookkeeping above and nothing else.)
 
 function resolvedDieType(t) {
   // Return the die type for CSS class (determines color)

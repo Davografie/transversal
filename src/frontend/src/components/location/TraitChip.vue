@@ -106,10 +106,12 @@ function traitDiceGroups(trait) {
   z-index: 3;
 }
 
-/* Grabbable only where the parent says so (GM arrange mode). This also makes an
-   unplaced chip in the auto-stack grabbable — the stack itself is
-   `pointer-events: none` so it never eats map clicks. */
-.trait-chip.draggable { pointer-events: auto; cursor: grab; }
+/* Interactive wherever it is drawn: a click plays the trait (see `useTraitPlay`), and
+   in arrange mode the GM drags it instead. The containers it sits in are
+   `pointer-events: none` so they never eat a map click, so the chip opts back in. */
+.trait-chip { pointer-events: auto; cursor: pointer; }
+
+.trait-chip.draggable { cursor: grab; }
 
 .trait-chip-text { display: flex; flex-direction: column; min-width: 0; }
 

@@ -20,6 +20,7 @@
         :draggable="editZones"
         @mousedown="editZones && onTraitChipDragStart($event, t)"
         @touchstart="editZones && onTraitChipDragStart($event, t)"
+        @click="!editZones && onTraitChipClick(t)"
       />
 
       <!-- Zone dots -->
@@ -123,6 +124,7 @@
         :draggable="editZones"
         @mousedown="editZones && onTraitChipDragStart($event, t)"
         @touchstart="editZones && onTraitChipDragStart($event, t)"
+        @click="!editZones && onTraitChipClick(t)"
       />
     </div>
 
@@ -217,6 +219,9 @@ import TravelOverlay from './location/TravelOverlay.vue'
 import MapDot from './MapDot.vue'
 import TraitChip from './location/TraitChip.vue'
 import { usePercentDrag } from '../composables/usePercentDrag.js'
+import { useTraitPlay } from '../composables/useTraitPlay.js'
+import { normalizeLocationTrait } from '../utils/locationTrait.js'
+import { useApi } from '../composables/useApi.js'
 import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import { isVideoUrl, coverOverscan, probeAspect, preloadMedia } from '@/composables/media.js'
@@ -250,9 +255,12 @@ const props = defineProps({
   gmMode: { type: Boolean, default: false },
   remotePools: { type: Object, default: () => ({}) },  // entity_id → { dice: [...], player_id, phase }
   remoteResults: { type: Object, default: () => ({}) },  // entity_id → { total, effect_die, rolls, ... }
+  // The roller's phase, so a chip plays by the same gate the sheet does (only
+  // `adding` plays; nothing is added mid-roll).
+  phase: { type: String, default: 'adding' },
 })
 
-const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity', 'dragging'])
+const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity', 'dragging', 'addToPool'])
 const { toggleTransversalType } = useTransversalLinks()
 
 const currentImage = ref('')
@@ -1357,8 +1365,13 @@ async function fetchLocationTraits() {
     const data = await r.json()
     // TRAITS tab only: a trait's tab is its trait SET's `sheet_tab`, reported by the
     // server. Profile-tab traits are the place's imagen/appearance configuration,
-    // which has no business on the map (B92, the human's rule).
-    locationTraits.value = (data.traits || []).filter(t => (t.sheet_tab || 'traits') === 'traits')
+    // which has no business on the map (B92, the human's rule). `normalizeLocationTrait`
+    // then puts each entry into the shape `useTraitPlay` reads — the wire's snake_case
+    // and lowercase enums are not it, and getting that wrong made a CHALLENGE trait
+    // behave like a static one.
+    locationTraits.value = (data.traits || [])
+      .filter(t => (t.sheet_tab || 'traits') === 'traits')
+      .map(normalizeLocationTrait)
   } catch { /* silent */ }
 }
 
@@ -1476,6 +1489,30 @@ function zoneCache(zone) {
 }
 
 // ── Nav dot drag ───────────────────────────────────
+
+// Playing a location's trait from its chip: the SAME act a trait row's rating click
+// performs in the sheet, through the same composable — so the gates, the pool payload
+// and the challenge/resource spend rules cannot drift between the two surfaces.
+const { spendResourceDie, spendChallengeDie } = useApi()
+const traitPlay = useTraitPlay({
+  phase: () => props.phase,
+  // No pool tree exists on the map, so the sheet's cascade (descendants, carried
+  // negatives, completing ancestors) is honestly a no-op here: the dice layer decides
+  // what a repeated play does.
+  cascade: () => {},
+  addToPool: (payload) => emit('addToPool', payload),
+  // Armed SFX live in the roller, which the map has no view of. No location trait
+  // carries SFX today, so this is where a future fold-out would hook in.
+  armedSfxIdsFor: () => [],
+  spendResourceDie,
+  spendChallengeDie,
+  // A spend changes the pool's remaining dice, so the chips' ratings must be re-read.
+  refresh: async () => { await fetchLocationTraits() },
+})
+
+function onTraitChipClick(trait) {
+  traitPlay.playTrait(trait)
+}
 
 // Everything the GM places by hand drags the same way — a nav dot and a trait chip
 // are both one {x, y} entry in a position map on this location, expressed as a

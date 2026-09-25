@@ -151,9 +151,11 @@
         :gm-mode="gmMode"
         :remote-pools="remotePools"
         :remote-results="remoteResults"
+        :phase="phase"
         @moved="onMoved"
         @inspect-entity="onInspectEntity"
         @dragging="occupantDragging = $event"
+        @add-to-pool="(d) => diceRef?.addFromSheet(d)"
       />
       <div v-if="mobileStackActive && mobileFocus !== 'location'" class="band-tap" @touchstart="onBandDragStart($event, 'location')" @click="tapBand('location')"></div>
     </div>
