@@ -89,6 +89,22 @@
     <div class="loc-label fade-in" v-if="showElements && gmMode">{{ displayName }}</div>
     <div class="uni-label fade-in" v-if="showElements && gmMode">{{ displayUniverse }}</div>
 
+    <!-- Location traits (B92) — the location's own, plus the challenge pools it
+         inherits from its ancestors. Visible to EVERYONE, unlike the two labels
+         above: the server has already resolved what this viewer may see, so a
+         hidden owner simply is not in the list. -->
+    <div
+      v-if="showElements && locationTraits.length"
+      class="loc-traits fade-in"
+      :class="{ 'has-switcher': gmMode }"
+    >
+      <div v-for="t in locationTraits" :key="t.id" class="loc-trait">
+        <span v-if="t.inherited" class="loc-trait-inherited" aria-hidden="true">↳</span>
+        <span class="loc-trait-name">{{ t.name }}</span>
+        <span v-if="t.dice.length" class="loc-trait-dice">{{ t.dice.join(' ') }}</span>
+      </div>
+    </div>
+
     <!-- Overlay preset switcher (architect only) -->
     <div class="overlay-switcher fade-in" v-if="showElements && gmMode">
       <button
@@ -1232,6 +1248,26 @@ async function fetchNav() {
 
     // Fetch pool dice at this location (background, don't block nav)
     fetchPools()
+
+    // …and this location's traits, already filtered for this viewer (B92).
+    fetchLocationTraits()
+  } catch { /* silent */ }
+}
+
+// The location's traits as THIS viewer may see them ([[B92]]): the location's own
+// of every kind, plus the challenge pools it inherits from its ancestors. The
+// server resolves the fog-of-war because only it knows who is asking — pass the
+// acting character and a hidden owner narrows to its `known_to`; omit it (GM
+// free-roam) for the whole set with the flags still on it. Failure is silent and
+// leaves the block empty, like every other background read here.
+const locationTraits = ref([])
+
+async function fetchLocationTraits() {
+  try {
+    const q = props.entityId ? `?viewer=${encodeURIComponent(props.entityId)}` : ''
+    const r = await fetch(`/api/v1/locations/${props.locationId}/traits${q}`)
+    const data = await r.json()
+    locationTraits.value = data.traits || []
   } catch { /* silent */ }
 }
 
@@ -1810,6 +1846,41 @@ onMounted(() => {
   z-index: 2;
   pointer-events: none;
 }
+
+/* Location traits (B92). Sits under the two labels above; when the GM's overlay
+   switcher is present (also GM-only, at +44px) it steps below it rather than
+   overlapping. `pointer-events: none` like the labels, so the map keeps every
+   click — which also means no tooltips here, so the inherited marker has to read
+   on its own. */
+.loc-traits {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 16px) + 44px);
+  left: 16px;
+  display: flex; flex-direction: column; gap: 2px;
+  max-width: 40vw;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.loc-traits.has-switcher {
+  top: calc(env(safe-area-inset-top, 16px) + 80px);
+}
+
+.loc-trait {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 12px;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.85);
+}
+
+.loc-trait-name { color: var(--map-text); }
+
+.loc-trait-dice {
+  color: var(--map-text-dim);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+}
+
+.loc-trait-inherited { color: var(--map-text-dim); opacity: 0.75; }
 
 /* ── Overlay switcher ────────────────────────────── */
 
