@@ -145,6 +145,13 @@ async def main(apply: bool = False, limit: int = 0, force: bool = False) -> int:
             up.save(buf, format="WEBP", quality=95)  # master quality; tiers re-encode at 85
             original.write_bytes(buf.getvalue())
             save_image_variants(buf.getvalue(), out_dir, filename)
+            # The record's dimensions describe the MASTER, so they have to move
+            # with it — otherwise the GM gallery keeps reporting the pre-upscale
+            # size and reads as "the upscale did nothing". (They are shown in the
+            # panel's alt text and are the only size the UI ever displays.)
+            db.collection(IMAGES).update(
+                {"_key": doc["_key"], "width": up.size[0], "height": up.size[1]}
+            )
         except Exception as exc:  # one bad image must not stop the batch
             failed += 1
             print(f"  FAILED {filename}: {type(exc).__name__}: {exc}", flush=True)

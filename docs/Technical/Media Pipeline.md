@@ -233,7 +233,30 @@ file bigger, softer and no more truthful.
 
 `owner_id` is the directory key, and it does not change when an entity gains a
 trait image: existing files stayed exactly where they were through the `B200`
-backfill. Trait images land under `media/imagen/trait-…/`, which cannot collide
+backfill.
+
+> [!warning] `width`/`height` describe the **master**, and the UI shows them
+> The gallery and image viewer label an image with `MediaImage.width` × `height`
+> — the only size a user ever sees. They are written at ingestion and nothing
+> maintained them, which failed two ways: **upscaling the master left them
+> reporting the old size**, so an upscaled image read as "the upscale did
+> nothing", and **708 of 1125 records said `0×0`** because the paths that created
+> them (migration, and some upload routes) never measured the image.
+> `sync_image_dimensions.py` rebuilds them from `Original` — the archival copy
+> every tier derives from — and `upscale_backgrounds.py` now moves them with the
+> master it writes.
+>
+> ```bash
+> docker compose exec api python -m transversal.sync_image_dimensions          # dry run
+> docker compose exec api python -m transversal.sync_image_dimensions --apply
+> ```
+>
+> Dimensions are **not** the served size: the tier is chosen by role. A gallery
+> shows one entry per *image*, never one per variant — five files exist on disk
+> per image, and which one a surface fetches depends on the role it is asking
+> for. Aspect ratio is preserved by every tier and by the upscale (worst measured
+> drift 0.02%), which is what keeps the percentage-based dot positions and the
+> panning correct. Trait images land under `media/imagen/trait-…/`, which cannot collide
 with entity keys because the ids are type-prefixed.
 
 Alpha survives the variant pass: sources with an alpha channel stay RGBA, so
