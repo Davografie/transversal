@@ -15,6 +15,10 @@ class RepositoryTraits:
     """Mixin contributing 16 member(s) to the repository."""
 
     def create_trait(self, trait: Trait) -> Trait:
+        loop = self.nomination_cycle(trait)
+        if loop:
+            raise ValueError(
+                "Trait nomination would be circular: " + " → ".join(loop))
         doc = trait.model_dump()
         doc["_key"] = trait.id
         self._traits.insert(doc)
@@ -108,6 +112,62 @@ class RepositoryTraits:
                     ids.append(st.id)
         return ids
 
+    def nomination_cycle(self, trait: Trait) -> list[str] | None:
+        """The loop ``trait`` would close, as trait names — or ``None`` if acyclic.
+
+        A registry trait nominates what may be put *inside* it: individual traits
+        (``possible_subtrait_ids``) and whole trait sets
+        (``possible_subtraitset_ids``, meaning every trait in the set). Following
+        those has to stay a path. If it can arrive back at the trait, the registry
+        is saying a trait may contain itself, and every walker that recurses over
+        nominations would spin. Nothing walks them recursively today, which is
+        exactly why this is cheaper to refuse now than to debug later
+        ([[B143]]).
+
+        The proposal replaces whatever is stored for ``trait``, so a walk is only
+        ever asked about a graph that is about to exist. This is checked on every
+        registry write and refusals name the loop. Live data measured at 802
+        traits / 858 direct nominations / 20 set nominations, so the walk is
+        trivial — no cache, no invalidation surface.
+
+        Note this is the *nomination* graph, not the containment graph: a
+        setting's own sub-trait chain is guarded separately by
+        ``_would_cycle``, and a shortcut trait *referencing* another is a
+        different relation again ([[Shortcut Traits Design Log]]).
+        """
+        index: dict[str, dict] = dict(self._traits_index())
+        index[trait.id] = {**trait.model_dump(), "_key": trait.id}
+
+        # Whole-set nominations expand to every trait in the set, so a set has to
+        # be resolved before the walk rather than during it.
+        by_set: dict[str, list[str]] = {}
+        for key, doc in index.items():
+            by_set.setdefault(doc.get("traitset_id") or "", []).append(key)
+
+        def nominations(key: str) -> list[str]:
+            doc = index[key]
+            out: list[str] = list(doc.get("possible_subtrait_ids") or [])
+            for set_id in doc.get("possible_subtraitset_ids") or []:
+                for member in by_set.get(set_id, []):
+                    if member not in out:
+                        out.append(member)
+            return out
+
+        def _names(keys: list[str]) -> list[str]:
+            return [index[k].get("name") or k for k in keys]
+
+        stack: list[tuple[str, list[str]]] = [(trait.id, [trait.id])]
+        seen = {trait.id}
+        while stack:
+            current, path = stack.pop()
+            for nxt in nominations(current):
+                if nxt == trait.id:
+                    return _names(path + [nxt])
+                if nxt in index and nxt not in seen:
+                    seen.add(nxt)
+                    stack.append((nxt, path + [nxt]))
+        return None
+
     def get_all_traits(self) -> list[Trait]:
         query = f"""
             FOR t IN {TRAITS}
@@ -120,6 +180,10 @@ class RepositoryTraits:
         ]
 
     def update_trait(self, trait: Trait) -> Trait:
+        loop = self.nomination_cycle(trait)
+        if loop:
+            raise ValueError(
+                "Trait nomination would be circular: " + " → ".join(loop))
         doc = trait.model_dump()
         doc["_key"] = trait.id
         self._traits.replace(doc)
