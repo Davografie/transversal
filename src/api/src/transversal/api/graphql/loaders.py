@@ -30,6 +30,7 @@ class Loaders:
     traitsetsettings: DataLoader
     sub_traitsettings: DataLoader
     relationship_traitsettings: DataLoader
+    images: DataLoader
 
 
 def build_loaders(em: EntityManager) -> Loaders:
@@ -50,10 +51,18 @@ def build_loaders(em: EntityManager) -> Loaders:
     async def load_relationship_traitsettings(keys: list[str]) -> list[list]:
         return _ordered(keys, repo.get_relationship_traitsettings_for_entities(keys))
 
+    # Keyed by **owner** (an entity or a trait), not by the asking object: a trait
+    # setting and its registry trait share one owner, and so do the several
+    # settings a sheet holds of one trait (`portents`, the statement traits), so
+    # the batch collapses those as well as the round trips.
+    async def load_images(keys: list[str]) -> list[list]:
+        return _ordered(keys, repo.get_images_for_owners(keys))
+
     return Loaders(
         projections=DataLoader(load_fn=load_projections),
         traitsettings=DataLoader(load_fn=load_traitsettings),
         traitsetsettings=DataLoader(load_fn=load_traitsetsettings),
         sub_traitsettings=DataLoader(load_fn=load_sub_traitsettings),
         relationship_traitsettings=DataLoader(load_fn=load_relationship_traitsettings),
+        images=DataLoader(load_fn=load_images),
     )

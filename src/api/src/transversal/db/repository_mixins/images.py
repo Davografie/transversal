@@ -9,10 +9,51 @@ does not need the kind — see [[Trait Images Design Log]].
 
 from __future__ import annotations
 
+from typing import Callable
+
 from transversal.db.arango import ENTITIES
 from transversal.db.arango import IMAGES
 from transversal.domain import MediaImage
 from transversal.domain import ImageType
+
+
+def pick_role_image(
+    images: list[MediaImage],
+    role: str,
+    variant_id: str | None = None,
+    universes: Callable[[], list[str]] | None = None,
+) -> MediaImage | None:
+    """The image carrying ``role``, from an already-loaded list — the ladder.
+
+    1. the **variant's** own image carrying ``role`` (newest first) — a
+       projection's for an entity, a traitsetting's for a trait;
+    2. an owner-level image in one of ``universes``;
+    3. any owner-level image carrying ``role``.
+
+    The list is a parameter so a caller that already holds the images can use the
+    ladder without re-reading them: the sheet's trait rows come from the
+    per-request loader, which fetches every row's owner in one query. That is why
+    the ladder is a function rather than a loop inside
+    :meth:`RepositoryImages.resolve_role_image_entry` — one ladder, two ways to
+    supply the list.
+
+    ``universes`` is a **callable** because step 2 needs a projection lookup, and
+    skipping it when step 1 already matched is the whole reason the original code
+    tried the variant first. A trait's variant is a traitsetting rather than a
+    projection, so its lookup answers empty and one picture serves every universe.
+    """
+    if variant_id:
+        for img in images:
+            if (img.variant_id or None) == variant_id and role in img.roles:
+                return img
+    for u in (universes() if universes else []):
+        for img in images:
+            if not img.variant_id and role in img.roles and img.universe == u:
+                return img
+    for img in images:
+        if not img.variant_id and role in img.roles:
+            return img
+    return None
 
 
 class RepositoryImages:
@@ -47,6 +88,30 @@ class RepositoryImages:
             MediaImage.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(query, bind_vars=binds)
         ]
+
+    def get_images_for_owners(self, owner_ids: list[str]) -> dict[str, list[MediaImage]]:
+        """Every image for each of ``owner_ids``, newest first — **one** query.
+
+        The batched twin of :meth:`get_images`, for the sheet's hot path: a trait
+        row asks for a picture per trait-setting, and one round trip per owner
+        measured ~2.7ms each on a 22-trait sheet — ~60ms on a page that otherwise
+        loads in ~10ms. Same shape and ordering as the single-owner read, so a
+        caller may use either; see ``api/graphql/loaders.py``.
+        """
+        ids = [i for i in dict.fromkeys(owner_ids) if i]
+        if not ids:
+            return {}
+        grouped: dict[str, list[MediaImage]] = {}
+        query = f"""
+            FOR doc IN {IMAGES}
+            FILTER doc.owner_id IN @ids
+            SORT doc.created_at DESC
+            RETURN doc
+        """
+        for doc in self.db.aql.execute(query, bind_vars={"ids": ids}):
+            img = MediaImage.model_validate({**doc, "id": doc["_key"]})
+            grouped.setdefault(img.owner_id, []).append(img)
+        return grouped
 
     def get_image(self, image_id: str) -> MediaImage | None:
         doc = self._images.get(image_id)
@@ -109,33 +174,40 @@ class RepositoryImages:
         universe the trait belongs to. With no ``variant_id`` only owner-level
         images are considered, exactly as before.
         """
-        images = self.get_images(owner_id)
-        if variant_id:
-            for img in images:
-                if (img.variant_id or None) == variant_id and role in img.roles:
-                    return img
-            proj = self.get_projection(variant_id)
-            universes: list[str] = []
-            if proj is not None:
-                if proj.universe:
-                    universes.append(proj.universe)
-                if proj.origin_universe and proj.origin_universe not in universes:
-                    universes.append(proj.origin_universe)
-            for u in universes:
-                for img in images:
-                    if not img.variant_id and role in img.roles and img.universe == u:
-                        return img
-        for img in images:
-            if not img.variant_id and role in img.roles:
-                return img
-        return None
+        return pick_role_image(
+            self.get_images(owner_id), role, variant_id,
+            lambda: self._variant_universes(variant_id),
+        )
+
+    def _variant_universes(self, variant_id: str | None) -> list[str]:
+        """The universes rung 2 prefers: a body's own, then its origin.
+
+        A **callable**'s worth of work, because it costs a projection read and
+        rung 2 is only reached when the variant itself carries no such image.
+        Empty for anything that is not a projection — a traitsetting — which is
+        what makes a trait's one picture answer for every universe.
+        """
+        if not variant_id:
+            return []
+        proj = self.get_projection(variant_id)
+        if proj is None:
+            return []
+        universes: list[str] = []
+        if proj.universe:
+            universes.append(proj.universe)
+        if proj.origin_universe and proj.origin_universe not in universes:
+            universes.append(proj.origin_universe)
+        return universes
+
+    def role_image_url(self, img: MediaImage | None, variant: str = "Large") -> str | None:
+        """Public media URL for a resolved image — the one place its shape lives."""
+        return self._image_url(img, variant) if img else None
 
     def resolve_role_image(
         self, owner_id: str, role: str, variant_id: str | None = None, variant: str = "Large"
     ) -> str | None:
         """Resolve a role image URL — see ``resolve_role_image_entry`` for order."""
-        entry = self.resolve_role_image_entry(owner_id, role, variant_id)
-        return self._image_url(entry, variant) if entry else None
+        return self.role_image_url(self.resolve_role_image_entry(owner_id, role, variant_id), variant)
 
     def get_navdot_images(
         self, entity_ids: list[str], bodies: dict[str, str] | None = None

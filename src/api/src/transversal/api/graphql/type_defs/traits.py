@@ -10,6 +10,7 @@ from transversal.api.graphql.type_defs.enums import (
     RatingType,
     SheetTab,
 )
+from transversal.db.repository_mixins.images import pick_role_image
 
 
 def _resolve_ego(setting, repo) -> bool:
@@ -61,6 +62,13 @@ class TraitDisplayNameInput:
     universe: str = ""
     ratings: list[list[DieType]] = strawberry.field(default_factory=list)
 
+#: Which stored variant a role renders from — the same map the entity resolver
+#: uses, so a trait picture and an entity portrait behave alike. Module level
+#: because a trait *setting* resolves through the same roles, and two copies
+#: would be free to disagree about which file a role means.
+_ROLE_VARIANT = {"background": "Large", "sheet": "Small", "navdot": "Large"}
+
+
 @strawberry.type
 class TraitRef:
     id: strawberry.ID
@@ -78,12 +86,8 @@ class TraitRef:
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
-    #: Which stored variant a role renders from — the same map the entity
-    #: resolver uses, so a trait picture and an entity portrait behave alike.
-    _ROLE_VARIANT = {"background": "Large", "sheet": "Small", "navdot": "Large"}
-
     @strawberry.field
-    def image(self, info: strawberry.Info, role: str = "sheet") -> Optional[str]:
+    async def image(self, info: strawberry.Info, role: str = "sheet") -> Optional[str]:
         """URL of this trait's image for ``role`` (`B200`).
 
         Role-filtered exactly like an entity's image, but with no universe
@@ -92,20 +96,21 @@ class TraitRef:
         sole-image rule gives a trait's first image all three roles, so a trait
         with one picture renders wherever it is asked for. See [[Media Pipeline]].
         """
-        variant = self._ROLE_VARIANT.get(role)
+        variant = _ROLE_VARIANT.get(role)
         if variant is None:
             return None
         em = info.context["entity_manager"]
-        return em.repo.resolve_role_image(str(self.id), role, None, variant)
+        images = await info.context["loaders"].images.load(str(self.id))
+        return em.repo.role_image_url(pick_role_image(images, role), variant)
 
     @strawberry.field
-    def image_transparent(self, info: strawberry.Info, role: str = "sheet") -> bool:
+    async def image_transparent(self, info: strawberry.Info, role: str = "sheet") -> bool:
         """Whether that image is a cutout, so the surface can float it rather
         than crop it — mirrors the entity sheet-portrait flag."""
-        if role not in self._ROLE_VARIANT:
+        if role not in _ROLE_VARIANT:
             return False
-        em = info.context["entity_manager"]
-        entry = em.repo.resolve_role_image_entry(str(self.id), role, None)
+        images = await info.context["loaders"].images.load(str(self.id))
+        entry = pick_role_image(images, role)
         return entry.transparent if entry is not None else False
 
 @strawberry.type
@@ -356,6 +361,34 @@ class TraitSetting:
         em = info.context["entity_manager"]
         trait = em.repo.get_trait(self.trait_id)
         return trait.tags if trait else []
+
+    @strawberry.field
+    async def image(self, info: strawberry.Info, role: str = "sheet") -> Optional[str]:
+        """URL of this trait's picture for ``role`` (`B200`).
+
+        A setting is a **variant** of its registry trait, so this walks the same
+        ladder an entity's body does — an image owned by *this setting* wins, then
+        the trait's own. Nothing is stored on a setting yet (slice 2), so today
+        this resolves the definition picture; when an override lands it will win
+        here without either surface changing, which is the whole reason the read
+        goes through the setting rather than straight to the trait.
+        """
+        variant = _ROLE_VARIANT.get(role)
+        if variant is None:
+            return None
+        em = info.context["entity_manager"]
+        images = await info.context["loaders"].images.load(str(self.trait_id))
+        return em.repo.role_image_url(pick_role_image(images, role, str(self.id)), variant)
+
+    @strawberry.field
+    async def image_transparent(self, info: strawberry.Info, role: str = "sheet") -> bool:
+        """Whether that picture is a cutout, so a surface can float it rather
+        than crop it — mirrors the entity sheet-portrait flag."""
+        if role not in _ROLE_VARIANT:
+            return False
+        images = await info.context["loaders"].images.load(str(self.trait_id))
+        entry = pick_role_image(images, role, str(self.id))
+        return entry.transparent if entry is not None else False
 
     @strawberry.field
     def possible_subtrait_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
