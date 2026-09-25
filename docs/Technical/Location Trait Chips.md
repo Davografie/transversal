@@ -129,6 +129,30 @@ caught both. `utils/locationTrait.js` now normalises at the boundary, and
 `scripts/check-trait-play.mjs` feeds literal wire entries through it, with both bugs
 kept as failing-if-regressed cases.
 
+## The marker picture (2026-09-25, [[B200]])
+
+A trait can own images, and the role that means *this surface* is **`navdot`** — the
+same role the map's dots use ([[Media Pipeline]] §Traits as image owners). When a
+location's trait has one, the chip leads with it, so the chip scans picture → name →
+rating, the order the sheet's trait rows use.
+
+- **The read is a read-through, not a field.** The registry **trait** owns the image
+  and the **trait setting** is the variant, exactly as the sheet's
+  `TraitSetting.image(role)` resolves, so slice 2's per-instance override will reach
+  the map with no change to the viewer. The ladder is the shared `pick_role_image`, so
+  the chip and the sheet cannot disagree about which file a role means.
+- **The payload carries the URL and the flag** — `navdot_image` +
+  `navdot_transparent` on both `/locations/{id}/traits` and `/challenge-traits`,
+  resolved **in one batch per page**, because a location holds dozens of traits and the
+  per-owner read measured ~2.7ms. An entry with no such image simply lacks the keys.
+- **A cutout stands OUT of the chip — no ring.** The picture is absolutely placed (so
+  the chip's height stays its text's, as the dice already are) and sized off the text
+  height plus a fixed overhang, so it breaks the chip's outline above and below whether
+  the chip is one line or two. That was the human's correction to the first pass, which
+  contained the art in a thumbnail: on this map a cutout is never confined to the
+  widget it marks. A plain opaque picture keeps a contained round thumbnail.
+  `e2e/tests/trait-chip-marker.spec.js` pins both branches by geometry.
+
 ## What is still needed
 
 **Only the drag gesture itself is unverified.** Everything it drives is proven:
@@ -146,6 +170,10 @@ Two things worth knowing for whoever tests it:
 - **`traitDiceGroups` is still mirrored** from `CharacterSheet.vue`'s
   `groupByDieType` (now in two places: that sheet and `TraitChip`). Two copies is
   the threshold at which this should move to a shared util.
+- **How far a cutout stands proud is one number** — the `calc(100% + 20px)` on
+  `.trait-chip-marker.transparent .trait-chip-marker-img`, currently 6px clear of the
+  chip above and below (measured on Everbloom Sanctuary's `spirit herb` chips, whose
+  `navdot` art is a 512×758 portrait). It is a taste knob, not a rule.
 
 ## Related
 
@@ -154,3 +182,4 @@ Two things worth knowing for whoever tests it:
 - [[Location Viewer]] — the dot model these chips sit alongside, and the arrange
   mode that drags them.
 - [[TraitRow]] — the sheet's trait rendering this chip matches.
+- [[Media Pipeline]] §Traits as image owners — the `navdot` role this chip renders.

@@ -258,6 +258,11 @@ here because they are the viewer's:
   read is snake_case with lowercase enums, and the shared play compares the sheet's
   camelCase uppercase. Skipping it makes a CHALLENGE trait behave like a static one —
   it pushes its raw dice instead of spending a die.
+- **A chip wears its trait's picture** when it has one (`B200`): the trait's `navdot`
+  image leads the chip, and a transparent cutout is sized past the chip's own height so
+  it breaks the chip's outline instead of being contained by it. The payload carries
+  `navdot_image` / `navdot_transparent`, batch-resolved per page; the geometry is pinned
+  in `e2e/tests/trait-chip-marker.spec.js`. See [[Location Trait Chips]] §marker.
 
 Zones and nav dots show the destination's background as their expanded image
 (the `navdot_image` role) — the "hole": an inner `<img>` sized as the
