@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.db.repository import EntityRepository
+from transversal.db.repository_mixins.images import pick_role_image
 from transversal.db.repository_mixins.trait_settings import trait_visible_to
 from transversal.domain import ArrivalKind
 from transversal.services.entity_manager import EntityManager, EntityNotFoundError
@@ -78,6 +79,34 @@ def _trait_entry(repo, ts, location_id: str, viewer: str):
     }
 
 
+def _attach_navdot_markers(repo, entries: list[dict]) -> list[dict]:
+    """Resolve each trait's ``navdot`` marker image onto its entry ([[B200]]).
+
+    The registry **trait** is the image owner and the **trait setting** is the
+    variant — the same read-through the sheet's ``TraitSetting.image(role)`` does,
+    which is what lets slice 2's per-instance override reach the map with no change
+    here ([[Media Pipeline]] §Traits as image owners). The ladder is the shared
+    ``pick_role_image``, so the chip and the sheet cannot disagree about which file
+    a role means; its universe rung answers empty for a trait, which is how one
+    picture serves every universe the trait belongs to.
+
+    Batched, because a location can hold dozens of traits: one
+    ``get_images_for_owners`` for the page rather than one read per chip. An entry
+    with no such image simply lacks the keys, and the chip draws as it did before.
+    """
+    owner_ids = list(dict.fromkeys(e["trait_id"] for e in entries if e.get("trait_id")))
+    if not owner_ids:
+        return entries
+    by_owner = repo.get_images_for_owners(owner_ids)
+    for entry in entries:
+        image = pick_role_image(by_owner.get(entry["trait_id"], []), "navdot", entry["id"])
+        if image is not None:
+            # "Large" matches the entity resolver's role→variant map (`_ROLE_VARIANT`).
+            entry["navdot_image"] = repo.role_image_url(image, "Large")
+            entry["navdot_transparent"] = image.transparent
+    return entries
+
+
 @router.get("/locations/{location_id}/traits")
 async def location_traits(location_id: str, viewer: str = ""):
     """Everything the viewer should list for this location ([[B92]]).
@@ -99,7 +128,8 @@ async def location_traits(location_id: str, viewer: str = ""):
         entry = _trait_entry(repo, ts, location_id, viewer)
         if entry is not None:
             traits.append(entry)
-    return {"location_id": location_id, "viewer": viewer or None, "traits": traits}
+    return {"location_id": location_id, "viewer": viewer or None,
+            "traits": _attach_navdot_markers(repo, traits)}
 
 
 @router.get("/locations/{location_id}/challenge-traits")
@@ -119,7 +149,8 @@ async def location_challenge_traits(location_id: str, viewer: str = ""):
         entry = _trait_entry(repo, ts, location_id, viewer)
         if entry is not None:
             traits.append(entry)
-    return {"location_id": location_id, "viewer": viewer or None, "traits": traits}
+    return {"location_id": location_id, "viewer": viewer or None,
+            "traits": _attach_navdot_markers(repo, traits)}
 
 
 @router.get("/locations/{location_id}/navigate")

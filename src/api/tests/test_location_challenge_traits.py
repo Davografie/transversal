@@ -114,6 +114,12 @@ class FakeRepo:
         entity.hidden = hidden
         return entity
 
+    def get_images_for_owners(self, owner_ids):
+        # The viewer payload resolves each trait's `navdot` marker in one batch
+        # ([[B200]]). These fixtures carry no images, so every entry comes back
+        # without one — the chip draws as it did before the marker existed.
+        return {}
+
 
 @pytest.fixture
 def client(monkeypatch):
