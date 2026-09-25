@@ -50,6 +50,13 @@ Every image is tagged with one or more **canonical roles**:
 
 ## Data model
 
+> [!info] Planned change — the image owner
+> Traits are getting images (`B200`), which generalises this record's **owner**
+> from "an entity" to `owner_kind` + `owner_id` + `variant_id`, with a backfill
+> of existing rows. Everything below describes the model **as built today**;
+> [[Trait Images Design Log]] carries the target shape. Read it before changing
+> anything in this section.
+
 `ImageType` (enum): `uploaded` · `imagen` · `animated` · `cutout`.
 
 `EntityImage` (`entity_images` collection) — one record per image file:
