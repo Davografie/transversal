@@ -32,6 +32,7 @@ class Repo:
         self.locations = {}             # location_id -> SimpleNamespace(sfx_ids=[...])
         self.location_parents = {}      # location_id -> parent location_id
         self.nested = {}                # parent_traitsetting_id -> [sub-instances]
+        self.sfxs = {}                  # sfx_id -> SFX (for the "why greyed" reads)
 
     def get_sub_traitsettings_for_parents(self, parent_ids):
         """Mirror the real batch read: sub-instances grouped by parent.
@@ -79,7 +80,7 @@ class Repo:
         return self.traitset_settings
 
     def get_sfx(self, sfx_id):
-        return None
+        return self.sfxs.get(sfx_id)
 
 
 def _entity(sfx_ids=None, current_projection=None, current_location=None):
@@ -1970,3 +1971,65 @@ def test_the_prefetch_agrees_with_the_per_entity_scope():
     prefetch = build_sfx_availability_prefetch(repo, [entity])
     with_prefetch = get_available_sfx_ids("char-1", "earth", repo, prefetch=prefetch)
     assert with_prefetch == without == ["sfx-standing"]
+
+# ── Why a rule is greyed (the sheet's question) ──────
+#
+# Availability discards a rule when its static conditions fail, so a listing knows
+# "not usable" and nothing else — which is how a card ends up greyed with no reason.
+
+def test_a_greyed_rule_says_which_condition_stops_it():
+    from transversal.domain import Condition, ConditionType, SFX
+    from transversal.services.sfx_owner import unavailable_sfx_reasons
+
+    repo = Repo()
+    repo.entity = SimpleNamespace(id="e1", sfx_ids=["sfx-gated"], current_projection=None,
+                                  current_location="loc-1")
+    repo.sfxs["sfx-gated"] = SFX(
+        id="sfx-gated", name="Gated", trigger="manual",
+        conditions=[Condition(type=ConditionType.AT_LOCATION, target="loc-elsewhere")])
+    assert get_available_sfx_ids("e1", "earth", repo) == []
+
+    reasons = unavailable_sfx_reasons(repo, repo.entity, "earth", ["sfx-gated"])
+    assert list(reasons) == ["sfx-gated"]
+    assert "elsewhere" in reasons["sfx-gated"][0], "the reason is the condition's own phrase"
+
+
+def test_an_available_rule_has_no_reason():
+    from transversal.domain import SFX
+    from transversal.services.sfx_owner import unavailable_sfx_reasons
+
+    repo = Repo()
+    repo.entity = SimpleNamespace(id="e1", sfx_ids=["sfx-open"], current_projection=None,
+                                  current_location="loc-1")
+    repo.sfxs["sfx-open"] = SFX(id="sfx-open", name="Open", trigger="manual")
+    assert unavailable_sfx_reasons(repo, repo.entity, "earth", ["sfx-open"]) == {}
+
+
+def test_a_context_gated_condition_is_never_a_reason():
+    """`roll_tier` is not false at listing time, it is *unknown*: reporting it would
+    grey a rule that is perfectly usable when the roll comes."""
+    from transversal.domain import Condition, ConditionType, SFX
+    from transversal.services.sfx_owner import unavailable_sfx_reasons
+
+    repo = Repo()
+    repo.entity = SimpleNamespace(id="e1", sfx_ids=["sfx-tier"], current_projection=None,
+                                  current_location="loc-1")
+    repo.sfxs["sfx-tier"] = SFX(
+        id="sfx-tier", name="Tier", trigger="on_roll",
+        conditions=[Condition(type=ConditionType.ROLL_TIER, target="high")])
+    assert unavailable_sfx_reasons(repo, repo.entity, "earth", ["sfx-tier"]) == {}
+
+
+def test_only_the_failing_conditions_are_named():
+    from transversal.domain import Condition, ConditionType, SFX
+    from transversal.services.sfx_owner import unavailable_sfx_reasons
+
+    repo = Repo()
+    repo.entity = SimpleNamespace(id="e1", sfx_ids=["sfx-gated"], current_projection=None,
+                                  current_location="loc-1")
+    repo.sfxs["sfx-gated"] = SFX(
+        id="sfx-gated", name="Gated", trigger="manual",
+        conditions=[Condition(type=ConditionType.AT_LOCATION, target="loc-1"),
+                    Condition(type=ConditionType.AT_LOCATION, target="loc-elsewhere")])
+    reasons = unavailable_sfx_reasons(repo, repo.entity, "earth", ["sfx-gated"])
+    assert len(reasons["sfx-gated"]) == 1, "only the failing one is a reason"

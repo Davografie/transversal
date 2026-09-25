@@ -46,6 +46,19 @@ class BoundVariableInput:
     spec: Optional[strawberry.scalars.JSON] = None
 
 @strawberry.type
+class UnavailableSfx:
+    """A rule the sheet lists but cannot offer, and the conditions that stop it.
+
+    Availability answers yes/no, which is how a card ends up greyed with no reason.
+    This is the other half: the failing conditions, phrased the way the rule's own
+    card phrases them ("you are at Rusted Gate", "Fire is rated ≥ d8"). Only
+    *static* conditions can appear — a context-gated one is unknown until it fires,
+    not false, so it never greys a rule.
+    """
+    sfx_id: strawberry.ID
+    reasons: list[str] = strawberry.field(default_factory=list)
+
+@strawberry.type
 class SfxRef:
     """SFX reference returned by queries."""
     id: strawberry.ID

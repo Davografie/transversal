@@ -24,7 +24,8 @@ from transversal.api.graphql.type_defs.conditions import (  # noqa: F401
     Condition,
     ConditionInput,
 )
-from transversal.api.graphql.type_defs.sfx import (  # noqa: F401
+from transversal.api.graphql.type_defs.sfx import (
+    UnavailableSfx,  # noqa: F401
     SfxOwnerKind,
     SfxOwnerKindGql,
     SfxRef,

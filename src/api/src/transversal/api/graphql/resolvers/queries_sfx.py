@@ -10,6 +10,7 @@ from transversal.api.graphql.types import SfxOwnerKindGql
 from transversal.api.graphql.types import SfxOwnerRef
 from transversal.api.graphql.types import SfxRef
 from transversal.api.graphql.types import PlaceSfxRules
+from transversal.api.graphql.types import UnavailableSfx
 from transversal.services.sfx_text import repo_name_resolver
 from typing import Optional
 from transversal.api.graphql.resolvers.converters import (
@@ -367,6 +368,30 @@ class QueriesSfx:
             entity = repo.get_entity(str(entity_id))
             universe = entity.current_universe if entity else ""
         return [strawberry.ID(i) for i in get_available_sfx_ids(str(entity_id), universe, repo)]
+
+    @strawberry.field
+    def unavailable_sfx(self, info: strawberry.Info, entity_id: strawberry.ID,
+                        universe: str = "",
+                        sfx_ids: Optional[list[strawberry.ID]] = None) -> list[UnavailableSfx]:
+        """Why a listed rule is greyed: its failing static conditions, in card words.
+
+        ``sfx_ids`` is the set the caller is showing (a trait detail view's rules);
+        a rule that is available, or that has no static conditions, is absent.
+        """
+        from transversal.services.sfx_owner import unavailable_sfx_reasons
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            return []
+        if not universe:
+            universe = entity.current_universe or ""
+        candidates = [str(i) for i in (sfx_ids or [])]
+        if not candidates:
+            return []
+        reasons = unavailable_sfx_reasons(repo, entity, universe, candidates)
+        return [UnavailableSfx(sfx_id=strawberry.ID(sid), reasons=texts)
+                for sid, texts in sorted(reasons.items())]
 
     @strawberry.field
     def validate_sfx(self, info: strawberry.Info, input: SfxInput) -> list[str]:
