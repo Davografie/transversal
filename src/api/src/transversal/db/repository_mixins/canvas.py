@@ -234,16 +234,15 @@ class RepositoryCanvas:
         self,
         entity_ids: list[str],
         role: str,
-        variant: str = "Large",
         bodies: dict[str, str] | None = None,
     ) -> dict[str, str]:
         """Resolve one image URL per entity for a role tag.
 
         Each entity is resolved through a body first, falling back to
         entity-level images. ``role`` is a canonical role tag
-        (background/sheet/navdot); ``variant`` is the static size suffix
-        (Large/Small). Animated images return their video URL regardless of
-        variant.
+        (background/sheet/navdot); which **render** and tier it serves comes from
+        the resolved record (see ``ROLE_RENDER``) — a picture with a matte serves it
+        here exactly as it does everywhere else.
 
         ``bodies`` overrides **which** body, per entity: ``{entity_id: body_id}``.
         Default is the entity's *active* body (``current_projection``) — right for
@@ -271,7 +270,7 @@ class RepositoryCanvas:
         return {
             eid: url
             for eid in entity_ids
-            if (url := self.resolve_role_image(eid, role, current_proj.get(eid), variant)) is not None
+            if (url := self.resolve_role_image(eid, role, current_proj.get(eid))) is not None
         }
 
     def _navdot_urls(self, entity_ids: list[str], bodies: dict[str, str] | None = None) -> dict[str, str]:

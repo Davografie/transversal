@@ -17,7 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.domain import CREDIT_ROLES, IMAGE_FLAGS, ImageType, MediaImage
-from transversal.services.media_utils import ROLE_VARIANT
+from transversal.services.media_utils import ROLE_RENDER
 from transversal.imagen.orchestrator import UPSCALE_MASTER_CAP
 from transversal.imagen.models import (
     AnimateRequest,
@@ -500,8 +500,9 @@ async def entity_images_batch(role: str = "sheet", ids: str = ""):
         return {"images": {}}
     from transversal.db.repository import EntityRepository
 
-    variant = ROLE_VARIANT.get(role, "Large")
-    images = EntityRepository().get_role_images(entity_ids, role, variant)
+    if role not in ROLE_RENDER:
+        raise HTTPException(status_code=400, detail=f"Unknown role '{role}'")
+    images = EntityRepository().get_role_images(entity_ids, role)
     return {"images": images}
 
 def _validated_credits(raw) -> list[dict]:

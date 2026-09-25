@@ -4,7 +4,7 @@ import strawberry
 
 from typing import Optional
 
-from transversal.services.media_utils import ROLE_VARIANT
+from transversal.services.media_utils import ROLE_RENDER
 from transversal.api.graphql.type_defs.image_meta import (
     ImageInfo,
     build_image_info,
@@ -68,11 +68,11 @@ class TraitDisplayNameInput:
     universe: str = ""
     ratings: list[list[DieType]] = strawberry.field(default_factory=list)
 
-#: Which stored variant a role renders from — the same map the entity resolver
-#: uses, so a trait picture and an entity portrait behave alike. Module level
-#: because a trait *setting* resolves through the same roles, and two copies
-#: would be free to disagree about which file a role means.
-_ROLE_VARIANT = ROLE_VARIANT
+#: Which render a role serves — the same map the entity resolver uses, so a trait
+#: picture and an entity portrait behave alike. Module level because a trait
+#: *setting* resolves through the same roles, and two copies would be free to
+#: disagree about which file a role means.
+_ROLE_RENDER = ROLE_RENDER
 
 
 @strawberry.type
@@ -102,12 +102,11 @@ class TraitRef:
         sole-image rule gives a trait's first image all three roles, so a trait
         with one picture renders wherever it is asked for. See [[Media Pipeline]].
         """
-        variant = _ROLE_VARIANT.get(role)
-        if variant is None:
+        if role not in _ROLE_RENDER:
             return None
         em = info.context["entity_manager"]
         images = await info.context["loaders"].images.load(str(self.id))
-        return em.repo.role_image_url(pick_role_image(images, role), variant)
+        return em.repo.role_image_url(pick_role_image(images, role), role)
 
     @strawberry.field
     async def image_info(self, info: strawberry.Info, role: str = "sheet") -> Optional[ImageInfo]:
@@ -118,21 +117,20 @@ class TraitRef:
         reader having to fetch the image list over REST to find out what the
         picture is.
         """
-        variant = _ROLE_VARIANT.get(role)
-        if variant is None:
+        if role not in _ROLE_RENDER:
             return None
         em = info.context["entity_manager"]
         images = await info.context["loaders"].images.load(str(self.id))
         entry = pick_role_image(images, role)
         if entry is None:
             return None
-        return build_image_info(entry, role, em.repo.role_image_url(entry, variant) or "")
+        return build_image_info(entry, role, em.repo.role_image_url(entry, role) or "")
 
     @strawberry.field
     async def image_transparent(self, info: strawberry.Info, role: str = "sheet") -> bool:
         """Whether that image is a cutout, so the surface can float it rather
         than crop it — mirrors the entity sheet-portrait flag."""
-        if role not in _ROLE_VARIANT:
+        if role not in _ROLE_RENDER:
             return False
         images = await info.context["loaders"].images.load(str(self.id))
         entry = pick_role_image(images, role)
@@ -414,31 +412,29 @@ class TraitSetting:
         here without either surface changing, which is the whole reason the read
         goes through the setting rather than straight to the trait.
         """
-        variant = _ROLE_VARIANT.get(role)
-        if variant is None:
+        if role not in _ROLE_RENDER:
             return None
         em = info.context["entity_manager"]
         images = await info.context["loaders"].images.load(str(self.trait_id))
-        return em.repo.role_image_url(pick_role_image(images, role, str(self.id)), variant)
+        return em.repo.role_image_url(pick_role_image(images, role, str(self.id)), role)
 
     @strawberry.field
     async def image_info(self, info: strawberry.Info, role: str = "sheet") -> Optional[ImageInfo]:
         """``image`` plus the metadata a viewer shows — see ``TraitRef.image_info``."""
-        variant = _ROLE_VARIANT.get(role)
-        if variant is None:
+        if role not in _ROLE_RENDER:
             return None
         em = info.context["entity_manager"]
         images = await info.context["loaders"].images.load(str(self.trait_id))
         entry = pick_role_image(images, role, str(self.id))
         if entry is None:
             return None
-        return build_image_info(entry, role, em.repo.role_image_url(entry, variant) or "")
+        return build_image_info(entry, role, em.repo.role_image_url(entry, role) or "")
 
     @strawberry.field
     async def image_transparent(self, info: strawberry.Info, role: str = "sheet") -> bool:
         """Whether that picture is a cutout, so a surface can float it rather
         than crop it — mirrors the entity sheet-portrait flag."""
-        if role not in _ROLE_VARIANT:
+        if role not in _ROLE_RENDER:
             return False
         images = await info.context["loaders"].images.load(str(self.trait_id))
         entry = pick_role_image(images, role, str(self.id))

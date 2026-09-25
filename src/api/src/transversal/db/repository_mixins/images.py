@@ -15,6 +15,7 @@ from transversal.db.arango import ENTITIES
 from transversal.db.arango import IMAGES
 from transversal.domain import MediaImage
 from transversal.domain import ImageType
+from transversal.services.media_utils import render_for
 
 
 def pick_role_image(
@@ -150,11 +151,20 @@ class RepositoryImages:
             if (img.variant_id or None) == variant_id
         ]
 
-    def _image_url(self, img: MediaImage, variant: str = "Large") -> str:
-        """Public media URL for an image, honoring animated vs static variant."""
-        if img.image_type == ImageType.ANIMATED:
-            return f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}"
-        return f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_{variant}.{img.extension}"
+    def _image_url(self, img: MediaImage, render: str = "static", tier: str = "Large") -> str:
+        """Public media URL for one render of a picture — the one place its shape lives.
+
+        ``render`` is ``static`` (a tier of the image itself), ``cutout`` (a tier of
+        the matte) or ``animated`` (the loop). A matte is always WebP whatever the
+        still's extension is; a loop keeps its own container, which a merged picture
+        records separately because ``extension`` names the still.
+        """
+        if render == "animated":
+            ext = img.animated_extension or img.extension
+            return f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{ext}"
+        if render == "cutout":
+            return f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Cutout_{tier}.webp"
+        return f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_{tier}.{img.extension}"
 
     def resolve_role_image_entry(
         self, owner_id: str, role: str, variant_id: str | None = None
@@ -199,15 +209,25 @@ class RepositoryImages:
             universes.append(proj.origin_universe)
         return universes
 
-    def role_image_url(self, img: MediaImage | None, variant: str = "Large") -> str | None:
-        """Public media URL for a resolved image — the one place its shape lives."""
-        return self._image_url(img, variant) if img else None
+    def role_image_url(self, img: MediaImage | None, role: str) -> str | None:
+        """Public media URL for a resolved image, at the render that ``role`` serves.
+
+        The render (the matte, the loop, or the plain image) and the tier both come
+        from ``ROLE_RENDER`` and the record's own ``renders``, so **no caller names a
+        tier** — a role cannot mean a different file on one surface than another, and
+        a picture that has a matte serves it without anyone re-tagging a second
+        record.
+        """
+        if img is None:
+            return None
+        render, tier = render_for(role, img.available_renders)
+        return self._image_url(img, render, tier)
 
     def resolve_role_image(
-        self, owner_id: str, role: str, variant_id: str | None = None, variant: str = "Large"
+        self, owner_id: str, role: str, variant_id: str | None = None
     ) -> str | None:
         """Resolve a role image URL — see ``resolve_role_image_entry`` for order."""
-        return self.role_image_url(self.resolve_role_image_entry(owner_id, role, variant_id), variant)
+        return self.role_image_url(self.resolve_role_image_entry(owner_id, role, variant_id), role)
 
     def get_navdot_images(
         self, entity_ids: list[str], bodies: dict[str, str] | None = None
@@ -256,6 +276,6 @@ class RepositoryImages:
                 result[eid] = entry.transparent
         return result
 
-    def get_role_images(self, entity_ids: list[str], role: str, variant: str = "Large") -> dict[str, str]:
+    def get_role_images(self, entity_ids: list[str], role: str) -> dict[str, str]:
         """Resolve one image URL per entity for any role tag, in one batch."""
-        return self._role_urls(entity_ids, role, variant)
+        return self._role_urls(entity_ids, role)

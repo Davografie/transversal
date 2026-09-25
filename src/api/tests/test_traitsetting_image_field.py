@@ -24,6 +24,7 @@ from types import SimpleNamespace
 
 from transversal.api.graphql.type_defs.traits import TraitRef, TraitSetting
 from transversal.domain import DieType, ImageType, MediaImage, RatingType
+from transversal.services.media_utils import ROLE_RENDER
 
 TRAIT = "trait-probe-image"
 SETTING = "character-probe:trait-probe-image"
@@ -43,10 +44,16 @@ class _Images:
 
 
 class _Repo:
-    """Only the URL formatter, marked so a test can see which image won."""
+    """Only the URL formatter, marked so a test can see which image won.
 
-    def role_image_url(self, img, variant="Large"):
-        return f"{img.id}:{variant}" if img else None
+    It mirrors the real builder's tier choice through the **shared** map, so this
+    test still pins the invariant it exists for: the setting's read and the
+    registry trait's read cannot disagree about what a role means.
+    """
+
+    def role_image_url(self, img, role):
+        _, tier = ROLE_RENDER.get(role, ("", "Large"))
+        return f"{img.id}:{tier}" if img else None
 
 
 def _info(images):

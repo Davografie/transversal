@@ -8,7 +8,7 @@ from transversal.api.graphql.type_defs.enums import (
     EntityType,
     TransversalTypeEnum,
 )
-from transversal.services.media_utils import ROLE_VARIANT
+from transversal.services.media_utils import ROLE_RENDER
 from transversal.api.graphql.type_defs.image_meta import (
     ImageInfo,
     build_image_info,
@@ -37,9 +37,7 @@ class Projection:
     def sheet_image(self, info: strawberry.Info) -> Optional[str]:
         """This body's sheet role image (with entity-level fallback)."""
         em = info.context["entity_manager"]
-        return em.repo.resolve_role_image(
-            str(self.entity_id), "sheet", str(self.id), "Small"
-        )
+        return em.repo.resolve_role_image(str(self.entity_id), "sheet", str(self.id))
 
     @strawberry.field
     def sheet_image_transparent(self, info: strawberry.Info) -> bool:
@@ -139,7 +137,7 @@ class Entity:
     @strawberry.field
     def background_image(self, info: strawberry.Info) -> Optional[str]:
         em = info.context["entity_manager"]
-        url = em.repo.resolve_role_image(str(self.id), "background", None, "Large")
+        url = em.repo.resolve_role_image(str(self.id), "background", None)
         return url if url is not None else self._background_image
 
     @strawberry.field
@@ -166,7 +164,7 @@ class Entity:
     def sheet_portrait(self, info: strawberry.Info) -> Optional[str]:
         em = info.context["entity_manager"]
         # Sheet portraits render at ~40px — serve the small variant.
-        url = em.repo.resolve_role_image(str(self.id), "sheet", None, "Small")
+        url = em.repo.resolve_role_image(str(self.id), "sheet", None)
         if url is not None:
             return url
         # Fall back to background image
@@ -193,19 +191,18 @@ class Entity:
     # (its own image first, then entity-level fallback); when omitted only
     # entity-level images are considered. There is deliberately no fallback to
     # the legacy denormalized background_image field.
-    _ROLE_VARIANT = ROLE_VARIANT
+    _ROLE_RENDER = ROLE_RENDER
 
     @strawberry.field
     def image(self, info: strawberry.Info, role: str, projection_id: Optional[strawberry.ID] = None) -> Optional[str]:
-        variant = self._ROLE_VARIANT.get(role)
-        if variant is None:
+        if role not in self._ROLE_RENDER:
             return None
         em = info.context["entity_manager"]
         # When no explicit projection is given, resolve through the entity's
         # active body (current_projection) so callers asking for "the entity's"
         # image get the active body's image first, falling back to entity level.
         pid = str(projection_id) if projection_id else (self.current_projection or None)
-        return em.repo.resolve_role_image(str(self.id), role, pid, variant)
+        return em.repo.resolve_role_image(str(self.id), role, pid)
 
     @strawberry.field
     def image_info(
@@ -220,16 +217,14 @@ class Entity:
         fallback); this exists because a viewer that wants to *disclose* where a
         picture came from needs the record, not just its URL.
         """
-        variant = self._ROLE_VARIANT.get(role)
-        if variant is None:
+        if role not in self._ROLE_RENDER:
             return None
         em = info.context["entity_manager"]
         pid = str(projection_id) if projection_id else (self.current_projection or None)
         entry = em.repo.resolve_role_image_entry(str(self.id), role, pid)
         if entry is None:
             return None
-        url = em.repo.resolve_role_image(str(self.id), role, pid, variant)
-        return build_image_info(entry, role, url or "")
+        return build_image_info(entry, role, em.repo.role_image_url(entry, role) or "")
 
     @strawberry.field
     def pending_term(self, info: strawberry.Info) -> Optional[PendingTerm]:

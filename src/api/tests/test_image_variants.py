@@ -12,7 +12,7 @@ import io
 import pytest
 from PIL import Image
 
-from transversal.services.media_utils import ROLE_VARIANT, save_image_variants
+from transversal.services.media_utils import ROLE_RENDER, ROLE_VARIANT, render_for, save_image_variants
 
 
 def _source(width, height, mode="RGB"):
@@ -78,15 +78,37 @@ def test_alpha_survives_every_tier(tmp_path):
 # ── The map the surfaces read ─────────────────────────
 
 
-def test_background_renders_from_the_biggest_tier():
-    assert ROLE_VARIANT["background"] == "XLarge"
-    # The small surfaces stay small: a map dot and a panel portrait pay nothing
-    # for pixels nobody sees.
-    assert ROLE_VARIANT["navdot"] == "Large"
-    assert ROLE_VARIANT["sheet"] == "Small"
+def test_each_role_names_its_render_and_static_tier():
+    """The whole render policy in one table ([[B210]])."""
+    assert ROLE_RENDER["background"] == ("animated", "XLarge")
+    assert ROLE_RENDER["navdot"] == ("cutout", "Large")
+    assert ROLE_RENDER["sheet"] == ("cutout", "Small")
+    # The static tier is still the fallback, so a picture with no matte serves
+    # exactly what it served before a cutout became a render.
+    assert ROLE_VARIANT == {"background": "XLarge", "sheet": "Small", "navdot": "Large"}
+
+
+def test_sheet_and_navdot_take_the_matte_at_their_own_tier():
+    """A matte is served without a second record — and at the small role's tier,
+    never at the matte's master size."""
+    assert render_for("sheet", []) == ("static", "Small")
+    assert render_for("sheet", ["cutout"]) == ("cutout", "Small")
+    assert render_for("navdot", ["cutout"]) == ("cutout", "Large")
+
+
+def test_background_prefers_the_loop_when_there_is_one():
+    assert render_for("background", []) == ("static", "XLarge")
+    assert render_for("background", ["animated"]) == ("animated", "XLarge")
+    # A picture can carry both renders; each role still picks its own.
+    assert render_for("background", ["cutout", "animated"]) == ("animated", "XLarge")
+    assert render_for("sheet", ["cutout", "animated"]) == ("cutout", "Small")
+
+
+def test_an_unknown_role_falls_back_to_static_large():
+    assert render_for("portrait", ["cutout"]) == ("static", "Large")
 
 
 def test_the_graphql_resolvers_share_one_map():
     from transversal.api.graphql.type_defs import entities, traits
-    assert entities.Entity._ROLE_VARIANT is ROLE_VARIANT
-    assert traits._ROLE_VARIANT is ROLE_VARIANT
+    assert entities.Entity._ROLE_RENDER is ROLE_RENDER
+    assert traits._ROLE_RENDER is ROLE_RENDER

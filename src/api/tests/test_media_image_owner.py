@@ -153,7 +153,10 @@ def test_trait_definition_image_resolves_by_role():
     repo.create_image(_trait_image(DEF_ID))
 
     url = repo.resolve_role_image(TRAIT, "sheet")
-    assert url == f"/media/imagen/{TRAIT}/three_realms/probe_{DEF_ID}_Large.webp"
+    # Through the shared role map, so `sheet` means the Small tier here exactly as
+    # it does for an entity portrait — the old default was Large, which is how the
+    # tier could differ by caller.
+    assert url == f"/media/imagen/{TRAIT}/three_realms/probe_{DEF_ID}_Small.webp"
 
     entry = repo.resolve_role_image_entry(TRAIT, "sheet")
     assert entry is not None

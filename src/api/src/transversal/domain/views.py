@@ -32,6 +32,15 @@ class CharacterView(BaseModel):
 #: pipeline.
 IMAGE_FLAGS = ("ai", "ai_generated", "ai_animated")
 
+#: Derived renders a picture can carry on top of its static ladder.
+#:
+#: ``cutout`` is a matte (the picture with its background removed) and ``animated``
+#: a loop. They belong to the **picture**, not to a second record: the role map
+#: (``services/media_utils.ROLE_RENDER``) reads this list to decide what a role
+#: serves, which is what makes a cutout keep its credits, its flags and its id by
+#: construction. See [[Image Tiers Design Log]].
+IMAGE_RENDERS = ("cutout", "animated")
+
 #: Roles a credited party can hold on an image.
 #:
 #: Named to line up with the established vocabularies so this data can be
@@ -83,6 +92,11 @@ class MediaImage(BaseModel):
     #: one of the pipelines that declares AI, and a cutout is the same picture with
     #: its background removed.
     flags: list[str] = Field(default_factory=list)
+    #: Derived renders this picture has, on top of its static ladder — a subset of
+    #: ``IMAGE_RENDERS``. A cutout is not a second picture but the same one with a
+    #: matte, and a loop is the same one with motion, so both are recorded here and
+    #: the role map decides which a surface gets. See [[Image Tiers Design Log]].
+    renders: list[str] = Field(default_factory=list)
     #: Who made it and where it came from. The structured half of an attribution
     #: — Creative Commons' TASL *Author* and *Source* (and IPTC's Creator /
     #: Credit Line / Source). See [[Media Pipeline]] § Credits.
@@ -104,6 +118,11 @@ class MediaImage(BaseModel):
     steps: int = 0
     filename: str = ""  # base filename without variant suffix or extension
     extension: str = "png"
+    #: The loop's container, when this picture has an ``animated`` render. A merged
+    #: picture is a still (``extension`` = webp) that *also* has a video, and one
+    #: field cannot name both. Empty on a row written before the tier migration, and
+    #: then the loop shares ``extension``.
+    animated_extension: str = ""
     created_at: str = ""  # ISO 8601
 
     # ── Legacy ownership fields (transitional) ───────────────────────────
@@ -127,3 +146,18 @@ class MediaImage(BaseModel):
             self.entity_id = self.owner_id
             self.projection_id = self.variant_id
         return self
+
+    @property
+    def available_renders(self) -> list[str]:
+        """``renders``, with a row written before the tier migration read in.
+
+        A pre-``B210`` row carries no ``renders``: an ``animated`` row's only render
+        was its video, and a ``cutout`` row was a separate matte record that serves
+        its own static ladder (so it has no *derived* render). Dropped with the
+        legacy ``ImageType`` members, once no row has them.
+        """
+        if self.renders:
+            return self.renders
+        if self.image_type == ImageType.ANIMATED:
+            return ["animated"]
+        return []

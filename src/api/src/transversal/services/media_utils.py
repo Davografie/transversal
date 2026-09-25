@@ -88,10 +88,35 @@ def save_image_variants(image_data: bytes, output_dir, base_name: str) -> dict[s
     return filenames
 
 
-#: Which tier each role renders from.
+#: Which render a role prefers, and the static tier it serves at when the picture
+#: has no such render. A picture can carry derived renders — a matte (``cutout``) or
+#: a loop (``animated``) — alongside its static ladder, and the role decides which
+#: one it gets. This is the **whole** render policy in one table; a resolver that
+#: wants a URL asks the record what it has rather than retyping a tier.
 #:
-#: ``background`` is the only full-bleed one — a location backdrop is drawn at
-#: viewport size, so it takes the biggest tier there is. ``navdot`` is a map dot
-#: and ``sheet`` a panel portrait; both are small on screen and would only pay
-#: memory for pixels nobody sees.
-ROLE_VARIANT = {"background": "XLarge", "sheet": "Small", "navdot": "Large"}
+#: ``background`` is the only full-bleed role, so it takes the biggest static tier
+#: (or the loop, whose motion is the point). ``navdot`` and ``sheet`` take the matte
+#: at **their own** small tier — a matte kept only at master size would send a
+#: 2048px transparent WebP for a 240px portrait.
+ROLE_RENDER = {
+    "background": ("animated", "XLarge"),
+    "sheet": ("cutout", "Small"),
+    "navdot": ("cutout", "Large"),
+}
+
+#: The static tier per role, for callers that need only a size (the ladder itself,
+#: and `upscale_backgrounds`).
+ROLE_VARIANT = {role: tier for role, (_, tier) in ROLE_RENDER.items()}
+
+
+def render_for(role: str, renders: list[str] | None) -> tuple[str, str]:
+    """``(render, tier)`` a role serves from a picture that has ``renders``.
+
+    Falls back to the role's static tier when the preferred render is absent, which
+    is why the choice can live entirely on the record: the same role means the matte
+    on a cut-out picture and the plain image on one without a matte.
+    """
+    preferred, tier = ROLE_RENDER.get(role, ("", "Large"))
+    if preferred and preferred in (renders or []):
+        return preferred, tier
+    return "static", tier
