@@ -99,8 +99,12 @@ test('adding a rating from the detail view returns to the set list', async ({ pa
 
     expect(after.detailOpen, `playing "${found.trait}" left the reader on the detail`).toBe(false)
     expect(after.setsRendered, 'the set list must be back').toBeGreaterThan(0)
-    // The set they came from stays open, so the row they just played is on screen.
-    expect(after.openSets).toContain(found.set)
+    // …and they are standing in exactly one set's list, not on the set layer as a
+    // whole. *Which* set is deliberately not asserted here: on this character every
+    // set is limit 1, so the pick fills it and the auto-advance hands them the
+    // next one. That rule has its own spec (`sheet-set-advance.spec.js`); this one
+    // is about not being stranded on the detail.
+    expect(after.openSets, 'the reader is in a set, not on the bare set layer').toHaveLength(1)
   } finally {
     // Restore even when the assertion fails — the pool is the testing
     // character's, and a red test must not leave a die in it.
