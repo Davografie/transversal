@@ -24,7 +24,10 @@ except ImportError:
 
 from transversal.domain import IMAGE_FLAGS, ImageType, MediaImage
 from transversal.db.repository import EntityRepository
-from transversal.services.media_utils import has_transparency
+from transversal.services.media_utils import (
+    has_transparency,
+    save_image_variants as _save_image_variants,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
 
@@ -81,30 +84,6 @@ def _convert_to_webp(data: bytes, source_ext: str) -> bytes:
     return buf.getvalue()
 
 
-def _save_image_variants(image_data: bytes, output_dir: Path, base_name: str) -> str:
-    """Save original + 3 variant sizes as webp. Returns the large variant filename."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    img = Image.open(io.BytesIO(image_data))
-    width, height = img.size
-
-    variants = {
-        "original": (width, height, "Original"),
-        "large": (min(width, 1024), int(min(width, 1024) / width * height) if width > height else int(min(height, 1024) / height * width), "Large"),
-        "small": (min(width, 240), int(min(width, 240) / width * height) if width > height else int(min(height, 240) / height * width), "Small"),
-        "mini": (min(width, 48), int(min(width, 48) / width * height) if width > height else int(min(height, 48) / height * width), "Mini"),
-    }
-
-    for variant_key, (w, h, label) in variants.items():
-        if variant_key == "original" or (w < width and h < height):
-            resized = img.resize((w, h), Image.LANCZOS)
-        else:
-            resized = img
-        fname = f"{base_name}_{label}.webp"
-        buf = io.BytesIO()
-        resized.save(buf, format="WEBP", quality=85)
-        (output_dir / fname).write_bytes(buf.getvalue())
-
-    return f"{base_name}_Large.webp"
 
 
 @router.post("/media/upload")

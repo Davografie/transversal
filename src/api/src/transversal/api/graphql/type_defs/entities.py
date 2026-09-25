@@ -8,6 +8,7 @@ from transversal.api.graphql.type_defs.enums import (
     EntityType,
     TransversalTypeEnum,
 )
+from transversal.services.media_utils import ROLE_VARIANT
 from transversal.api.graphql.type_defs.image_meta import (
     ImageInfo,
     build_image_info,
@@ -192,7 +193,7 @@ class Entity:
     # (its own image first, then entity-level fallback); when omitted only
     # entity-level images are considered. There is deliberately no fallback to
     # the legacy denormalized background_image field.
-    _ROLE_VARIANT = {"background": "Large", "sheet": "Small", "navdot": "Large"}
+    _ROLE_VARIANT = ROLE_VARIANT
 
     @strawberry.field
     def image(self, info: strawberry.Info, role: str, projection_id: Optional[strawberry.ID] = None) -> Optional[str]:

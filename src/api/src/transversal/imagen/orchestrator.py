@@ -41,7 +41,10 @@ from transversal.imagen.models import (
 )
 from transversal.imagen.ollama import OllamaClient
 from transversal.imagen.prompt_builder import build_imagen_prompt
-from transversal.services.media_utils import has_transparency
+from transversal.services.media_utils import (
+    has_transparency,
+    save_image_variants as _save_image_variants,
+)
 
 logger = logging.getLogger("transversal.imagen")
 logger.setLevel(logging.INFO)
@@ -82,46 +85,6 @@ def _safe_filename(name: str) -> str:
     return "".join(c if c.isalnum() or c in "_-" else "_" for c in name).strip("_")
 
 
-def _save_image_variants(image_data: bytes, output_dir: Path, base_name: str) -> dict[str, str]:
-    """Save original + 3 variant sizes as webp. Returns dict of variant→filename.
-
-    Files named: {base_name}_{Size}.webp (e.g. ElenaAntonova_Earth_Large_a1b2.webp)
-    """
-    img = Image.open(__import__("io").BytesIO(image_data))
-    width, height = img.size
-
-    variants = {
-        "original": (width, height, "Original"),
-        "large": (min(width, 1024), int(min(width, 1024) / width * height) if width > height else int(min(height, 1024) / height * width), "Large"),
-        "small": (min(width, 240), int(min(width, 240) / width * height) if width > height else int(min(height, 240) / height * width), "Small"),
-        "mini": (min(width, 48), int(min(width, 48) / width * height) if width > height else int(min(height, 48) / height * width), "Mini"),
-    }
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    filenames: dict[str, str] = {}
-
-    for variant_key, (w, h, size_label) in variants.items():
-        if variant_key == "original":
-            resized = img
-        else:
-            if width > height:
-                new_w, new_h = w, int((w / width) * height)
-            else:
-                new_w, new_h = int((h / height) * width), h
-            resized = img.resize((new_w, new_h), Image.LANCZOS)
-
-        # Convert RGBA → RGB for webp, strip EXIF
-        if resized.mode in ("RGBA", "LA", "P"):
-            resized = resized.convert("RGBA")
-        else:
-            resized = resized.convert("RGB")
-
-        fname = f"{base_name}_{size_label}.webp"
-        path = output_dir / fname
-        resized.save(path, format="WEBP", quality=85)
-        filenames[variant_key] = fname
-
-    return filenames
 
 
 class ImagenOrchestrator:

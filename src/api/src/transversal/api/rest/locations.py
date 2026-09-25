@@ -13,6 +13,8 @@ from transversal.services.entity_manager import EntityManager, EntityNotFoundErr
 
 logger = logging.getLogger("transversal.locations")
 
+from transversal.services.media_utils import ROLE_VARIANT
+
 router = APIRouter(prefix="/api/v1", tags=["locations"])
 
 
@@ -101,8 +103,9 @@ def _attach_navdot_markers(repo, entries: list[dict]) -> list[dict]:
     for entry in entries:
         image = pick_role_image(by_owner.get(entry["trait_id"], []), "navdot", entry["id"])
         if image is not None:
-            # "Large" matches the entity resolver's role→variant map (`_ROLE_VARIANT`).
-            entry["navdot_image"] = repo.role_image_url(image, "Large")
+            # Via the shared map, so a navdot cannot drift from what the entity
+            # resolver would serve for the same role.
+            entry["navdot_image"] = repo.role_image_url(image, ROLE_VARIANT["navdot"])
             entry["navdot_transparent"] = image.transparent
     return entries
 

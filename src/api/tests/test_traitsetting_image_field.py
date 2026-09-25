@@ -97,11 +97,17 @@ async def test_another_settings_override_is_not_mine():
 
 async def test_each_role_reads_its_own_stored_variant():
     """The role→variant map is shared with the registry trait's read, so a role
-    cannot mean one file here and another there."""
+    cannot mean one file here and another there.
+
+    Updated 2026-09-25: `background` moved from `Large` to `XLarge` (2048) when the
+    full-bleed tiers were added — a backdrop is drawn at viewport size, while
+    `navdot` is a map dot and `sheet` a panel portrait and both stay small. The
+    map is now one constant in `services/media_utils.py`, which is the invariant
+    this test is really about."""
     info = _info([_image("def", roles=("background", "sheet", "navdot"))])
     setting = _setting()
     assert await setting.image(info, "sheet") == "def:Small"
-    assert await setting.image(info, "background") == "def:Large"
+    assert await setting.image(info, "background") == "def:XLarge"
     assert await setting.image(info, "navdot") == "def:Large"
 
 

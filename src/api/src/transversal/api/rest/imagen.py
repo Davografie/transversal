@@ -17,6 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.domain import CREDIT_ROLES, IMAGE_FLAGS, ImageType, MediaImage
+from transversal.services.media_utils import ROLE_VARIANT
 from transversal.imagen.models import (
     AnimateRequest,
     GenerationStatus,
@@ -427,7 +428,7 @@ async def entity_images_batch(role: str = "sheet", ids: str = ""):
         return {"images": {}}
     from transversal.db.repository import EntityRepository
 
-    variant = "Small" if role == "sheet" else "Large"
+    variant = ROLE_VARIANT.get(role, "Large")
     images = EntityRepository().get_role_images(entity_ids, role, variant)
     return {"images": images}
 
@@ -511,6 +512,7 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "license": img.license,
                 "credit_text": img.credit_text,
                 "path_large": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}",
+                "path_xlarge": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_XLarge.{img.extension}",
                 "path_animated": f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
             }
             for img in images

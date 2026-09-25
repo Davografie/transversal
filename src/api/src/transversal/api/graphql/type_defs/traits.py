@@ -4,6 +4,7 @@ import strawberry
 
 from typing import Optional
 
+from transversal.services.media_utils import ROLE_VARIANT
 from transversal.api.graphql.type_defs.image_meta import (
     ImageInfo,
     build_image_info,
@@ -71,7 +72,7 @@ class TraitDisplayNameInput:
 #: uses, so a trait picture and an entity portrait behave alike. Module level
 #: because a trait *setting* resolves through the same roles, and two copies
 #: would be free to disagree about which file a role means.
-_ROLE_VARIANT = {"background": "Large", "sheet": "Small", "navdot": "Large"}
+_ROLE_VARIANT = ROLE_VARIANT
 
 
 @strawberry.type

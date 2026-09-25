@@ -113,28 +113,105 @@ docker compose exec api python -m transversal.backfill_transparency --apply  # w
 Animated images are skipped (video has no alpha to detect); transparent loops
 get the flag from the matting stage instead (see [[#Transparent animations]]).
 
+## The variant ladder
+
+| tier | long side | used by |
+| --- | --- | --- |
+| `Original` | the master | nothing directly — the archival copy |
+| `XLarge` | ≤2048 | **`background`** — the only full-bleed role |
+| `Large` | ≤1024 | `navdot` (a map dot) |
+| `Small` | ≤240 | `sheet` (a panel portrait) |
+| `Mini` | ≤48 | list rows, tiny chrome |
+
+The role→variant mapping lives in one constant,
+`services/media_utils.ROLE_VARIANT`, shared by the `Entity`, `Trait` and
+`TraitSetting` GraphQL resolvers and by the REST batch endpoint — so a role
+cannot mean one file in one place and another elsewhere. `background` moved from
+`Large` to `XLarge` because a location backdrop is drawn at **viewport** size: a
+1080p screen wants ~1920 device pixels and a phone held portrait ~1170×2532,
+which `Large` could not reach. The small roles stay small on purpose — a 48px map
+dot and a panel portrait pay memory only for pixels nobody sees.
+
+### What a bigger tier costs
+
+Measured on six real `three_realms` backgrounds (photographic-ish, WebP q85):
+
+| long side | pixels | bytes | decoded RGBA |
+| --- | --- | --- | --- |
+| 700 *(the old median)* | 0.3 MP | 210 KB | 1.3 MB |
+| 1024 *(the old cap)* | 0.7 MP | 210 KB | 2.9 MB |
+| 1536 | 1.6 MP | 269 KB | 6.5 MB |
+| 2048 *(the new cap)* | 2.9 MP | 362 KB | 11.5 MB |
+| 2731 | 5.1 MP | 485 KB | 20.4 MB |
+
+**Bytes are not the constraint: 8.4× the pixels costs 1.7× the bytes**, because
+this art has large flat areas and compresses very well. Media is also served
+`cache-control: public, max-age=31536000, immutable` with an ETag, so the
+download is a one-time cost per device. What recurs is **decode and memory**:
+
+- **Desktop** is comfortable to 2048–2560. 4K (8.3 MP, 33 MB decoded) is fine but
+  wasteful unless the window really is 4K.
+- **Mobile is where it binds**, and the location crossfade keeps **two
+  backgrounds live at once** — so the budget is 2× the figures above. 2048 gives
+  ~23 MB peak, which is comfortable; 2731 would be ~41 MB and low-end devices
+  start evicting there. Decode time matters too: ~3 MP WebP is 30–80 ms on
+  desktop and 150–400 ms on a mid-range phone.
+- `XLarge` therefore sits at 2048: it covers 1080p exactly-ish and a phone
+  well, without pushing the crossfade past what a phone can hold.
+
+> [!note] The tiers never invent detail — the masters are the ceiling
+> Re-rendering fixed *delivery*: it recovers the resolution the masters already
+> had (846 of 848 backgrounds went from ~0.3–0.7 MP to their master, ≈2.4× the
+> pixels). It does not add detail, because most masters are 832×1216 (1.0 MP).
+> Going beyond that needs either an ML upscale or regeneration at a larger size —
+> the container has `RealESRGAN_x4plus_anime_6B.pth` (anime-tuned, so a poor fit
+> for the photoreal Earth backgrounds) plus `ComfyUI_UltimateSDUpscale`, and Flux
+> can render larger natively. **Undecided**, deliberately.
+
+```bash
+docker compose exec api python -m transversal.rerender_image_variants          # dry run
+docker compose exec api python -m transversal.rerender_image_variants --apply
+```
+
 ## Storage layout
 
-Static images are saved as WebP in several size variants:
+Static images are saved as WebP in one ladder of size variants:
 
 ```
 media/imagen/{owner_id}/{universe}/{filename}_{variant}.{ext}
-    variant ∈ Original · Large (≤1024) · Small (≤240) · Mini (≤48)
+    variant ∈ Original · XLarge (≤2048 long side) · Large (≤1024) · Small (≤240) · Mini (≤48)
 ```
+
+Every tier is scaled to fit its cap on the **long side**, aspect ratio preserved,
+and **a tier never upscales**: when the master's long side is already at or below
+a cap, that tier is a copy of the master rather than an interpolation. So an
+832×1216 master has an `XLarge` that *is* the 832×1216 master — the biggest
+honest file that exists — never a resampled 2048. Inventing pixels would make the
+file bigger, softer and no more truthful.
 
 `owner_id` is the directory key, and it does not change when an entity gains a
 trait image: existing files stayed exactly where they were through the `B200`
 backfill. Trait images land under `media/imagen/trait-…/`, which cannot collide
 with entity keys because the ids are type-prefixed.
 
-Alpha survives the variant pass: sources with an alpha channel are converted
-RGBA→RGBA, so cutouts stay transparent in every variant.
+Alpha survives the variant pass: sources with an alpha channel stay RGBA, so
+cutouts are transparent in every tier.
 
-> [!warning] Variant quirk
-> For **portrait** sources the `Large` variant is derived on the width axis, so
-> its long side collapses to the source's *short* side (478×700 → 326×478).
-> Landscape sources scale as expected. Treat `Original` as the native copy and
-> `Large` as an upper bound, not a guarantee.
+> [!warning] There used to be two of these, and they disagreed
+> `_save_image_variants` existed twice — in `api/rest/media.py` and in
+> `imagen/orchestrator.py` — with different maths. The orchestrator's copy scaled
+> portraits on the *width* axis, so an 832×1216 master was written out as
+> 478×700 **and the aspect ratio was wrong**: `Small` came out 240×164 and `Mini`
+> 48×32, landscape-shaped. The other copy left anything under 1024 untouched, so
+> **the same source produced different files depending on which pipeline wrote
+> it** — 622 live backgrounds were generation-produced and squashed, 117 were
+> uploads and fine.
+>
+> Both copies are gone; `services/media_utils.save_image_variants` is the only
+> implementation, and `api/rest/media.py` and `imagen/orchestrator.py` both
+> delegate to it (keeping the old private name so `migrate_media` and the tests
+> still import it). `rerender_image_variants.py` rebuilt every existing file from
+> its master: **1117 images, +206 MB**, and the squashed tiers are gone.
 
 Animated loops live separately:
 
