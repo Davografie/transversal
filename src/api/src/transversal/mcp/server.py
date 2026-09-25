@@ -113,7 +113,9 @@ def _rest_put(path: str, payload: Any) -> Any:
 
 _MUT_CREATE_ENTITY = """
 mutation($input: CreateEntityInput!) {
-  createEntity(input: $input) { id type name currentUniverse currentLocation unpublished }
+  createEntity(input: $input) {
+    id type name razmerit currentUniverse currentLocation starterLocation unpublished
+  }
 }
 """
 
@@ -129,7 +131,10 @@ mutation($input: UpdateEntityInput!) {
 
 _MUT_CREATE_RELATIONSHIP = """
 mutation($input: CreateRelationshipInput!) {
-  createRelationship(input: $input) { fromEntityId toEntityId type description }
+  createRelationship(input: $input) {
+    id fromEntityId toEntityId type description
+    relationTraits { id traitId relationshipType statement }
+  }
 }
 """
 
@@ -145,7 +150,20 @@ query($id: ID!) {
 }
 """
 
+#: The fields that make one trait setting legible.
+_TS_READ_FIELDS = (
+    "id traitId name statement notes dice ratingType polarity capacity "
+    "traitsetId traitsetName traitsetTab traitsetOrder parentTraitsettingId "
+    "fromType projectionId relationshipType relationshipContactId relationshipContactName "
+    "enabled order sfxIds"
+)
+
 #: Everything needed to *grasp* an entity in one call — see ``character_build``.
+#:
+#: ``subTraitSettings`` is nested three deep on purpose. ``entity.traitSettings``
+#: returns only top-level settings, so a `portents` container comes back with none
+#: of its portents and a chain looks absent when it is present — the read that made
+#: me twice conclude created content was missing.
 _QUERY_ENTITY_BUILD = """
 query($id: ID!) {
   entity(id: $id) {
@@ -153,14 +171,15 @@ query($id: ID!) {
     hidden unpublished ownedBy knownTo
     projections { id universe transversalType currentLocation }
     traitSettings {
-      id traitId name statement notes dice ratingType polarity capacity
-      traitsetId traitsetName traitsetTab traitsetOrder
-      fromType projectionId relationshipType relationshipContactId relationshipContactName
-      enabled order sfxIds
+      %s
+      subTraitSettings {
+        %s
+        subTraitSettings { %s }
+      }
     }
   }
 }
-"""
+""" % (_TS_READ_FIELDS, _TS_READ_FIELDS, _TS_READ_FIELDS)
 
 _QUERY_ENTITIES = """
 query($type: EntityType, $universe: String) {
@@ -347,19 +366,31 @@ _MUT_REMOVE_TRAIT_SETTING = """
 mutation($id: ID!) { removeTraitSetting(id: $id) }
 """
 
+# Every readable field of a ``TraitRef``, so a registry write can be read back
+# from its own response rather than assumed. ``defaultEgo`` matters most: it is
+# what anchors an instance to the entity instead of the active projection, and
+# until this selection carried it a caller could set the flag and see nothing.
+_TRAIT_WRITE_FIELDS = (
+    "id name universes traitsetId defaultDieType defaultRatingType "
+    "possibleSfxIds defaultSfxIds possibleSubtraitIds possibleSubtraitsetIds "
+    "defaultEgo tags polarity displayNames { name universe ratings }"
+)
+
 _MUT_CREATE_TRAIT = """
 mutation($input: TraitInput!) {
-  createTrait(input: $input) { id name universes traitsetId defaultDieType defaultRatingType tags }
+  createTrait(input: $input) {
+    %s
+  }
 }
-"""
+""" % _TRAIT_WRITE_FIELDS
 
 _MUT_UPDATE_TRAIT = """
 mutation($id: ID!, $input: TraitUpdateInput!) {
   updateTrait(id: $id, input: $input) {
-    id name universes traitsetId defaultDieType defaultRatingType tags
+    %s
   }
 }
-"""
+""" % _TRAIT_WRITE_FIELDS
 
 _MUT_CREATE_TRAITSET = """
 mutation(
@@ -374,11 +405,31 @@ mutation(
 }
 """
 
-_MUT_SAVE_ROLL_TABLE = """
-mutation($input: RollTableInput!) {
-  saveRollTable(input: $input) { id name universe scheme }
-}
-"""
+# An effect is the substance of a rule: a four-field SFX response could not show
+# a condition or an action, so an author could write a rule and see none of it.
+_EFFECT_FIELDS = (
+    "timing type action target entity result dieFilter negative context "
+    "duration { timers { event remaining } combine } "
+    "targetSpec entitySpec ownerSpec resultSpec refs output "
+    "conditions { type subject target value operator narrative }"
+)
+
+_ROLL_ENTRY_FIELDS = (
+    "label description minValue maxValue weight tier "
+    "conditions { type subject target value operator narrative } "
+    "costEffects { %s } effects { %s }"
+) % (_EFFECT_FIELDS, _EFFECT_FIELDS)
+
+_MUT_SAVE_ROLL_TABLE = (
+    "mutation($input: RollTableInput!) {\n"
+    "  saveRollTable(input: $input) {\n"
+    "    id name universe lifePath scheme rollSource traitDiceCount die\n"
+    "    check { traitIds difficulty freeChoice }\n"
+    "    entries { " + _ROLL_ENTRY_FIELDS + " }\n"
+    "    boundVariables { name spec } canvasX canvasY\n"
+    "  }\n"
+    "}\n"
+)
 
 _MUT_SAVE_LIFE_PATH = """
 mutation(
@@ -392,11 +443,25 @@ mutation(
 }
 """
 
+# Every field of ``SfxInput`` that ``SfxRef`` exposes. An SFX is a rule, and its
+# rule *is* its conditions and effects — a four-field response (id, name,
+# description, trigger) let a caller author a rule and see none of it, so a
+# typo'd effect or a silently dropped placement was invisible.
+_SFX_WRITE_FIELDS = (
+    "id name description trigger limit sourceKind placement armingScope "
+    "listenerSpec acquireSpec implicit "
+    "boundVariables { name spec } conditions { type subject target value operator narrative } "
+    "duration { timers { event remaining } combine } "
+    "effects { %s }"
+) % _EFFECT_FIELDS
+
 _MUT_CREATE_SFX = """
 mutation($input: SfxInput!) {
-  createSfx(input: $input) { id name description trigger }
+  createSfx(input: $input) {
+    %s
+  }
 }
-"""
+""" % _SFX_WRITE_FIELDS
 
 _MUT_ADD_OWNER_SFX = """
 mutation($sfxId: ID!, $ownerRefs: [OwnerRefInput!]!) {
@@ -406,9 +471,11 @@ mutation($sfxId: ID!, $ownerRefs: [OwnerRefInput!]!) {
 
 _MUT_UPDATE_SFX = """
 mutation($input: SfxUpdateInput!) {
-  updateSfx(input: $input) { id name description trigger }
+  updateSfx(input: $input) {
+    %s
+  }
 }
-"""
+""" % _SFX_WRITE_FIELDS
 
 _MUT_DELETE_SFX = """
 mutation($id: ID!) {
@@ -658,18 +725,24 @@ def create_asset(args: dict) -> dict:
 
 
 def create_relationship(args: dict) -> dict:
+    payload = {
+        "fromEntityId": args["from_id"],
+        "toEntityId": args["to_id"],
+        "type": args["type"],
+        "description": args.get("description", ""),
+    }
+    # ``elevated`` resolves a non-structural edge's endpoints to the *entity*
+    # rather than to the active projection, so the tie outlives any one body.
+    # It is the lever the flashback design needs ("a tie that spans eras"), and
+    # omitting it silently produced projection-anchored ties instead.
+    if args.get("elevated") is not None:
+        payload["elevated"] = args["elevated"]
     steps = [_step(
         "createRelationship",
         _MUT_CREATE_RELATIONSHIP,
-        {
-            "input": {
-                "fromEntityId": args["from_id"],
-                "toEntityId": args["to_id"],
-                "type": args["type"],
-                "description": args.get("description", ""),
-            }
-        },
-        f"link {args['from_id']} --{args['type']}--> {args['to_id']}",
+        {"input": payload},
+        f"link {args['from_id']} --{args['type']}--> {args['to_id']}"
+        + (" (elevated to the entity)" if payload.get("elevated") else ""),
     )]
     return _run_steps(steps, args.get("dry_run", True))
 
@@ -688,7 +761,13 @@ def delete_relationship(args: dict) -> dict:
         },
         f"unlink {args['from_id']} --{args['type']}--> {args['to_id']}",
     )]
-    return _run_steps(steps, args.get("dry_run", True))
+    result = _run_steps(steps, args.get("dry_run", True))
+    if args.get("dry_run", True):
+        return result
+    remaining = _existing_edge_type(args["from_id"], args["to_id"])
+    return _read_back(result, remaining is None, "relationship(from, to)",
+                      observed={"remaining_type": remaining} if remaining else None,
+                      note=f"an edge of type {remaining} still links the pair" if remaining else "")
 
 
 _RELATIONS_TS_CACHE: str | None = None
@@ -856,6 +935,41 @@ def _call_mutation(
     return data.get(result_key, data) if result_key else data
 
 
+# Reads used to confirm a write whose own response is a bare scalar. A mutation
+# returning ``true`` says the resolver did not raise; it does not say the world
+# changed the way the caller meant. For a delete the record is gone afterwards, so
+# the confirmation has to be a *second* read — and naming that read in the response
+# is the point, because it lets the caller see how the outcome was checked instead
+# of taking a boolean on faith.
+_QUERY_SFX_OWNERS = """
+query($t: SfxOwnerKind!) {
+  sfxOwners(ownerType: $t) { ownerType ownerId label entityType sfxIds }
+}
+"""
+
+_QUERY_SFX_IDS = "query { sfxs { id } }"
+
+
+def _read_back(write: Any, verified: bool, by: str, observed: Any = None,
+               note: str = "") -> dict:
+    """Pair a scalar-returning write with the read that confirms it."""
+    out: dict[str, Any] = {"result": write, "verified": verified, "verified_by": by}
+    if observed is not None:
+        out["observed"] = observed
+    if note:
+        out["note"] = note
+    return out
+
+
+def _owner_carries(owner_type: str, owner_id: str, sfx_id: str) -> bool:
+    """Does this owner surface carry this SFX, according to the read?"""
+    refs = _graphql(_QUERY_SFX_OWNERS, {"t": _enum(owner_type)}).get("sfxOwners") or []
+    return any(
+        r.get("ownerId") == owner_id and sfx_id in (r.get("sfxIds") or [])
+        for r in refs
+    )
+
+
 def add_trait_to_entity(args: dict) -> dict:
     """Add a trait setting (an instance of a registry trait) to an entity.
 
@@ -953,10 +1067,30 @@ def update_trait_setting(args: dict) -> dict:
 
 
 def remove_trait_setting(args: dict) -> dict:
-    """Remove a trait setting from an entity."""
+    """Remove a trait setting from an entity.
+
+    The mutation answers with a bare boolean, and **no query fetches a setting by
+    its own id** — so pass ``entity_id`` and the removal is confirmed by reading
+    the owner's settings back and checking the id is gone. Without it the response
+    says plainly that nothing was checked, rather than implying it was observed.
+    """
     variables = {"id": args["id"]}
-    return _call_mutation("removeTraitSetting", _MUT_REMOVE_TRAIT_SETTING, variables,
-                          args.get("dry_run", True), "removeTraitSetting")
+    result = _call_mutation("removeTraitSetting", _MUT_REMOVE_TRAIT_SETTING, variables,
+                            args.get("dry_run", True), "removeTraitSetting")
+    if args.get("dry_run", True):
+        return result
+    entity_id = args.get("entity_id")
+    if not entity_id:
+        return _read_back(result, False, "not checked",
+                          note="pass entity_id to confirm the removal by reading the "
+                               "owner's settings back")
+    remaining = [
+        t for t in ((_graphql(_QUERY_ENTITY_BUILD, {"id": entity_id}).get("entity") or {})
+                    .get("traitSettings") or [])
+        if t.get("id") == args["id"]
+    ]
+    return _read_back(result, not remaining, f"entity({entity_id}).traitSettings",
+                      note="the setting is still present" if remaining else "")
 
 
 def create_trait(args: dict) -> dict:
@@ -1014,8 +1148,19 @@ def save_life_path(args: dict) -> dict:
         "entryTableId": args.get("entry_table_id", ""),
         "discovery": args.get("discovery"),
     }
-    return _call_mutation("saveLifePath", _MUT_SAVE_LIFE_PATH, variables,
-                          args.get("dry_run", True), "saveLifePath")
+    result = _call_mutation("saveLifePath", _MUT_SAVE_LIFE_PATH, variables,
+                            args.get("dry_run", True), "saveLifePath")
+    if args.get("dry_run", True):
+        return result
+    # saveLifePath answers with opaque JSON, so confirm by finding the path.
+    found = [
+        p for p in (_graphql(_QUERY_LIFE_PATHS, {"universe": args["universe"]})
+                    .get("lifePaths") or [])
+        if p.get("id") == args["id"]
+    ]
+    return _read_back(result, bool(found), f"lifePaths(universe={args['universe']})",
+                      observed=found[0] if found else None,
+                      note="" if found else "the saved path was not returned by the read")
 
 
 def create_sfx(args: dict) -> dict:
@@ -1043,8 +1188,13 @@ def add_owner_sfx(args: dict) -> dict:
         "sfxId": args["sfx_id"],
         "ownerRefs": [{"ownerType": args["owner_type"], "ownerId": args["owner_id"]}],
     }
-    return _call_mutation("addOwnerSfx", _MUT_ADD_OWNER_SFX, variables,
-                          args.get("dry_run", True), "addOwnerSfx")
+    result = _call_mutation("addOwnerSfx", _MUT_ADD_OWNER_SFX, variables,
+                            args.get("dry_run", True), "addOwnerSfx")
+    if args.get("dry_run", True):
+        return result
+    carried = _owner_carries(args["owner_type"], args["owner_id"], args["sfx_id"])
+    return _read_back(result, carried, f"sfxOwners({args['owner_type']})",
+                      note="" if carried else "the read does not show the attachment")
 
 
 def update_sfx(args: dict) -> dict:
@@ -1068,8 +1218,12 @@ def delete_sfx(args: dict) -> dict:
     nothing, so detach it first with ``remove_owner_sfx`` when it is attached —
     ``sfx_owners`` is the read that lists the surfaces carrying it.
     """
-    return _call_mutation("deleteSfx", _MUT_DELETE_SFX, {"id": args["sfx_id"]},
-                          args.get("dry_run", True), "deleteSfx")
+    result = _call_mutation("deleteSfx", _MUT_DELETE_SFX, {"id": args["sfx_id"]},
+                            args.get("dry_run", True), "deleteSfx")
+    if args.get("dry_run", True):
+        return result
+    ids = {r.get("id") for r in (_graphql(_QUERY_SFX_IDS).get("sfxs") or [])}
+    return _read_back(result, args["sfx_id"] not in ids, "sfxs")
 
 
 def remove_owner_sfx(args: dict) -> dict:
@@ -1083,8 +1237,13 @@ def remove_owner_sfx(args: dict) -> dict:
         "sfxId": args["sfx_id"],
         "ownerRefs": [{"ownerType": args["owner_type"], "ownerId": args["owner_id"]}],
     }
-    return _call_mutation("removeOwnerSfx", _MUT_REMOVE_OWNER_SFX, variables,
-                          args.get("dry_run", True), "removeOwnerSfx")
+    result = _call_mutation("removeOwnerSfx", _MUT_REMOVE_OWNER_SFX, variables,
+                            args.get("dry_run", True), "removeOwnerSfx")
+    if args.get("dry_run", True):
+        return result
+    carried = _owner_carries(args["owner_type"], args["owner_id"], args["sfx_id"])
+    return _read_back(result, not carried, f"sfxOwners({args['owner_type']})",
+                      note="the read still shows it attached" if carried else "")
 
 
 # ── Blue Book: the entity's own record ───────────────
@@ -1159,8 +1318,15 @@ def update_message(args: dict) -> dict:
     for key, gql_key in (("after_ids", "afterIds"), ("threads", "threads")):
         if args.get(key) is not None:
             input_[gql_key] = args[key]
-    return _call_mutation("updateMessage", _MUT_UPDATE_MESSAGE, {"input": input_},
-                          args.get("dry_run", True), "updateMessage")
+    result = _call_mutation("updateMessage", _MUT_UPDATE_MESSAGE, {"input": input_},
+                            args.get("dry_run", True), "updateMessage")
+    if args.get("dry_run", True):
+        return result
+    # There is no `message(id)` query, so the applied patch can only be echoed, not
+    # read back. Say so rather than letting the boolean imply it was observed.
+    return _read_back(result, False, "not checked", observed={"applied": input_},
+                      note="no single-message read exists; re-read through read_journal "
+                           "or read_conversation to see the entry")
 
 
 def read_journal(args: dict) -> dict:
@@ -1311,6 +1477,7 @@ _MUT_SET_AGENCY_MAIN = """
 mutation($input: SetAgencyMainInput!) {
   setAgencyMain(input: $input) {
     id name role lastMainEntityId mainEntity { id name }
+    agency { entityId main }
   }
 }
 """
@@ -1687,6 +1854,8 @@ def _build_entry(t: dict) -> str:
         bit += f" ({t['_bodies']})"
     if t.get("enabled") is False:
         bit += " (disabled)"
+    if t.get("parentTraitsettingId"):
+        bit = "↳ " + bit
     return bit
 
 
@@ -1712,7 +1881,14 @@ def character_build(args: dict) -> dict:
     if not entity:
         return {"error": f"no entity {args['entity_id']}"}
     note_cap = int(args.get("notes_chars", 160))
-    settings = entity.get("traitSettings") or []
+    # The flat read omits nested children, so walk the tree: a container read is
+    # half a read, and a portent chain that looks empty is worse than one that is.
+    def _flatten(nodes):
+        for n in nodes or []:
+            yield n
+            yield from _flatten(n.get("subTraitSettings"))
+
+    settings = list(_flatten(entity.get("traitSettings")))
 
     own, tie_settings = [], []
     for t in settings:
@@ -2011,8 +2187,13 @@ def update_trait(args: dict) -> dict:
 def delete_entity(args: dict) -> dict:
     """Delete an entity (optionally its subtree)."""
     variables = {"id": args["entity_id"], "rmtree": args.get("rmtree", False)}
-    return _call_mutation("deleteEntity", _MUT_DELETE_ENTITY, variables,
-                          args.get("dry_run", True), "deleteEntity")
+    result = _call_mutation("deleteEntity", _MUT_DELETE_ENTITY, variables,
+                            args.get("dry_run", True), "deleteEntity")
+    if args.get("dry_run", True):
+        return result
+    gone = _graphql(_QUERY_ENTITY, {"id": args["entity_id"]}).get("entity") is None
+    return _read_back(result, gone, f"entity({args['entity_id']})",
+                      note="" if gone else "the entity still resolves after the delete")
 
 
 def list_traitsets(args: dict) -> dict:
@@ -2296,6 +2477,12 @@ TOOL_SCHEMAS = {
                 "to_id": {"type": "string"},
                 "type": {"type": "string", "description": "Edge type (membership, super, …)"},
                 "description": {"type": "string"},
+                "elevated": {
+                    "type": "boolean",
+                    "description": "Anchor a non-structural edge to the entity instead of the "
+                                   "active projection, so the tie outlives any one body (the "
+                                   "cross-era tie). Omit for the default.",
+                },
                 "dry_run": _dry_run_property(),
             },
             "required": ["from_id", "to_id", "type"],
@@ -2799,7 +2986,16 @@ TOOL_SCHEMAS = {
         "description": "Remove a trait setting from an entity.",
         "inputSchema": {
             "type": "object",
-            "properties": {"id": {"type": "string"}, "dry_run": _dry_run_property()},
+            "properties": {
+                "id": {"type": "string"},
+                "entity_id": {
+                    "type": "string",
+                    "description": "Optional. When given, the removal is confirmed by "
+                                   "reading this entity's settings back — there is no "
+                                   "query that fetches a setting by its own id.",
+                },
+                "dry_run": _dry_run_property(),
+            },
             "required": ["id"],
         },
     },
