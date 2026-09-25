@@ -1,8 +1,8 @@
 <template>
   <div class="image-viewer">
-    <MediaImage :src="imageType === 'animated' && animatedSrc ? animatedSrc : src" class="viewer-media" :alt="alt" />
+    <MediaImage :src="hasRender('animated') && animatedSrc ? animatedSrc : src" class="viewer-media" :alt="alt" />
 
-    <div class="animate-section" v-if="imageType !== 'animated'">
+    <div class="animate-section" v-if="!hasRender('animated')">
       <div class="motion-hint-row">
         <input v-if="!statusInfo.cancelling" v-model="motionHint" type="text" placeholder="Motion hint (optional) — e.g. 'hair blowing in wind'" />
         <Button
@@ -21,7 +21,7 @@
           <span class="btn-label">⤢ {{ upscaleLabel }}</span>
         </Button>
       </div>
-      <div class="bg-remove-row" v-if="imageType !== 'cutout'">
+      <div class="bg-remove-row" v-if="!hasRender('cutout') && !hasRender('animated')">
         <Button class="bg-btn" :loading="bgBusy" :disabled="bgBusy || !!localBgJob" @click="onRemoveBgClick" variant="neutral">
           <span class="btn-label">{{ bgLabel }}</span>
         </Button>
@@ -84,7 +84,11 @@ const props = defineProps({
   alt: { type: String, default: '' },
   entityId: { type: String, default: '' },
   imageId: { type: String, default: '' },
-  imageType: { type: String, default: '' },
+  // Which derived renders this picture carries ([[B210]]). A loop is no longer
+  // its own image_type, so the viewer cannot read the distinction from the type:
+  // `renders` is what says whether the loop is the picture and whether a matte
+  // already exists.
+  renders: { type: Array, default: () => [] },
   animateJob: { type: Object, default: null },
   animatedSrc: { type: String, default: '' },
   // Both are passed by the opener and were previously undeclared, so the size
@@ -96,7 +100,8 @@ const props = defineProps({
 const emit = defineEmits(['close', 'deleted', 'refresh'])
 const animating = ref(false)
 
-const activeSrc = computed(() => props.imageType === 'animated' && props.animatedSrc ? props.animatedSrc : props.src)
+const hasRender = (name) => (props.renders || []).includes(name)
+const activeSrc = computed(() => hasRender('animated') && props.animatedSrc ? props.animatedSrc : props.src)
 const fileExt = computed(() => { const m = activeSrc.value.match(/\.(\w+)(\?|$)/); return m ? m[1] : '' })
 
 function formatBytes(bytes) {

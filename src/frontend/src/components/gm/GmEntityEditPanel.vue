@@ -86,11 +86,12 @@
           @touchstart="touchStart($event, img.id)"
           @click="openImage(img)"
         >
-          <MediaImage :src="img.image_type === 'animated' ? img.path_animated : img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
+          <MediaImage :src="img.path_animated || img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
           <span class="gallery-label">
             {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
             <span v-if="img.universe_label" class="universe-badge">{{ img.universe_label }}</span>
             <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
+            <span v-for="r in (img.renders || [])" :key="'render-' + r" class="render-badge">{{ r }}</span>
             <!-- The XLarge tier is real detail only once the master reaches the
                  ceiling; below it, XLarge is just a copy of the master. -->
             <span
@@ -123,7 +124,7 @@
           @drop.prevent="drop"
         >
           <div class="projection-row" @click="openProjectionEditor(p)">
-            <MediaImage v-if="projectionThumb(p)" :src="projectionThumb(p).image_type === 'animated' ? projectionThumb(p).path_animated : projectionThumb(p).path_large" class="proj-thumb" :alt="p.originUniverse" />
+            <MediaImage v-if="projectionThumb(p)" :src="projectionThumb(p).path_animated || projectionThumb(p).path_large" class="proj-thumb" :alt="p.originUniverse" />
             <span v-else class="proj-thumb proj-thumb-empty">🖼</span>
             <span class="proj-name">{{ p.name || form?.name }}</span>
             <span class="proj-universe">{{ universeName(p.originUniverse) }}<template v-if="p.universe !== p.originUniverse"> → {{ universeName(p.universe) }}</template></span>
@@ -144,10 +145,11 @@
               @touchstart="touchStart($event, img.id)"
               @click="openImage(img)"
             >
-              <MediaImage :src="img.image_type === 'animated' ? img.path_animated : img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
+              <MediaImage :src="img.path_animated || img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
               <span class="gallery-label">
                 {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
                 <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
+                <span v-for="r in (img.renders || [])" :key="'render-' + r" class="render-badge">{{ r }}</span>
                 <!-- The XLarge tier is real detail only once the master reaches the
                      ceiling; below it, XLarge is just a copy of the master. -->
                 <span
@@ -929,14 +931,14 @@ function openMemberImage(m, img) {
   panel.open({
     component: ImageViewer,
     title: img.id,
-    badge: img.image_type === 'animated' ? 'ANIMATED' : 'IMAGE',
+    badge: (img.renders || []).includes('animated') ? 'ANIMATED' : 'IMAGE',
     props: {
       src: img.path_animated || img.path_large,
       animatedSrc: img.path_animated,
       alt: img.image_type + ' — ' + img.width + '×' + img.height,
       entityId: m.id,
       imageId: img.id,
-      imageType: img.image_type,
+      renders: img.renders || [],
       roles: img.roles || [],
       sizeBytes: img.size_bytes,
     },
@@ -1218,8 +1220,8 @@ function openImage(img) {
   panel.open({
     component: ImageViewer,
     title: img.id,
-    badge: img.image_type === 'animated' ? 'ANIMATED' : 'IMAGE',
-    props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: props.entityId, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },
+    badge: (img.renders || []).includes('animated') ? 'ANIMATED' : 'IMAGE',
+    props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: props.entityId, imageId: img.id, renders: img.renders || [], roles: img.roles || [], sizeBytes: img.size_bytes },
     listeners: {
       'close': () => { openedImageId.value = null },
       'refresh': () => { loadImages() },
@@ -1291,6 +1293,7 @@ defineExpose({ refresh: loadImages })
 .universe-badge { display: inline-block; font-size: 7px; background: var(--resource-32); color: var(--violet-pale); padding: 0 3px; border-radius: 2px; margin-left: 3px; }
 .role-badge { display: inline-block; font-size: 7px; background: var(--warn-32); color: var(--gold); padding: 0 3px; border-radius: 2px; margin-left: 2px; text-transform: uppercase; }
 .xl-badge { display: inline-block; font-size: 7px; background: rgba(108,140,255,0.32); color: var(--text); padding: 0 3px; border-radius: 2px; margin-left: 2px; font-weight: 600; }
+.render-badge { display: inline-block; font-size: 7px; background: rgba(120,200,160,0.30); color: var(--text); padding: 0 3px; border-radius: 2px; margin-left: 2px; text-transform: uppercase; }
 
 .section-buttons {
   margin-top: 12px; display: flex; gap: 6px;

@@ -553,7 +553,9 @@ async function onUpscale(img) {
 }
 
 function canCutOut(img) {
-  return !!img && !img.transparent && img.image_type !== 'animated'
+  // A picture that already has a matte or a loop has nothing to cut out.
+  const renders = (img && img.renders) || []
+  return !!img && !renders.includes('cutout') && !renders.includes('animated')
 }
 
 async function pollCutoutJob() {
