@@ -102,6 +102,10 @@ class ScheduledEvent(BaseModel):
       own: it is applied when the activation is **ended** early, and dissolved
       when the activation *commits* — a delayed part of it fires, or the dice are
       rolled. Until then the whole activation can be taken back.
+    - ``"awaiting_choice"`` — a **choice node** whose boundary has arrived
+      ([[B5]]). It is *asked*, not applied: the row keeps the question (and the
+      options on its effect) until `scheduled_events.resolve_parked_branch` answers
+      it. It never re-fires, so a prompt cannot be lost to a tick or a reload.
     """
     id: str
     target_type: str = "entity"           # "entity" | "trait_setting"
