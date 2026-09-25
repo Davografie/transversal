@@ -14,11 +14,11 @@ aliases:
 
 # Location Trait Chips
 
-> [!info] Spec'd 2026-09-25 — **not built yet**
-> How a location's traits should render on the map ([[B92]]'s rendering half). The
-> current build is a placeholder: a stacked text block under the location and
-> universe labels showing each trait's name and dice. This note is the agreed
-> target. **One blocker** — see *What is still needed*.
+> [!info] Built 2026-09-25 — **the drag gesture is the one piece not yet verified**
+> How a location's traits render on the map ([[B92]]'s rendering half). The chip,
+> the traits-tab filter and **placement** (`trait_positions`, the arrange-mode drag
+> and the `PUT /locations/{id}/trait-positions` endpoint) all landed; see *Built*
+> below and *What is still needed* for the single gap.
 
 ## The chip (human's spec, 2026-09-25)
 
@@ -67,34 +67,54 @@ coordinates inside the scene layer, so they pan and zoom with the map.
   never been dragged stays in the stack; once placed it locks to its scene
   position and leaves the stack. Nothing has to be hand-placed to be readable.
 
+## Built (2026-09-25)
+
+- **`TraitChip.vue`** — the chip as one component, because it renders in two places:
+  the auto-stack beside the labels, and a scene element once placed. It takes
+  optional `x`/`y`; given them it is absolutely placed at that image-space point and
+  centred, so it pans and zooms with the map.
+- **`traitPositions`** — a ref with a loader, mirroring `navDotPositions`;
+  `placedTraits`/`unplacedTraits` split the list, and placed chips render inside the
+  scene layer.
+- **The drag** reuses **`usePercentDrag`**, the same composable the nav dots use —
+  a chip and a dot are both one `{x, y}` entry in a position map on the location. A
+  chip promoted out of the stack lands under the pointer rather than jumping to a
+  default spot. `pointer-events: auto` only when `draggable`, so a chip is grabbable
+  exactly when arrange mode is on and never eats a map click otherwise.
+- **`PUT /locations/{id}/trait-positions`** replaces the whole map, mirroring `PUT
+  /zones`. An absent id keeps meaning "not placed yet", which leaves that chip in
+  the stack.
+- **The tab filter is real, and the earlier worry was wrong.** `_trait_entry` now
+  reports `sheet_tab` — the read-through of `TraitSet.sheet_tab` that the GraphQL
+  `traitsetTab` field already did — and the viewer keeps only the traits tab. Live
+  proof at Krasnoyarsk-45: **5 traits, 4 kept, 1 profile dropped.** (The old note
+  here guessed the filter might be a no-op because the location trait *set* carries
+  no tab of its own; the per-trait answer comes from each trait's set, and plenty of
+  those are profile — the imagen/appearance config, `LoRA 1`, `positive imagen`,
+  `negative imagen`.)
+
 ## What is still needed
 
-**The payload has no tab.** `GET /locations/{id}/traits?viewer=…` (the endpoint
-[[B92]]'s viewer uses) returns
-`{id, trait_id, name, traitset_id, rating_type, polarity, dice[], capacity[],
-statement, owner_location_id, owner_name, inherited, hidden, known_to[]}` —
-**no `traitset_tab`**. The field exists only on the GraphQL type, derived.
+**Only the drag gesture itself is unverified.** Everything it drives is proven:
+the endpoint round-trips, a stored position renders as a scene chip (out of the
+stack, with its fanned dice), and it survives a reload. But the *gesture* needs GM
+arrange mode, and the testing character's player is **not an architect**, so the
+e2e harness cannot enter it — it stays a hand-check. The gesture is the same
+composable the nav dots already use, gated on the same `editZones`.
 
-So "only the trait tab's traits" cannot be honoured from the payload as it stands.
-Two ways, and the first is much cheaper:
+Two things worth knowing for whoever tests it:
 
-1. **[[applied-mechanics]] adds the derived tab to the trait entry** (it is already
-   computed server-side for GraphQL, so this is one field on `_trait_entry`) — and
-   the caller can then either filter for the trait tab or ask for it.
-2. The viewer re-derives the tab from the trait set itself — duplicating a rule that
-   already lives server-side, and the kind of drift this project keeps paying for.
-
-**Also worth noting:** the location trait set (`ts-location-afd2`, name `location`)
-carries **no tab of its own** (`tab: None`), so for locations every trait may
-already resolve to the trait tab — making the filter a no-op until locations
-actually have profile-tab sets. Worth confirming with the human before building the
-filter, since "no profile traits exist yet" would make it untestable in live data
-(the same situation as the hidden-location route rule).
+- **A chip's first drag lands it under the pointer**, wherever the pointer was in
+  the stack — not at the scene centre. If that feels wrong, the fallback is the one
+  line in `onTraitChipDragStart`.
+- **`traitDiceGroups` is still mirrored** from `CharacterSheet.vue`'s
+  `groupByDieType` (now in two places: that sheet and `TraitChip`). Two copies is
+  the threshold at which this should move to a shared util.
 
 ## Related
 
-- [[B92]] — the ticket; the server half (inheritance + per-viewer visibility) and
-  the placeholder rendering already landed.
+- [[B92]] — the ticket: the server half (inheritance, per-viewer visibility), the
+  chip, and placement all landed.
 - [[Location Viewer]] — the dot model these chips sit alongside, and the arrange
-  mode that will drag them.
-- [[TraitRow]] — the sheet's trait rendering this chip should match.
+  mode that drags them.
+- [[TraitRow]] — the sheet's trait rendering this chip matches.
