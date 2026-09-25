@@ -63,6 +63,10 @@ def _trait_entry(repo, ts, location_id: str, viewer: str):
         "sheet_tab": getattr(getattr(traitset, "sheet_tab", None), "value", None) or "traits",
         "rating_type": ts.rating_type.value,
         "polarity": ts.polarity.value,
+        # SFX granted by this trait, so a map chip can tell whether it has any to
+        # offer. The definitions are not here: a client reads them from the `sfxs`
+        # catalog query, which every surface already uses for names and text.
+        "sfx_ids": list(ts.sfx_ids or []),
         "dice": [d.value for d in ts.dice],
         "capacity": [d.value for d in (ts.capacity or [])],
         "statement": ts.statement,
