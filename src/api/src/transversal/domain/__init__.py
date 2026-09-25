@@ -118,8 +118,10 @@ from transversal.domain.rolltables import (  # noqa: F401
 )
 
 from transversal.domain.views import (  # noqa: F401
+    CREDIT_ROLES,
     CharacterView,
     IMAGE_FLAGS,
+    ImageCredit,
     MediaImage,
 )
 

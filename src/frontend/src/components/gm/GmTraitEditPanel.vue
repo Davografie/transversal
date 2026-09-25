@@ -93,6 +93,34 @@
               :title="f === 'ai_generated' ? 'Made by the imagen pipeline' : 'Motion made by the animate pipeline'"
             >{{ AUTO_FLAG_LABELS[f] }}</span>
           </div>
+          <ImageProvenance
+            v-if="hasProvenance(img)"
+            compact
+            :flags="img.flags || []"
+            :credits="img.credits || []"
+            :license="img.license || ''"
+            :credit-text="img.credit_text || ''"
+          />
+          <button
+            v-if="creditsOpenFor === img.id"
+            type="button"
+            class="credit-add"
+            @click="creditsOpenFor = ''"
+          >Done</button>
+          <button
+            v-else
+            type="button"
+            class="credit-add"
+            @click="creditsOpenFor = img.id"
+          >Credits &amp; source</button>
+          <ImageCreditsEditor
+            v-if="creditsOpenFor === img.id"
+            :image-id="img.id"
+            :credits="img.credits || []"
+            :license="img.license || ''"
+            :credit-text="img.credit_text || ''"
+            @saved="fetchTraitImages()"
+          />
           <div class="trait-image-actions">
             <button
               v-if="canCutOut(img)"
@@ -312,6 +340,8 @@ import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
 import GmList from '@/components/ui/GmList.vue'
+import ImageCreditsEditor from '@/components/ImageCreditsEditor.vue'
+import ImageProvenance from '@/components/ImageProvenance.vue'
 import MediaImage from '@/components/MediaImage.vue'
 import DangerButton from '@/components/ui/DangerButton.vue'
 import Button from '@/components/ui/Button.vue'
@@ -446,6 +476,13 @@ async function toggleRole(img, role) {
 // `[AI-generated]` / `[AI-animated]` are set by the pipelines and only shown.
 // Flags never strip siblings, unlike roles.
 const AUTO_FLAG_LABELS = { ai_generated: '[AI-generated]', ai_animated: '[AI-animated]' }
+
+// Per-image credits editor, opened on demand so the row stays compact.
+const creditsOpenFor = ref('')
+
+function hasProvenance(img) {
+  return (img.credits || []).length > 0 || !!img.license || !!img.credit_text
+}
 
 function autoFlagsOf(img) {
   return (img.flags || []).filter(f => f in AUTO_FLAG_LABELS)
@@ -1034,6 +1071,11 @@ async function onDelete() {
   background: none; cursor: pointer;
 }
 .trait-image-cutout:disabled { opacity: 0.6; cursor: default; }
+.credit-add {
+  align-self: flex-start; font-size: 10px; padding: 2px 6px;
+  border: 1px dashed var(--border); border-radius: 3px;
+  background: none; color: var(--text-dim); cursor: pointer;
+}
 .trait-image-error { color: var(--danger, #e06c75); }
 .ego-toggle {
   padding: 3px 12px;

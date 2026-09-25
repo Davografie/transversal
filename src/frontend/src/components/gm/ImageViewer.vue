@@ -27,6 +27,16 @@
       <label class="role-check" title="Use as character sheet portrait"><input type="checkbox" :checked="hasRole('sheet')" @change="toggleRole('sheet')" /> Sheet</label>
       <label class="role-check" title="Use as navigation dot"><input type="checkbox" :checked="hasRole('navdot')" @change="toggleRole('navdot')" /> Nav</label>
     </div>
+    <details class="credits-block">
+      <summary>Credits &amp; source</summary>
+      <ImageCreditsEditor
+        :image-id="imageId"
+        :credits="fetchedCredits"
+        :license="fetchedLicense"
+        :credit-text="fetchedCreditText"
+        @saved="onCreditsSaved"
+      />
+    </details>
     <div class="flag-assign">
       <label class="flag-check" title="AI was somewhere in this image's workflow — tick this for art you know involved AI">
         <input type="checkbox" :checked="hasFlag('ai')" @change="toggleFlag('ai')" />
@@ -60,6 +70,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import ImageCreditsEditor from '@/components/ImageCreditsEditor.vue'
 import MediaImage from '@/components/MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 
@@ -94,6 +105,10 @@ const fetchedRoles = ref([])
 // Provenance labels — separate from roles: not unique, and nothing strips
 // siblings, so several images of one owner can carry [AI] at once.
 const fetchedFlags = ref([])
+// Credits + licence for this image — the citation half, independent of roles.
+const fetchedCredits = ref([])
+const fetchedLicense = ref('')
+const fetchedCreditText = ref('')
 
 //: Machine-set labels are shown, never editable: the pipelines own them.
 const AUTO_FLAG_LABELS = { ai_generated: '[AI-generated]', ai_animated: '[AI-animated]' }
@@ -116,6 +131,12 @@ async function toggleFlag(f) {
   } catch {}
 }
 
+function onCreditsSaved() {
+  // Re-read so the panel reflects exactly what the server stored.
+  fetchRoles()
+  emit('refresh')
+}
+
 async function fetchRoles() {
   const entityId = props.entityId
   const imageId = props.imageId
@@ -129,6 +150,9 @@ async function fetchRoles() {
       if (img) {
         fetchedRoles.value = img.roles || []
         fetchedFlags.value = img.flags || []
+        fetchedCredits.value = img.credits || []
+        fetchedLicense.value = img.license || ''
+        fetchedCreditText.value = img.credit_text || ''
       }
     }
   } catch {}
@@ -354,6 +378,9 @@ async function onDelete() {
 
 /* Provenance labels — deliberately unlike the role row, since these do not
    assign the image anywhere. */
+.credits-block { margin-top: 6px; font-size: 10px; color: var(--text-dim); }
+.credits-block summary { cursor: pointer; }
+.credits-block[open] summary { margin-bottom: 5px; }
 .flag-assign { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 4px; flex-wrap: wrap; }
 .flag-check { display: flex; align-items: center; gap: 3px; cursor: pointer; }
 .flag-check input { margin: 0; cursor: pointer; }

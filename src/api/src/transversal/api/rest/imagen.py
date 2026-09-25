@@ -16,7 +16,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
-from transversal.domain import IMAGE_FLAGS, ImageType, MediaImage
+from transversal.domain import CREDIT_ROLES, IMAGE_FLAGS, ImageType, MediaImage
 from transversal.imagen.models import (
     AnimateRequest,
     GenerationStatus,
@@ -432,6 +432,41 @@ async def entity_images_batch(role: str = "sheet", ids: str = ""):
     images = EntityRepository().get_role_images(entity_ids, role, variant)
     return {"images": images}
 
+def _validated_credits(raw) -> list[dict]:
+    """Validate credit rows. Raises 400 on a bad role or a non-http(s) URL.
+
+    The URLs end up as links the UI renders, so the scheme is checked rather than
+    trusted: an unchecked one is a stored-XSS vector, the same class of problem
+    that got `.svg` removed from uploads (SEC-4). Blank rows are dropped, so an
+    empty row in the editor does not have to be a special case.
+    """
+    if not isinstance(raw, list):
+        raise HTTPException(status_code=400, detail="credits must be a list")
+    if len(raw) > 20:
+        raise HTTPException(status_code=400, detail="too many credits (max 20)")
+
+    out: list[dict] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=400, detail="each credit must be an object")
+        role = str(entry.get("role") or "artist").strip()
+        if role not in CREDIT_ROLES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown credit role '{role}'. Allowed: {', '.join(CREDIT_ROLES)}",
+            )
+        url = str(entry.get("url") or "").strip()
+        if url and not url.lower().startswith(("http://", "https://")):
+            raise HTTPException(
+                status_code=400,
+                detail="credit url must start with http:// or https://",
+            )
+        name = str(entry.get("name") or "").strip()
+        if name or url:
+            out.append({"role": role, "name": name[:200], "url": url[:500]})
+    return out
+
+
 @router.get("/imagen/{entity_id}", response_model=ImageListResponse)
 async def list_images(entity_id: str, universe: str | None = None):
     """List generated images for an entity, optionally filtered by universe."""
@@ -473,6 +508,9 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "roles": img.roles,
                 "transparent": img.transparent,
                 "flags": img.flags,
+                "credits": [c.model_dump() for c in img.credits],
+                "license": img.license,
+                "credit_text": img.credit_text,
                 "path_large": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}",
                 "path_animated": f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
             }
@@ -526,6 +564,16 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
             raise HTTPException(status_code=400, detail=f"Unknown image flag(s): {', '.join(unknown)}")
         updates["flags"] = new_flags
 
+    # ── Credits: where the artwork came from (TASL's Author and Source) ──
+    # Structured parties plus an optional verbatim line. Like flags, independent
+    # of roles: many images of one owner may credit the same artist.
+    if "credits" in payload:
+        updates["credits"] = _validated_credits(payload.get("credits"))
+    if "license" in payload:
+        updates["license"] = str(payload.get("license") or "").strip()[:200]
+    if "credit_text" in payload:
+        updates["credit_text"] = str(payload.get("credit_text") or "").strip()[:1000]
+
     # ── Ownership tier (the variant below the owner) ──
     # `projection_id` is the long-standing request field and is still accepted;
     # `variant_id` is the generalised name (a projection for an entity, a
@@ -561,6 +609,8 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
         return {
             "success": True, "roles": img.roles, "universe": img.universe,
             "projection_id": img.projection_id, "flags": img.flags,
+            "credits": [c.model_dump() for c in img.credits],
+            "license": img.license, "credit_text": img.credit_text,
         }
 
     updated = repo.update_image(image_id, updates)
@@ -571,6 +621,9 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
         "universe": updated.universe if updated else img.universe,
         "projection_id": updated.projection_id if updated else img.projection_id,
         "flags": updated.flags if updated else img.flags,
+        "credits": [c.model_dump() for c in (updated or img).credits],
+        "license": (updated or img).license,
+        "credit_text": (updated or img).credit_text,
     }
 
 

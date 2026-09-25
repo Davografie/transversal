@@ -496,6 +496,14 @@
             <Button variant="ghost" size="sm" title="Close" @click="portraitViewerOpen = false">✕</Button>
           </div>
           <MediaImage :src="portraitViewerSrc" class="portrait-viewer-media" :alt="entity.name" />
+          <ImageProvenance
+            v-if="portraitViewerInfo"
+            class="portrait-viewer-prov"
+            :flags="portraitViewerInfo.flags || []"
+            :credits="portraitViewerInfo.credits || []"
+            :license="portraitViewerInfo.license || ''"
+            :credit-text="portraitViewerInfo.creditText || ''"
+          />
         </div>
       </div>
 
@@ -525,6 +533,7 @@ import { usePersistedRef } from '../composables/usePersistedState.js'
 import { useTraitEditor } from '../composables/useTraitEditor.js'
 import { useDragDrop } from '../composables/useDragDrop.js'
 import { useTraitPlay } from '../composables/useTraitPlay.js'
+import ImageProvenance from './ImageProvenance.vue'
 import TraitEditPanel from './sheet/TraitEditPanel.vue'
 import SfxCard from './sheet/SfxCard.vue'
 import TraitDetailPanel from './sheet/TraitDetailPanel.vue'
@@ -613,6 +622,35 @@ const sheetPortrait = computed(() => activeProjection.value?.sheetImage || entit
 // the portrait itself when no background image exists.
 const portraitViewerOpen = ref(false)
 const portraitViewerSrc = computed(() => entity.value?.backgroundRoleImage || sheetPortrait.value)
+// What the viewer should *disclose* about that picture — its AI labels and its
+// credits/citation. Fetched when the viewer opens rather than with the sheet:
+// it is metadata for a modal, not something the sheet needs to render.
+const portraitViewerInfo = ref(null)
+
+watch(portraitViewerOpen, async (open) => {
+  if (!open || !entity.value) return
+  const id = entity.value.id
+  portraitViewerInfo.value = null
+  try {
+    const data = await graphql(
+      `query($id: ID!) {
+        entity(id: $id) {
+          imageInfo(role: "background") {
+            url flags license creditText
+            credits { role name url }
+          }
+        }
+      }`,
+      { id }
+    )
+    // The viewer may have been closed or moved on while that was in flight.
+    if (portraitViewerOpen.value && entity.value?.id === id) {
+      portraitViewerInfo.value = data?.entity?.imageInfo || null
+    }
+  } catch {
+    portraitViewerInfo.value = null
+  }
+})
 // Mirror sheetPortrait's resolution chain: the projection's sheet image when
 // present, else the entity's resolved sheet portrait.
 const sheetPortraitTransparent = computed(() => {

@@ -32,6 +32,26 @@ class CharacterView(BaseModel):
 #: pipeline.
 IMAGE_FLAGS = ("ai", "ai_generated", "ai_animated")
 
+#: Roles a credited party can hold on an image.
+#:
+#: Named to line up with the established vocabularies so this data can be
+#: exported or embedded later without a translation table — ``artist`` is
+#: TASL's *Author*, Schema.org's `creator` and IPTC's *Creator*; ``source`` is
+#: TASL's *Source* and IPTC's *Source*; ``rights`` is Schema.org's
+#: `copyrightHolder`; ``publisher`` is IPTC's *Credit Line*.
+CREDIT_ROLES = ("artist", "source", "rights", "publisher")
+
+
+class ImageCredit(BaseModel):
+    """One party credited on an image.
+
+    ``url`` is optional and, when present, is a link the UI renders — so it is
+    scheme-checked at the write boundary (http/https only), never trusted.
+    """
+    role: str = "artist"  # one of CREDIT_ROLES
+    name: str = ""        # the person, organisation or site
+    url: str = ""         # their page, or the page the image came from
+
 
 class MediaImage(BaseModel):
     """Metadata for an image stored against an **owner**, per-universe.
@@ -62,6 +82,17 @@ class MediaImage(BaseModel):
     #: inherits its source's flags and gains ``ai``, because BiRefNet is itself a
     #: model.
     flags: list[str] = Field(default_factory=list)
+    #: Who made it and where it came from. The structured half of an attribution
+    #: — Creative Commons' TASL *Author* and *Source* (and IPTC's Creator /
+    #: Credit Line / Source). See [[Media Pipeline]] § Credits.
+    credits: list[ImageCredit] = Field(default_factory=list)
+    #: TASL's *Licence*: a licence URL, or a short name when there is no page
+    #: ("CC BY-SA 4.0", "all rights reserved").
+    license: str = ""
+    #: The wording to *display*, when the rights holder specifies one verbatim.
+    #: Empty means derive a line from ``credits`` + ``license`` — this field
+    #: exists because a required attribution line is often not decomposable.
+    credit_text: str = ""
     transparent: bool = False  # image has a transparent background (alpha channel)
     prompt: str = ""
     negative_prompt: str = ""

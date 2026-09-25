@@ -3,6 +3,11 @@
 import strawberry
 
 from typing import Optional
+
+from transversal.api.graphql.type_defs.image_meta import (
+    ImageInfo,
+    build_image_info,
+)
 from transversal.api.graphql.type_defs.enums import (
     DieType,
     EntityType,
@@ -102,6 +107,25 @@ class TraitRef:
         em = info.context["entity_manager"]
         images = await info.context["loaders"].images.load(str(self.id))
         return em.repo.role_image_url(pick_role_image(images, role), variant)
+
+    @strawberry.field
+    async def image_info(self, info: strawberry.Info, role: str = "sheet") -> Optional[ImageInfo]:
+        """``image`` plus the metadata a viewer shows — AI labels and credits.
+
+        A read-only surface (a player's trait row, the scene chip) uses this so an
+        AI badge or a source link can be shown where the trait is, rather than the
+        reader having to fetch the image list over REST to find out what the
+        picture is.
+        """
+        variant = _ROLE_VARIANT.get(role)
+        if variant is None:
+            return None
+        em = info.context["entity_manager"]
+        images = await info.context["loaders"].images.load(str(self.id))
+        entry = pick_role_image(images, role)
+        if entry is None:
+            return None
+        return build_image_info(entry, role, em.repo.role_image_url(entry, variant) or "")
 
     @strawberry.field
     async def image_transparent(self, info: strawberry.Info, role: str = "sheet") -> bool:
@@ -379,6 +403,19 @@ class TraitSetting:
         em = info.context["entity_manager"]
         images = await info.context["loaders"].images.load(str(self.trait_id))
         return em.repo.role_image_url(pick_role_image(images, role, str(self.id)), variant)
+
+    @strawberry.field
+    async def image_info(self, info: strawberry.Info, role: str = "sheet") -> Optional[ImageInfo]:
+        """``image`` plus the metadata a viewer shows — see ``TraitRef.image_info``."""
+        variant = _ROLE_VARIANT.get(role)
+        if variant is None:
+            return None
+        em = info.context["entity_manager"]
+        images = await info.context["loaders"].images.load(str(self.trait_id))
+        entry = pick_role_image(images, role, str(self.id))
+        if entry is None:
+            return None
+        return build_image_info(entry, role, em.repo.role_image_url(entry, variant) or "")
 
     @strawberry.field
     async def image_transparent(self, info: strawberry.Info, role: str = "sheet") -> bool:

@@ -8,6 +8,10 @@ from transversal.api.graphql.type_defs.enums import (
     EntityType,
     TransversalTypeEnum,
 )
+from transversal.api.graphql.type_defs.image_meta import (
+    ImageInfo,
+    build_image_info,
+)
 from transversal.api.graphql.type_defs.relationships import FactionMember
 from transversal.api.graphql.type_defs.traits import (
     TraitSetSetting,
@@ -201,6 +205,30 @@ class Entity:
         # image get the active body's image first, falling back to entity level.
         pid = str(projection_id) if projection_id else (self.current_projection or None)
         return em.repo.resolve_role_image(str(self.id), role, pid, variant)
+
+    @strawberry.field
+    def image_info(
+        self,
+        info: strawberry.Info,
+        role: str,
+        projection_id: Optional[strawberry.ID] = None,
+    ) -> Optional[ImageInfo]:
+        """``image`` plus the metadata a viewer shows — AI labels and credits.
+
+        Resolution is identical to ``image`` (the active body first, entity
+        fallback); this exists because a viewer that wants to *disclose* where a
+        picture came from needs the record, not just its URL.
+        """
+        variant = self._ROLE_VARIANT.get(role)
+        if variant is None:
+            return None
+        em = info.context["entity_manager"]
+        pid = str(projection_id) if projection_id else (self.current_projection or None)
+        entry = em.repo.resolve_role_image_entry(str(self.id), role, pid)
+        if entry is None:
+            return None
+        url = em.repo.resolve_role_image(str(self.id), role, pid, variant)
+        return build_image_info(entry, role, url or "")
 
     @strawberry.field
     def pending_term(self, info: strawberry.Info) -> Optional[PendingTerm]:

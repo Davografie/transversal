@@ -50,6 +50,10 @@ from transversal.api.graphql.type_defs.traits import (  # noqa: F401
     TraitSettingUpdateInput,
     TraitSetSetting,
 )
+from transversal.api.graphql.type_defs.image_meta import (  # noqa: F401
+    CreditRef,
+    ImageInfo,
+)
 from transversal.api.graphql.type_defs.entities import (  # noqa: F401
     Projection,
     Zone,

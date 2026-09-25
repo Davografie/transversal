@@ -681,6 +681,87 @@ pipelines own them. The upload endpoint takes `flags` (comma-separated) and
 > docker compose exec api python -m transversal.backfill_image_flags --apply
 > ```
 
+## Credits & citation
+
+`MediaImage` records **who made an image and where it came from**, so a picture
+found online can be cited rather than silently borrowed:
+
+- `credits: [{role, name, url}]` — the parties. Roles are `artist`, `source`,
+  `publisher`, `rights` (`CREDIT_ROLES` in `domain/views.py`). Several per image;
+  `url` is optional and, when set, is rendered as a link.
+- `license: str` — a licence URL, or a short name when there is no page.
+- `credit_text: str` — the wording to *display* when the rights holder specifies
+  one verbatim. Optional: empty means the surfaces compose a line from the
+  credits and licence instead.
+
+### The standard it follows
+
+There is no single citation standard, but there is a clear convergent core, and
+the field names here are chosen to match it so this data can be exported or
+embedded later without a translation table. The short version is Creative
+Commons' **TASL** — *Title, Author, Source, Licence* — which is what the CC
+"recommended practices for attribution" reduce to and what most people actually
+expect to see.
+
+| our field | TASL | Schema.org | IPTC photo metadata |
+| --- | --- | --- | --- |
+| `credits[role=artist]` | Author | `creator` | Creator / Creator's Job Title |
+| `credits[role=source]` | Source | `creditText`, `isBasedOn` | Source, Credit Line |
+| `credits[role=publisher]` | — | `publisher` | Credit Line |
+| `credits[role=rights]` | — | `copyrightHolder` | Copyright Notice |
+| `license` | Licence | `license`, `acquireLicensePage` | Rights Usage Terms, Licensor URL |
+| `credit_text` | the rendered line | `creditText` | *(the display string)* |
+
+Two neighbours worth knowing about and **deliberately not adopted**:
+
+- **IPTC / XMP** is the standard for embedding this *in the file* ([IPTC Photo
+  Metadata Standard](https://www.iptc.org/std/photometadata/specification/IPTC-PhotoMetadata-2022.1.html)).
+  Real fields (`dc:creator`, `photoshop:Credit`, `photoshop:Source`,
+  `xmpRights:WebStatement`) and the natural export target if we ever want the
+  metadata to travel with the WebP rather than live only in the database. Not
+  done now because nothing reads it yet, and a field we populate but no surface
+  consults is worse than an honest column.
+- **C2PA / Content Credentials** is a *cryptographically signed* provenance
+  manifest ([c2pa.org](https://c2pa.org/)), the heavyweight answer to "can this
+  claim be trusted" — it is about authenticity chains, not cataloguing, and it
+  signs the asset. Overkill for crediting a piece of art in a home game, but it
+  is the standard our `ai_generated` / `ai_animated` labels would eventually map
+  onto (`c2pa.actions` with `trainedAlgorithmicMedia`) if we ever want them
+  verifiable rather than asserted.
+
+[VRA Core 4.0](https://www.loc.gov/standards/vracore/VRA_Core4_Element_Description.pdf)
+and Dublin Core are the library/museum vocabularies; VRA's split between the
+*work* and the *image of the work* is the one idea worth stealing if this ever
+grows — here, `credits` describes the artwork and the image is assumed to be a
+faithful copy of it.
+
+### Rules and surfaces
+
+- **Links are scheme-checked.** `url` must start with `http://` or `https://`
+  (`_validated_credits` in `api/rest/imagen.py`), because these render as links:
+  an unchecked `javascript:` or `data:` URL is a stored-XSS vector, the same
+  class of bug that removed `.svg` uploads (SEC-4). Unknown roles are a 400, and
+  blank rows are dropped so an empty editor row is not an error.
+- **Not roles, not flags.** Credits are independent of where an image renders,
+  and many images can credit the same artist — the same reasoning that keeps
+  `flags` out of `roles`.
+- **Where it is set:** the GM image viewer's *Credits & source* block, and each
+  row of the trait editor's gallery. Both use `ImageCreditsEditor.vue`; the
+  server validates regardless.
+- **Where it is shown to players:** the character sheet's portrait viewer
+  (`CharacterSheet.vue`) renders `ImageProvenance.vue` under the image, reading
+  the resolved record through GraphQL `imageInfo(role)` — which can show an AI
+  badge and a source link, and stays silent when an image has neither. Both
+  `Entity.image_info` and `Trait.image_info` / `TraitSetting.image_info` expose
+  it, so a player-facing trait row or scene chip can do the same.
+
+> [!note] `image(role)` vs `image_info(role)`
+> `image(role)` is still the cheap way to get a URL. `image_info(role)` returns
+> the resolved image *plus* its flags, credits, licence and credit line, for any
+> surface that has to **disclose** something about the picture rather than just
+> draw it. Prefer `image_info` when the viewer shows provenance; prefer `image`
+> when it just needs something to put on screen.
+
 ## Frontend
 
 - `MediaImage.vue` — unified renderer: `<video>` for `.webm`/`.mp4`, `<img>`
