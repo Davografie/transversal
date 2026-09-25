@@ -1478,10 +1478,17 @@ function zoneCache(zone) {
 // ── Nav dot drag ───────────────────────────────────
 
 // Everything the GM places by hand drags the same way — a nav dot and a trait chip
-// are both one {x, y} entry in a position map on this location. The pointer plumbing
-// and the image-space conversion live in `usePercentDrag` so the two cannot drift
-// apart; each caller supplies only its own map, key and write.
-const percentDrag = usePercentDrag({ enabled: () => props.editZones, viewerEl })
+// are both one {x, y} entry in a position map on this location, expressed as a
+// percentage **of the scene layer**. `usePercentDrag` therefore needs the scene's own
+// px size to convert the pointer's movement, not the viewer's box: the scene is
+// bigger than the viewer (overscan + teaser zoom), so the viewer's size made a
+// dragged element outrun the cursor by `scene ÷ viewer` — 1.19× on a square
+// background, 2.11× on a wide one. Each caller supplies only its own map, key, write.
+const percentDrag = usePercentDrag({
+  enabled: () => props.editZones,
+  viewerEl,
+  span: () => ({ w: sceneCamera.value.w, h: sceneCamera.value.h }),
+})
 
 function onNavDragStart(e, nd) {
   percentDrag.start(e, {

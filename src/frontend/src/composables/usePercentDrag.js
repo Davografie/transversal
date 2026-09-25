@@ -29,16 +29,24 @@ const CLAMP_MAX = 98
  *   each live position, and an optional callback once the drag has finished (where a
  *   caller saves). `onMove` receives already-clamped, already-rounded percentages.
  */
-export function usePercentDrag({ enabled, viewerEl }) {
+export function usePercentDrag({ enabled, viewerEl, span }) {
   function start(e, { x, y, onMove, onEnd }) {
     if (typeof enabled === 'function' ? !enabled() : !enabled) return
     const el = viewerEl?.value
     if (!el || !onMove) return
     e.preventDefault()
 
-    // Measured once per drag: the map's box cannot change meaningfully mid-drag, and
+    // Both measured once per drag: neither can change meaningfully mid-drag, and
     // re-measuring on every move would force layout on the hot path.
     const rect = el.getBoundingClientRect()
+    // The px size that **100% of the position space** spans — NOT the viewer's box.
+    // Every map element is positioned as a percentage of the scene layer, which is
+    // larger than the viewer (overscan ×1.1, plus the teaser zoom). Dividing by the
+    // viewer instead makes the dragged thing move `scene ÷ viewer` times faster than
+    // the pointer — measured at 1.19× for a square background and 2.11× for a wide
+    // one, i.e. the chip visibly outruns the cursor. Callers whose positions are
+    // image-space must pass this.
+    const extent = span ? span() : { w: rect.width, h: rect.height }
     const clientX = e.touches ? e.touches[0].clientX : e.clientX
     const clientY = e.touches ? e.touches[0].clientY : e.clientY
     const clamp = (v) => Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, Math.round(v)))
@@ -48,8 +56,8 @@ export function usePercentDrag({ enabled, viewerEl }) {
       const cx = ev.touches ? ev.touches[0].clientX : ev.clientX
       const cy = ev.touches ? ev.touches[0].clientY : ev.clientY
       onMove(
-        clamp(x + ((cx - clientX) / rect.width) * 100),
-        clamp(y + ((cy - clientY) / rect.height) * 100),
+        clamp(x + ((cx - clientX) / extent.w) * 100),
+        clamp(y + ((cy - clientY) / extent.h) * 100),
       )
     }
 
