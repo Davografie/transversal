@@ -15,7 +15,7 @@ import asyncio
 import pytest
 from PIL import Image
 
-from transversal.domain import Entity, MediaImage, EntityType, ImageType
+from transversal.domain import Entity, ImageCredit, MediaImage, EntityType, ImageType
 from transversal.imagen import orchestrator as orch
 
 PROJECTION = "proj-1"
@@ -46,6 +46,14 @@ class _FakeRepo:
 
     def get_image(self, image_id):
         return next((i for i in self._images if i.id == image_id), None)
+
+
+class _FakeOllama:
+    async def describe_motion(self, data, hint=""):
+        return "a slow drift"
+
+    async def unload_model(self):
+        return None
 
 
 class _FakeComfyUI:
@@ -174,17 +182,16 @@ def test_a_generated_image_declares_ai_generated(stub_gpu, monkeypatch):
     assert image.flags == ["ai_generated"]
 
 
-def test_a_cutout_inherits_its_source_flags_and_adds_nothing(stub_gpu, monkeypatch):
-    source = _image("src-1", PROJECTION)
-    source.flags = ["ai_generated"]
-    source.filename = "src"
-    repo = _FakeRepo(existing=[source])
+def _run_cutout(repo, source, monkeypatch):
+    """Drive the real `run_remove_background` with the GPU stubbed.
 
-    # The source's Large variant has to exist for the cutout to read it, and the
-    # saving stub has to leave an openable file behind (the real one measures it).
-    src_dir = orch.IMAGEN_DIR / "char-1" / "earth"
+    The source must already be in `repo`; its `Large` variant is put on disk here
+    because the cutout reads it, and the saving stub leaves an openable file
+    behind because the real one measures the result.
+    """
+    src_dir = orch.IMAGEN_DIR / source.owner_id / source.universe
     src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "src_Large.png").write_bytes(b"bytes")
+    (src_dir / f"{source.filename}_Large.{source.extension}").write_bytes(b"bytes")
 
     def _fake_variants(data, out, base):
         out.mkdir(parents=True, exist_ok=True)
@@ -195,7 +202,16 @@ def test_a_cutout_inherits_its_source_flags_and_adds_nothing(stub_gpu, monkeypat
     monkeypatch.setattr(orch, "_save_image_variants", _fake_variants)
 
     orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
-    cutout = asyncio.run(orchestrator.run_remove_background("char-1", "src-1", display_name="Kael"))
+    return asyncio.run(orchestrator.run_remove_background(source.owner_id, source.id, display_name="Kael"))
+
+
+def test_a_cutout_inherits_its_source_flags_and_adds_nothing(stub_gpu, monkeypatch):
+    source = _image("src-1", PROJECTION)
+    source.flags = ["ai_generated"]
+    source.filename = "src"
+    repo = _FakeRepo(existing=[source])
+
+    cutout = _run_cutout(repo, source, monkeypatch)
 
     assert cutout.image_type == ImageType.CUTOUT
     assert cutout.flags == ["ai_generated"], (
@@ -214,19 +230,53 @@ def test_a_cutout_of_an_unlabelled_upload_stays_unlabelled(stub_gpu, monkeypatch
     source.filename = "src2"
     repo = _FakeRepo(existing=[source])
 
-    src_dir = orch.IMAGEN_DIR / "char-1" / "earth"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "src2_Large.png").write_bytes(b"bytes")
-
-    def _fake_variants(data, out, base):
-        out.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (4, 4)).save(out / "o.webp")
-        return {"original": "o.webp", "large": "L.webp"}
-
-    monkeypatch.setattr(orch, "inject_bg_removal_params", lambda wf, **kw: wf)
-    monkeypatch.setattr(orch, "_save_image_variants", _fake_variants)
-
-    orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
-    cutout = asyncio.run(orchestrator.run_remove_background("char-1", "src-2", display_name="Kael"))
+    cutout = _run_cutout(repo, source, monkeypatch)
 
     assert cutout.flags == []
+
+
+def test_a_cutout_keeps_the_artworks_citation(stub_gpu, monkeypatch):
+    """A cutout is the same picture with its background removed, so the artist,
+    the source link and the licence must survive the new file id."""
+    source = _image("src-3", PROJECTION)
+    source.filename = "src3"
+    source.credits = [ImageCredit(role="artist", name="Jane Doe", url="https://example.org/jane")]
+    source.license = "CC BY-SA 4.0"
+    source.credit_text = "Art by Jane Doe, CC BY-SA 4.0"
+    repo = _FakeRepo(existing=[source])
+
+    cutout = _run_cutout(repo, source, monkeypatch)
+
+    assert [(c.role, c.name, c.url) for c in cutout.credits] == [
+        ("artist", "Jane Doe", "https://example.org/jane"),
+    ]
+    assert cutout.license == "CC BY-SA 4.0"
+    assert cutout.credit_text == "Art by Jane Doe, CC BY-SA 4.0"
+    assert cutout.credits[0] is not source.credits[0], "independent rows, not shared objects"
+
+
+def test_an_animated_loop_keeps_the_artworks_citation(stub_gpu, monkeypatch):
+    """Same rule as the cutout: a loop of a credited picture is that picture."""
+    source = _image("src-4", PROJECTION)
+    source.filename = "src4"
+    source.credits = [ImageCredit(role="artist", name="Jane Doe", url="https://example.org/jane")]
+    source.license = "CC BY-SA 4.0"
+    source.credit_text = "Art by Jane Doe, CC BY-SA 4.0"
+    repo = _FakeRepo(existing=[source])
+
+    src_dir = orch.IMAGEN_DIR / "char-1" / "earth"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / "src4_Large.png").write_bytes(b"bytes")
+
+    monkeypatch.setattr(orch, "inject_wan_params", lambda wf, **kw: wf)
+    orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
+    orchestrator.ollama = _FakeOllama()
+    image = asyncio.run(orchestrator.run_animate(_entity(), "earth", source_image_id="src-4"))
+
+    assert image.image_type == ImageType.ANIMATED
+    assert image.flags == ["ai_animated"]
+    assert [(c.role, c.name, c.url) for c in image.credits] == [
+        ("artist", "Jane Doe", "https://example.org/jane"),
+    ]
+    assert image.license == "CC BY-SA 4.0"
+    assert image.credit_text == "Art by Jane Doe, CC BY-SA 4.0"

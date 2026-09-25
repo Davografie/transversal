@@ -131,7 +131,7 @@ def _run_imagen_bg(entity_id: str, universe: str, projection_id: str = ""):
         _update_job(entity_id, GenerationType.IMAGEN.value, GenerationStatus.FAILED.value)
 
 
-def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_image_path: str = "", motion_hint: str = "", source_transparent: bool = False):
+def _run_animate_bg(entity_id: str, universe: str, duration: float, source_image_id: str = "", motion_hint: str = ""):
     """Background task: generate video loop and publish final SSE event."""
     if entity_id not in active_jobs:
         logger.info(f"Animate for {entity_id} was cancelled before starting — skipping")
@@ -143,9 +143,8 @@ def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_ima
             entity=EntityManager().get(entity_id),
             universe=universe,
             duration_seconds=duration,
-            existing_image_path=existing_image_path,
+            source_image_id=source_image_id,
             motion_hint=motion_hint,
-            source_transparent=source_transparent,
         ))
         event_bus.publish(StreamEvent(
             event="imagen_progress",
@@ -297,23 +296,23 @@ async def generate_animation(
     universe = entity.current_universe
     duration = request.duration_seconds if request else 3.0
 
-    # Resolve existing image path if image_id provided
-    existing_image_path = ""
-    source_transparent = False
+    # Animating an existing image: pass the id and let the orchestrator read the
+    # record. Building the path here instead is how the owner_id/entity_id split
+    # was missed in the first place.
+    source_image_id = ""
     if request and request.image_id:
         from transversal.db.repository import EntityRepository
         repo = EntityRepository()
         img = repo.get_image(request.image_id)
         if img:
-            existing_image_path = f"{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}"
-            source_transparent = img.transparent
-            logger.info(f"Animating existing image: {existing_image_path} (transparent={source_transparent})")
+            source_image_id = img.id
+            logger.info(f"Animating existing image {img.id} (transparent={img.transparent})")
 
     logger.info(f"Enqueuing animate for {entity_id} ({entity.name}) in {universe}")
 
     _queue_job(entity_id, GenerationType.ANIMATE.value)
     motion_hint = request.motion_hint if request else ""
-    background_tasks.add_task(_run_animate_bg, entity_id, universe, duration, existing_image_path, motion_hint, source_transparent)
+    background_tasks.add_task(_run_animate_bg, entity_id, universe, duration, source_image_id, motion_hint)
 
     return {"accepted": True, "entity_id": entity_id, "generation_type": "animate"}
 

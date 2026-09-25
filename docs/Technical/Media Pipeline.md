@@ -745,6 +745,13 @@ faithful copy of it.
 - **Not roles, not flags.** Credits are independent of where an image renders,
   and many images can credit the same artist — the same reasoning that keeps
   `flags` out of `roles`.
+- **A derivative carries the citation forward.** A **cutout** and an **animated
+  loop** inherit their source's `credits`, `license` and `credit_text`: the file
+  has a new id, but it is not a new work, and losing the artist because you
+  removed a background is exactly the silent-omission these fields exist to
+  prevent. (A cutout also inherits its `flags`; an animated loop is labelled
+  `ai_animated` by its own pipeline.) Credits are copied per record, so the two
+  rows are independent afterwards.
 - **Where it is set:** the GM image viewer's *Credits & source* block, and each
   row of the trait editor's gallery. Both use `ImageCreditsEditor.vue`; the
   server validates regardless.

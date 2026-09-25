@@ -349,17 +349,25 @@ class ImagenOrchestrator:
         universe: str,
         duration_seconds: float = 3.0,
         session_id: str = "",
-        existing_image_path: str = "",
+        source_image_id: str = "",
         motion_hint: str = "",
-        source_transparent: bool = False,
     ) -> MediaImage:
         """Generate a video loop for an entity.
 
         Pipeline (fresh): Flux → gemma3 vision → WanVideo loop
         Pipeline (existing): read image from disk → gemma3 vision → WanVideo loop
+
+        ``source_image_id`` animates an existing image instead of generating one.
+        It is an **id, not a path**: the record is the single source of truth for
+        where the file is and whether it is transparent, so a caller cannot hand
+        in a path that disagrees with the row — and the artwork's credits travel
+        with it onto the loop.
         """
         entity_id = entity.id
         gen_type = GenerationType.ANIMATE
+        source = self.repo.get_image(source_image_id) if source_image_id else None
+        # A loop is matted only when the picture it came from was already a cutout.
+        source_transparent = bool(source.transparent) if source else False
 
         # 1. Static image first
         await self._report(entity_id, gen_type, GenerationStatus.PROMPTING, "Building prompt...", 5)
@@ -397,10 +405,12 @@ class ImagenOrchestrator:
             output_full = IMAGEN_DIR / output_subpath
             output_full.mkdir(parents=True, exist_ok=True)
 
-            if existing_image_path:
+            if source is not None:
                 # Use existing image — skip Flux generation
                 await self._report(entity_id, gen_type, GenerationStatus.GENERATING, "Using existing image...", 15)
-                img_path = IMAGEN_DIR / existing_image_path
+                img_path = IMAGEN_DIR / (
+                    f"{source.owner_id}/{source.universe}/{source.filename}_Large.{source.extension}"
+                )
                 if not img_path.exists():
                     raise FileNotFoundError(f"Existing image not found: {img_path}")
                 static_image = img_path.read_bytes()
@@ -520,6 +530,12 @@ class ImagenOrchestrator:
             universe=universe,
             image_type=ImageType.ANIMATED,
             flags=["ai_animated"],  # the animate pipeline made the motion
+            # The citation follows the artwork, exactly as it does for a cutout:
+            # a loop made from a credited picture is still that picture, so it
+            # must not silently lose the artist, the source link or the licence.
+            credits=[c.model_copy() for c in source.credits] if source else [],
+            license=source.license if source else "",
+            credit_text=source.credit_text if source else "",
             transparent=source_transparent,
             prompt=prompt,
             negative_prompt=anim_negative,
@@ -695,6 +711,13 @@ class ImagenOrchestrator:
             # label describes the picture's origin, which removing the background
             # does not change.
             flags=list(src.flags),
+            # The citation follows the artwork. A cutout is the same picture with
+            # its background removed, so it must not silently lose the artist, the
+            # source link or the licence: the file has a new id, but it is not a
+            # new work. Copied per record — the two rows are independent from here.
+            credits=[c.model_copy() for c in src.credits],
+            license=src.license,
+            credit_text=src.credit_text,
             transparent=has_transparency(cutout_bytes),
             prompt=f"background removed from {src.filename}",
             negative_prompt="",
