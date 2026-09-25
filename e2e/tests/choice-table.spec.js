@@ -15,7 +15,7 @@
 // about what the surface sent, which is the thing under test anyway.
 
 import { test, expect } from '@playwright/test'
-import { gql, openSheet } from '../helpers/sheet.js'
+import { gql } from '../helpers/sheet.js'
 
 const DESKTOP = { width: 1280, height: 950 }
 const TABLET_LANDSCAPE = { width: 1194, height: 834 }
@@ -92,13 +92,69 @@ async function stub(page, { table = null, lifePaths = null, extras = {} } = {}) 
   })
 }
 
-async function seed(page, size) {
-  await page.setViewportSize(size)
-  await openSheet(page, character)
-  await page.waitForTimeout(600)
+/**
+ * Focus a band in the mobile stack by tapping it, as a reader does.
+ *
+ * A raw mouse click, not `locator.click()`: a band is a *container* whose
+ * top-left corner is covered by one of its own children (the `.band-tap` capture
+ * layer at every focus but its own), so Playwright's actionability check sees an
+ * intercepted click and retries forever. A finger does not care which descendant
+ * is on top — the tap bubbles — so the test should not either. Same recipe as
+ * `sfx-rail.spec.js`; it is why the phone case below can reach the sheet's header
+ * at all.
+ */
+async function focusBand(page, bandClass) {
+  const y = await page.evaluate((sel) => {
+    const r = document.querySelector(sel).getBoundingClientRect()
+    return Math.round(r.y + 6)
+  }, `.${bandClass}`)
+  await page.mouse.click(6, y)
+  await page.waitForTimeout(700)
 }
 
-/** Settings → "create a support character" → the menu. The human's reference surface. */
+/**
+ * Seed identity and open the sheet at `size` — the sheet is where the settings
+ * overlay (and the surface under test) is entered from.
+ *
+ * Below the 820px breakpoint the sheet rides in the three-band stack, so the
+ * sheet band has to be focused before anything inside its header can be clicked;
+ * left alone, the stack opens on the location band and the roller band's
+ * `.band-tap` teaser sits over the pill.
+ */
+async function seed(page, size, { stack = false } = {}) {
+  await page.setViewportSize(size)
+  await page.goto('/')
+  await page.evaluate(([pid, pname, eid]) => {
+    localStorage.setItem('playerId', pid)
+    localStorage.setItem('playerName', pname)
+    localStorage.setItem('entityId', eid)
+  }, [character.playerId, character.playerName, character.entityId])
+  await page.goto('/')
+
+  // The self dot fades in and the camera settles after it, so it is briefly
+  // "not stable" and a plain click retries against a moving target — measured as
+  // a whole-test timeout at 834×1194, which is a race rather than a fault. Poll
+  // its box until two reads agree, then click.
+  const self = page.locator('button.map-dot.self').first()
+  await self.waitFor({ state: 'visible', timeout: 20_000 })
+  let last = null
+  await expect.poll(async () => {
+    const b = await self.boundingBox()
+    const key = b && `${Math.round(b.x)},${Math.round(b.y)}`
+    const settled = !!key && key === last
+    last = key
+    return settled
+  }, { timeout: 15_000, intervals: [150, 150, 150, 250] }).toBe(true)
+  await self.click()
+  await page.locator('.sheet-embedded').first().waitFor({ state: 'visible', timeout: 20_000 })
+
+  if (stack) {
+    await focusBand(page, 'sheet-band')
+    await expect(page.locator('.stage')).toHaveClass(/focus-sheet/)
+  }
+}
+
+/** Settings → "create a support character" → the menu (the human's reference surface). */
 async function openCreateSupport(page) {
   await page.locator('.sheet-pills button[title="Player settings"]').click({ timeout: 15_000 })
   await page.locator('.support-create-btn').first().click({ timeout: 15_000 })
@@ -141,7 +197,7 @@ for (const [label, size, wide] of VIEWPORTS) {
     })
 
     await stub(page)
-    await seed(page, size)
+    await seed(page, size, { stack: !wide })
     await openCreateSupport(page)
 
     const m = await measure(page)
