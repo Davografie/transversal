@@ -16,6 +16,10 @@ context (e.g. buy-hitch, P3.3), not derived from an entity.
 
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger("transversal.sfx")
+
 import time
 
 from dataclasses import dataclass, field
@@ -652,6 +656,29 @@ def _walk_nested(repo, parent_ids: list[str]) -> list:
     return out
 
 
+def _relationship_traitsettings_for(repo, entity_id: str, prefetch=None) -> list:
+    """The trait instances the entity holds *on its relationship edges*.
+
+    Outgoing only, matching the sheet's own reading of "what I hold about others":
+    the tie's traits are on the edge, so the entity that owns the edge owns the
+    rules. Two edges to the same contact of different kinds are distinct, which is
+    why the *edge* — not the contact — carries them.
+    """
+    if prefetch is not None and entity_id in prefetch.relationship_traitsettings:
+        return [row.get("setting") if isinstance(row, dict) else row
+                for row in prefetch.relationship_traitsettings[entity_id]]
+    read = getattr(repo, "get_relationship_traitsettings_for_entity", None)
+    if read is None:
+        # A repo that cannot answer is missing the edge scope, not reporting "no
+        # rules" — say so rather than returning a confident empty. Every repository
+        # has the read; a test double that does not is under-specified.
+        log.warning("[get_available_sfx_ids] repo has no relationship-trait read — "
+                    "rules on a tie's traits are invisible (entity=%s)", entity_id)
+        return []
+    rows = read(entity_id) or []
+    return [row.get("setting") if isinstance(row, dict) else row for row in rows]
+
+
 def _nested_traitsettings_for(repo, entity_id: str, universe: str) -> list:
     """The entity's sub-trait instances that are in play (see the note above)."""
     effective = repo.get_effective_traitsettings(entity_id, [universe])
@@ -703,6 +730,7 @@ class SfxAvailabilityPrefetch:
     traitsetsettings: dict[str, list] = field(default_factory=dict)  # entity_id → [TraitSetSetting]
     location_rules: dict[str, list] = field(default_factory=dict)    # location_id → [sfx_id] in scope
     faction_rules: dict[str, list] = field(default_factory=dict)     # entity_id → [sfx_id] from its factions
+    relationship_traitsettings: dict[str, list] = field(default_factory=dict)  # entity_id → [edge traits]
     sfx_by_id: dict[str, Any] = field(default_factory=dict)          # sfx_id → SFX
 
 
@@ -816,6 +844,10 @@ def build_sfx_availability_prefetch(
         traitsettings.setdefault(eid, [])
         traitsettings[eid] = traitsettings[eid] + nested
 
+    # …and the edge-anchored instances, in one batch for the whole fan-out.
+    read_edge_traits = getattr(repo, "get_relationship_traitsettings_for_entities", None)
+    relationship_traitsettings = read_edge_traits(eids) if read_edge_traits is not None else {}
+
     # Location scope, resolved once per *distinct* location rather than per
     # entity: the fan-out visits every entity, and most of them share a room.
     location_rules: dict[str, list] = {}
@@ -835,6 +867,7 @@ def build_sfx_availability_prefetch(
         traitsettings=traitsettings,
         traitsetsettings=traitsetsettings,
         location_rules=location_rules,
+        relationship_traitsettings=relationship_traitsettings,
         sfx_by_id={s.id: s for s in (sfx_docs if sfx_docs is not None else repo.get_all_sfxs())},
     )
 
@@ -903,6 +936,14 @@ def get_available_sfx_ids(
         # effective read excludes them, so they are walked in.
         trait_settings = trait_settings + _nested_traitsettings_for(
             repo, entity_id, universe)
+        # …and the instances it holds on its **relationship edges** ([[B153]]): a
+        # tie carries its own sheet (a rank, a tenure, a statement), and the rules
+        # that sheet offers belong to the entity holding the tie. The effective read
+        # is entity-anchored rows only, so before this the rules a tie carried were
+        # never offered — `sfx-challenge-statement` sat greyed on the sheet with no
+        # condition to blame (its trait declares no conditions at all).
+        trait_settings = trait_settings + _relationship_traitsettings_for(
+            repo, entity_id, prefetch)
         traitset_settings = repo.get_effective_traitsetsettings(entity_id, [universe])
 
     for ts in trait_settings:

@@ -33,6 +33,7 @@ class Repo:
         self.location_parents = {}      # location_id -> parent location_id
         self.nested = {}                # parent_traitsetting_id -> [sub-instances]
         self.sfxs = {}                  # sfx_id -> SFX (for the "why greyed" reads)
+        self.edge_traits = {}           # entity_id -> [{"setting": TraitSetting}]
 
     def get_sub_traitsettings_for_parents(self, parent_ids):
         """Mirror the real batch read: sub-instances grouped by parent.
@@ -69,6 +70,15 @@ class Repo:
 
     def list_member_factions_with_sfx(self, entity_id):
         return []
+
+    def get_relationship_traitsettings_for_entity(self, entity_id):
+        """Edge-anchored instances (a tie's rank/tenure/statement): the walk reads
+        them, so a double without this would hide the whole edge scope."""
+        return list(self.edge_traits.get(entity_id, []))
+
+    def get_relationship_traitsettings_for_entities(self, entity_ids):
+        """The bulk twin the availability prefetch reads — same shape, one call."""
+        return {eid: list(self.edge_traits.get(eid, [])) for eid in entity_ids}
 
     def list_member_factions_with_sfx_bulk(self, entity_ids):
         return {}
@@ -2036,3 +2046,33 @@ def test_only_the_failing_conditions_are_named():
                     Condition(type=ConditionType.AT_LOCATION, target="loc-elsewhere")])
     reasons = unavailable_sfx_reasons(repo, repo.entity, "earth", ["sfx-gated"])
     assert len(reasons["sfx-gated"]) == 1, "only the failing one is a reason"
+
+
+def test_a_rule_on_a_relationship_trait_is_offered():
+    """[[B153]]/[[B193]]: a tie carries its own sheet — a rank, a tenure, a
+    statement — and the rules it offers belong to the entity holding the tie. They
+    are neither entity-anchored nor sub-traits, so before this walk they were never
+    offered at all: `sfx-challenge-statement` sat greyed on the sheet with no
+    condition to blame."""
+    repo = Repo()
+    repo.entity = SimpleNamespace(id="e1", sfx_ids=[], current_projection=None,
+                                  current_location="loc-1")
+    edge_ts = SimpleNamespace(id="edge:1:fac:membership", sfx_ids=["sfx-statement"],
+                              trait_id="statement", enabled=True)
+    repo.edge_traits["e1"] = [{"setting": edge_ts}]
+    from transversal.domain import SFX
+
+    repo.sfxs["sfx-statement"] = SFX(id="sfx-statement", name="Challenge Statement",
+                                     trigger="manual")
+
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-statement"]
+
+
+def test_a_disabled_relationship_trait_grants_nothing():
+    repo = Repo()
+    repo.entity = SimpleNamespace(id="e1", sfx_ids=[], current_projection=None,
+                                  current_location="loc-1")
+    edge_ts = SimpleNamespace(id="edge:1:fac:membership", sfx_ids=["sfx-statement"],
+                              trait_id="statement", enabled=False)
+    repo.edge_traits["e1"] = [{"setting": edge_ts}]
+    assert get_available_sfx_ids("e1", "earth", repo) == []
