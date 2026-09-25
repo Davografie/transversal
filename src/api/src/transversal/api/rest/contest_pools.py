@@ -385,3 +385,14 @@ async def cancel_contest(location_id: str, entity_id: str):
             "opponent_id": opponent_id,
         })
     return {"status": "cancelled"}
+
+
+@router.get("/{location_id}/pools/{entity_id}/pending-effects")
+async def pending_effects(location_id: str, entity_id: str):
+    """Name the effects that would fire on give-in / prevent-take-out ([[B14]]).
+
+    A read, not a decision: the SFX owner answers which authored rules carry the
+    two triggers for this entity, so the buttons can say what they will do.
+    """
+    from transversal.services.contest_history import pending_contest_effects
+    return pending_contest_effects(entity_id)

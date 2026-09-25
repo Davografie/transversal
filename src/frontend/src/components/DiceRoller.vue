@@ -250,7 +250,7 @@
       <button v-if="isPicking()" @click="onPickCommit" class="roll-btn commit-btn">
         {{ challenged ? 'Set' : 'Done' }}
       </button>
-      <button v-if="challenged && !contestResult && !contestCompare && giveInAllowed" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
+      <button v-if="showGiveIn" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
       <!-- The empty-pool exit ([[B118]]): a mis-started challenge is cancelled,
            not resolved. Only the initiator, and only before anything is rolled. -->
       <button v-if="canCancelContest" @click="cancelContest" class="roll-btn cancel-btn">Cancel contest</button>
@@ -269,7 +269,7 @@
       <button @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide' : 'Take complication' }}</button>
     </div>
 
-    <div class="controls" v-if="iAmTakenOut && razmerit >= 1 && (!gmMode || entityId)">
+    <div class="controls" v-if="showPreventTakenOut">
       <button @click="doPreventTakenOut" class="roll-btn prevent-taken-out-btn">Prevent take out (1 razmerit)</button>
     </div>
 
@@ -281,6 +281,11 @@
       <button @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
       <button @click="doPush" class="roll-btn push-btn">Push</button>
     </div>
+
+    <!-- What those two actions actually do ([[B14]]): the rules exist only as
+         authored SFX, so without this the buttons are a bare "spend 1". -->
+    <div v-if="giveInForecast" class="effect-forecast">Fires on give in: {{ giveInForecast }}</div>
+    <div v-if="preventForecast" class="effect-forecast">Fires on prevent take out: {{ preventForecast }}</div>
 
     <div v-if="showConsequences && (isResolved() || contestResult)" class="consequence-panel">
       <ConsequenceMenu :entity-id="consequenceTargetId" :side="consequenceSide" :menu-context="consequenceMenuContext" :effect-die="consequenceEffectDie" :exclude-ids="consequenceExcludeIds" @close="showConsequences = false" />
@@ -374,7 +379,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange', 'offered-change', 'poolSaved'])
 
-const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest, cancelContest: apiCancelContest } = useApi()
+const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest, cancelContest: apiCancelContest, getPendingContestEffects: apiPendingEffects } = useApi()
 const { resolveEffectTargets, resolveSfxLoop } = useEffectApplication()
 const { applyOption: applyHitchEffect } = useHitchMenu()
 const pool = reactive([])
@@ -599,12 +604,47 @@ const iWon = computed(() => {
 })
 const appliedEffectDie = computed(() => contestResult.value?.effect_die || null)
 const iAmTakenOut = computed(() => !!contestResult.value?.taken_out && !iWon.value)
+
 const razmerit = ref(null)  // acting entity's razmerit (fetched when a takeout happens)
 
 watch(iAmTakenOut, async (taken) => {
   if (!taken || !editingEntityId.value) return
   const data = await graphql(`query($id: ID!) { entity(id: $id) { razmerit } }`, { id: editingEntityId.value })
   razmerit.value = data?.entity?.razmerit ?? 0
+})
+
+// The two "leave the contest" actions, in one place each: the buttons and their
+// effect forecasts ([[B14]]) must agree about when they apply.
+const showGiveIn = computed(() =>
+  challenged.value && !contestResult.value && !contestCompare.value && giveInAllowed.value
+)
+const showPreventTakenOut = computed(() =>
+  iAmTakenOut.value && (razmerit.value || 0) >= 1 && (!props.gmMode || !!props.entityId)
+)
+// Names of the authored rules that will fire, fetched from the SFX owner.
+const effectForecast = ref({ give_in: [], prevent_taken_out: [] })
+const giveInForecast = computed(() =>
+  showGiveIn.value ? effectForecast.value.give_in.map(s => s.name).join(' · ') : ''
+)
+const preventForecast = computed(() =>
+  showPreventTakenOut.value ? effectForecast.value.prevent_taken_out.map(s => s.name).join(' · ') : ''
+)
+
+async function loadEffectForecast() {
+  if (!props.locationId || !editingEntityId.value) return
+  const res = await apiPendingEffects(props.locationId, editingEntityId.value)
+  if (res) {
+    effectForecast.value = {
+      give_in: res.give_in || [],
+      prevent_taken_out: res.prevent_taken_out || [],
+    }
+  }
+}
+
+// Only asked for when one of the two actions is on screen — and re-asked when the
+// acting entity changes, since availability is per entity ([[B14]]).
+watch([showGiveIn, showPreventTakenOut, () => editingEntityId.value, () => props.locationId], () => {
+  if (showGiveIn.value || showPreventTakenOut.value) loadEffectForecast()
 })
 const iGaveIn = computed(() => {
   if (!contestResult.value?.gave_in) return false
@@ -2213,6 +2253,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .controls { display: flex; gap: 8px; }
 .waiting-state { flex: 1; text-align: center; font-size: 14px; color: var(--text-dim); padding: 10px; }
 .consequence-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.effect-forecast { font-size: 11px; color: var(--text-dim); text-align: center; margin-top: 4px; }
 .sfx-choice-panel { margin-top: 8px; }
 .roll-btn { width: 100%; font-size: 18px; font-weight: 700; padding: 10px; }
 

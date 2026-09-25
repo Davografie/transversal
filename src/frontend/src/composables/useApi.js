@@ -397,6 +397,16 @@ export function useApi() {
     } catch (e) { console.error('[API] cancelContest', e.message); return null }
   }
 
+  // Which authored effects would fire on give-in / prevent-take-out ([[B14]]),
+  // so those buttons can say what they do instead of being a bare spend.
+  async function getPendingContestEffects(locationId, entityId) {
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/pending-effects`)
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] getPendingContestEffects', e.message); return null }
+  }
+
   async function setDifficulty(locationId, difficulty) {
     if (!locationId) return null
     try {
@@ -434,5 +444,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, cancelContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, cancelContest, getPendingContestEffects, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

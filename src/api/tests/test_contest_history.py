@@ -32,6 +32,7 @@ class RecordingRepo:
 
     def __init__(self):
         self.records = []
+        self.sfxs = {}
 
     def add_historical_record(self, entity_id, record_type, data, universe="", session_id="", after_ids=None):
         self.records.append(
@@ -45,6 +46,9 @@ class RecordingRepo:
 
     def get_entity(self, entity_id):
         return _Entity(NAMES.get(entity_id, entity_id))
+
+    def get_sfx(self, sfx_id):
+        return self.sfxs.get(sfx_id)
 
     def for_entity(self, entity_id):
         return [r for r in self.records if r["entity_id"] == entity_id]
@@ -259,3 +263,51 @@ class TestTestEntry:
         data = repo.for_entity("kael")[0]["data"]
         assert data["result"] == "unopposed"
         assert data["rounds"][0]["opposition"]["difficulty"] is None
+
+
+class TestPendingEffectsForecast:
+    """B14: the give-in / prevent-take-out buttons say what they will fire."""
+
+    @staticmethod
+    def _fake_available(monkeypatch):
+        from transversal.services import sfx_owner
+
+        def fake(entity_id, universe, repo, prefetch=None, triggers=None):
+            triggers = triggers or frozenset()
+            if "on_give_in" in triggers:
+                return ["sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban"]
+            if "on_prevent_taken_out" in triggers:
+                return ["prevent-taken-out"]
+            return []
+
+        monkeypatch.setattr(sfx_owner, "get_available_sfx_ids", fake)
+
+    def test_names_the_effects_that_will_fire(self, client, repo, monkeypatch):
+        self._fake_available(monkeypatch)
+        repo.sfxs = {
+            "sfx-give-in-get-razmerit": _Entity("Give In Reward"),
+            "sfx-give-in-targeting-ban": _Entity("Give In — Keep Your Distance"),
+            "prevent-taken-out": _Entity("Prevent Being Taken Out"),
+        }
+
+        r = client.get("/api/v1/locations/loc-1/pools/kael/pending-effects")
+        assert r.status_code == 200, r.text
+        data = r.json()
+
+        assert [s["name"] for s in data["give_in"]] == ["Give In Reward", "Give In — Keep Your Distance"]
+        assert [s["id"] for s in data["give_in"]] == ["sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban"]
+        assert [s["name"] for s in data["prevent_taken_out"]] == ["Prevent Being Taken Out"]
+
+    def test_no_matching_rule_reads_as_an_empty_forecast(self, client, repo, monkeypatch):
+        from transversal.services import sfx_owner
+        monkeypatch.setattr(sfx_owner, "get_available_sfx_ids", lambda *a, **k: [])
+        data = client.get("/api/v1/locations/loc-1/pools/kael/pending-effects").json()
+        assert data == {"give_in": [], "prevent_taken_out": []}
+
+    def test_a_rule_without_a_name_falls_back_to_its_id(self, client, repo, monkeypatch):
+        self._fake_available(monkeypatch)
+        repo.sfxs = {}  # get_sfx returns None
+        data = client.get("/api/v1/locations/loc-1/pools/kael/pending-effects").json()
+        assert data["prevent_taken_out"] == [
+            {"id": "prevent-taken-out", "name": "prevent-taken-out", "description": ""}
+        ]

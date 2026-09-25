@@ -193,6 +193,51 @@ def _write(repo, entity_id: str, record_type: HistoricalRecordType, data: dict, 
     repo.add_historical_record(entity_id, record_type, data, universe=universe or "")
 
 
+def pending_contest_effects(entity_id: str, universe: str = "", *, repo=None) -> dict:
+    """The effects that would fire on give-in / prevent-take-out, by name ([[B14]]).
+
+    Those two controls used to be bare buttons — "Prevent take out (1 razmerit)" —
+    with the cost and the consequence living only in authored SFX, invisible until
+    they fired. Which rules apply is a question for the SFX owner, not the contest:
+    the same trigger filter the engine uses (``triggers=``) answers it, so an
+    authored rule appears here without the contest having to know it exists.
+    """
+    empty = {"give_in": [], "prevent_taken_out": []}
+    repo = _resolve_repo(repo)
+    if repo is None or not entity_id:
+        return empty
+    from transversal.services.sfx_owner import get_available_sfx_ids
+
+    if not universe:
+        try:
+            entity = repo.get_entity(entity_id)
+            universe = getattr(entity, "current_universe", "") or ""
+        except Exception:  # noqa: BLE001
+            universe = ""
+
+    out: dict[str, list[dict]] = {}
+    for key, trigger in (("give_in", "on_give_in"), ("prevent_taken_out", "on_prevent_taken_out")):
+        rows: list[dict] = []
+        try:
+            ids = get_available_sfx_ids(entity_id, universe, repo, triggers=frozenset({trigger}))
+        except Exception:  # noqa: BLE001 - a forecast must never break the panel
+            logger.exception("[contest_history] pending-effects lookup failed for %s", trigger)
+            ids = []
+        for sfx_id in ids:
+            sfx = None
+            try:
+                sfx = repo.get_sfx(sfx_id)
+            except Exception:  # noqa: BLE001
+                sfx = None
+            rows.append({
+                "id": sfx_id,
+                "name": getattr(sfx, "name", "") or sfx_id,
+                "description": getattr(sfx, "description", "") or "",
+            })
+        out[key] = rows
+    return out
+
+
 def record_contest_outcome(
     location_id: str,
     challenger,
