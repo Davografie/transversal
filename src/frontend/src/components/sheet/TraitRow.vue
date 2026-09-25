@@ -20,6 +20,18 @@
       @dragstart="api.onTraitDragStart($event, trait)"
       @dragend="api.onTraitDragEnd()"
     >⠿</span>
+    <!-- The trait's picture (`B200`) — the registry definition's `sheet` role, so a
+         spirit herb is a thing you can see rather than a stat line. A cutout floats
+         (no frame, `contain`) exactly as the entity portrait does; an opaque
+         picture keeps a rounded frame, so a list of mixed art still reads as a
+         list. Leading the row, so it scans picture → name → rating. -->
+    <MediaImage
+      v-if="trait.sheetImage"
+      :src="trait.sheetImage"
+      class="trait-picture"
+      :class="{ transparent: trait.imageTransparent }"
+      :alt="api.displayName(trait.name)"
+    />
     <div class="trait-left" :class="{ 'has-statement': !!trait.statement }">
       <span class="trait-name" :class="{ disabled: phase !== 'adding' || api.isResourceDepleted(trait) }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
       <span v-if="api.traitTimerLabel(trait)" class="trait-timer" :title="'Re-enables after ' + api.traitTimerLabel(trait)">⏳ {{ api.traitTimerLabel(trait) }}</span>
@@ -278,6 +290,7 @@
 // indent accumulates on its own.
 import { computed } from 'vue'
 import DieIcon from '@/components/DieIcon.vue'
+import MediaImage from '@/components/MediaImage.vue'
 import SfxCard from './SfxCard.vue'
 import Button from '@/components/ui/Button.vue'
 import { childrenOf, showsChildren } from '@/utils/traitTree.js'
@@ -493,6 +506,26 @@ function onRowClick() {
   font-size: 13px;
   opacity: 1;
   color: var(--text);
+}
+
+/* The trait's picture (`B200`). Sized to the row's first text line rather than
+   the row: a described trait is several lines tall and the picture belongs with
+   the name, not floating in the middle of the prose. `flex-shrink: 0` so a long
+   statement cannot squash it. */
+.trait-picture {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border-radius: 4px;
+  border: 1px solid var(--overlay-12);
+  object-fit: cover;
+}
+/* A cutout carries its own shape, so it gets no frame and no crop. */
+.trait-picture.transparent {
+  border: none;
+  border-radius: 0;
+  object-fit: contain;
 }
 
 /* A trait's notes, shown inline where the host asks for them and there is no

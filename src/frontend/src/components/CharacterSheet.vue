@@ -841,6 +841,13 @@ const RELATION_TRAIT_FIELDS = `
   relationshipContactType
   relationshipType
   possibleSubtraitIds
+  # The trait's picture (B200), aliased to the names the registry query already
+  # uses (useTraitsConfig) so one vocabulary serves both reads. "sheet" is the
+  # row/detail picture, "background" the detail's backdrop, and the bare
+  # imageTransparent is that ladder's default role -- "sheet".
+  sheetImage: image(role: "sheet")
+  backgroundImage: image(role: "background")
+  imageTransparent
 `
 
 // ── Incoming ties (B134) ────────────────────────────────────────
@@ -2535,6 +2542,11 @@ const QUERY = `
     relationshipType
     possibleSubtraitIds
     parentTraitsettingId
+    # The picture travels with the setting at every depth, like the rest of the
+    # field set: a nested row opens the same detail panel as a top-level one.
+    sheetImage: image(role: "sheet")
+    backgroundImage: image(role: "background")
+    imageTransparent
   }
   # GraphQL requires every nesting level spelled out, so the chain is linear and
   # each link adds exactly one level: Depth2 = 2 levels, Depth3 = 3. The sheet

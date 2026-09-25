@@ -1,10 +1,32 @@
 <template>
 <div class="trait-detail-panel">
+  <!-- The trait's `background` role, as the panel's backdrop (`B200`). A layer
+       behind the content rather than a CSS background on the panel: the gradient
+       that fades it out has to blend into whatever the sheet's own background is,
+       and only a layer can be masked without knowing that colour. `.detail-content`
+       carries the stack's one `z-index`, so nothing else here fights for it. -->
+  <div
+    v-if="trait.backgroundImage"
+    class="detail-backdrop"
+    :style="{ backgroundImage: `url(${trait.backgroundImage})` }"
+    aria-hidden="true"
+  ></div>
+  <div class="detail-content">
   <div class="detail-header">
     <Button class="detail-back" variant="link" @click="$emit('back')">← {{ trait.traitsetName || 'Back' }}</Button>
     <Button class="detail-edit" variant="link" @click="$emit('edit', trait)">✎ Edit</Button>
   </div>
 
+  <!-- The trait's picture — the same `sheet` role the row shows, larger. Opaque
+       art gets a band; a cutout floats at its own proportions instead, exactly as
+       the sheet portrait does. -->
+  <MediaImage
+    v-if="trait.sheetImage"
+    :src="trait.sheetImage"
+    class="detail-picture"
+    :class="{ transparent: trait.imageTransparent }"
+    :alt="api.displayName(trait.name)"
+  />
   <div class="detail-hero">
     <div class="detail-hero-line">
       <h3 class="detail-name">{{ api.displayName(trait.name) }}</h3>
@@ -81,6 +103,7 @@
       <span class="detail-context-value">{{ row.value }}</span>
     </div>
   </div>
+  </div> <!-- .detail-content -->
 </div>
 </template>
 
@@ -90,6 +113,7 @@ import Button from '@/components/ui/Button.vue'
 import { renderMarkdown } from '@/utils/markdown.js'
 import DieIcon from '@/components/DieIcon.vue'
 import SfxCard from './SfxCard.vue'
+import MediaImage from '@/components/MediaImage.vue'
 
 // The read-only view of one trait: rating band (die faces as text, playable when
 // the sheet allows it), SFX cards, notes, sub-traits and the derived context
@@ -120,7 +144,44 @@ const tagRows = computed(() => {
 </script>
 
 <style scoped>
-.trait-detail-panel { display: flex; flex-direction: column; }
+.trait-detail-panel { position: relative; }
+
+/* The trait's `background` role behind the content. Masked rather than faded to
+   a colour, so it works on either theme without knowing the sheet's own
+   background: strongest at the top, gone before the prose starts. */
+.detail-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  opacity: 0.5;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), transparent 55%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), transparent 55%);
+}
+
+/* The stack itself, lifted over the backdrop. */
+.detail-content { position: relative; z-index: 1; display: flex; flex-direction: column; }
+
+/* The trait's picture in the panel (`B200`) — the row's picture, larger. Opaque
+   art gets a band; a cutout floats at its own proportions, like the sheet
+   portrait, so a cut-out herb is not cropped into a rectangle. */
+.detail-picture {
+  width: 100%;
+  max-height: 170px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--overlay-12);
+  object-fit: cover;
+}
+.detail-picture.transparent {
+  max-height: 220px;
+  border: none;
+  border-radius: 0;
+  object-fit: contain;
+}
 .detail-header {
   display: flex;
   align-items: center;
