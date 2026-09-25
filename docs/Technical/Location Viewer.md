@@ -242,6 +242,23 @@ the way, one step at a time.
 so an unusable directions SFX should never reach a player; `destination` present with
 `next_hop: null` is the belt-and-braces case for a graph that changed afterwards.
 
+### Trait chips
+
+The location's own traits (plus the challenge pools it inherits) render as **chips** —
+see [[Location Trait Chips]] for the spec, the placement (`trait_positions`, dragged in
+arrange mode through `usePercentDrag`) and the traits-tab filter. Two things belong
+here because they are the viewer's:
+
+- **Clicking a chip plays its trait**, through `composables/useTraitPlay.js` — the same
+  act, and the same code, as clicking a trait's *rating* in a sheet. The map supplies
+  no-ops for what it does not have (no pool tree, no armed-SFX view) and emits
+  `addToPool`, which `App.vue` routes to the same `diceRef.addFromSheet` the sheet
+  uses. A click in arrange mode is a drag, not a play.
+- **The wire shape is normalised** on the way in (`utils/locationTrait.js`): the REST
+  read is snake_case with lowercase enums, and the shared play compares the sheet's
+  camelCase uppercase. Skipping it makes a CHALLENGE trait behave like a static one —
+  it pushes its raw dice instead of spending a die.
+
 Zones and nav dots show the destination's background as their expanded image
 (the `navdot_image` role) — the "hole": an inner `<img>` sized as the
 **destination's own scene layer** (cover + `PAN_OVERSCAN` + the teaser zoom) and

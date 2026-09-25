@@ -93,6 +93,42 @@ coordinates inside the scene layer, so they pan and zoom with the map.
   those are profile — the imagen/appearance config, `LoRA 1`, `positive imagen`,
   `negative imagen`.)
 
+## Playing a chip (2026-09-25)
+
+**Clicking a chip does what clicking a trait's *rating* does in a sheet** — not what
+clicking its *name* does (that opens the read-only detail panel). The dice go into the
+roller, or a pool gives one up. The human's steer was to **share** those rules rather
+than copy them, and to leave the sheet where it is, so they live in
+`composables/useTraitPlay.js` and the sheet was rewired onto them too.
+
+What a click means, and what it deliberately does not:
+
+- **Gates:** only while the roller is `adding` (never mid-roll) and never for a
+  disabled trait.
+- **Static** → the trait's dice join the pool. A multi-die rating contributes one pool
+  die per entry; negativity rides the payload so the dice layer routes it.
+- **RESOURCE / CHALLENGE** → **spends one die** (doom to the opposition, progress into
+  its own pool, per polarity), and the trait's own dice follow what the server returns.
+- **A mixed-die pool's chip click does nothing, on purpose.** Those pools are spent
+  per die group from their own buttons in the sheet, and guessing which group was meant
+  is what the split exists to avoid. Verified live: clicking the mixed `regime alert`
+  chip leaves the pool untouched.
+- **The map has no pool tree**, so the sheet's group `cascade` (descendants, carried
+  negatives, completing ancestors) is a no-op here. **Armed SFX are the roller's
+  state**, so `armedSfxIdsFor` is empty — and no location trait carries SFX anyway.
+  **Refund tracking is the sheet's**, so a die spent from the map is not refundable
+  from the sheet's UI.
+
+**The wire shape nearly broke this twice.** The REST read is snake_case
+(`rating_type`) with **lowercase** enums (`challenge`, `negative`), while the play
+compares the sheet's camelCase **uppercase** (`ratingType === 'CHALLENGE'`). Either
+mistake made a CHALLENGE trait look static: its chip pushed the pool's raw dice at the
+roller instead of spending a die — and a negative trait read as positive. Neither
+showed up in a build or in a logic test made of hand-shaped fixtures; the browser check
+caught both. `utils/locationTrait.js` now normalises at the boundary, and
+`scripts/check-trait-play.mjs` feeds literal wire entries through it, with both bugs
+kept as failing-if-regressed cases.
+
 ## What is still needed
 
 **Only the drag gesture itself is unverified.** Everything it drives is proven:
