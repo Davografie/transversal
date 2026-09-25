@@ -97,7 +97,10 @@ def _generate(repo, monkeypatch, projection=PROJECTION, cutout=None):
     """Run one generation, stubbing the cutout; return (image, cutout_calls)."""
     calls = []
 
-    async def fake_cutout(entity, image_id, report_gen_type=None):
+    async def fake_cutout(owner_id, image_id, display_name="", report_gen_type=None):
+        # The orchestrator takes the owner id, not an Entity: nothing below the
+        # call needs the object, and a trait owner has no Entity at all (B200).
+        assert owner_id == _entity().id, "the cutout must report under its owner"
         calls.append(image_id)
         if isinstance(cutout, Exception):
             raise cutout

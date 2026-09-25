@@ -398,3 +398,115 @@ def test_upload_rejects_an_unknown_owner_kind():
         files={"file": ("x.png", _png_bytes(), "image/png")},
     )
     assert r.status_code == 400
+
+
+# ── Cutting out a trait image ─────────────────────────
+#
+# The BiRefNet pass itself needs the GPU and is not exercised here — the
+# orchestrator's cutout is `test_imagen_auto_cutout`'s subject. What these pin is
+# the *wiring*: that the endpoint accepts a trait owner, resolves it, validates
+# ownership, and hands the owner id and display name to the job.
+
+
+def _stub_cutout_job(monkeypatch):
+    """Replace the queued background task; return the list it records calls in."""
+    import transversal.api.rest.imagen as imagen_mod
+
+    calls = []
+    monkeypatch.setattr(imagen_mod, "_run_remove_bg_bg", lambda *a, **k: calls.append(a))
+    return imagen_mod, calls
+
+
+def _drain_job(imagen_mod, owner_id):
+    """A stubbed job never reports completion, so clear its queue entry."""
+    imagen_mod.active_jobs.pop(owner_id, None)
+    if owner_id in imagen_mod._job_order:
+        imagen_mod._job_order.remove(owner_id)
+
+
+@requires_db
+def test_remove_background_accepts_a_trait_owner(monkeypatch):
+    repo = _repo
+    _fixtures(repo)
+    repo.create_image(_trait_image(DEF_ID))
+    imagen_mod, calls = _stub_cutout_job(monkeypatch)
+    client = TestClient(app)
+
+    try:
+        r = client.post(
+            f"/api/v1/remove-background/{TRAIT}?owner_kind=trait",
+            json={"image_id": DEF_ID},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["accepted"] is True
+        # owner id, image id, display name — the job reports under the trait's id
+        # and names the file after the trait.
+        assert calls == [(TRAIT, DEF_ID, "ImgOwnerSpiritHerb")]
+    finally:
+        _drain_job(imagen_mod, TRAIT)
+        _cleanup(repo)
+
+
+@requires_db
+def test_remove_background_still_defaults_to_an_entity_owner(monkeypatch):
+    """The image viewer sends no owner_kind; the default must stay entity."""
+    repo = _repo
+    _fixtures(repo)
+    repo.create_image(MediaImage(
+        id=ENT_ID, owner_kind="entity", owner_id=ENTITY, universe="earth",
+        image_type=ImageType.IMAGEN, roles=["sheet"],
+        filename=f"probe_{ENT_ID}", extension="webp", created_at=EARLY,
+    ))
+    imagen_mod, calls = _stub_cutout_job(monkeypatch)
+    client = TestClient(app)
+
+    try:
+        r = client.post(f"/api/v1/remove-background/{ENTITY}", json={"image_id": ENT_ID})
+        assert r.status_code == 200, r.text
+        assert calls and calls[0][0] == ENTITY
+    finally:
+        _drain_job(imagen_mod, ENTITY)
+        _cleanup(repo)
+
+
+@requires_db
+def test_remove_background_rejects_a_cross_owner_image(monkeypatch):
+    """A trait image must not be cut out through an entity's id, or vice versa."""
+    repo = _repo
+    _fixtures(repo)
+    repo.create_image(_trait_image(DEF_ID))
+    imagen_mod, _ = _stub_cutout_job(monkeypatch)
+    client = TestClient(app)
+
+    try:
+        r = client.post(f"/api/v1/remove-background/{ENTITY}", json={"image_id": DEF_ID})
+        assert r.status_code == 400
+        assert "does not belong" in r.json()["detail"]
+    finally:
+        _drain_job(imagen_mod, ENTITY)
+        _cleanup(repo)
+
+
+@requires_db
+def test_remove_background_rejects_an_unknown_trait_and_kind(monkeypatch):
+    repo = _repo
+    _fixtures(repo)
+    repo.create_image(_trait_image(DEF_ID))
+    imagen_mod, _ = _stub_cutout_job(monkeypatch)
+    client = TestClient(app)
+
+    try:
+        missing = client.post(
+            "/api/v1/remove-background/test-imgowner-absent?owner_kind=trait",
+            json={"image_id": DEF_ID},
+        )
+        assert missing.status_code == 404
+
+        bad_kind = client.post(
+            f"/api/v1/remove-background/{TRAIT}?owner_kind=projection",
+            json={"image_id": DEF_ID},
+        )
+        assert bad_kind.status_code == 400
+    finally:
+        _drain_job(imagen_mod, TRAIT)
+        _cleanup(repo)

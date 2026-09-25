@@ -71,6 +71,14 @@
             <span>{{ uploadingImage ? 'Uploading…' : (traitImageUrl ? 'Replace' : 'Upload') }}</span>
           </label>
           <DangerButton v-if="traitImageId" @click="removeTraitImage">Remove</DangerButton>
+          <button
+            v-if="canCutOut"
+            type="button"
+            class="trait-image-cutout"
+            :disabled="cutoutBusy"
+            :title="'Remove the background, and use the transparent result as the trait\'s picture'"
+            @click="onCutOut"
+          >{{ cutoutBusy ? 'Cutting out…' : '✂ Cut out' }}</button>
         </div>
       </div>
       <p v-if="imageError" class="section-hint trait-image-error">{{ imageError }}</p>
@@ -261,7 +269,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch, onMounted, computed } from 'vue'
+import { reactive, ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -367,6 +375,89 @@ async function removeTraitImage() {
     await fetchTraitsConfig()
   } catch (e) {
     imageError.value = e?.message || 'Remove failed'
+  }
+}
+
+// ── Cut out the trait's picture (B200) ───────────────
+// BiRefNet runs on the GPU in the API's background task, keyed by owner id —
+// the trait's own id, exactly as an entity's is keyed by the entity's. So the
+// job registry at /imagen/jobs is polled with the trait id.
+const cutoutJob = ref(null)
+const startingCutout = ref(false)
+const cutoutBusy = computed(() => startingCutout.value || !!cutoutJob.value)
+
+const canCutOut = computed(() => {
+  const img = traitImage.value
+  return !!img && !img.transparent && img.image_type !== 'animated'
+})
+
+async function pollCutoutJob() {
+  if (!props.traitId) return
+  try {
+    const res = await fetch('/api/v1/imagen/jobs')
+    if (res.ok) {
+      const jobs = (await res.json()).jobs || {}
+      const job = jobs[props.traitId]
+      cutoutJob.value = (job && job.type === 'remove_bg') ? job : null
+    }
+  } catch { /* the job list is best-effort; the button just stays enabled */ }
+}
+
+let _cutoutPoll = null
+onMounted(() => { pollCutoutJob(); _cutoutPoll = setInterval(pollCutoutJob, 2000) })
+onUnmounted(() => { clearInterval(_cutoutPoll) })
+
+// The job clearing means the cutout exists. A trait has ONE picture, so the
+// transparent result has to become it: the cutout lands untagged (the same
+// non-destructive contract an entity cutout has), and an untagged image renders
+// on none of the three surfaces.
+watch(cutoutJob, async (now, prev) => {
+  if (!prev || now) return
+  await fetchTraitImages()
+  await adoptNewestAsTraitImage()
+  await fetchTraitsConfig()
+})
+
+async function adoptNewestAsTraitImage() {
+  const newest = traitImages.value[0]
+  if (!newest) return
+  const all = ['background', 'sheet', 'navdot']
+  if (all.every(r => (newest.roles || []).includes(r))) return
+  try {
+    // Assigning a role strips it from sibling images on the same owner, so this
+    // moves the picture rather than duplicating it.
+    await fetch(`/api/v1/imagen/${encodeURIComponent(newest.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roles: all }),
+    })
+    await fetchTraitImages()
+  } catch (e) {
+    imageError.value = e?.message || 'Cut out finished, but the result could not be tagged'
+  }
+}
+
+async function onCutOut() {
+  const img = traitImage.value
+  if (!img || cutoutBusy.value || !trait.value) return
+  startingCutout.value = true
+  imageError.value = ''
+  try {
+    const res = await fetch(
+      `/api/v1/remove-background/${encodeURIComponent(trait.value.id)}?owner_kind=trait`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_id: img.id }),
+      },
+    )
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Cut out failed (${res.status})`)
+    pollCutoutJob()
+  } catch (e) {
+    imageError.value = e?.message || 'Cut out failed'
+  } finally {
+    startingCutout.value = false
   }
 }
 
@@ -855,6 +946,12 @@ async function onDelete() {
   border: 1px solid var(--border); color: var(--text);
 }
 .trait-image-upload.is-busy span { opacity: 0.6; }
+.trait-image-cutout {
+  font-size: 11px; padding: 4px 10px; border-radius: 4px;
+  border: 1px solid var(--border); color: var(--text);
+  background: none; cursor: pointer;
+}
+.trait-image-cutout:disabled { opacity: 0.6; cursor: default; }
 .trait-image-error { color: var(--danger, #e06c75); }
 .ego-toggle {
   padding: 3px 12px;

@@ -175,16 +175,22 @@ def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_ima
         _update_job(entity_id, GenerationType.ANIMATE.value, GenerationStatus.FAILED.value)
 
 
-def _run_remove_bg_bg(entity_id: str, image_id: str):
-    """Background task: remove the background from a static image."""
+def _run_remove_bg_bg(entity_id: str, image_id: str, display_name: str = ""):
+    """Background task: remove the background from a static image.
+
+    ``entity_id`` is the owner id and the progress key — an entity or a trait,
+    whichever asked. The cutout's owner comes from the *source image*, not from
+    here.
+    """
     if entity_id not in active_jobs:
         logger.info(f"Background removal for {entity_id} was cancelled before starting — skipping")
         return
     orchestrator = _get_orchestrator()
     try:
         image = asyncio.run(orchestrator.run_remove_background(
-            entity=EntityManager().get(entity_id),
+            owner_id=entity_id,
             image_id=image_id,
+            display_name=display_name,
         ))
         event_bus.publish(StreamEvent(
             event="imagen_progress",
@@ -312,42 +318,59 @@ async def generate_animation(
     return {"accepted": True, "entity_id": entity_id, "generation_type": "animate"}
 
 
-@router.post("/remove-background/{entity_id}")
+@router.post("/remove-background/{owner_id}")
 async def remove_background(
-    entity_id: str,
+    owner_id: str,
     background_tasks: BackgroundTasks,
+    owner_kind: str = "entity",
     request: RemoveBackgroundRequest | None = None,
 ):
     """Remove the background from an existing static image (async).
 
-    Produces a new transparent cutout image owned by the same entity or
-    projection. Progress streams via SSE 'imagen_progress' events.
+    Works for any image **owner**: an entity (`owner_kind=entity`, the default —
+    what the image viewer sends) or a registry trait (`owner_kind=trait`).
+    Produces a new transparent cutout image owned by the same owner *and the same
+    tier* as the source; the source is untouched.
+
+    Progress streams via SSE `imagen_progress` keyed by `owner_id`, and
+    `GET /imagen/jobs` is keyed the same way — so a trait's picture is cut out
+    under the trait's id exactly as an entity's is under its own.
     """
-    em = EntityManager()
-    try:
-        entity = em.get(entity_id)
-    except EntityNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Entity '{entity_id}' not found")
+    from transversal.db.repository import EntityRepository
+
+    if owner_kind not in ("entity", "trait"):
+        raise HTTPException(status_code=400, detail="owner_kind must be 'entity' or 'trait'")
+
+    repo = EntityRepository()
+    if owner_kind == "entity":
+        em = EntityManager()
+        try:
+            owner = em.get(owner_id)
+        except EntityNotFoundError:
+            raise HTTPException(status_code=404, detail=f"Entity '{owner_id}' not found")
+    else:
+        owner = repo.get_trait(owner_id)
+        if owner is None:
+            raise HTTPException(status_code=404, detail=f"Trait '{owner_id}' not found")
 
     if not request or not request.image_id:
         raise HTTPException(status_code=400, detail="image_id is required")
 
-    from transversal.db.repository import EntityRepository
-    repo = EntityRepository()
     img = repo.get_image(request.image_id)
     if not img:
         raise HTTPException(status_code=404, detail=f"Image '{request.image_id}' not found")
     if img.image_type == ImageType.ANIMATED:
         raise HTTPException(status_code=400, detail="Background removal only works on static images")
-    if img.owner_id != entity_id:
-        raise HTTPException(status_code=400, detail=f"Image '{request.image_id}' does not belong to entity '{entity_id}'")
+    if img.owner_id != owner_id:
+        raise HTTPException(status_code=400, detail=f"Image '{request.image_id}' does not belong to '{owner_id}'")
 
-    logger.info(f"Enqueuing background removal for {entity_id} ({entity.name}) from image {request.image_id}")
+    owner_name = getattr(owner, "name", "")
+    logger.info(f"Enqueuing background removal for {owner_kind} {owner_id} ({owner_name}) from image {request.image_id}")
 
-    _queue_job(entity_id, GenerationType.REMOVE_BG.value)
-    background_tasks.add_task(_run_remove_bg_bg, entity_id, request.image_id)
+    _queue_job(owner_id, GenerationType.REMOVE_BG.value)
+    background_tasks.add_task(_run_remove_bg_bg, owner_id, request.image_id, owner_name)
 
-    return {"accepted": True, "entity_id": entity_id, "generation_type": "remove_bg"}
+    return {"accepted": True, "owner_id": owner_id, "generation_type": "remove_bg"}
 
 
 @router.post("/imagen/{entity_id}/cancel")

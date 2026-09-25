@@ -322,7 +322,8 @@ class ImagenOrchestrator:
             await self._report(entity_id, GenerationType.IMAGEN,
                                GenerationStatus.SAVING, "Cutting out navdot...", 90)
             cutout = await self.run_remove_background(
-                entity, source.id, report_gen_type=GenerationType.IMAGEN
+                entity.id, source.id, display_name=entity.name,
+                report_gen_type=GenerationType.IMAGEN,
             )
         except Exception:
             logger.exception(
@@ -603,21 +604,27 @@ class ImagenOrchestrator:
 
     async def run_remove_background(
         self,
-        entity: Entity,
+        owner_id: str,
         image_id: str,
+        display_name: str = "",
         report_gen_type: GenerationType | None = None,
     ) -> MediaImage:
         """Remove the background from an existing static image via BiRefNet.
 
-        Produces a new transparent cutout image owned by the same entity or
-        projection as the source. Non-destructive: the source is untouched.
+        Produces a new transparent cutout image owned by the same owner **and the
+        same tier** as the source. Non-destructive: the source is untouched.
+
+        ``owner_id`` is the progress key, and ``display_name`` merely names the
+        file. Neither decides the cutout's owner — the **source image** does
+        (`src.owner_kind` / `owner_id` / `variant_id`), so a trait image yields a
+        trait-owned cutout with no special case. ``owner_id`` is only the caller's
+        assertion of who owns it, which the REST layer validates.
 
         ``report_gen_type`` lets a caller that is already running a job of its
         own (the auto-cutout under imagen, B129) report under *that* type —
         otherwise the progress stream would flip back to a second job type
         mid-generation.
         """
-        entity_id = entity.id
         gen_type = report_gen_type or GenerationType.REMOVE_BG
 
         src = self.repo.get_image(image_id)
@@ -632,14 +639,14 @@ class ImagenOrchestrator:
         source_bytes = source_path.read_bytes()
 
         short_hash = uuid.uuid4().hex[:8]
-        safe_name = _safe_filename(entity.name)
+        safe_name = _safe_filename(display_name or owner_id)
         safe_universe = _safe_filename(src.universe)
         base_name = f"{safe_name}_{safe_universe}_cut_{short_hash}"
         output_subpath = f"{src.owner_id}/{src.universe}"
         output_full = IMAGEN_DIR / output_subpath
         output_full.mkdir(parents=True, exist_ok=True)
 
-        await self._report(entity_id, gen_type, GenerationStatus.GENERATING, "Removing background...", 20)
+        await self._report(owner_id, gen_type, GenerationStatus.GENERATING, "Removing background...", 20)
 
         async with self._gpu_lock:
             input_filename = f"bgrem_{short_hash}.png"
@@ -661,7 +668,7 @@ class ImagenOrchestrator:
             )
             await self.comfyui.free_memory()
 
-        await self._report(entity_id, gen_type, GenerationStatus.SAVING, "Saving cutout...", 85)
+        await self._report(owner_id, gen_type, GenerationStatus.SAVING, "Saving cutout...", 85)
 
         variants = _save_image_variants(cutout_bytes, output_full, base_name)
         with Image.open(output_full / variants["original"]) as _im:
@@ -692,7 +699,7 @@ class ImagenOrchestrator:
         )
         self.repo.create_image(entity_image)
 
-        await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
+        await self._report(owner_id, gen_type, GenerationStatus.COMPLETE,
                            f"/media/imagen/{output_subpath}/{variants['large']}", 100)
 
         return entity_image
