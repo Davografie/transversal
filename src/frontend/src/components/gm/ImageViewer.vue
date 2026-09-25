@@ -40,7 +40,7 @@
     <div class="flag-assign">
       <label class="flag-check" title="AI was somewhere in this image's workflow — tick this for art you know involved AI">
         <input type="checkbox" :checked="hasFlag('ai')" @change="toggleFlag('ai')" />
-        <span class="flag-pill" :class="{ 'is-on': hasFlag('ai') }">[AI]</span>
+        <span class="flag-pill" :class="{ 'is-on': hasFlag('ai') }">AI</span>
       </label>
       <span
         v-for="f in autoFlags"
@@ -103,7 +103,7 @@ const message = ref('')
 const motionHint = ref('')
 const fetchedRoles = ref([])
 // Provenance labels — separate from roles: not unique, and nothing strips
-// siblings, so several images of one owner can carry [AI] at once.
+// siblings, so several images of one owner can carry AI at once.
 const fetchedFlags = ref([])
 // Credits + licence for this image — the citation half, independent of roles.
 const fetchedCredits = ref([])
@@ -111,7 +111,7 @@ const fetchedLicense = ref('')
 const fetchedCreditText = ref('')
 
 //: Machine-set labels are shown, never editable: the pipelines own them.
-const AUTO_FLAG_LABELS = { ai_generated: '[AI-generated]', ai_animated: '[AI-animated]' }
+const AUTO_FLAG_LABELS = { ai_generated: 'AI-generated', ai_animated: 'AI-animated' }
 
 const autoFlags = computed(() => fetchedFlags.value.filter(f => f in AUTO_FLAG_LABELS))
 

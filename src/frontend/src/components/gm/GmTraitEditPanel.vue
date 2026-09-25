@@ -84,7 +84,7 @@
                 :checked="(img.flags || []).includes('ai')"
                 @change="toggleFlag(img, 'ai')"
               />
-              <span class="trait-flag-pill" :class="{ 'is-on': (img.flags || []).includes('ai') }">[AI]</span>
+              <span class="trait-flag-pill" :class="{ 'is-on': (img.flags || []).includes('ai') }">AI</span>
             </label>
             <span
               v-for="f in autoFlagsOf(img)"
@@ -472,10 +472,10 @@ async function toggleRole(img, role) {
 }
 
 // ── Provenance flags (independent of the role tags) ──
-// `[AI]` is the human's label for art whose workflow they know involved AI;
-// `[AI-generated]` / `[AI-animated]` are set by the pipelines and only shown.
+// `AI` is the human's label for art whose workflow they know involved AI;
+// `AI-generated` / `AI-animated` are set by the pipelines and only shown.
 // Flags never strip siblings, unlike roles.
-const AUTO_FLAG_LABELS = { ai_generated: '[AI-generated]', ai_animated: '[AI-animated]' }
+const AUTO_FLAG_LABELS = { ai_generated: 'AI-generated', ai_animated: 'AI-animated' }
 
 // Per-image credits editor, opened on demand so the row stays compact.
 const creditsOpenFor = ref('')

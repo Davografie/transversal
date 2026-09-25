@@ -654,7 +654,7 @@ rejected.
 **`flags` is deliberately a separate field from `roles`.** Roles are unique per
 (owner, role) — assigning one strips it from sibling images — which is right for
 "where does this render" and catastrophic for a provenance label: putting `ai` in
-`roles` would make ticking one image's `[AI]` silently untag every other image of
+`roles` would make ticking one image's `AI` silently untag every other image of
 that owner. So flags are additive, not unique per owner, and resolution never
 consults them. (`tests/test_media_image_owner.py` pins both halves of that
 contrast in one test.)
@@ -669,7 +669,7 @@ cutouts were stamped `ai` by the first cut of the backfill and corrected; the
 script's `--remove-cutout-ai` is that correction.)
 
 Surfaces: the GM image viewer and the GM trait editor both show the three labels;
-`[AI]` is a checkbox and the two pipeline labels are read-only, because the
+`AI` is a checkbox and the two pipeline labels are read-only, because the
 pipelines own them. The upload endpoint takes `flags` (comma-separated) and
 `PATCH /imagen/{image_id}` sets them, both validated against the vocabulary.
 

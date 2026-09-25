@@ -58,15 +58,15 @@ const props = defineProps({
 //: Only the labels an image actually carries are shown, so an ordinary upload
 //: displays nothing at all rather than a row of empty badges.
 const FLAG_LABELS = {
-  ai: '[AI]',
-  ai_generated: '[AI-generated]',
-  ai_animated: '[AI-animated]',
+  ai: 'AI',
+  ai_generated: 'AI-generated',
+  ai_animated: 'AI-animated',
 }
 
 const AI_TITLES = {
-  '[AI]': 'AI was somewhere in this image’s workflow',
-  '[AI-generated]': 'Made by the image generator',
-  '[AI-animated]': 'Motion made by the animation generator',
+  AI: 'AI was somewhere in this image’s workflow',
+  'AI-generated': 'Made by the image generator',
+  'AI-animated': 'Motion made by the animation generator',
 }
 
 const ROLE_LABELS = {
