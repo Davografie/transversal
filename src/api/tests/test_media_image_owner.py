@@ -317,6 +317,14 @@ def test_upload_registers_an_image_for_a_trait_owner():
         for role in ("sheet", "background", "navdot"):
             assert image_id in repo.resolve_role_image(TRAIT, role)
         assert image_id in repo.resolve_role_image(TRAIT, "sheet", SETTING)
+
+        # The GM trait editor reads the picture back over this same list — the
+        # endpoint an entity gallery uses, now keyed by any owner id, with the
+        # URL built from owner_id rather than the legacy entity_id.
+        listing = client.get(f"/api/v1/imagen/{TRAIT}").json()
+        row = next(i for i in listing["images"] if i["id"] == image_id)
+        assert row["path_large"] == f"/media/imagen/{TRAIT}/three_realms/upload_{image_id}_Large.webp"
+        assert row["variant_id"] is None and row["projection_id"] is None
     finally:
         if repo.get_image(image_id) is not None:
             repo.delete_image(image_id)

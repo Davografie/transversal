@@ -425,9 +425,9 @@ async def list_images(entity_id: str, universe: str | None = None):
     def _file_size(img: MediaImage) -> int:
         try:
             if img.image_type == ImageType.ANIMATED:
-                path = f"/app/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
+                path = f"/app/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}"
             else:
-                path = f"/app/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
+                path = f"/app/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}"
             return os.path.getsize(path)
         except OSError:
             return 0
@@ -441,6 +441,7 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "universe_label": universe_names.get(img.universe, img.universe),
                 "image_type": img.image_type.value,
                 "projection_id": img.projection_id,
+                "variant_id": img.variant_id,
                 "prompt": img.prompt,
                 "width": img.width,
                 "height": img.height,
@@ -448,8 +449,8 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "size_bytes": _file_size(img),
                 "roles": img.roles,
                 "transparent": img.transparent,
-                "path_large": f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}",
-                "path_animated": f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
+                "path_large": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}",
+                "path_animated": f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
             }
             for img in images
         ],

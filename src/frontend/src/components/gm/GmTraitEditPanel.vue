@@ -44,6 +44,37 @@
         />
       </div>
 
+      <!-- Image (B200) — one picture per trait, shared across its universes -->
+      <h4 class="ps-section-title">Image</h4>
+      <p class="section-hint">
+        One picture per trait, shared by every universe it belongs to. The first
+        image is tagged for all three surfaces (sheet, backdrop, scene chip)
+        automatically.
+      </p>
+      <div class="trait-image">
+        <img
+          v-if="traitImageUrl"
+          class="trait-image-preview"
+          :class="{ 'is-transparent': traitImageTransparent }"
+          :src="traitImageUrl"
+          :alt="`${trait?.name || 'Trait'} image`"
+        />
+        <div v-else class="trait-image-empty">No image</div>
+        <div class="trait-image-actions">
+          <label class="trait-image-upload" :class="{ 'is-busy': uploadingImage }">
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif"
+              :disabled="uploadingImage"
+              @change="onImagePicked"
+            />
+            <span>{{ uploadingImage ? 'Uploading…' : (traitImageUrl ? 'Replace' : 'Upload') }}</span>
+          </label>
+          <DangerButton v-if="traitImageId" @click="removeTraitImage">Remove</DangerButton>
+        </div>
+      </div>
+      <p v-if="imageError" class="section-hint trait-image-error">{{ imageError }}</p>
+
       <!-- Display Names (read-only list → opens editor panel) -->
       <h4 class="ps-section-title">Display Names</h4>
       <GmList
@@ -262,6 +293,82 @@ const props = defineProps({
 })
 
 const saving = ref(false)
+
+// ── Image (B200) ─────────────────────────────────────
+// One picture per trait, shared across its universes. Authored here; the image
+// record comes over REST rather than GraphQL because removing it needs the
+// record's id, and the same list already carries the URL and the transparency
+// flag. The GraphQL `Trait.image(role)` fields serve the read-only surfaces.
+const traitImages = ref([])
+const uploadingImage = ref(false)
+const imageError = ref('')
+
+const traitImage = computed(() => traitImages.value[0] || null)
+const traitImageUrl = computed(() => traitImage.value?.path_large || '')
+const traitImageId = computed(() => traitImage.value?.id || '')
+const traitImageTransparent = computed(() => !!traitImage.value?.transparent)
+
+async function fetchTraitImages() {
+  if (!props.traitId) {
+    traitImages.value = []
+    return
+  }
+  try {
+    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(props.traitId)}`)
+    const data = res.ok ? await res.json() : { images: [] }
+    // The definition tier only: a trait has no projections, so anything with a
+    // variant belongs to the per-instance override (slice 2) and is not what
+    // this control edits.
+    traitImages.value = (data.images || []).filter(i => !i.projection_id && !i.variant_id)
+  } catch {
+    traitImages.value = []
+  }
+}
+
+watch(() => props.traitId, fetchTraitImages, { immediate: true })
+
+async function onImagePicked(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''  // let the same file be re-picked after an error
+  if (!file || !trait.value) return
+
+  uploadingImage.value = true
+  imageError.value = ''
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    // A trait lists its universes; the first is the storage default. Passing it
+    // explicitly keeps a universe-less trait from silently skipping registration.
+    const universe = trait.value.universes?.[0] || ''
+    const res = await fetch(
+      `/api/v1/media/upload?owner_kind=trait&owner_id=${encodeURIComponent(trait.value.id)}`
+        + `&universe=${encodeURIComponent(universe)}`,
+      { method: 'POST', body: form },
+    )
+    if (!res.ok) throw new Error(`Upload failed (${res.status})`)
+    const data = await res.json()
+    if (!data.image_id) throw new Error('The file was saved but not attached to the trait.')
+    await fetchTraitImages()
+    await fetchTraitsConfig()
+  } catch (e) {
+    imageError.value = e?.message || 'Upload failed'
+  } finally {
+    uploadingImage.value = false
+  }
+}
+
+async function removeTraitImage() {
+  if (!traitImageId.value) return
+  imageError.value = ''
+  try {
+    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(traitImageId.value)}`, { method: 'DELETE' })
+    if (!res.ok && res.status !== 404) throw new Error(`Remove failed (${res.status})`)
+    await fetchTraitImages()
+    await fetchTraitsConfig()
+  } catch (e) {
+    imageError.value = e?.message || 'Remove failed'
+  }
+}
 
 // allSfxs is now provided by useTraitsConfig() composable — no local fallback needed
 
@@ -726,6 +833,29 @@ async function onDelete() {
 .field-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .section-hint { font-size: 11px; color: var(--text-dim); margin: 0 0 6px; line-height: 1.4; }
 .section-hint strong { color: var(--text); }
+
+/* Trait image (B200) */
+.trait-image { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 6px; }
+.trait-image-preview {
+  width: 88px; height: 88px; object-fit: cover; border-radius: 6px;
+  border: 1px solid var(--border); background: rgba(0, 0, 0, 0.25);
+}
+/* A cutout floats rather than sitting in a box, like the sheet portrait does. */
+.trait-image-preview.is-transparent { object-fit: contain; border-style: dashed; background: none; }
+.trait-image-empty {
+  width: 88px; height: 88px; border-radius: 6px; border: 1px dashed var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--text-dim);
+}
+.trait-image-actions { display: flex; flex-direction: column; gap: 6px; }
+.trait-image-upload { position: relative; overflow: hidden; display: inline-flex; }
+.trait-image-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.trait-image-upload span {
+  font-size: 11px; padding: 4px 10px; border-radius: 4px;
+  border: 1px solid var(--border); color: var(--text);
+}
+.trait-image-upload.is-busy span { opacity: 0.6; }
+.trait-image-error { color: var(--danger, #e06c75); }
 .ego-toggle {
   padding: 3px 12px;
   border-radius: 999px;

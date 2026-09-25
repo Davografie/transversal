@@ -22,6 +22,10 @@ export function useTraitsConfig() {
             defaultEgo polarity tags
             possibleSfxIds defaultSfxIds possibleSubtraitIds possibleSubtraitsetIds
             displayNames { name universe ratings }
+            sheetImage: image(role: "sheet")
+            backgroundImage: image(role: "background")
+            navdotImage: image(role: "navdot")
+            imageTransparent
           }
         }
       }`),
