@@ -2287,6 +2287,432 @@ def compare_totals(args: dict) -> dict:
     return {"winner": _compare_totals(args["player_total"], args["opponent_total"]).value}
 
 
+# ── Registry lifecycle: delete, reorder, detach (2026-09-25) ──
+#
+# The other half of authoring. Until these existed a registry entry, a life path
+# or a table created by mistake could be edited but never removed, so iterative
+# authoring had no undo — a gap my own worklog had recorded as "no easy undo of a
+# bad apply". They cascade, and the cascade is what makes them dangerous.
+
+_QUERY_HISTORICAL = """
+query($entityId: ID!) {
+  historicalRecords(entityId: $entityId) {
+    id entityId recordType universe sessionId data afterIds createdAt
+  }
+}
+"""
+
+_QUERY_CONSEQUENCE_OPTIONS = ("""
+query($entityId: ID!, $side: String!, $menuContext: String!) {
+  consequenceOptions(entityId: $entityId, side: $side, menuContext: $menuContext) {
+    id label side source
+    effects { %s }
+  }
+}
+""" % _EFFECT_FIELDS)
+
+_MUT_DELETE_TRAIT = "mutation($id: ID!) { deleteTrait(id: $id) }"
+
+_MUT_DELETE_TRAITSET = "mutation($id: ID!) { deleteTraitset(id: $id) }"
+
+_MUT_REORDER_TRAITSETS = "mutation($ids: [ID!]!) { reorderTraitsets(ids: $ids) }"
+
+_MUT_DELETE_LIFE_PATH = "mutation($id: ID!) { deleteLifePath(id: $id) }"
+
+_MUT_DELETE_ROLL_TABLE = "mutation($id: ID!) { deleteRollTable(id: $id) }"
+
+_MUT_REMOVE_SUB_TRAIT = (
+    "mutation($id: ID!) { removeSubTrait(subTraitSettingId: $id) }"
+)
+
+_MUT_UPDATE_HISTORICAL_RECORD = (
+    "mutation($input: UpdateHistoricalRecordInput!) { updateHistoricalRecord(input: $input) }"
+)
+
+_MUT_SET_ROLL_TABLE_POSITION = """
+mutation($id: ID!, $x: Float, $y: Float) {
+  setRollTablePosition(id: $id, x: $x, y: $y) { id name lifePath canvasX canvasY }
+}
+"""
+
+_MUT_CLEAR_ROLL_TABLE_POSITIONS = (
+    "mutation($lifePathId: ID!) { clearRollTablePositions(lifePathId: $lifePathId) }"
+)
+
+_MUT_CREATE_SUPPORT_CHARACTER = """
+mutation($playerId: ID!, $mainEntityId: ID!, $tableId: ID!, $index: Int!) {
+  createSupportCharacter(
+    playerId: $playerId, mainEntityId: $mainEntityId, tableId: $tableId, index: $index
+  ) {
+    id type name razmerit currentUniverse currentLocation unpublished ownedBy
+  }
+}
+"""
+
+_MUT_START_TERM = """
+mutation($entityId: ID!, $factionId: ID!, $pathId: ID!) {
+  startTerm(entityId: $entityId, factionId: $factionId, pathId: $pathId) {
+    factionId pathId currentTableId continuation
+  }
+}
+"""
+
+_MUT_STEP_UP_TRAIT = """
+mutation($id: ID!) { stepUpTrait(traitSettingId: $id) { %s } }
+""" % _TS_WRITE_FIELDS
+
+_MUT_STEP_DOWN_TRAIT = """
+mutation($id: ID!) { stepDownTrait(traitSettingId: $id) { %s } }
+""" % _TS_WRITE_FIELDS
+
+_MUT_RESOLVE_EFFECT_TARGETS = """
+mutation($entityId: ID!, $resolutions: [EffectTargetResolutionInput!]!) {
+  resolveEffectTargets(entityId: $entityId, resolutions: $resolutions) {
+    applied
+    structured
+    pendingChoices { index kind scope field }
+  }
+}
+"""
+
+_MUT_RESOLVE_SFX_LOOP = """
+mutation($entityId: ID!, $sfxId: ID!, $eventType: String!, $universe: String, $context: JSON) {
+  resolveSfxLoop(
+    entityId: $entityId, sfxId: $sfxId, eventType: $eventType,
+    universe: $universe, context: $context
+  ) {
+    applied
+    structured
+    pendingChoices { index kind scope field }
+  }
+}
+"""
+
+_MUT_RESOLVE_PARKED_BRANCH = """
+mutation($eventId: ID!, $optionId: String) {
+  resolveParkedBranch(eventId: $eventId, optionId: $optionId) {
+    applied
+    structured
+    pendingChoices { index kind scope field }
+  }
+}
+"""
+
+_MUT_SET_CONSEQUENCE_OPTIONS = """
+mutation($entityId: ID!, $options: [ConsequenceOptionInput!]!) {
+  setConsequenceOptions(entityId: $entityId, options: $options) {
+    id name currentLocation
+  }
+}
+"""
+
+
+def _all_trait_ids() -> set[str]:
+    return {
+        t["id"]
+        for ts in (_graphql(_QUERY_TRAITS).get("traitsets") or [])
+        for t in (ts.get("traits") or [])
+    }
+
+
+def _all_traitset_ids() -> set[str]:
+    return {t["id"] for t in (_graphql(_QUERY_TRAITSETS_FULL).get("traitsets") or [])}
+
+
+def delete_trait(args: dict) -> dict:
+    """Delete a registry trait definition outright.
+
+    **Dangerous in a quiet way:** removing a definition leaves every instance that
+    referenced it pointing at nothing, and a setting whose trait cannot be resolved
+    renders as a **blank row** rather than erroring — the exact damage the 53 dead
+    life-path references did. Re-read ``list_traits`` after; this returns a bare
+    boolean, so the response carries the read that confirms the trait is gone.
+    """
+    result = _call_mutation("deleteTrait", _MUT_DELETE_TRAIT, {"id": args["id"]},
+                            args.get("dry_run", True), "deleteTrait")
+    if args.get("dry_run", True):
+        return result
+    gone = args["id"] not in _all_trait_ids()
+    return _read_back(result, gone, "traitsets{traits{id}}",
+                      note="" if gone else "the trait is still listed")
+
+
+def delete_traitset(args: dict) -> dict:
+    """Delete a trait set — **and every trait and setting inside it.**
+
+    The largest blast radius in the layer, and the mutation is the only thing that
+    reports it: the resolver answers with *"Deleted traitset and N traits, M
+    settings"*. Read ``list_traitsets`` and ``list_traits`` before calling, and
+    treat a non-zero count as the warning it is.
+    """
+    result = _call_mutation("deleteTraitset", _MUT_DELETE_TRAITSET, {"id": args["id"]},
+                            args.get("dry_run", True), "deleteTraitset")
+    if args.get("dry_run", True):
+        return result
+    gone = args["id"] not in _all_traitset_ids()
+    return _read_back(result, gone, "traitsets", observed=result,
+                      note="" if gone else "the trait set is still listed")
+
+
+def reorder_traitsets(args: dict) -> dict:
+    """Set the order trait sets appear in on a sheet, by passing the ids in order.
+
+    The list is authoritative and positional — the resolver numbers them ``1..n`` in
+    the order given, so **pass every id you care about**; sets left out keep their
+    old order and can end up interleaved. Confirmed by reading the orders back.
+    """
+    ids = args["ids"]
+    result = _call_mutation("reorderTraitsets", _MUT_REORDER_TRAITSETS, {"ids": ids},
+                            args.get("dry_run", True), "reorderTraitsets")
+    if args.get("dry_run", True):
+        return result
+    order = {t["id"]: t.get("order") for t in
+             (_graphql(_QUERY_TRAITSETS_FULL).get("traitsets") or [])}
+    wrong = {tid: order.get(tid) for i, tid in enumerate(ids) if order.get(tid) != i + 1}
+    return _read_back(result, not wrong, "traitsets{order}", observed=order,
+                      note=f"order mismatch for {wrong}" if wrong else "")
+
+
+def delete_life_path(args: dict) -> dict:
+    """Delete a life path definition. Read ``list_life_paths`` afterwards to confirm."""
+    result = _call_mutation("deleteLifePath", _MUT_DELETE_LIFE_PATH, {"id": args["id"]},
+                            args.get("dry_run", True), "deleteLifePath")
+    if args.get("dry_run", True):
+        return result
+    found = [p for p in (_graphql(_QUERY_LIFE_PATHS, {"universe": None}).get("lifePaths") or [])
+             if p.get("id") == args["id"]]
+    return _read_back(result, not found, "lifePaths",
+                      note="" if not found else "the life path is still listed")
+
+
+def delete_roll_table(args: dict) -> dict:
+    """Delete a roll table. Read ``list_roll_tables`` afterwards to confirm."""
+    result = _call_mutation("deleteRollTable", _MUT_DELETE_ROLL_TABLE, {"id": args["id"]},
+                            args.get("dry_run", True), "deleteRollTable")
+    if args.get("dry_run", True):
+        return result
+    found = [t for t in (_graphql(_QUERY_ROLL_TABLES, {"lifePathId": None}).get("rollTables") or [])
+             if t.get("id") == args["id"]]
+    return _read_back(result, not found, "rollTables",
+                      note="" if not found else "the table is still listed")
+
+
+def remove_sub_trait(args: dict) -> dict:
+    """Detach a sub-trait setting from its container — the undo of ``add_sub_trait``.
+
+    Removes the setting **and anything nested beneath it**. Pass ``entity_id`` and
+    the removal is confirmed by reading the owner's settings back; there is no query
+    that fetches a setting by its own id, so without it the response says plainly
+    that nothing was checked.
+    """
+    result = _call_mutation("removeSubTrait", _MUT_REMOVE_SUB_TRAIT,
+                            {"id": args["sub_trait_setting_id"]},
+                            args.get("dry_run", True), "removeSubTrait")
+    if args.get("dry_run", True):
+        return result
+    entity_id = args.get("entity_id")
+    if not entity_id:
+        return _read_back(result, False, "not checked",
+                          note="pass entity_id to confirm the removal by reading the "
+                               "owner's settings back")
+    def _flat(nodes):
+        for n in nodes or []:
+            yield n
+            yield from _flat(n.get("subTraitSettings"))
+    remaining = [
+        t for t in _flat((_graphql(_QUERY_ENTITY_BUILD, {"id": entity_id}).get("entity") or {})
+                         .get("traitSettings"))
+        if t.get("id") == args["sub_trait_setting_id"]
+    ]
+    return _read_back(result, not remaining, f"entity({entity_id}).traitSettings",
+                      note="the sub-trait is still present" if remaining else "")
+
+
+def update_historical_record(args: dict) -> dict:
+    """Set a historical record's Blue Book chain position — its only writable field.
+
+    Records are append-only, so ``after_ids`` is all this can change: it is what
+    lets a record be ordered against its neighbours. Pass ``entity_id`` for the
+    read-back, since records are fetched per entity.
+    """
+    input_ = {"id": args["id"]}
+    if args.get("after_ids") is not None:
+        input_["afterIds"] = args["after_ids"]
+    result = _call_mutation("updateHistoricalRecord", _MUT_UPDATE_HISTORICAL_RECORD,
+                            {"input": input_}, args.get("dry_run", True),
+                            "updateHistoricalRecord")
+    if args.get("dry_run", True):
+        return result
+    entity_id = args.get("entity_id")
+    if not entity_id:
+        return _read_back(result, False, "not checked",
+                          note="pass entity_id to confirm by reading historicalRecords")
+    records = _graphql(_QUERY_HISTORICAL, {"entityId": entity_id}).get("historicalRecords") or []
+    found = [r for r in records if r.get("id") == args["id"]]
+    observed = found[0] if found else None
+    ok = bool(found) and (args.get("after_ids") is None
+                          or observed.get("afterIds") == args["after_ids"])
+    return _read_back(result, ok, f"historicalRecords({entity_id})", observed=observed,
+                      note="" if ok else "the record does not show the chain position asked for")
+
+
+def set_roll_table_position(args: dict) -> dict:
+    """Persist a roll table's canvas position in the life-path editor.
+
+    ``x``/``y`` are the node's coordinates; **pass both as null to clear the
+    position**. Note that a full ``save_roll_table`` deliberately preserves whatever
+    this set, so layout survives a content re-save.
+    """
+    variables = {"id": args["id"], "x": args.get("x"), "y": args.get("y")}
+    return _call_mutation("setRollTablePosition", _MUT_SET_ROLL_TABLE_POSITION, variables,
+                          args.get("dry_run", True), "setRollTablePosition")
+
+
+def clear_roll_table_positions(args: dict) -> dict:
+    """Clear every saved canvas position for one life path's roll tables.
+
+    Returns the **number of tables cleared**, which is the whole confirmation — a
+    zero means the path had no positions saved.
+    """
+    return _call_mutation("clearRollTablePositions", _MUT_CLEAR_ROLL_TABLE_POSITIONS,
+                          {"lifePathId": args["life_path_id"]},
+                          args.get("dry_run", True), "clearRollTablePositions")
+
+
+def create_support_character(args: dict) -> dict:
+    """Create a support character from a roll-table entry — the take-over path (B86).
+
+    The **main pays the entry's cost**; a new GMC is created, owned by the player
+    with ``main: false``, linked to the main by a ``support`` edge, and the entry's
+    benefit effects land on the new character. This is what the two support-cast
+    tables (``rt-support-cast``, ``rt-three_realms-support-cast``) are *for*, and
+    without it those tables could not be exercised through the tool layer at all —
+    they resolve by explicit ``index``, not by a roll.
+
+    The entity is created **published**, since a player is about to play it.
+    """
+    return _call_mutation(
+        "createSupportCharacter", _MUT_CREATE_SUPPORT_CHARACTER,
+        {"playerId": args["player_id"], "mainEntityId": args["main_entity_id"],
+         "tableId": args["table_id"], "index": args["index"]},
+        args.get("dry_run", True), "createSupportCharacter")
+
+
+def start_term(args: dict) -> dict:
+    """Begin (or restart) a term in a faction's life path.
+
+    Sets the entity's ``pendingTerm`` checkpoint to the path's entry table and
+    persists it, so the term can be resumed in a later session. The returned
+    ``continuation`` is where the term will go next.
+    """
+    return _call_mutation("startTerm", _MUT_START_TERM,
+                          {"entityId": args["entity_id"], "factionId": args["faction_id"],
+                           "pathId": args["path_id"]},
+                          args.get("dry_run", True), "startTerm")
+
+
+def step_up_trait(args: dict) -> dict:
+    """Step one trait setting up its die ladder — the growth half of play.
+
+    Refuses at the top of the ladder rather than saturating, and the full setting
+    comes back, so the new die is visible in the response.
+    """
+    return _call_mutation("stepUpTrait", _MUT_STEP_UP_TRAIT,
+                          {"id": args["trait_setting_id"]},
+                          args.get("dry_run", True), "stepUpTrait")
+
+
+def step_down_trait(args: dict) -> dict:
+    """Step one trait setting down its die ladder — the complication half of play."""
+    return _call_mutation("stepDownTrait", _MUT_STEP_DOWN_TRAIT,
+                          {"id": args["trait_setting_id"]},
+                          args.get("dry_run", True), "stepDownTrait")
+
+
+def resolve_effect_targets(args: dict) -> dict:
+    """Re-apply previously-pending effects once their targets are chosen.
+
+    The other half of ``apply_effects``: when a rule's target step cannot be
+    resolved by itself it returns ``pendingChoices``, and this answers one. Each
+    resolution carries ``effect``/``target``/``field`` (legacy single-target) or
+    ``answers`` (a resumable mid-path ``choose`` step, which may surface the next
+    choose rather than finishing).
+
+    **This commits effects** — it is the applying call, not a preview of one.
+    """
+    return _call_mutation(
+        "resolveEffectTargets", _MUT_RESOLVE_EFFECT_TARGETS,
+        {"entityId": args["entity_id"], "resolutions": args["resolutions"]},
+        args.get("dry_run", True), "resolveEffectTargets")
+
+
+def resolve_sfx_loop(args: dict) -> dict:
+    """Run **one more round** of a rule that re-entered the change it handled.
+
+    The loop guard offers each round rather than recursing, so this is how a table
+    says "again" — and it is the only way an automated loop advances, one answered
+    round at a time. The rule re-runs for *the same moment* against live state, so a
+    round that has become impossible (the challenge is full, the trait is gone)
+    simply does nothing, and a round that causes the change again surfaces the next
+    prompt by itself.
+    """
+    variables = {"entityId": args["entity_id"], "sfxId": args["sfx_id"],
+                 "eventType": args["event_type"]}
+    if args.get("universe") is not None:
+        variables["universe"] = args["universe"]
+    if args.get("context") is not None:
+        variables["context"] = args["context"]
+    return _call_mutation("resolveSfxLoop", _MUT_RESOLVE_SFX_LOOP, variables,
+                          args.get("dry_run", True), "resolveSfxLoop")
+
+
+def resolve_parked_branch(args: dict) -> dict:
+    """Answer a **parked choice node** — run the option, end the question.
+
+    A boundary choice is *asked*, not applied: its row keeps the question and its
+    options so the prompt survives a reload and a skipped choice cannot resolve
+    itself. An **empty ``option_id`` is the default branch** — it runs nothing and
+    ends the row, which for the session-end challenge choice means the step-down
+    stands. Returns the effects the chosen branch applied.
+    """
+    return _call_mutation(
+        "resolveParkedBranch", _MUT_RESOLVE_PARKED_BRANCH,
+        {"eventId": args["event_id"], "optionId": args.get("option_id", "")},
+        args.get("dry_run", True), "resolveParkedBranch")
+
+
+def set_consequence_options(args: dict) -> dict:
+    """Replace an entity's authored **consequence options** — the location-move menu.
+
+    The call is a *replace*: pass the whole list, or ``[]`` to clear it. Each option
+    is ``{id, label, side, effects}``, and ``side`` groups it on the menu.
+
+    Read-back is limited and the response says so: ``Entity`` does not expose
+    ``consequenceOptions``, and the read that does (``consequenceOptions``) needs a
+    ``side`` and a menu context the write does not carry.
+    """
+    result = _call_mutation(
+        "setConsequenceOptions", _MUT_SET_CONSEQUENCE_OPTIONS,
+        {"entityId": args["entity_id"], "options": args["options"]},
+        args.get("dry_run", True), "setConsequenceOptions")
+    if args.get("dry_run", True):
+        return result
+    side, menu_context = args.get("side"), args.get("menu_context")
+    if not (side and menu_context):
+        return _read_back(result, False, "not checked", observed=result,
+                          note="Entity exposes no consequenceOptions field; pass side and "
+                               "menu_context to confirm through the consequenceOptions read")
+    observed = _graphql(_QUERY_CONSEQUENCE_OPTIONS,
+                        {"entityId": args["entity_id"], "side": side,
+                         "menuContext": menu_context}).get("consequenceOptions") or []
+    want = {o.get("id") for o in args["options"] if o.get("side") == side}
+    got = {o.get("id") for o in observed}
+    return _read_back(result, want == got,
+                      f"consequenceOptions({args['entity_id']}, {side})", observed=observed,
+                      note="" if want == got else f"expected {sorted(want)}, read {sorted(got)}")
+
+
+
 # ── Tool registry ────────────────────────────────────
 
 TOOLS = {
@@ -2366,6 +2792,23 @@ TOOLS = {
     "pick_total": pick_total,
     "pick_effect_die": pick_effect_die,
     "compare_totals": compare_totals,
+    "delete_trait": delete_trait,
+    "delete_traitset": delete_traitset,
+    "reorder_traitsets": reorder_traitsets,
+    "delete_life_path": delete_life_path,
+    "delete_roll_table": delete_roll_table,
+    "remove_sub_trait": remove_sub_trait,
+    "update_historical_record": update_historical_record,
+    "set_roll_table_position": set_roll_table_position,
+    "clear_roll_table_positions": clear_roll_table_positions,
+    "create_support_character": create_support_character,
+    "start_term": start_term,
+    "step_up_trait": step_up_trait,
+    "step_down_trait": step_down_trait,
+    "resolve_effect_targets": resolve_effect_targets,
+    "resolve_sfx_loop": resolve_sfx_loop,
+    "resolve_parked_branch": resolve_parked_branch,
+    "set_consequence_options": set_consequence_options,
 }
 
 
@@ -3470,6 +3913,251 @@ TOOL_SCHEMAS = {
                 "opponent_total": {"type": "integer"},
             },
             "required": ["player_total", "opponent_total"],
+        },
+    },
+    "delete_trait": {
+        "name": "delete_trait",
+        "description": "Delete a registry trait definition. Leaves any setting that referenced "
+                       "it pointing at nothing, which renders as a blank row rather than an error.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}, "dry_run": _dry_run_property()},
+            "required": ["id"],
+        },
+    },
+    "delete_traitset": {
+        "name": "delete_traitset",
+        "description": "Delete a trait set AND every trait and setting inside it. The response "
+                       "reports the cascade counts; read list_traitsets first.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}, "dry_run": _dry_run_property()},
+            "required": ["id"],
+        },
+    },
+    "reorder_traitsets": {
+        "name": "reorder_traitsets",
+        "description": "Set sheet order for trait sets by passing their ids in order (numbered "
+                       "1..n). The list is authoritative: pass every id you care about.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ids": {"type": "array", "items": {"type": "string"}},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["ids"],
+        },
+    },
+    "delete_life_path": {
+        "name": "delete_life_path",
+        "description": "Delete a life path definition.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}, "dry_run": _dry_run_property()},
+            "required": ["id"],
+        },
+    },
+    "delete_roll_table": {
+        "name": "delete_roll_table",
+        "description": "Delete a roll table.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}, "dry_run": _dry_run_property()},
+            "required": ["id"],
+        },
+    },
+    "remove_sub_trait": {
+        "name": "remove_sub_trait",
+        "description": "Detach a sub-trait setting from its container, with anything nested "
+                       "beneath it. The undo of add_sub_trait.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sub_trait_setting_id": {"type": "string"},
+                "entity_id": {
+                    "type": "string",
+                    "description": "Optional. When given, the removal is confirmed by reading "
+                                   "this entity's settings back.",
+                },
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["sub_trait_setting_id"],
+        },
+    },
+    "update_historical_record": {
+        "name": "update_historical_record",
+        "description": "Set a historical record's Blue Book chain position (after_ids is its "
+                       "only writable field; records are append-only).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "after_ids": {"type": "array", "items": {"type": "string"}},
+                "entity_id": {
+                    "type": "string",
+                    "description": "Optional. When given, the chain position is confirmed by "
+                                   "reading historicalRecords for that entity.",
+                },
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["id"],
+        },
+    },
+    "set_roll_table_position": {
+        "name": "set_roll_table_position",
+        "description": "Persist a roll table's canvas position in the life-path editor. Pass "
+                       "x and y as null to clear it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["id"],
+        },
+    },
+    "clear_roll_table_positions": {
+        "name": "clear_roll_table_positions",
+        "description": "Clear every saved canvas position for one life path's roll tables. "
+                       "Returns the number of tables cleared.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "life_path_id": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["life_path_id"],
+        },
+    },
+    "create_support_character": {
+        "name": "create_support_character",
+        "description": "Create a support character from a roll-table entry: the main pays the "
+                       "cost, a GMC is created owned by the player and linked by a support edge.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "player_id": {"type": "string"},
+                "main_entity_id": {"type": "string"},
+                "table_id": {"type": "string"},
+                "index": {"type": "integer", "description": "The entry's index in the table."},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["player_id", "main_entity_id", "table_id", "index"],
+        },
+    },
+    "start_term": {
+        "name": "start_term",
+        "description": "Begin or restart a term in a faction's life path, setting the entity's "
+                       "pending-term checkpoint to the path's entry table.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "faction_id": {"type": "string"},
+                "path_id": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "faction_id", "path_id"],
+        },
+    },
+    "step_up_trait": {
+        "name": "step_up_trait",
+        "description": "Step one trait setting up its die ladder (growth). Refuses at the top.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "trait_setting_id": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["trait_setting_id"],
+        },
+    },
+    "step_down_trait": {
+        "name": "step_down_trait",
+        "description": "Step one trait setting down its die ladder (complication).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "trait_setting_id": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["trait_setting_id"],
+        },
+    },
+    "resolve_effect_targets": {
+        "name": "resolve_effect_targets",
+        "description": "Re-apply previously-pending effects once their targets are chosen. "
+                       "This COMMITS effects; it is not a preview.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "resolutions": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "One per pending choice: {effect, target, field} for a legacy "
+                                   "single target, or {answers} for a resumable choose step.",
+                },
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "resolutions"],
+        },
+    },
+    "resolve_sfx_loop": {
+        "name": "resolve_sfx_loop",
+        "description": "Run one more round of a rule that re-entered the change it handled — "
+                       "how a table says 'again'. The only way an automated loop advances.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "sfx_id": {"type": "string"},
+                "event_type": {"type": "string"},
+                "universe": {"type": "string"},
+                "context": {"type": "object"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "sfx_id", "event_type"],
+        },
+    },
+    "resolve_parked_branch": {
+        "name": "resolve_parked_branch",
+        "description": "Answer a parked choice node: run the option and end the question. An "
+                       "empty option_id is the default branch (runs nothing, ends the row).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string"},
+                "option_id": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["event_id"],
+        },
+    },
+    "set_consequence_options": {
+        "name": "set_consequence_options",
+        "description": "Replace an entity's authored consequence options (the location-move "
+                       "menu). A replace: pass the whole list, or [] to clear.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "options": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "Each {id, label, side, effects}; side groups it on the menu.",
+                },
+                "side": {
+                    "type": "string",
+                    "description": "Optional. With menu_context, confirms the write through the "
+                                   "consequenceOptions read.",
+                },
+                "menu_context": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["entity_id", "options"],
         },
     },
 }

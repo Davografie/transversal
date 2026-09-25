@@ -77,6 +77,16 @@ BASELINE_GAPS: dict[str, dict[str, str]] = {
         "*": "the input is a spec of effects to *run*, not a record to store; the "
         "response reports the outcome instead (applied / structured / pendingChoices)",
     },
+    "resolveEffectTargets": {
+        "*": "same shape as applyEffects: the input answers pending *choices*, and the "
+        "response reports what applied plus any next choice rather than echoing them",
+    },
+    "setConsequenceOptions": {
+        "label": "not a field on `Entity`; pass side + menu_context and the tool confirms "
+        "through the consequenceOptions read",
+        "side": "as above -- side is a read coordinate, not an entity field",
+        "effects": "as above -- the authored effects are read back via consequenceOptions",
+    },
 }
 
 
