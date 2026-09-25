@@ -180,6 +180,7 @@
           :universe="universe"
           :phase="phase"
           :visible="sheetDock || sheetVisible || mobileStackActive"
+          :trait-set-accordion="traitSetAccordion"
           embedded
           :gm-mode="gmMode"
           @open-settings="openSettings"
@@ -1619,9 +1620,20 @@ function onPanelDragEnd({ dy, velocity }) {
 // ── Theme (light/dark) — see composables/useThemeMode.js
 const { colorMode } = useThemeMode()
 
-const { isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobileFocus, rollerContentH, onBandDragStart, tapBand } = useMobileBands({
+const { isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobileFocus, shortViewport, rollerContentH, onBandDragStart, tapBand } = useMobileBands({
   wrapperEl, gmMode, entityId, viewingEntityId,
 })
+
+// Which shape the traits tab takes, handed to the sheet as a fact rather than
+// letting it guess at layout. The human's rule (2026-09-25): the accordion is for
+// **landscape views with a large height — desktops and tablets** — and nowhere
+// else. Everywhere else the sets are a drill-in again (the shape B178 replaced),
+// which is what a small screen can actually show: the set list, then one set.
+//
+// Both conjuncts matter. Dock alone would put the accordion on the phone-landscape
+// column (390px tall); height alone would put it on a portrait tablet, which the
+// human's wording excludes.
+const traitSetAccordion = computed(() => sheetDock.value && !shortViewport.value)
 
 // Is the LocationViewer the surface a floating overlay would land on?
 //
