@@ -13,8 +13,13 @@
       <textarea v-model="form.description" rows="2" placeholder="What it is…"></textarea>
     </div>
     <div class="lpe-field">
-      <label>Entry table id</label>
-      <input v-model="form.entryTableId" placeholder="rt-…" />
+      <label>Entry table</label>
+      <GmScopePicker
+        v-model="form.entryTableId"
+        :options="entryTableOptions"
+        empty-label="None"
+        placeholder="Select entry table…"
+      />
       <span class="lpe-hint">The first roll table of this path.</span>
     </div>
 
@@ -24,14 +29,17 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
+import { useApi } from '@/composables/useApi.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import Button from '@/components/ui/Button.vue'
+import GmScopePicker from './GmScopePicker.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
+const { graphql } = useApi()
 const { saveLifePath } = useLifePaths()
 
 const props = defineProps({
@@ -44,6 +52,28 @@ const form = reactive({
   description: props.lp.description || '',
   entryTableId: props.lp.entryTableId || '',
 })
+
+const entryTableOptions = ref([])
+
+// Table names repeat across life paths ("Learn", "Mishap", "Survival" ×2), so
+// the owning path — or the shared/fundamental scope — disambiguates the label.
+async function loadEntryTableOptions() {
+  try {
+    const [tables, lps] = await Promise.all([
+      graphql(`{ rollTables { id name universe lifePath } }`),
+      graphql(`{ lifePaths { id name } }`),
+    ])
+    const pathNames = Object.fromEntries((lps?.lifePaths || []).map(l => [l.id, l.name]))
+    entryTableOptions.value = (tables?.rollTables || []).map(t => ({
+      value: t.id,
+      label: t.name + (t.lifePath
+        ? ` · ${pathNames[t.lifePath] || t.lifePath}`
+        : t.universe ? ' · shared' : ' · fundamental'),
+    }))
+  } catch { /* leave empty */ }
+}
+
+onMounted(loadEntryTableOptions)
 
 const saving = ref(false)
 const error = ref('')
