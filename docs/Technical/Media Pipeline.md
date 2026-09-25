@@ -1042,8 +1042,9 @@ faithful copy of it.
 - `gm/GmEntityEditPanel.vue` — entity gallery + per-projection galleries;
   drag between them reassigns ownership; per-projection [imagen] button.
 - `gm/ImageViewer.vue` — role checkboxes (BG/Sheet/Nav), universe selector,
-  animate, **Remove BG**, delete. Remove BG is offered for static images only
-  (hidden for animated loops and for images that are already cutouts).
+  animate, **Remove BG**, delete. Remove BG is offered only when there is
+  something to gain — hidden from a picture that already has a `cutout` render or
+  a loop, both read from `renders` rather than guessed from the file type.
 
 ### Consuming `transparent`
 
