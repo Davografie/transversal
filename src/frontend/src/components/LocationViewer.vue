@@ -1319,17 +1319,17 @@ function onTraitChipDragStart(e, trait) {
     // Promoting a chip out of the auto-stack: it has no scene position yet, so it
     // lands under the pointer and the drag continues from there — grabbing it does
     // not fling it to a default spot first.
-    const el = viewerEl.value
-    const rect = el?.getBoundingClientRect()
-    if (rect) {
-      const cx = e.touches ? e.touches[0].clientX : e.clientX
-      const cy = e.touches ? e.touches[0].clientY : e.clientY
-      const img = toImagePos(cx - rect.left, cy - rect.top)
-      from = { x: Math.round(img.x), y: Math.round(img.y) }
-      traitPositions.value = { ...traitPositions.value, [trait.id]: from }
-    } else {
-      from = { x: 50, y: 50 }
+    //
+    // `getPosFromEvent` is the px → viewport% → image% conversion the zone drag uses.
+    // Do NOT hand-roll it: `toImagePos` takes viewport PERCENTAGES, so passing pixels
+    // turns a 30px pointer into "30%" and a 200px one into "200%", which lands the
+    // chip outside the scene — where it simply disappears.
+    const img = getPosFromEvent(e)
+    from = {
+      x: Math.max(2, Math.min(98, Math.round(img.x))),
+      y: Math.max(2, Math.min(98, Math.round(img.y))),
     }
+    traitPositions.value = { ...traitPositions.value, [trait.id]: from }
   }
   percentDrag.start(e, {
     x: from.x,
