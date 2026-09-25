@@ -42,6 +42,13 @@ A **chip**, in the same visual language as a trait row on the character sheet
 - **Right side: the trait's full rating**, rendered the way the sheet renders one —
   not the chip's own edge. A trait with several dice shows them all
   (`d6 d8 d6`), because live traits really do carry more than one.
+  The dice hang off the chip's right edge and grow **leftwards**, so the chip reserves a
+  lane equal to the rating's **own computed width** (`--rating-w`, from the dice groups)
+  plus 2px — 8px of clearance from the text, with the last die still straddling and
+  hiding the border. A fixed lane cannot work: one die is 24px but `d4 d6 d8 d10` is
+  120px, and with the old 22px lane that rating printed **92px inside its own name**.
+  `e2e/tests/trait-chip-rating-lane.spec.js` pins the clearance for one die, a deep fan of
+  one type, and several types at once.
 
 ## Resting and open (human's spec, 2026-09-25)
 
