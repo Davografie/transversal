@@ -562,11 +562,13 @@ Reusable roll tables whose entries execute effects when selected.
 
 ### Zone
 
-Sub-area within a location, embedded in `entities.zones`.
+Sub-area within a location, embedded in `entities.zones`. A zone is a **link to a
+child location** — it carries no name of its own; the dot's label is derived from
+the linked child, so a rename can never leave a stale pin behind.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | string | Display name |
+| `location_id` | string | **Required.** `_key` of the child location this pin opens |
 | `x` | float | Percentage X position on background image (0–100, default `50`) |
 | `y` | float | Percentage Y position on background image (0–100, default `50`) |
 | `background_image` | string? | Optional zone-specific image |

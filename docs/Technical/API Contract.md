@@ -161,7 +161,7 @@ enum Polarity {
 }
 
 type Zone {
-  name: String!
+  locationId: ID!   # the child location this pin opens — a zone is always a link
   backgroundImage: String
   x: Float!   # percentage position on background (0–100)
   y: Float!   # percentage position on background (0–100)
@@ -475,7 +475,7 @@ Returns parent (up), children (down), transversal destinations (lateral), zones,
 
 ```json
 {
-  "location": { "name": "Valley of Ascension", "zones": [{"name": "Verdant Dominion", "x": 30, "y": 40}, ...], "nav_positions": {"parent": {"x": 90, "y": 15}, "portal": {"x": 90, "y": 50}} },
+  "location": { "name": "Valley of Ascension", "zones": [{"location_id": "loc-40646134", "x": 30, "y": 40}, ...], "nav_positions": {"parent": {"x": 90, "y": 15}, "portal": {"x": 90, "y": 50}} },
   "parent": { "name": "...", "_key": "..." },
   "children": [{ "name": "Verdant Dominion", "_key": "loc-40646134", "current_universe": "three_realms" }],
   "transversal": [{ "name": "The Arrival Platform", "_key": "loc-platform", "current_universe": "three_realms" }],
@@ -510,10 +510,14 @@ Removes a location edge. Transversal edges are removed bidirectionally.
 
 Replaces all zones on a location. Used by the GM zone editor to persist drag-and-drop repositioning.
 
+A zone is a **link**, not a label: `location_id` is required, and the dot's label
+is the linked child's *current* name — derived, never stored, so renaming a child
+can never leave a pin stale.
+
 ```json
 [
-  { "name": "Verdant Dominion", "x": 30, "y": 40 },
-  { "name": "Gilded Basin", "x": 70, "y": 40 }
+  { "location_id": "loc-40646134", "x": 30, "y": 40 },
+  { "location_id": "loc-40646505", "x": 70, "y": 40 }
 ]
 ```
 
@@ -649,6 +653,10 @@ Valid roles: `"player"`, `"architect"`. The role controls which UI elements are 
 **`POST /api/v1/players/{player_id}/spotlight`** — stamp the player's spotlight recency (actor-keyed; B55 wires this to "took control of a main"). Request `{"last_main_entity_id": "...", "timestamp": "ISO"}`; `timestamp` defaults to now.
 
 **`POST /api/v1/players/{player_id}/control/{entity_id}`** — the character-switch signal (B55). Stamps `last_spotlight_at` + `last_main_entity_id` only when `entity_id` is one of the player's mains; broadcasts `main_active` via SSE in both directions (a main becoming active on take, inactive on switch-away). Response `{"player_id": "...", "entity_id": "...", "main": true|false}`.
+
+Optional query param **`stamp=false`** — records the body **without** touching spotlight recency: presence only, no `last_spotlight_at` and no main active/inactive flip. This is the GM's own path for taking a GMC (it must show up in `playerBodies` and size its map dot, but a GM's possession must never stamp another player's spotlight — see [[Troupe Play]]).
+
+**`DELETE /api/v1/players/{player_id}/control`** — the player has stopped driving anything (the GM going to free-roam). Response `{"player_id": "...", "entity_id": null}`.
 
 ### Player Persistence
 
