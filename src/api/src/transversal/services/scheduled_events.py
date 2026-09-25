@@ -455,6 +455,10 @@ def advance_scheduled_events(repo, event_type: str, entity_id: Optional[str] = N
             # A hold never fires on its own: it is applied by end_activation, or
             # dissolved by commit_holds. Ticking it would apply it out of turn.
             continue
+        if event.kind == "awaiting_choice":
+            # A choice node whose boundary has arrived and been *asked*: it waits
+            # for an answer (`resolve_parked_branch`) and must not re-ask every tick.
+            continue
         if entity_id is not None:
             if event.target_type == "entity":
                 if event.target_id != entity_id:
@@ -466,6 +470,9 @@ def advance_scheduled_events(repo, event_type: str, entity_id: Optional[str] = N
             else:
                 continue
         if _advance_event(event, event_type):
+            if _is_choice_node(event.effect):
+                _park_branch(repo, event)
+                continue
             fired += _apply_event(repo, event)
             repo.delete_scheduled_event(event.id)
             if event.source_sfx_id:
@@ -526,3 +533,75 @@ def dispatch_event(
 
             fire_global_state_sfx(sfx_trigger)
     return fired
+
+
+def _is_choice_node(effect) -> bool:
+    """Whether this effect is a choice node ([[B5]])."""
+    return getattr(effect, "type", "") == "branch"
+
+
+def _park_branch(repo, event: ScheduledEvent) -> None:
+    """Park a due choice node: it is *asked*, and the row keeps the question.
+
+    The row is **not** deleted and never re-fires (the parked kind is skipped), so the
+    prompt survives a reload and a skipped choice cannot quietly resolve itself —
+    which is what the session-end choice needs. :func:`resolve_parked_branch` is the
+    only thing that ends it.
+    """
+    from transversal.services.effects_engine.events import PendingSfxEffect
+    from transversal.services.roll_orchestrator import _emit_pending_choices
+
+    event.kind = "awaiting_choice"
+    repo.update_scheduled_event(event)
+
+    entity_id = (event.target_id if event.target_type == "entity"
+                 else _event_owner_entity(repo, event))
+    if not entity_id:
+        return
+    entity = repo.get_entity(entity_id)
+    sfx = repo.get_sfx(event.source_sfx_id) if event.source_sfx_id else None
+    # The effect travels whole, so the picker has the options and the answer can
+    # name one; `kind` tells a client this is a branch rather than a target choice.
+    _emit_pending_choices(
+        entity_id, getattr(entity, "current_universe", "") or "",
+        [PendingSfxEffect(effect=event.effect,
+                          sfx_name=getattr(sfx, "name", "") or "",
+                          sfx_description=getattr(sfx, "description", "") or "",
+                          kind="branch", field_name="branch")],
+    )
+
+
+def resolve_parked_branch(repo, event_id: str, option_id: str = "") -> list[str]:
+    """Answer a parked choice node: run the chosen option, end the row.
+
+    An empty or unknown answer applies **nothing** and ends the row. That is the
+    *default branch*, not a failure: for the author's session-end choice the default
+    is that the step-down stands, so doing nothing is exactly right. The chosen
+    effects commit with the rule's own activation, so their durations and reverts
+    behave as if the rule had run them; the answer itself is not cancelable (the
+    boundary it belonged to has passed).
+    """
+    from transversal.services.effects_applier import resolve_branch_effects
+    from transversal.services.effects_applier.datatypes import ACTIVATION_CONTEXT_KEY
+    from transversal.services.effects_commit import commit_effects
+
+    event = repo.get_scheduled_event(event_id)
+    if event is None or event.kind != "awaiting_choice":
+        return []
+    effects = resolve_branch_effects(event.effect, option_id)
+    summaries: list[str] = []
+    if effects:
+        entity_id = (event.target_id if event.target_type == "entity"
+                     else _event_owner_entity(repo, event))
+        entity = repo.get_entity(entity_id) if entity_id else None
+        if entity is not None:
+            result = commit_effects(entity, effects, repo, {
+                ACTIVATION_CONTEXT_KEY: {
+                    "sfx_id": event.source_sfx_id or "",
+                    "cancelable": False,
+                    "source_id": "",
+                },
+            })
+            summaries = [a.summary for a in result.applied]
+    repo.delete_scheduled_event(event.id)
+    return summaries

@@ -204,6 +204,23 @@ class MutationsEffects:
         )
 
     @strawberry.mutation
+    def resolve_parked_branch(self, info: strawberry.Info, event_id: strawberry.ID,
+                              option_id: str = "") -> EffectApplicationResult:
+        """Answer a **parked choice node** ([[B5]]): run the option, end the question.
+
+        A boundary choice is *asked*, not applied: its row keeps the question (and
+        its options) so the prompt survives a reload and a skipped choice cannot
+        resolve itself. An empty ``option_id`` is the **default branch** — it runs
+        nothing, which for the session-end challenge choice means the step-down
+        stands — and ends the row either way.
+        """
+        from transversal.services.scheduled_events import resolve_parked_branch
+
+        repo = _em(info).repo
+        applied = resolve_parked_branch(repo, str(event_id), option_id)
+        return EffectApplicationResult(applied=applied, pending_choices=[], structured=[])
+
+    @strawberry.mutation
     def set_consequence_options(self, info: strawberry.Info, entity_id: strawberry.ID,
                                 options: list[ConsequenceOptionInput]) -> Entity:
         """Replace an entity's authored consequence options (location moves)."""
