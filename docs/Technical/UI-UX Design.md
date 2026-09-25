@@ -221,6 +221,26 @@ columns collapse**, because a header that labels columns which no longer exist i
 worse than no header; the **key survives to the narrowest width**, because on a
 phone the moment a row matters most is the moment the dice found it.
 
+**Where a prompt lives** (settled 2026-09-25, answering [[Effects]]' open question
+2 — it was blocking [[B5]]'s client half). A choice is a **flow step, not a roll's
+panel**:
+
+- **A choice attached to a roll** renders in the roller's panel, as it does today
+  (`ConsequenceMenu` is the live example: compact density, under the result).
+- **A choice that outlives the roll** renders at the **sheet's** level, in a
+  persistent prompt slot. The roller cannot host it: it is transient, a GM in
+  free-roam has none at all, and the next roll clears it — so a parked branch put
+  there would be lost by the act of playing on.
+- **The prompt is non-modal and never auto-dismisses.** A parked choice waits
+  ([[B5]]), and *answering nothing is a legitimate default* — so the only way to
+  leave it is an explicit "leave it" that writes nothing, and something on the
+  sheet's pill row has to say one is waiting, or "waiting" means "invisible".
+- **Both are the same surface**, driven by different things: the roller's copy is
+  fed by the roll's result, the sheet's by the parked prompt. The rows carry their
+  choice `kind`, and the kind decides whether a pick resolves immediately (a
+  branch) or opens the target wizard — which is a property of the *driver*, not of
+  the row, so the surface is already sufficient for both.
+
 **Flashy, and restrained.** A die-pip key column with tabular numerals, a short
 staggered entrance, and a *landing beat* when a roll finds a row (the pip fills,
 the row lifts once) — so "the dice found this" reads differently from "you chose
