@@ -131,10 +131,13 @@ def _player_to_gql(p: DomainPlayer, repo) -> GqlPlayer:
     )
 
 def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
+    # Same rule as the read path, from the same helper: an EMPTY trait rates with
+    # no dice. Shared so the two converters cannot drift apart again.
+    from transversal.api.graphql.type_defs.traits import rating_dice
     return TraitSetting(
         id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
         traitset_id=s.traitset_id,
-        rating_type=s.rating_type, dice=s.dice,
+        rating_type=s.rating_type, dice=rating_dice(s),
         spent_dice=s.spent_dice,
         capacity=s.capacity,
         polarity=s.polarity,

@@ -150,6 +150,25 @@ class TraitUpdateInput:
     clear_polarity: bool = False
     display_names: Optional[list[TraitDisplayNameInput]] = None
 
+def rating_dice(s) -> list:
+    """The dice a setting actually rates with — **none** when it has no rating.
+
+    An ``EMPTY`` trait is descriptive or a container: it has no rating, so it must
+    not report a die left in storage. That is not hypothetical — **1,261 live
+    settings** are empty and still carry one (``age``, ``full name``,
+    ``behaviour``, ``negative imagen`` … all sitting on a meaningless ``d4``), and
+    the editor already enforces the rule on the way in (*"EMPTY traits carry no
+    dice rating — clear them"*, `useTraitEditor`). The read was the half that
+    disagreed.
+
+    Shared by both converters deliberately: they are the pair that drifted before
+    (``enabled`` dropped on the read path, ``capacity`` on the mutation path),
+    which is what `tests/test_trait_setting_converters.py` exists to catch. A rule
+    like this belongs in one place, not twice.
+    """
+    return [] if s.rating_type == RatingType.EMPTY else list(s.dice)
+
+
 @strawberry.type
 class TraitSetting:
     id: strawberry.ID
@@ -193,15 +212,37 @@ class TraitSetting:
         return _resolve_ego(self, em.repo)
 
     @strawberry.field
-    def die_type(self) -> DieType:
-        """Derive die_type from the first die in dice, or D6 if empty."""
-        if self.dice:
-            return self.dice[0]
-        return DieType.D6
+    def die_type(self) -> Optional[DieType]:
+        """The setting's die — ``null`` when it has no rating.
+
+        This used to fall back to ``D6``, which manufactured a rating for a trait
+        that has none: an empty (descriptive/container) trait, or a pool drained to
+        nothing. Absent is the honest answer, and it is what the `dice` field says
+        too.
+        """
+        if self.rating_type == RatingType.EMPTY:
+            return None
+        return self.dice[0] if self.dice else None
 
     @strawberry.field
-    def rating(self) -> str:
-        """Human-readable rating string derived from dice."""
+    def rating(self) -> Optional[str]:
+        """Human-readable rating — ``null`` when there is no rating to report.
+
+        Two ways a setting ends up with no rating, and both used to answer with
+        something that reads as one:
+
+        * an **empty** trait returns ``null`` rather than the die left in storage
+          (1,261 live settings carry a stray ``d4``);
+        * **no dice** returns ``null`` rather than the word ``"empty"``, which is
+          what `dice_list_to_rating([])` produces and which is a *value* once it
+          reaches a client (3,423 live settings, empty and non-empty alike, were
+          sending it).
+
+        The client is the right place to decide how absence looks; it already does
+        ("depleted" for a drained resource).
+        """
+        if self.rating_type == RatingType.EMPTY or not self.dice:
+            return None
         from transversal.domain import dice_list_to_rating
         return dice_list_to_rating(self.dice)
 
@@ -347,7 +388,7 @@ def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
     return TraitSetting(
         id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
         traitset_id=s.traitset_id,
-        rating_type=s.rating_type, dice=s.dice,
+        rating_type=s.rating_type, dice=rating_dice(s),
         spent_dice=s.spent_dice,
         capacity=s.capacity,
         polarity=s.polarity,
