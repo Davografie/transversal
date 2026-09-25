@@ -242,6 +242,21 @@ const CAMERA_START = 0.6         // window-height fraction where the zoom-in beg
 const CAMERA_FULL = 0.2          // window-height fraction where the zoom is full
 const EXPAND_PROXIMITY = 24      // image-% — distance at which bubbles pop out
 const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop-to-travel zone
+// How much larger than "fit" the location itself renders. Chips, dots and the
+// background all live in the scene layer, so this is the one knob that spaces them
+// out: everything positioned in image-% separates in proportion, and the cost is that
+// less of the map is in view at once.
+//
+// It compensates for the viewer's WIDTH, because that is what actually crowds a map.
+// A chip is a fixed number of pixels, so the narrower the viewer, the smaller the share
+// of the scene those pixels cover: on a 390px phone a location's chips landed 44px
+// apart where the same location gave 86px in the docked desktop view. Scaling by the
+// width puts a comparable distance between them on both, and leaves the wide layout —
+// which is not the crowded one — exactly as it was.
+const LOCATION_SCALE_REF = 760   // viewer width that needs no extra scale
+const LOCATION_SCALE_MAX = 1.5   // cap, so a very narrow phone still shows a map
+const locationScale = (viewerW) =>
+  Math.min(LOCATION_SCALE_MAX, Math.max(1, LOCATION_SCALE_REF / Math.max(viewerW, 1)))
 const CONTROLLED_SCALE = 1.4     // actively-controlled dots render this much bigger
                                  // (also drives the pool dice ring radius, so the
                                  // ring stays outside the rim at every size)
@@ -434,7 +449,10 @@ const sceneCamera = computed(() => {
   const h0 = refH * CAMERA_START
   const h1 = refH * CAMERA_FULL
   const p = ch >= h0 ? 0 : ch <= h1 ? 1 : (h0 - ch) / (h0 - h1)
-  const zoom = 1 + (TEASER_ZOOM - 1) * p
+  // Folded into `zoom` rather than applied at the size below, because the destination
+  // preview is sized from `c.zoom` too — a separate multiplier here would make the map
+  // jump the instant a travel animation became the scene layer.
+  const zoom = (1 + (TEASER_ZOOM - 1) * p) * locationScale(cw)
   const { x: mx, y: my } = selfPos.value
   // The character glides from its natural map position to the center.
   const anchor = { x: mx + (50 - mx) * p, y: my + (50 - my) * p }
