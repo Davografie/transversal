@@ -845,8 +845,14 @@ def get_available_sfx_ids(
     repo,
     prefetch: SfxAvailabilityPrefetch | None = None,
     triggers: frozenset[str] | None = None,
+    out_sources: dict | None = None,
 ) -> list[str]:
     """Return the sorted SFX ids available to ``entity_id`` in ``universe``.
+
+    ``out_sources`` (optional) receives the walk's own map from a granted SFX id to
+    the trait instance that grants it. It is handed out rather than re-derived so a
+    second reader cannot disagree with this one about "the trait this rule sits on"
+    — which is what ``unavailable_sfx_reasons`` needs to say *why* a rule is out.
 
     ``prefetch`` (optional) supplies bulk-loaded per-entity data so a fan-out
     over many entities avoids the per-entity round-trips; see
@@ -994,6 +1000,8 @@ def get_available_sfx_ids(
             if static and not evaluate_conditions(entity, static, repo, source=source, source_element=source_element):
                 ids.discard(sfx_id)
 
+    if out_sources is not None:
+        out_sources.update(sfx_sources)
     return sorted(ids)
 
 
@@ -1780,3 +1788,54 @@ def backfill_support_default_sfx(repo) -> int:
         if provision_support_default_sfx(repo, entity_id):
             updated += 1
     return updated
+
+def unavailable_sfx_reasons(repo, entity, universe: str, sfx_ids, *,
+                            prefetch=None) -> dict[str, list[str]]:
+    """Why each candidate rule is unavailable: the conditions that stop it.
+
+    Availability can only *discard* a rule when its static conditions fail, so a
+    listing knows "not usable" and nothing else — which is how a card ends up greyed
+    with no reason. This answers the question the card is asking: for every candidate
+    that is not available, the phrase the rule's own conditions render as
+    (:func:`sfx_text.condition_text`), one entry per failing condition.
+
+    Only **static** conditions (the ones availability itself reads) can be a reason:
+    a context-gated one (``roll_tier``, ``test_outcome``, a ``{variable}``) is not
+    false, it is *unknown* until the moment it fires, and reporting it would grey a
+    rule that is perfectly usable. An available rule is absent from the result.
+    """
+    from transversal.services.conditions import (
+        evaluate_condition, static_conditions,
+    )
+    from transversal.services.sfx_text import condition_text, repo_name_resolver
+
+    resolve = repo_name_resolver(repo)
+    source_map: dict = {}
+    available = set(get_available_sfx_ids(str(getattr(entity, "id", "")), universe, repo,
+                                          out_sources=source_map))
+    reasons: dict[str, list[str]] = {}
+    for sfx_id in sfx_ids:
+        sfx = (prefetch.sfx_by_id.get(sfx_id) if prefetch is not None
+               else _load_sfx(repo, sfx_id))
+        if sfx is None:
+            continue
+        if str(sfx_id) in available:
+            continue
+        static = static_conditions(sfx.conditions or [])
+        if not static:
+            continue
+        source = source_map.get(sfx_id)
+        source_element = None
+        if source is not None and getattr(sfx, "source_kind", None):
+            from transversal.services import target_catalog as tc
+            source_element = tc.source_element(sfx.source_kind)
+        failing = [
+            condition_text(condition, resolve=resolve, source_element=source_element)
+            or "a condition it declares"
+            for condition in static
+            if not evaluate_condition(entity, condition, repo, None, source,
+                                      source_element, None)
+        ]
+        if failing:
+            reasons[str(sfx_id)] = failing
+    return reasons
