@@ -104,6 +104,14 @@ coordinates inside the scene layer, so they pan and zoom with the map.
 - **Before placement:** an **auto-stack** (roughly today's block). A chip that has
   never been dragged stays in the stack; once placed it locks to its scene
   position and leaves the stack. Nothing has to be hand-placed to be readable.
+- **A stacked chip is as wide as its own content** — the width it has when placed. The
+  stack is a column flex container, and a column flex container stretches its items
+  across the cross axis by default, so every chip used to take the width of the
+  **widest** one in the stack; on a phone the container's `max-width: 40vw` then
+  capped that, drawing a two-word trait as wide as the longest sentence in the room.
+  `align-items: flex-start` on `.loc-traits` is the whole fix, and
+  `e2e/tests/trait-chip-width.spec.js` asserts it by giving a placed and a stacked chip
+  identical text and comparing their measured widths.
 
 ## Built (2026-09-25)
 
