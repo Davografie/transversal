@@ -18,6 +18,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.domain import CREDIT_ROLES, IMAGE_FLAGS, ImageType, MediaImage
 from transversal.services.media_utils import ROLE_VARIANT
+from transversal.imagen.orchestrator import UPSCALE_MASTER_CAP
 from transversal.imagen.models import (
     AnimateRequest,
     GenerationStatus,
@@ -130,6 +131,42 @@ def _run_imagen_bg(entity_id: str, universe: str, projection_id: str = ""):
         ))
         _cleanup_gpu(orchestrator)
         _update_job(entity_id, GenerationType.IMAGEN.value, GenerationStatus.FAILED.value)
+
+
+def _run_upscale_bg(owner_id: str, image_id: str):
+    """Background task: ESRGAN detail pass on one image's master."""
+    if owner_id not in active_jobs:
+        logger.info(f"Upscale for {owner_id} was cancelled before starting — skipping")
+        return
+    orchestrator = _get_orchestrator()
+    try:
+        image = asyncio.run(orchestrator.run_upscale(image_id))
+        event_bus.publish(StreamEvent(
+            event="imagen_progress",
+            data={
+                "entity_id": owner_id,
+                "generation_type": GenerationType.UPSCALE.value,
+                "status": GenerationStatus.COMPLETE.value,
+                "message": f"{image.width}x{image.height}",
+                "percent": 100,
+            },
+        ))
+        logger.info(f"Upscale complete for {image_id}: {image.width}x{image.height}")
+        _update_job(owner_id, GenerationType.UPSCALE.value, GenerationStatus.COMPLETE.value)
+    except Exception as e:
+        logger.exception(f"Upscale failed for {image_id}")
+        event_bus.publish(StreamEvent(
+            event="imagen_progress",
+            data={
+                "entity_id": owner_id,
+                "generation_type": GenerationType.UPSCALE.value,
+                "status": GenerationStatus.FAILED.value,
+                "message": str(e),
+                "percent": 0,
+            },
+        ))
+        _cleanup_gpu(orchestrator)
+        _update_job(owner_id, GenerationType.UPSCALE.value, GenerationStatus.FAILED.value)
 
 
 def _run_animate_bg(entity_id: str, universe: str, duration: float, source_image_id: str = "", motion_hint: str = ""):
@@ -373,6 +410,41 @@ async def remove_background(
     return {"accepted": True, "owner_id": owner_id, "generation_type": "remove_bg"}
 
 
+@router.post("/upscale/{image_id}")
+async def upscale_image(image_id: str, background_tasks: BackgroundTasks):
+    """Upscale one image's master and re-render its tiers (async).
+
+    Offered per image rather than run as a batch: the point is to spend the GPU
+    only on pictures that need it, from the surface where you are already looking
+    at the picture. Refused when there is nothing to gain — a loop has no tiers,
+    and a master already at the ceiling cannot get bigger than what is served.
+
+    Progress streams via SSE `imagen_progress` and `GET /imagen/jobs`, both keyed
+    by the image's **owner**, so the gallery that offered the button polls for it
+    exactly as it does for a cutout.
+    """
+    from transversal.db.repository import EntityRepository
+
+    repo = EntityRepository()
+    img = repo.get_image(image_id)
+    if not img:
+        raise HTTPException(status_code=404, detail=f"Image '{image_id}' not found")
+    if img.image_type == ImageType.ANIMATED:
+        raise HTTPException(status_code=400, detail="Upscaling works on still images; a loop has no tiers")
+    if img.width and img.height and max(img.width, img.height) >= UPSCALE_MASTER_CAP:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Already at the {UPSCALE_MASTER_CAP}px ceiling ({img.width}x{img.height})",
+        )
+
+    logger.info(f"Enqueuing upscale for image {image_id} (owner {img.owner_id})")
+    _queue_job(img.owner_id, GenerationType.UPSCALE.value)
+    background_tasks.add_task(_run_upscale_bg, img.owner_id, image_id)
+
+    return {"accepted": True, "image_id": image_id, "owner_id": img.owner_id,
+            "generation_type": GenerationType.UPSCALE.value}
+
+
 @router.post("/imagen/{entity_id}/cancel")
 async def cancel_job(entity_id: str):
     """Interrupt an active imagen/animate job for an entity."""
@@ -513,6 +585,16 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "credit_text": img.credit_text,
                 "path_large": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}",
                 "path_xlarge": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_XLarge.{img.extension}",
+                # What an "Upscale" button needs to know: is there anything left
+                # to gain, and has this one already been through the pass?
+                "can_upscale": bool(
+                    img.image_type != ImageType.ANIMATED
+                    and max(img.width, img.height) < UPSCALE_MASTER_CAP
+                ),
+                "upscaled": os.path.exists(
+                    f"/app/media/imagen/{img.owner_id}/{img.universe}/"
+                    f"{img.filename}_PreUpscale.{img.extension}"
+                ),
                 "path_animated": f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
             }
             for img in images

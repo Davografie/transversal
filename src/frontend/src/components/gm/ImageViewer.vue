@@ -16,6 +16,11 @@
           <span v-if="statusInfo.status" class="btn-status">{{ statusInfo.status }}</span>
         </Button>
       </div>
+      <div class="bg-remove-row" v-if="canUpscale || localUpscaleJob">
+        <Button class="bg-btn" :loading="upscaleBusy" :disabled="upscaleBusy || !!localUpscaleJob" @click="onUpscaleClick" variant="neutral">
+          <span class="btn-label">⤢ {{ upscaleLabel }}</span>
+        </Button>
+      </div>
       <div class="bg-remove-row" v-if="imageType !== 'cutout'">
         <Button class="bg-btn" :loading="bgBusy" :disabled="bgBusy || !!localBgJob" @click="onRemoveBgClick" variant="neutral">
           <span class="btn-label">{{ bgLabel }}</span>
@@ -153,6 +158,8 @@ async function fetchRoles() {
         fetchedCredits.value = img.credits || []
         fetchedLicense.value = img.license || ''
         fetchedCreditText.value = img.credit_text || ''
+        canUpscale.value = img.can_upscale === true
+        upscaled.value = img.upscaled === true
       }
     }
   } catch {}
@@ -243,6 +250,11 @@ async function toggleRole(r) {
 // Independent job polling — Panel system props are static on open
 const localJob = ref(null)
 const localBgJob = ref(null)
+const localUpscaleJob = ref(null)
+// Whether this image has anything left to gain, and whether it has been through
+// the pass already — both come from the server, which owns the ceiling.
+const canUpscale = ref(false)
+const upscaled = ref(false)
 let _pollTimer = null
 
 async function pollOwnJob() {
@@ -254,6 +266,7 @@ async function pollOwnJob() {
       const j = jobs[props.entityId]
       localJob.value = (j && j.type === 'animate') ? j : null
       localBgJob.value = (j && j.type === 'remove_bg') ? j : null
+      localUpscaleJob.value = (j && j.type === 'upscale') ? j : null
     }
   } catch {}
 }
@@ -268,6 +281,32 @@ watch(localJob, (now, prev) => {
 watch(localBgJob, (now, prev) => {
   if (prev && !now) emit('refresh')
 })
+watch(localUpscaleJob, (now, prev) => {
+  if (prev && !now) { fetchRoles(); emit('refresh') }
+})
+
+// Upscale (detail pass) — the same server-side pipeline the bulk script calls.
+const upscaleBusy = ref(false)
+const upscaleLabel = computed(() => {
+  if (localUpscaleJob.value) return 'Upscaling…'
+  return upscaled.value ? 'Upscaled' : 'Upscale'
+})
+
+async function onUpscaleClick() {
+  if (upscaleBusy.value || localUpscaleJob.value || !canUpscale.value) return
+  upscaleBusy.value = true
+  message.value = 'Upscaling…'
+  try {
+    const r = await fetch(`/api/v1/upscale/${props.imageId}`, { method: 'POST' })
+    const d = await r.json().catch(() => ({}))
+    message.value = r.ok ? 'Upscaling started — the picture refreshes when it lands' : (d.detail || 'Failed')
+    if (r.ok) pollOwnJob()
+  } catch {
+    message.value = 'Request failed'
+  } finally {
+    upscaleBusy.value = false
+  }
+}
 
 // Background removal
 const bgBusy = ref(false)

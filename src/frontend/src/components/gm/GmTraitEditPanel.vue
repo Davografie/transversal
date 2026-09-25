@@ -92,6 +92,12 @@
               class="trait-flag-pill is-on is-auto"
               :title="f === 'ai_generated' ? 'Made by the imagen pipeline' : 'Motion made by the animate pipeline'"
             >{{ AUTO_FLAG_LABELS[f] }}</span>
+            <!-- Real detail only once the master reaches the ceiling. -->
+            <span
+              v-if="img.can_upscale === false"
+              class="trait-flag-pill is-on is-auto"
+              title="At the 2048px ceiling — the XLarge tier is real detail"
+            >XL</span>
           </div>
           <ImageProvenance
             v-if="hasProvenance(img)"
@@ -130,6 +136,14 @@
               title="Remove the background — adds a new transparent image below"
               @click="onCutOut(img)"
             >{{ cutoutBusy ? 'Cutting out…' : '✂ Cut out' }}</button>
+            <button
+              v-if="canUpscale(img) || upscaleJob"
+              type="button"
+              class="trait-image-cutout"
+              :disabled="startingUpscale || !!upscaleJob"
+              title="Upscale the master with 4x-UltraSharp — adds detail, keeps the art"
+              @click="onUpscale(img)"
+            >{{ upscaleJob ? 'Upscaling…' : '⤢ Upscale' }}</button>
             <DangerButton @click="removeTraitImage(img.id)">Remove</DangerButton>
           </div>
         </div>
@@ -510,8 +524,33 @@ async function toggleFlag(img, flag) {
 // the trait's own id, exactly as an entity's is keyed by the entity's. So the
 // job registry at /imagen/jobs is polled with the trait id.
 const cutoutJob = ref(null)
+const upscaleJob = ref(null)
 const startingCutout = ref(false)
 const cutoutBusy = computed(() => startingCutout.value || !!cutoutJob.value)
+
+const startingUpscale = ref(false)
+
+function canUpscale(img) {
+  // The server owns the ceiling; `can_upscale` is its answer, and it is absent
+  // on rows fetched before the field existed — treat that as "no".
+  return img?.can_upscale === true
+}
+
+async function onUpscale(img) {
+  if (!img || startingUpscale.value || upscaleJob.value) return
+  startingUpscale.value = true
+  imageError.value = ''
+  try {
+    const res = await fetch(`/api/v1/upscale/${encodeURIComponent(img.id)}`, { method: 'POST' })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Upscale failed (${res.status})`)
+    pollCutoutJob()
+  } catch (e) {
+    imageError.value = e?.message || 'Upscale failed'
+  } finally {
+    startingUpscale.value = false
+  }
+}
 
 function canCutOut(img) {
   return !!img && !img.transparent && img.image_type !== 'animated'
@@ -525,6 +564,7 @@ async function pollCutoutJob() {
       const jobs = (await res.json()).jobs || {}
       const job = jobs[props.traitId]
       cutoutJob.value = (job && job.type === 'remove_bg') ? job : null
+      upscaleJob.value = (job && job.type === 'upscale') ? job : null
     }
   } catch { /* the job list is best-effort; the button just stays enabled */ }
 }
@@ -537,6 +577,11 @@ onUnmounted(() => { clearInterval(_cutoutPoll) })
 // for an entity. It lands untagged by the non-destructive contract, so it simply
 // appears in the gallery above for the author to tag. Nothing is moved for them:
 // silently reassigning the roles is what made this look like an in-place edit.
+watch(upscaleJob, async (now, prev) => {
+  if (!prev || now) return
+  await fetchTraitImages()
+})
+
 watch(cutoutJob, async (now, prev) => {
   if (!prev || now) return
   await fetchTraitImages()

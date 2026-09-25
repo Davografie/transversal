@@ -30,6 +30,7 @@ from transversal.imagen.comfyui import (
     inject_bg_removal_params,
     inject_bg_removal_video_params,
     inject_flux_params,
+    inject_upscale_params,
     inject_wan_params,
 )
 from transversal.imagen.models import (
@@ -42,6 +43,7 @@ from transversal.imagen.models import (
 from transversal.imagen.ollama import OllamaClient
 from transversal.imagen.prompt_builder import build_imagen_prompt
 from transversal.services.media_utils import (
+    VARIANT_LONG_SIDES,
     has_transparency,
     save_image_variants as _save_image_variants,
 )
@@ -57,6 +59,16 @@ WORKFLOW_DIR = Path(os.getenv(
     "WORKFLOW_DIR",
     "/app/workflows",
 ))
+
+#: The upscaler. Chosen by measuring two candidates against real art at the size
+#: actually served (see `inject_upscale_params`) — `4x-UltraSharp` beat
+#: `RealESRGAN_x4plus` on both the illustrated and the painted-ink backgrounds.
+UPSCALE_MODEL = "4x-UltraSharp.pth"
+
+#: The model is 4x, but nothing bigger than the largest tier is ever served, so
+#: the master is capped there. A 2048 resampled down from 4x is a better 2048
+#: than one upscaled straight to it. Derived from the ladder, not retyped.
+UPSCALE_MASTER_CAP = VARIANT_LONG_SIDES["XLarge"]
 
 MEDIA_DIR = Path(os.getenv("MEDIA_DIR", "/app/media"))
 IMAGEN_DIR = MEDIA_DIR / "imagen"
@@ -586,6 +598,95 @@ class ImagenOrchestrator:
             ]
             subprocess.run(cmd, check=True, timeout=600)
             return out_path.read_bytes()
+
+    # ── Upscale (detail pass on an existing static image) ──
+
+    async def run_upscale(
+        self,
+        image_id: str,
+        report_gen_type: GenerationType | None = None,
+    ) -> MediaImage:
+        """Upscale an image's **master** in place, then re-render its tiers.
+
+        The old master is kept as `{filename}_PreUpscale.{ext}`: upscaling is
+        irreversible and this is the only copy of the art. Returns the updated
+        record, whose `width`/`height` move with the master — the UI labels an
+        image with those, so leaving them stale made the work look like it had
+        not happened.
+
+        Raises ``ValueError`` for a video (no variants to derive) or when the
+        master is already at the cap, because then there is nothing to gain.
+        """
+        from datetime import datetime, timezone
+
+        img = self.repo.get_image(image_id)
+        if not img:
+            raise FileNotFoundError(f"Image '{image_id}' not found")
+        if img.image_type == ImageType.ANIMATED:
+            raise ValueError("Upscaling works on still images; a loop has no tiers")
+
+        out_dir = IMAGEN_DIR / img.owner_id / img.universe
+        master = out_dir / f"{img.filename}_Original.{img.extension}"
+        if not master.exists():
+            raise FileNotFoundError(f"Master not found: {master}")
+
+        with Image.open(master) as im:
+            before = im.size
+        if max(before) >= UPSCALE_MASTER_CAP:
+            raise ValueError(
+                f"Already at the {UPSCALE_MASTER_CAP}px ceiling ({before[0]}x{before[1]})"
+            )
+
+        gen_type = report_gen_type or GenerationType.UPSCALE
+        await self._report(img.owner_id, gen_type, GenerationStatus.GENERATING,
+                           "Upscaling...", 20)
+
+        async with self._gpu_lock:
+            input_filename = f"upscale_{uuid.uuid4().hex[:8]}.png"
+            await self.comfyui.upload_image(master.read_bytes(), input_filename)
+            workflow = _load_workflow("upscale.json")
+            workflow = inject_upscale_params(
+                workflow,
+                input_image=input_filename,
+                model_name=UPSCALE_MODEL,
+                filename_prefix=f"upscaled_{img.id}",
+            )
+            prompt_id = await self.comfyui.submit_workflow(workflow)
+            result = await self.comfyui.wait_for_result(prompt_id, timeout_secs=1800)
+            if not result.get("filename"):
+                raise FileNotFoundError("Upscale produced no output image")
+            raw = await self.comfyui.get_image(
+                result["filename"], result.get("subfolder", ""), result.get("type", "output")
+            )
+            await self.comfyui.free_memory()
+
+        await self._report(img.owner_id, gen_type, GenerationStatus.SAVING, "Saving...", 85)
+
+        upscaled = Image.open(io.BytesIO(raw))
+        w, h = upscaled.size
+        if max(w, h) > UPSCALE_MASTER_CAP:  # nothing larger is ever served
+            scale = UPSCALE_MASTER_CAP / max(w, h)
+            upscaled = upscaled.resize(
+                (max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS
+            )
+
+        backup = out_dir / f"{img.filename}_PreUpscale.{img.extension}"
+        if not backup.exists():
+            backup.write_bytes(master.read_bytes())
+
+        buf = io.BytesIO()
+        upscaled.save(buf, format="WEBP", quality=95)  # master; tiers re-encode at 85
+        master.write_bytes(buf.getvalue())
+        _save_image_variants(buf.getvalue(), out_dir, img.filename)
+
+        updated = self.repo.update_image(image_id, {"width": upscaled.size[0], "height": upscaled.size[1]})
+        await self._report(img.owner_id, gen_type, GenerationStatus.COMPLETE,
+                           f"{before[0]}x{before[1]} -> {upscaled.size[0]}x{upscaled.size[1]}", 100)
+        logger.info(
+            f"Upscaled {img.filename} ({img.owner_id}) {before[0]}x{before[1]} -> "
+            f"{upscaled.size[0]}x{upscaled.size[1]}"
+        )
+        return updated or img
 
     # ── Remove background (static image cutout) ────────
 

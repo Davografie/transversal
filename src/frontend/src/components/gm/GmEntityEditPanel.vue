@@ -91,6 +91,14 @@
             {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
             <span v-if="img.universe_label" class="universe-badge">{{ img.universe_label }}</span>
             <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
+            <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
+            <!-- The XLarge tier is real detail only once the master reaches the
+                 ceiling; below it, XLarge is just a copy of the master. -->
+            <span
+              v-if="img.can_upscale === false"
+              class="xl-badge"
+              title="At the 2048px ceiling — the XLarge tier is real detail"
+            >XL</span>
           </span>
         </div>
       </div>
@@ -141,6 +149,14 @@
               <span class="gallery-label">
                 {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
                 <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
+                <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
+                <!-- The XLarge tier is real detail only once the master reaches the
+                     ceiling; below it, XLarge is just a copy of the master. -->
+                <span
+                  v-if="img.can_upscale === false"
+                  class="xl-badge"
+                  title="At the 2048px ceiling — the XLarge tier is real detail"
+                >XL</span>
               </span>
             </div>
           </div>
@@ -1276,6 +1292,7 @@ defineExpose({ refresh: loadImages })
 .gallery-label { display: block; font-size: 9px; color: var(--text-dim); text-align: center; padding: 2px 4px; background: rgba(0,0,0,0.3); }
 .universe-badge { display: inline-block; font-size: 7px; background: var(--resource-32); color: var(--violet-pale); padding: 0 3px; border-radius: 2px; margin-left: 3px; }
 .role-badge { display: inline-block; font-size: 7px; background: var(--warn-32); color: var(--gold); padding: 0 3px; border-radius: 2px; margin-left: 2px; text-transform: uppercase; }
+.xl-badge { display: inline-block; font-size: 7px; background: rgba(108,140,255,0.32); color: var(--text); padding: 0 3px; border-radius: 2px; margin-left: 2px; font-weight: 600; }
 
 .section-buttons {
   margin-top: 12px; display: flex; gap: 6px;

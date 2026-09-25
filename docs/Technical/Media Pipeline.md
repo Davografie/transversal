@@ -193,22 +193,44 @@ there is more information to resample from. The **pre-upscale master is kept** a
 `{filename}_PreUpscale.{ext}` (~150 KB each): upscaling is irreversible and this
 is the only copy of the art. It can be deleted once the result is trusted.
 
-`upscale_backgrounds.py` drives ComfyUI directly and therefore does **not** hold
-the orchestrator's `_gpu_lock` — that lock is per-process and this is a separate
-one — so before each image it waits while ComfyUI's own queue has anyone else's
-work in it. ComfyUI's queue is the honest signal and covers every submitter, not
-just this app. Skipping that guard would put a 849-image batch on the same 4090
-as a user's generation and have the two fight for VRAM.
+**It is a per-image action, not a batch.** The human's call: an **Upscale** button
+in the image viewer, offered only where there is something to gain — spending the
+GPU on the pictures that need it, from the surface where you are already looking
+at the picture.
+
+- `POST /upscale/{image_id}` — async, `202`. Refused with a 400 when the master is
+  already at the ceiling (nothing can be gained) or when the image is a loop (a
+  video has no tiers). Progress streams on `imagen_progress` and `GET /imagen/jobs`
+  keyed by the image's **owner**, so the gallery that offered the button polls for
+  it exactly as it does for a cutout.
+- The list exposes the two things the UI needs, so the **ceiling stays server-side**
+  and is never retyped in the frontend: `can_upscale` (master below the cap → show
+  the button) and `upscaled` (a `_PreUpscale` backup exists → already through).
+- The gallery tags an image **`XL`** when `can_upscale` is false. Worth being
+  precise about what that means, because every image has an `_XLarge.webp` *file*
+  on disk: **below the ceiling, `XLarge` is a copy of the master**, so the tag marks
+  the images where the tier is genuinely larger — upscaled, or natively big enough.
+  (If it should instead mark only images that went through the pass, that is one
+  word: `upscaled` rather than `can_upscale`.)
+- Both buttons — the GM entity image viewer and each row of the trait gallery —
+  drive the same server code.
+
+`ImagenOrchestrator.run_upscale` is the one implementation; the script below is only
+a bulk loop over it, because the two copies of the variant writer are the
+cautionary tale. It drives ComfyUI through that method, which takes the
+orchestrator's `_gpu_lock` — but that lock is per-process and the script is a
+separate process, so it *also* waits while ComfyUI's own queue holds anyone else's
+work. ComfyUI's queue is the honest signal and covers every submitter. Skipping
+that guard would put a sweep on the same 4090 as a user's generation and have the
+two fight for VRAM.
 
 ```bash
 docker compose exec api python -m transversal.upscale_backgrounds --limit 5 --apply  # trial
-docker compose exec api python -m transversal.upscale_backgrounds --apply            # the batch
+docker compose exec api python -m transversal.upscale_backgrounds --apply            # whole role
 ```
 
-It is idempotent — an image already at the cap is skipped, so a re-run costs
-nothing — and `--force` re-does them, e.g. to try another model. Measured at
-**~7 s per image** on the 4090, so ~100 minutes for the ~845 backgrounds that
-need it.
+Idempotent — an image already at the cap is refused and counted as a skip. Measured
+at **~4–7 s per image** on the 4090.
 
 ```bash
 docker compose exec api python -m transversal.rerender_image_variants          # dry run

@@ -10,6 +10,7 @@ class GenerationType(str, Enum):
     IMAGEN = "imagen"
     ANIMATE = "animate"
     REMOVE_BG = "remove_bg"
+    UPSCALE = "upscale"      # ESRGAN detail pass on an existing static image
 
 
 class GenerationStatus(str, Enum):
