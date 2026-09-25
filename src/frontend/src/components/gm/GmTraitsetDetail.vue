@@ -24,6 +24,7 @@
     </div>
 
     <h4 class="ps-section-title">Traits</h4>
+    <div v-if="filterNote" class="trait-filter-note">{{ filterNote }}</div>
     <div class="trait-head-actions">
       <Button class="ps-add-btn" @click="onNewTrait" variant="secondary" block>+ New Trait</Button>
       <Button class="ps-add-btn" @click="openBatchEdit" variant="secondary" block>Batch Edit</Button>
@@ -54,7 +55,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch, computed, onMounted } from 'vue'
+import { reactive, ref, watch, computed, onMounted, inject } from 'vue'
 import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
@@ -99,7 +100,36 @@ const props = defineProps({
 const traitset = computed(() => {
   return traitsets.value.find(ts => ts.id === props.traitsetId) || null
 })
-const traits = computed(() => traitset.value?.traits || [])
+const allTraits = computed(() => traitset.value?.traits || [])
+
+// The traitsets list filters on the set's name *or* a contained trait's name, so
+// a set can be on screen because of something inside it. Opening it should show
+// the traits that matched rather than all of them. The query arrives as a live
+// ref through the spec's context (see GmTraitsetsPanel) so editing it with this
+// panel open re-scopes the list instead of leaving a stale copy.
+const filterQuery = inject('traitsetFilter', null)
+
+const matchingTraits = computed(() => {
+  const q = String(filterQuery?.value ?? '').trim().toLowerCase()
+  if (!q) return []
+  return allTraits.value.filter(t => String(t.name || '').toLowerCase().includes(q))
+})
+
+// Scope the list only when something matched. A set that is on screen because its
+// *name* matched has no matching traits, and hiding every trait under it would
+// read as "this set lost its traits" — the opposite of what the filter promised.
+// So: show the matches when there are any, otherwise show the set.
+const traits = computed(() => (matchingTraits.value.length ? matchingTraits.value : allTraits.value))
+
+// Say so when rows are being withheld, and how many — an unannounced short list
+// is how a scoped list gets mistaken for a broken one.
+const filterNote = computed(() => {
+  const q = String(filterQuery?.value ?? '').trim()
+  if (!q || !matchingTraits.value.length) return ''
+  if (matchingTraits.value.length === allTraits.value.length) return ''
+  const n = matchingTraits.value.length
+  return `Showing ${n} of ${allTraits.value.length} traits matching “${q}”`
+})
 
 // Close self if traitset was deleted
 watch(traitset, (ts) => {
@@ -185,4 +215,5 @@ onMounted(loadUniverseOptions)
 
 .trait-head-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
 .trait-head-actions .ps-add-btn { margin-top: 0; width: auto; }
+.trait-filter-note { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
 </style>
