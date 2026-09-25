@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gql } from '../helpers/sheet.js'
 
 // B185 — adding a rating from the trait *detail* view must return the reader to
 // the trait list, not strand them on the detail.
@@ -12,14 +13,18 @@ import { test, expect } from '@playwright/test'
 // not come back; that is the assertion below.
 
 // The project's testing character, named by `AGENTS.md`: Kael Drift, owned as a
-// main by the dedicated `DSH MCP` test player. Pinned deliberately rather than
-// discovered, because the generic helper picks whichever character sorts first
-// and that would exercise a real player's sheet.
-const TEST_CHARACTER = {
-  playerId: 'player-75a410',
-  playerName: 'DSH MCP',
-  entityId: 'character-kael-drift-e555ccde',
-}
+// main by the dedicated `DSH MCP` test player. Resolved through the *relationship*
+// rather than by name — the player has been renamed once already (`Tester` →
+// `DSH MCP`) and a name lookup broke the dock suite the moment it happened.
+const TEST_ENTITY = 'character-kael-drift-e555ccde'
+
+let character
+test.beforeAll(async ({ request }) => {
+  const { players } = await gql(request, `query { players { id name agency { entityId main } } }`)
+  const owner = players.find((p) => (p.agency || []).some((a) => a.entityId === TEST_ENTITY && a.main))
+  if (!owner) throw new Error(`no player mains ${TEST_ENTITY} — cannot reach the testing character`)
+  character = { playerId: owner.id, playerName: owner.name, entityId: TEST_ENTITY }
+})
 // Playing a trait writes to the entity's dice pool, which lives per
 // location+entity. The probe snapshots and restores it so the testing character
 // is left exactly as it was found.
@@ -31,14 +36,14 @@ async function seedAndOpen(page) {
     localStorage.setItem('playerId', ids.playerId)
     localStorage.setItem('playerName', ids.playerName)
     localStorage.setItem('entityId', ids.entityId)
-  }, TEST_CHARACTER)
+  }, character)
   await page.goto('/')
 
   const self = page.locator('button.map-dot.self').first()
   try {
     await self.waitFor({ state: 'visible', timeout: 20_000 })
   } catch {
-    test.skip(true, `the testing character ${TEST_CHARACTER.entityId} is not a main occupant here`)
+    test.skip(true, `the testing character ${TEST_ENTITY} is not a main occupant here`)
   }
   await self.click()
   await page.locator('.sheet-embedded').first().waitFor({ state: 'visible', timeout: 20_000 })

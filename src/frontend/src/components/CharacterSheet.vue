@@ -3456,6 +3456,21 @@ watch(() => props.externalPoolSources, (sources) => {
   border-color: var(--accent);
 }
 .sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: 20px; overflow: hidden; border: 1px solid var(--overlay-8); }
+/* The tabs are a *row*, and the group is drawn as one rounded control. Below
+   roughly 200px — which the phone-landscape dock reaches, at 179px of sheet —
+   the tab buttons used to wrap onto a second line *inside* that rounded border,
+   so the group stopped reading as a group. One scrollable row instead: the tabs
+   keep their size, the group keeps its shape, and the overflow is reachable by
+   swiping. The `↩` settings button is a sibling of this wrapper, so it stays
+   pinned to the right rather than scrolling away with the tabs. */
+.sheet-pills > div {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sheet-pills > div::-webkit-scrollbar { display: none; }
 .pill { padding: 5px 14px; font-size: 11px; border: none; cursor: pointer; background: var(--overlay-2); color: var(--text-dim); transition: background 0.15s, color 0.15s; }
 .pill + .pill { border-left: 1px solid var(--overlay-6); }
 .pill:hover { background: var(--overlay-4); color: var(--text); }

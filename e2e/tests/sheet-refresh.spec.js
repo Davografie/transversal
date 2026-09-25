@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gql } from '../helpers/sheet.js'
 
 // B125 — a sheet refresh must patch the sheet in place, not rebuild it.
 //
@@ -19,14 +20,18 @@ import { test, expect } from '@playwright/test'
 // header that is a different node, which a `toBeVisible()` check would pass.
 
 // The project's testing character, named by `AGENTS.md`: Kael Drift, owned as a
-// main by the dedicated `DSH MCP` test player. Pinned deliberately rather than
-// discovered, because the generic helper picks whichever character sorts first
-// and that would exercise a real player's sheet.
-const TEST_CHARACTER = {
-  playerId: 'player-75a410',
-  playerName: 'DSH MCP',
-  entityId: 'character-kael-drift-e555ccde',
-}
+// main by the dedicated `DSH MCP` test player. Resolved through the *relationship*
+// rather than by name — the player has already been renamed once (`Tester` →
+// `DSH MCP`), and a name lookup broke the dock suite the moment it happened.
+const TEST_ENTITY = 'character-kael-drift-e555ccde'
+
+let character
+test.beforeAll(async ({ request }) => {
+  const { players } = await gql(request, `query { players { id name agency { entityId main } } }`)
+  const owner = players.find((p) => (p.agency || []).some((a) => a.entityId === TEST_ENTITY && a.main))
+  if (!owner) throw new Error(`no player mains ${TEST_ENTITY} — cannot reach the testing character`)
+  character = { playerId: owner.id, playerName: owner.name, entityId: TEST_ENTITY }
+})
 
 /** Seed the testing identity and open Kael's own sheet, or skip with a reason. */
 async function openTestingSheet(page) {
@@ -35,14 +40,14 @@ async function openTestingSheet(page) {
     localStorage.setItem('playerId', ids.playerId)
     localStorage.setItem('playerName', ids.playerName)
     localStorage.setItem('entityId', ids.entityId)
-  }, TEST_CHARACTER)
+  }, character)
   await page.goto('/')
 
   const self = page.locator('button.map-dot.self').first()
   try {
     await self.waitFor({ state: 'visible', timeout: 20_000 })
   } catch {
-    test.skip(true, `the testing character ${TEST_CHARACTER.entityId} is not a main occupant here`)
+    test.skip(true, `the testing character ${TEST_ENTITY} is not a main occupant here`)
   }
   await self.click()
 
