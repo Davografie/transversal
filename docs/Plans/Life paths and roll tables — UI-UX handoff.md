@@ -98,7 +98,7 @@ The component's "why not available" axis has more vocabulary than it looks:
 4. **Offering** — `LifePath.factionIds`, **derived read-only** from
    `faction.suitable_life_path_ids`; there is no mutation for it.
 
-[[Effect]]'s note lists gating as one axis; on this side it is four, of which one is dead and one
+[[Effects]]' note lists gating as one axis; on this side it is four, of which one is dead and one
 is being built now.
 
 ## One name-resolution contract, or the ids leak
