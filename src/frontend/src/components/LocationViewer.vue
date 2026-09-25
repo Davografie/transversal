@@ -1688,19 +1688,18 @@ function invalidateDestCache() {
 
 async function preloadDestNavCache() {
   const currentId = props.locationId
-  const destinations = []
 
-  // Children
-  for (const child of (nav.value.children || [])) {
-    destinations.push({ id: child._key, name: child.name, image: child.navdot_image || child.background_image || null })
+  // Built from the DOTS, not from the raw payload: each entry needs its dot's own
+  // x/y, because that position is the fallback landing point for a **one-way**
+  // edge (see below). The zone dots are the child links; `navDots` covers the
+  // parent and every portal.
+  const destinations = []
+  for (const z of zones.value) {
+    const child = childForZone(z)
+    if (child) destinations.push({ id: child._key, name: child.name, image: childImage(z), x: z.x, y: z.y })
   }
-  // Parent
-  if (nav.value.parent) {
-    destinations.push({ id: nav.value.parent._key, name: nav.value.parent.name, image: nav.value.parent.navdot_image || nav.value.parent.background_image || null })
-  }
-  // Portal
-  for (const t of (nav.value.transversal || [])) {
-    destinations.push({ id: t._key, name: t.name, image: t.navdot_image || t.background_image || null })
+  for (const nd of navDots.value) {
+    destinations.push({ id: nd.target.id, name: nd.name, image: nd.image, x: nd.x, y: nd.y })
   }
 
   for (const dest of destinations) {
@@ -1713,11 +1712,16 @@ async function preloadDestNavCache() {
       const data = await r.json()
       const loc = data.location
 
-      // The very same rule the travel uses — see `arrivalPoint`. Reading it from
-      // the destination's own payload (rather than re-deriving it from the
-      // relation kind) is what keeps the preview and the landing in step.
-      const arrive = arrivalPoint(data, currentId)
-      if (!arrive) continue  // no storeable landing point — leave the dot a thumbnail
+      // The very same rule the travel uses — see `arrivalPoint` — with the very
+      // same fallback. A **one-way** transversal edge leaves the destination with
+      // no landing dot for us (100 of 354 transversal edges store only one
+      // direction), so `arrivalPoint` legitimately returns null; travel then lands
+      // at the source dot's own position. Skipping the cache entirely there is
+      // what left those dots showing a plain thumbnail instead of the hole —
+      // e.g. Azure Dawn → Whispering Forest. Using the same fallback keeps the
+      // preview and the landing in step, which is the whole point of sharing the
+      // rule.
+      const arrive = arrivalPoint(data, currentId) || { x: dest.x, y: dest.y }
 
       // Get destination image aspect. Videos must be probed through metadata:
       // an <img> cannot decode .webm, which silently left animated destinations
