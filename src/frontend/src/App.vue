@@ -1020,8 +1020,10 @@ let offSwitchViewLocation = null
 // param); a free-roaming GM keeps the connection alive on their playerId.
 const { connected, lastEvent, error, drainSseEvents } = useSSE(sessionId, computed(() => entityId.value || playerId.value), playerId)
 
-// Architect toast notifications
-const { toasts, addToast, dismissToast } = useToasts()
+// SSE notification toasts, for every role. Each `addToast` declares its audience
+// (`all` / `gm` / `player`) and `useToasts` does the filtering — `isGm` is a
+// getter because `gmMode` settles after this line.
+const { toasts, addToast, dismissToast } = useToasts({ isGm: () => gmMode.value })
 const nameCache = ref({})  // entity_id → name
 
 function entName(eid) {
@@ -1113,7 +1115,7 @@ function handleSseEvent(evt) {
       poolLocations.value = {}
       contests.value = []
       currentDifficulty.value = null
-      if (gmMode.value) addToast('Beat ended', 'dice')
+      addToast('Beat ended', 'dice', 'gm')
       break
     case 'session_started':
       inSession.value = evt.data?.in_session !== false
@@ -1148,10 +1150,22 @@ function handleSseEvent(evt) {
           diceRef.value?.resyncTraitDie(evt.data.trait_setting_id, evt.data.new_dice ?? [evt.data.new_rating])
         }
         sheetRef.value?.fetchEntity('sse-trait-updated')
-      }
-      if (gmMode.value && foreign) {
+        // B91: a change to the sheet *this client drives* that came from someone
+        // else is a consequence landing on it — a complication, a step-down. It
+        // used to arrive silently (the sheet just re-fetched), which is exactly
+        // the "did anyone notice?" gap the ticket is about. The trait's *name*
+        // is not in the payload (it carries the registry and setting ids), so
+        // the message stays honest rather than inventing one.
+        if (foreign) {
+          const tName = evt.data?.trait_name || evt.data?.name
+          addToast(tName
+            ? `Someone changed your sheet: ${tName} is now ${evt.data?.new_rating}`
+            : `Someone changed your sheet: a trait is now ${evt.data?.new_rating}`, 'trait')
+        }
+      } else if (foreign) {
+        // Anyone else's sheet: the GM's watch feed, and only the GM's.
         const tName = evt.data?.trait_name || evt.data?.name || 'a trait'
-        addToast(`${name} updated ${tName}`, 'trait')
+        addToast(`${name} updated ${tName}`, 'trait', 'gm')
       }
       break
     case 'location_changed':
@@ -1172,14 +1186,14 @@ function handleSseEvent(evt) {
       } else {
         locationRef.value?.fetchNav()
       }
-      if (gmMode.value && foreign && evt.data?.to) {
+      if (foreign && evt.data?.to) {
         // Names, not ids. This line used to cache `evt.data.to_name` — a field
         // the payload did not carry — under the *entity's* key, so from the
         // second move on the toast read "a1b2c3d4 moved to loc-142673364". The
         // payload now carries both names; the caches are the fallback.
         const who = evt.data?.name || name
         placeName(evt.data.to, evt.data?.to_name)
-          .then(where => addToast(`${who} moved to ${where}`, 'move'))
+          .then(where => addToast(`${who} moved to ${where}`, 'move', 'gm'))
       }
       break
     case 'entity_updated':
@@ -1198,9 +1212,7 @@ function handleSseEvent(evt) {
       break
     case 'scene_change':
       if (evt.data?.to_location) locationName.value = evt.data.to_location
-      if (gmMode.value) {
-        addToast(evt.data?.to_location ? `Scene: ${evt.data.to_location}` : 'Scene advanced', 'scene')
-      }
+      addToast(evt.data?.to_location ? `Scene: ${evt.data.to_location}` : 'Scene advanced', 'scene', 'gm')
       diceRef.value?.clearPool()
       remotePools.value = {}
       remoteResults.value = {}
@@ -1264,12 +1276,12 @@ function handleSseEvent(evt) {
           remoteResults.value = rest
         }
       }
-      if (gmMode.value && eid && eid !== entityId.value) {
+      if (eid && eid !== entityId.value) {
         const phase = evt.data.phase || 'adding'
         const dice = evt.data.dice || []
         if (phase === 'adding') {
           if (dice.length) {
-            addToast(`${name} added ${dice.length} die${dice.length > 1 ? '' : ''} to pool`, 'dice')
+            addToast(`${name} added ${dice.length} die${dice.length > 1 ? '' : ''} to pool`, 'dice', 'gm')
           }
         } else if (phase === 'rolled') {
           // pool was submitted for rolling
@@ -1293,27 +1305,25 @@ function handleSseEvent(evt) {
           rolls: (res.rolls && res.rolls.length) ? res.rolls : (existing.rolls || []),
         }}
       }
-      if (gmMode.value && foreign && eid) {
+      if (foreign && eid) {
         const res = evt.data.result
         const total = res.total ?? res.highest ?? '?'
         const tier = res.tier ? ` (${res.tier})` : ''
         const eff = res.effect_die ? ` · d${res.effect_die}` : ''
-        addToast(`${name} rolled ${total}${tier}${eff}`, 'roll')
+        addToast(`${name} rolled ${total}${tier}${eff}`, 'roll', 'gm')
       }
       break
     case 'roll_table_roll':
-      if (gmMode.value && foreign && eid) {
+      if (foreign && eid) {
         const table = evt.data?.table_name || 'a roll table'
         const entry = evt.data?.entry_label ? `: ${evt.data.entry_label}` : ''
-        addToast(`${name} rolled on ${table}${entry}`, 'roll')
+        addToast(`${name} rolled on ${table}${entry}`, 'roll', 'gm')
       }
       break
     case 'difficulty_set':
       if (evt.data?.difficulty != null) {
         currentDifficulty.value = evt.data.difficulty
-        if (!gmMode.value) {
-          addToast(`Difficulty set: ${evt.data.difficulty}`, 'roll')
-        }
+        addToast(`Difficulty set: ${evt.data.difficulty}`, 'roll', 'player')
       }
       break
     case 'contest_challenged':
@@ -1330,7 +1340,7 @@ function handleSseEvent(evt) {
         ]
       }
       if (gmMode.value) {
-        addToast(`${entName(evt.data?.challenger_id)} challenged ${entName(evt.data?.opponent_id)}`, 'dice')
+        addToast(`${entName(evt.data?.challenger_id)} challenged ${entName(evt.data?.opponent_id)}`, 'dice', 'gm')
         // Auto-switch to a challenged GMC so the GM can roll its side at once.
         const oppId = evt.data?.opponent_id
         if (oppId && isGmcEntity(oppId) && entityId.value !== oppId) {
@@ -1339,7 +1349,7 @@ function handleSseEvent(evt) {
       }
       if (evt.data?.opponent_id === entityId.value) {
         diceRef.value?.onChallenged(evt.data.challenger_id)
-        if (!gmMode.value) addToast(`You've been challenged by ${entName(evt.data?.challenger_id)}`, 'dice')
+        addToast(`You've been challenged by ${entName(evt.data?.challenger_id)}`, 'dice', 'player')
       }
       break
     case 'contest_set':
@@ -1351,14 +1361,10 @@ function handleSseEvent(evt) {
         }}
         diceRef.value?.onOpponentCommitted(evt.data)
       }
-      if (gmMode.value) {
-        addToast(`${name} set their result (${evt.data?.total})`, 'roll')
-      }
+      addToast(`${name} set their result (${evt.data?.total})`, 'roll', 'gm')
       break
     case 'contest_give_in':
-      if (gmMode.value) {
-        addToast(`${name} gave in`, 'roll')
-      }
+      addToast(`${name} gave in`, 'roll', 'gm')
       if (eid && eid !== entityId.value) {
         diceRef.value?.onOpponentGiveIn(evt.data)
       }
@@ -1366,8 +1372,21 @@ function handleSseEvent(evt) {
     case 'contest_compare':
       diceRef.value?.onContestCompare(evt.data)
       break
+    case 'contest_cancelled':
+      // A mis-started contest is off ([[B118]]). Both sides are told because
+      // both were showing it; the canceller already reset their own panel, so
+      // only the other side needs the notice.
+      diceRef.value?.onContestCancelled(evt.data)
+      if (evt.data?.entity_id && evt.data?.opponent_id) {
+        contests.value = contests.value.filter(c =>
+          !(c.challenger_id === evt.data.entity_id && c.defendant_id === evt.data.opponent_id))
+      }
+      if (evt.data?.entity_id !== entityId.value) {
+        addToast(`${entName(evt.data?.entity_id)} cancelled the contest`, 'dice')
+      }
+      break
     case 'contest_push':
-      if (gmMode.value && eid) addToast(`${name} is pushing`, 'dice')
+      if (eid) addToast(`${name} is pushing`, 'dice', 'gm')
       if (eid && eid !== entityId.value) diceRef.value?.onContestPush(evt.data)
       break
     case 'contest_stakes':

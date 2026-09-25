@@ -250,6 +250,9 @@
         {{ challenged ? 'Set' : 'Done' }}
       </button>
       <button v-if="challenged && !contestResult && !contestCompare && giveInAllowed" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
+      <!-- The empty-pool exit ([[B118]]): a mis-started challenge is cancelled,
+           not resolved. Only the initiator, and only before anything is rolled. -->
+      <button v-if="canCancelContest" @click="cancelContest" class="roll-btn cancel-btn">Cancel contest</button>
     </div>
 
     <div class="controls" v-if="isResolved() && mode !== 'roll_table' && !challenged">
@@ -279,13 +282,6 @@
     </div>
 
     <div v-if="showConsequences && (isResolved() || contestResult)" class="consequence-panel">
-      <div class="consequence-side">
-        <label>Menu</label>
-        <select v-model="consequenceSide">
-          <option value="player">Player</option>
-          <option value="gm">GM</option>
-        </select>
-      </div>
       <ConsequenceMenu :entity-id="consequenceTargetId" :side="consequenceSide" :menu-context="consequenceMenuContext" :effect-die="consequenceEffectDie" :exclude-ids="consequenceExcludeIds" @close="showConsequences = false" />
     </div>
 
@@ -377,7 +373,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange', 'offered-change', 'poolSaved'])
 
-const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
+const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest, cancelContest: apiCancelContest } = useApi()
 const { resolveEffectTargets, resolveSfxLoop } = useEffectApplication()
 const { applyOption: applyHitchEffect } = useHitchMenu()
 const pool = reactive([])
@@ -394,7 +390,11 @@ const difficultyPresets = [
 ]
 const panelOpen = ref(false)
 const showConsequences = ref(false)
-const consequenceSide = ref('player')
+// Which set of consequence options to offer is not a choice to put to the user:
+// a resolved context plus the role looking at it already decides. The switch
+// that used to be here let a player read the GM's menu and the reverse, which
+// is never a real situation ([[B118]]).
+const consequenceSide = computed(() => (props.gmMode ? 'gm' : 'player'))
 const buyHitchChoices = ref([])
 const buyHitchTargetId = ref('')
 const selectedHitches = ref([]) // roll indices the GM has toggled
@@ -627,6 +627,14 @@ const showDifficultyTarget = computed(() =>
 // location with at least one peer, during assembly/picking or once challenged.
 const showContest = computed(() => (!props.gmMode || props.entityId) && props.mode !== 'roll_table' && props.peers.length > 1 && (challenged.value || isAdding() || isPicking()))
 
+// Who may cancel: the side that started it, before anything is on the table
+// ([[B118]]). Once a roll exists the contest is a thing to resolve, and give-in
+// is how a side leaves that one.
+const canCancelContest = computed(() =>
+  challenged.value && isChallenger.value && !contestResult.value && !contestCompare.value
+  && !result.value && pool.length === 0
+)
+
 function markPurpose(kind) {
   if (pool.length === 0) poolPurpose.value = kind
 }
@@ -730,6 +738,43 @@ function onChallenged(challengerId) {
   contestNotice.value = ''
   giveInAllowed.value = false
   opponentCommitted.value = null
+}
+
+/** Drop this client's contest state. `clearDice` is the canceller's own pool —
+ *  the opponent keeps theirs, which is why the server only cleared one side. */
+function resetContest({ clearDice = false, notice = '' } = {}) {
+  challenged.value = false
+  isChallenger.value = false
+  opponentId.value = ''
+  contestResult.value = null
+  contestCompare.value = null
+  contestError.value = ''
+  contestNotice.value = notice
+  giveInAllowed.value = false
+  opponentCommitted.value = null
+  showConsequences.value = false
+  if (clearDice) {
+    pool.splice(0, pool.length)
+    resetEditor()
+    setPhase(Phase.ADDING)
+  }
+}
+
+async function cancelContest() {
+  if (!props.locationId) return
+  const res = await apiCancelContest(props.locationId, editingEntityId.value)
+  if (!res || res.status !== 'cancelled') {
+    contestError.value = res?.reason || 'Could not cancel the contest'
+    return
+  }
+  resetContest({ clearDice: true })
+}
+
+/** The other side (or the GM watching) is told the contest is off. */
+function onContestCancelled(data) {
+  if (!challenged.value) return
+  const byMe = data?.entity_id === editingEntityId.value
+  resetContest({ notice: byMe ? '' : `${opponentName.value} cancelled the contest` })
 }
 
 function setContestOutcome(outcome) {
@@ -1229,7 +1274,7 @@ function stampArmedSfx(tsId, sfxId) {
   if (changed) notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, retractNegative, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, stampArmedSfx, panelOpen, poolMatchesRollTableDice })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, retractNegative, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, onContestCancelled, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, stampArmedSfx, panelOpen, poolMatchesRollTableDice })
 
 function isHitch(idx) {
   if (!result.value) return false
@@ -2118,8 +2163,6 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .waiting-state { flex: 1; text-align: center; font-size: 14px; color: var(--text-dim); padding: 10px; }
 .consequence-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .sfx-choice-panel { margin-top: 8px; }
-.consequence-side { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); }
-.consequence-side select { font-size: 11px; padding: 3px 6px; background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-12); border-radius: 4px; }
 .roll-btn { width: 100%; font-size: 18px; font-weight: 700; padding: 10px; }
 
 .result { text-align: center; }
@@ -2302,6 +2345,14 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   border: 1px solid var(--danger);
   background: var(--danger-8);
 }
+/* Cancel is the quiet exit next to give-in's loud one: an undone mis-start, not
+   a loss ([[B118]]). */
+.cancel-btn {
+  color: var(--text-dim);
+  border: 1px solid var(--overlay-12);
+  background: transparent;
+}
+.cancel-btn:hover { color: var(--text); background: var(--overlay-6); }
 .give-in-btn:hover {
   background: var(--danger-20);
   color: var(--danger);

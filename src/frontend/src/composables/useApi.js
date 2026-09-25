@@ -386,6 +386,17 @@ export function useApi() {
     } catch (e) { console.error('[API] clearContest', e.message); return null }
   }
 
+  // Cancel a contest the initiator started, before anything is rolled ([[B118]]).
+  // Distinct from clearContest: the server takes *both* sides' contest state and
+  // tells the other side, which `clear` (self-only, end of beat) does not.
+  async function cancelContest(locationId, entityId) {
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/cancel`, { method: 'POST' })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] cancelContest', e.message); return null }
+  }
+
   async function setDifficulty(locationId, difficulty) {
     if (!locationId) return null
     try {
@@ -423,5 +434,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, cancelContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }
