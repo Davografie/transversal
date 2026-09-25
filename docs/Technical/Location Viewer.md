@@ -195,10 +195,11 @@ draws the background at:
 | 1.845 | 1659 | 4355 | 6.2× | 3.6× |
 | 2.2 (cap) | 1978 | 5193 | 7.4× | 4.3× |
 
-So the background is upscaled in every configuration, before any compensation is applied:
-1:1 would need a scale of about **0.42**. Raising the cap buys map size and spends
-sharpness in proportion — the real levers are serving the `_Original` (1.74× linear) and
-larger source art, both outside this role.
+So the background is upscaled in every configuration, before any compensation is applied.
+The scale at which the image is drawn 1:1 is **0.30** against the served `_Large`, **0.43**
+against the animated webm (672×1024), and **0.52** against the `_Original` — all well below
+1. Raising the cap buys map size and spends sharpness in proportion — the real levers are
+serving the `_Original` (1.74× linear) and larger source art, both outside this role.
 
 ```
 <viewer (overflow:hidden)>
