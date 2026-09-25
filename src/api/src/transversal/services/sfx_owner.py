@@ -1829,13 +1829,18 @@ def unavailable_sfx_reasons(repo, entity, universe: str, sfx_ids, *,
         if source is not None and getattr(sfx, "source_kind", None):
             from transversal.services import target_catalog as tc
             source_element = tc.source_element(sfx.source_kind)
-        failing = [
-            condition_text(condition, resolve=resolve, source_element=source_element)
-            or "a condition it declares"
-            for condition in static
-            if not evaluate_condition(entity, condition, repo, None, source,
-                                      source_element, None)
-        ]
+        # The phrase is the condition **as written** — `condition_text` renders the
+        # positive form ("you are in Three Realms"), which on a *failing* condition
+        # reads as its opposite. So each reason is framed explicitly as unmet until
+        # the wording pass can negate per type ("you are not in Three Realms"); a
+        # reason that states the opposite of the truth is worse than no reason.
+        failing: list[str] = []
+        for condition in static:
+            if evaluate_condition(entity, condition, repo, None, source,
+                                  source_element, None):
+                continue
+            phrase = condition_text(condition, resolve=resolve, source_element=source_element)
+            failing.append(f"unmet: {phrase}" if phrase else "unmet: a condition it declares")
         if failing:
             reasons[str(sfx_id)] = failing
     return reasons

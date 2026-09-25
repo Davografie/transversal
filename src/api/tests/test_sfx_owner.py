@@ -1991,7 +1991,10 @@ def test_a_greyed_rule_says_which_condition_stops_it():
 
     reasons = unavailable_sfx_reasons(repo, repo.entity, "earth", ["sfx-gated"])
     assert list(reasons) == ["sfx-gated"]
-    assert "elsewhere" in reasons["sfx-gated"][0], "the reason is the condition's own phrase"
+    assert "elsewhere" in reasons["sfx-gated"][0], "the reason names the condition"
+    # Framed as unmet: the condition's own phrase is the *positive* form ("you are
+    # at loc-elsewhere"), which on a failing condition would read as its opposite.
+    assert reasons["sfx-gated"][0].startswith("unmet:")
 
 
 def test_an_available_rule_has_no_reason():
