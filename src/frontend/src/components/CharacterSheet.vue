@@ -419,6 +419,7 @@
               :limit-reached="limitReachedFor(t)"
               :wrap="activeSheetView === 'profile'"
               :hide-contact="traitContinuations.has(t.id)"
+              :show-notes="activeSheetView === 'profile'"
             />
           <!-- The set order, so a reader can walk a sheet's sets without going back
                to the list each time. `align-self: stretch` on the row is what lets a

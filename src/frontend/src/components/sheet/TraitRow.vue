@@ -33,6 +33,17 @@
         <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId, 'chip')"
                  @activate="api.activateSfx(sfxId, trait.id)" />
       </div>
+      <!-- The notes, where the host asks for them and the statement is not already
+           saying the same thing in one line. A trait with a `statement` reads as
+           name + statement everywhere else on the sheet, with the notes one click
+           away in the detail; without a statement the notes *are* the trait's only
+           prose, and hiding them hides it entirely. After the SFX cards so the row
+           reads in the detail view's own order: statement → rules → notes.
+
+           Rendered as markdown through the shared util (which escapes HTML), the
+           same way the detail does — hence the `:deep()` selectors below, since
+           the tags come from `v-html` and never carry this component's scope id. -->
+      <div v-if="showNotes && !trait.statement && trait.notes" class="trait-notes" v-html="renderMarkdown(trait.notes)"></div>
     </div>
     <!-- A container is a trait like any other, so its right zone keeps whatever
          rating it has (one instance of the container trait in the live data is
@@ -270,6 +281,7 @@ import DieIcon from '@/components/DieIcon.vue'
 import SfxCard from './SfxCard.vue'
 import Button from '@/components/ui/Button.vue'
 import { childrenOf, showsChildren } from '@/utils/traitTree.js'
+import { renderMarkdown } from '@/utils/markdown.js'
 
 const props = defineProps({
   trait: { type: Object, required: true },
@@ -286,6 +298,12 @@ const props = defineProps({
   insideContainer: { type: Boolean, default: false },
   // The row above states the same relationship, so this row does not repeat it.
   hideContact: { type: Boolean, default: false },
+  // Show a trait's full notes inline when it has no `statement`. The host's call,
+  // because the answer differs by list: on the profile page a described trait with
+  // nothing else to say would otherwise render as a bare name, while the traits
+  // tab is a dense list of lines where a paragraph per trait is a different
+  // question. Default `false` so only a list that asks for it gets it.
+  showNotes: { type: Boolean, default: false },
 })
 
 const children = computed(() => childrenOf(props.trait))
@@ -475,6 +493,45 @@ function onRowClick() {
   font-size: 13px;
   opacity: 1;
   color: var(--text);
+}
+
+/* A trait's notes, shown inline where the host asks for them and there is no
+   statement to carry the row (see the `showNotes` prop). Body text, not a
+   caption: this is the trait's whole description, so it reads at the sheet's
+   normal size rather than the statement's small italic. `max-width: 100%` keeps
+   it inside the profile page's wrapping chip row.
+   `:deep()` is required — the markdown tags come from `v-html` and never carry
+   this component's scope attribute, so a plain `.trait-notes p { … }` would
+   compile to `.trait-notes p[data-v-x]` and match nothing. (BlueBook has exactly
+   that bug; the detail panel documents it too.) */
+.trait-notes {
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  word-wrap: break-word;
+}
+.trait-notes :deep(p) { margin: 2px 0; }
+.trait-notes :deep(p:first-child) { margin-top: 0; }
+.trait-notes :deep(p:last-child) { margin-bottom: 0; }
+.trait-notes :deep(ul),
+.trait-notes :deep(ol) { margin: 2px 0; padding-left: 18px; }
+.trait-notes :deep(li) { margin: 1px 0; }
+.trait-notes :deep(a) { color: var(--accent); text-decoration: underline; }
+.trait-notes :deep(strong) { font-weight: 700; }
+.trait-notes :deep(em) { font-style: italic; }
+.trait-notes :deep(code) {
+  font-family: monospace;
+  font-size: 11px;
+  background: var(--overlay-8);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.trait-notes :deep(blockquote) {
+  border-left: 3px solid var(--accent);
+  margin: 4px 0;
+  padding: 2px 10px;
+  color: var(--text-dim);
 }
 
 .trait-die-groups {
