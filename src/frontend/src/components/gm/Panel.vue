@@ -765,10 +765,32 @@ watch([children, activeKey, viewHeight], () => nextTick(() => {
   measureTabs()
   measureSelf()
 }))
-// The sibling stack re-centers (or this panel is re-anchored) without a size
-// change, which ResizeObserver alone misses — re-measure on position change so
-// the action rail follows the panel instead of stranding at the pre-move spot.
-watch([effectiveTop, effectiveLeft], () => nextTick(measureSelf))
+// This panel's real viewport position: its origin (the parent's measured node
+// origin) + its own offset + the viewport fix.
+//
+// Its own *measurement* is the origin its children are placed from, so it has to
+// re-measure whenever this moves — not merely when its offset props change.
+// `viewportFix` can move the panel on its own, and an ancestor moving moves it
+// too (that arrives as a new `originTop`, with the offsets unchanged). Either way
+// the cached origin went stale, and the levels below were then placed from a
+// position this panel no longer occupies; because a child's own clamp is computed
+// in that same stale space, the error compounded instead of correcting itself and
+// a grandchild could end up above the top of the viewport (anchor near the top,
+// then open a panel two levels down). Dragging the parent appeared to cure it
+// because a slide calls `queueMeasure()`.
+const resolvedTop = computed(() => {
+  if (isRoot.value) return selfTop.value
+  const o = props.originTop
+  if (o == null || effectiveTop.value == null) return null
+  return o + effectiveTop.value + (isVertical.value ? 0 : slideOffset.value) + viewportFix.value.y
+})
+const resolvedLeft = computed(() => {
+  if (isRoot.value) return selfLeft.value
+  const o = props.originLeft
+  if (o == null || effectiveLeft.value == null) return null
+  return o + effectiveLeft.value + (isVertical.value ? slideOffset.value : 0) + viewportFix.value.x
+})
+watch([resolvedTop, resolvedLeft], () => queueMeasure())
 watch(childSizes, () => nextTick(() => {
   measureTabs()
   measureSelf()
