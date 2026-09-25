@@ -185,5 +185,46 @@ console.log('\nthe one resolver\n')
   yes('…and no longer carries its own row CSS', !/\.ep-row\s*\{/.test(picker))
 }
 
+// ── a roll marks a row; the click takes it; there is no confirm ──────────────
+// The rule is easy to lose by adding one "Continue" back for an awkward host, so
+// it is pinned where it lives: the surface has no confirm control, the click is
+// the only `pick`, and the 🎲 reports `roll`.
+console.log('\na roll marks, the click takes\n')
+{
+  const table = readFileSync('src/components/ui/ChoiceTable.vue', 'utf8')
+  const code = table.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
+  yes('the click is what emits the pick',
+    /function onRow\(r, i\) \{[\s\S]{0,120}?emit\('pick', r, i\)/.test(code))
+  yes('the 🎲 emits a roll…', /emit\('roll', x\.r, x\.i, roll\)/.test(code))
+  yes('…and never a pick — rolling cannot take a row',
+    !/pickRandom\(\)[\s\S]{0,1200}?emit\('pick'/.test(code))
+  yes('no confirm control, prop or event is left to resurrect a second press',
+    !/'confirm'/.test(code) && !/confirmLabel/.test(code))
+  yes('no selection state is left either — the mark is the roll, not a cursor',
+    !/selectable/.test(code) && !/\bselected\b/.test(code))
+  yes('the mark persists (the player is deciding, not racing a timer)',
+    /const ownRoll = ref\(null\)/.test(code) && !/ownRoll\.value = null;\s*return/.test(code))
+  yes('…and the arrival is a separate, transient beat',
+    /is-landing/.test(code) && /@keyframes ct-land/.test(table))
+  yes('a new set of rows clears the mark, so a step cannot inherit a find',
+    /watch\(\(\) => props\.rows[\s\S]{0,60}?ownRoll\.value = null/.test(code))
+
+  const wizard = readFileSync('src/components/LifePathWizard.vue', 'utf8')
+  yes('the wizard takes its step on a click', /@pick="continueStep"/.test(wizard))
+  yes('…and resolving is driven by the click, not by the roll',
+    /function continueStep\(row, i\) \{[\s\S]{0,120}?resolveStep\(\{ index: i \+ 1 \}\)/.test(wizard))
+  // The roll handler's *own body*, so the assertion cannot be satisfied or
+  // broken by something 300 characters away.
+  const markBody = (readFileSync('src/components/LifePathWizard.vue', 'utf8')
+    .match(/function markRolled\(idx\)\s*\{([\s\S]*?)\n\}/) || [, ''])[1]
+  yes('…so its roll handler only marks, and never resolves',
+    /rolledEntryIndex\.value = idx/.test(markBody) && !/resolveStep/.test(markBody))
+
+  const menu = readFileSync('src/components/gm/RollTableMenu.vue', 'utf8')
+  yes('the roll-table menu takes its row on a click',
+    /@pick="\(e, i\) => choose\(e, i \+ 1\)"/.test(menu))
+}
+
 console.log(fail ? `\n  ${fail} failed, ${pass} passed\n` : `\n  all ${pass} assertions pass\n`)
 process.exit(fail ? 1 : 0)

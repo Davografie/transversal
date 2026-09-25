@@ -8,7 +8,8 @@
     :random-label="randomLabel"
     :cancel-label="cancelLabel"
     :empty-text="emptyText"
-    @pick="(o, i, roll) => $emit('pick', o, i, roll)"
+    @pick="(o, i) => $emit('pick', o, i)"
+    @roll="(o, i, roll) => $emit('roll', o, i, roll)"
     @close="$emit('close')"
   />
 </template>
@@ -30,12 +31,14 @@ import ChoiceTable from './ChoiceTable.vue'
 //
 // `key` is the leading cell (a roll table's range/key), `tone` is a CSS hook for
 // semantic colour (the consequence menu's gm/player sides), and `weight` makes
-// the random pick weighted — a table with no weights rolls uniformly.
+// the random roll weighted — a table with no weights rolls uniformly.
 //
-// It reports *what was chosen* and nothing else: resolving the pick (opening the
-// target wizard, applying an entry's effects, driving the dice) belongs to the
-// host, which is why the same picker serves three surfaces with three different
-// resolutions.
+// It reports *what happened* and nothing else: `pick(option, index)` is the click
+// that takes a row, and `roll(option, index, number)` is the 🎲 *finding* one —
+// which marks it and does not take it, because the taking is the click. Resolving
+// either (opening the target wizard, applying an entry's effects, driving the
+// dice) belongs to the host, which is why the same picker serves three surfaces
+// with three different resolutions.
 const props = defineProps({
   options: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
@@ -49,5 +52,5 @@ const props = defineProps({
   emptyText: { type: String, default: 'No options.' },
 })
 
-defineEmits(['pick', 'close'])
+defineEmits(['pick', 'roll', 'close'])
 </script>

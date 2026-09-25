@@ -54,23 +54,21 @@
             <div v-if="!rollableTraits.length" class="wiz-empty">No rollable traits for this table.</div>
           </div>
 
-          <!-- Roll-then-confirm: a roll *finds* a row, `Continue` takes it. That
-               is why the 🎲 is a separate control and only a weighted table has
-               one — every other scheme is rolled by the dice in the roller. -->
+          <!-- A roll *finds* a row and marks it; the click is what takes it. That
+               is why the 🎲 is a separate control, why it exists only on a
+               weighted table (every other scheme is rolled by the dice in the
+               roller), and why the surface has no confirm button. -->
           <ChoiceTable
             :rows="entries"
             :scheme="currentTable?.scheme"
-            selectable
-            :selected="selectedEntryIndex"
-            :rolled-index="lastRolledIndex"
+            :rolled-index="rolledEntryIndex"
             :roll-token="rollToken"
             :allow-random="isWeight"
             :busy="resolving"
             :show-cancel="false"
-            confirm-label="Continue"
             empty-text="This table has no entries."
-            @select="selectEntry"
-            @confirm="(row, i) => continueStep(i)"
+            @pick="continueStep"
+            @roll="(row, i) => markRolled(i)"
           >
             <template #actions>
               <Button variant="neutral" size="sm" :disabled="resolving" @click="backToChoose">↩ Paths</Button>
@@ -164,8 +162,7 @@ const lastResult = ref(null)
 const log = ref([])
 const traits = ref([])          // entity traitSettings — the rollable pool
 const selectedTraitId = ref('')
-const selectedEntryIndex = ref(null)
-const lastRolledIndex = ref(null)
+const rolledEntryIndex = ref(null)
 const rollToken = ref(0)
 
 const title = computed(() => {
@@ -254,8 +251,7 @@ async function loadTable(tableId) {
     { id: tableId },
   )
   currentTable.value = data?.rollTable || null
-  selectedEntryIndex.value = null
-  lastRolledIndex.value = null
+  rolledEntryIndex.value = null
   selectedTraitId.value = ''
 }
 
@@ -342,10 +338,6 @@ async function resolveStep({ index = null, roll = null } = {}) {
   }
 }
 
-function selectEntry(row, i) {
-  selectedEntryIndex.value = i
-}
-
 function setupRoller() {
   if (isWeight.value) {
     bus.emit('roll-table:prepare', { dice: [] })
@@ -366,8 +358,7 @@ function setupRoller() {
 }
 
 function onTraitSelect() {
-  selectedEntryIndex.value = null
-  lastRolledIndex.value = null
+  rolledEntryIndex.value = null
   setupRoller()
 }
 
@@ -378,6 +369,27 @@ function onTraitSelect() {
  * pick two different acts in the UI rather than two buttons that do the same
  * thing.
  */
+/**
+ * Mark the row a roll found — and only mark it.
+ *
+ * The dice in the roller rolled this step, or the surface's own 🎲 did (a
+ * weighted table). Either way the number selects a row through the scheme's own
+ * rule and the row is **marked, never applied**: the player still clicks it, or
+ * clicks a different one, and *that* is the pick. So "a roll and a pick are
+ * different acts" is a property of the surface rather than a rule this file has
+ * to remember.
+ */
+function markRolled(idx) {
+  if (idx === null || idx === undefined) return
+  rolledEntryIndex.value = idx
+  rollToken.value += 1
+  bus.emit('roll-table:resolved', {
+    lifePathName: selectedPath.value?.name,
+    tableName: currentTable.value?.name,
+    entryLabel: entries.value[idx]?.label,
+  })
+}
+
 function onRolled(result) {
   if (!result?.rolls?.length) return
   const faces = result.rolls.map(r => r.result)
@@ -388,22 +400,13 @@ function onRolled(result) {
   } else {
     n = faces[0]
   }
-  const idx = resolveIndex(n)
-  selectedEntryIndex.value = idx
-  lastRolledIndex.value = idx
-  rollToken.value += 1
-  const entry = entries.value[idx]
-  bus.emit('roll-table:resolved', {
-    lifePathName: selectedPath.value?.name,
-    tableName: currentTable.value?.name,
-    entryLabel: entry?.label,
-  })
+  markRolled(resolveIndex(n))
 }
 
-function continueStep(i) {
-  const index = i ?? selectedEntryIndex.value
-  if (index === null || index === undefined) return
-  resolveStep({ index: index + 1 })
+/** The click is the pick: `resolveStep` takes the row the player actually chose. */
+function continueStep(row, i) {
+  if (i === null || i === undefined) return
+  resolveStep({ index: i + 1 })
 }
 
 function backToChoose() { step.value = 'choose'; error.value = ''; bus.emit('roll-table:prepare', { dice: [] }) }
@@ -414,8 +417,7 @@ function startOver() {
   lastResult.value = null
   log.value = []
   selectedTraitId.value = ''
-  selectedEntryIndex.value = null
-  lastRolledIndex.value = null
+  rolledEntryIndex.value = null
   step.value = 'choose'
   bus.emit('roll-table:prepare', { dice: [] })
 }

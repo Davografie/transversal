@@ -24,16 +24,16 @@
             role="listitem"
             class="ct-row"
             :class="[toneOf(r), stateOf(r), {
-              'is-selected': isSelected(r, i),
-              'is-rolled': flashIndex === i,
+              'is-rolled': rolled === i,
+              'is-landing': landing === i,
               'is-locked': isLocked(r),
             }]"
             :style="{ '--i': i }"
             :disabled="isLocked(r) || busy"
-            :aria-current="isSelected(r, i) ? 'true' : undefined"
+            :aria-current="rolled === i ? 'true' : undefined"
             @click="onRow(r, i)"
           >
-            <slot name="row" :row="r" :index="i" :selected="isSelected(r, i)">
+            <slot name="row" :row="r" :index="i" :rolled="rolled === i">
               <span v-if="showKey" class="ct-cell-key">
                 <span class="ct-pip">{{ keyOf(r, i) }}</span>
               </span>
@@ -58,22 +58,17 @@
       </div>
 
       <div class="ct-actions">
+        <!-- The 🎲 *finds* a row and marks it; it never takes it. Taking is the
+             click, on that row or on any other — which is why there is no
+             confirm button anywhere in this surface. -->
         <Button
           v-if="allowRandom"
           variant="neutral"
           size="sm"
-          title="Pick one at random"
+          title="Find one at random"
           :disabled="busy"
           @click="pickRandom"
         >🎲 {{ randomLabel }}</Button>
-        <Button
-          v-if="selectable"
-          variant="primary"
-          size="sm"
-          :disabled="busy || selected === null || selected === undefined"
-          :loading="busy"
-          @click="$emit('confirm', rows[selected], selected)"
-        >{{ confirmLabel }}</Button>
         <Button v-if="showCancel" variant="neutral" size="sm" :disabled="busy" @click="$emit('close')">{{ cancelLabel }}</Button>
         <!-- Flow chrome belongs to the driver: a step that can be left by name
              (the life path's `↩ Paths`) puts its own exit here rather than
@@ -97,9 +92,12 @@ import { conditionSummary, costSummary, effectSummary, entryKey } from '@/utils/
 // It renders *what a row is* and reports *what was chosen*; it resolves nothing.
 // The three acts it refuses to conflate (see [[UI-UX Design#Choice table]]):
 //
-//   a roll and a pick   — the scheme decides whether a row can be picked, so the
-//                         🎲 is a separate control and is opt-in per host; a
-//                         rolled row is *selected*, never applied
+//   a roll and a pick   — **a roll finds a row, a click takes it.** The roll
+//                         (the 🎲 here, or the dice roller's own roll reported
+//                         through `rolledIndex`) only *marks* a row; picking is
+//                         always the click, on that row or on another. There is
+//                         deliberately no confirm button: a marked row that needs
+//                         a second press to take is a step with nothing in it.
 //   a row and a flow    — position, `Back` and named exits belong to the driver
 //   cost and benefit    — the cost cell is always shown, never merged into the label
 //
@@ -124,19 +122,16 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
   emptyText: { type: String, default: 'Nothing to choose from.' },
   maxHeight: { type: String, default: '' },
-  /** Clicking a row selects it (then `confirm`) instead of picking immediately. */
-  selectable: { type: Boolean, default: false },
-  selected: { type: Number, default: null },
-  /** The row a roll landed on — flashed once, so "found" reads differently from "chosen". */
+  /** The row a roll landed on, when the roll came from outside (the dice roller).
+   *  Marks the row until it is taken or the rows change — it never commits it. */
   rolledIndex: { type: Number, default: null },
-  /** Bump to flash `rolledIndex` again (a second roll can land on the same row,
-   *  and that must still read as a roll rather than as nothing happening). */
+  /** Bump to re-mark `rolledIndex` (a second roll can land on the same row, and
+   *  that must still read as a roll rather than as nothing happening). */
   rollToken: { type: Number, default: 0 },
   /** Show the 🎲. Off by default: rolling is meaningful on a roll table, but a
    *  consequence or a hitch is usually a deliberate choice, so the host decides. */
   allowRandom: { type: Boolean, default: false },
   randomLabel: { type: String, default: 'Roll' },
-  confirmLabel: { type: String, default: 'Continue' },
   cancelLabel: { type: String, default: 'Cancel' },
   showCancel: { type: Boolean, default: true },
   /** Force the column legend off (it is on automatically when a key cell exists). */
@@ -147,7 +142,8 @@ const props = defineProps({
   resolver: { type: Object, default: null },
 })
 
-const emit = defineEmits(['pick', 'select', 'confirm', 'close'])
+/** `pick` is the click (the only way a row is taken); `roll` is the 🎲 finding one. */
+const emit = defineEmits(['pick', 'roll', 'close'])
 
 const shared = useLabelResolver()
 const labels = computed(() => props.resolver || shared)
@@ -168,16 +164,27 @@ const showKey = computed(() =>
 )
 const headerOn = computed(() => (props.showHeader === null ? showKey.value : props.showHeader))
 
-const flashIndex = ref(null)
-let flashTimer = null
-watch(() => [props.rolledIndex, props.rollToken], () => {
-  const v = props.rolledIndex
-  if (v === null || v === undefined) { flashIndex.value = null; return }
-  flashIndex.value = v
-  if (flashTimer) clearTimeout(flashTimer)
-  flashTimer = setTimeout(() => { flashIndex.value = null }, 900)
+// The row a roll found. A host that knows the roll (the dice roller's own) passes
+// `rolledIndex` and owns it; otherwise the 🎲 owns it here, so a host that only
+// wants "roll, see it marked, click it" needs no state at all. A new set of rows
+// clears the mark — the next step's table must not inherit the last one's find.
+const ownRoll = ref(null)
+const rolled = computed(() => (props.rolledIndex === null || props.rolledIndex === undefined
+  ? ownRoll.value
+  : props.rolledIndex))
+watch(() => props.rows, () => { ownRoll.value = null })
+
+// The landing beat: the mark is persistent, the animation is not.
+const landing = ref(null)
+let landingTimer = null
+watch(() => [rolled.value, props.rollToken], () => {
+  const v = rolled.value
+  if (v === null || v === undefined) { landing.value = null; return }
+  landing.value = v
+  if (landingTimer) clearTimeout(landingTimer)
+  landingTimer = setTimeout(() => { landing.value = null }, 900)
 }, { immediate: true })
-onUnmounted(() => { if (flashTimer) clearTimeout(flashTimer) })
+onUnmounted(() => { if (landingTimer) clearTimeout(landingTimer) })
 
 function keyOf(r, i) {
   if (r.key !== undefined && r.key !== null && r.key !== '') return r.key
@@ -195,11 +202,6 @@ function isLocked(r) {
 function whyOf(r) {
   return r.why || r.reason || ''
 }
-function isSelected(r, i) {
-  if (!props.selectable) return false
-  if (r.id !== undefined && typeof props.selected === 'string') return r.id === props.selected
-  return props.selected === i
-}
 
 function conditionLines(r) {
   if (r.conditionLines) return r.conditionLines
@@ -215,10 +217,10 @@ function costOf(r) {
   return { label: '', free: true }
 }
 
+/** The click is the pick — the one and only way a row is taken. */
 function onRow(r, i) {
   if (props.busy || isLocked(r)) return
-  if (props.selectable) emit('select', r, i)
-  else emit('pick', r, i, null)
+  emit('pick', r, i)
 }
 
 /** The pool a random pick may draw from: locked rows are never rolled. */
@@ -227,12 +229,14 @@ const pool = computed(() => props.rows.map((r, i) => ({ r, i })).filter((x) => !
 const weighted = computed(() => pool.value.some((x) => (Number(x.r.weight) || 0) > 0))
 
 /**
- * Roll one row. A weighted list rolls a die over the cumulative weights (the
- * life-path rule) and reports the number rolled; an unweighted list picks
- * uniformly and reports none. The host still resolves the pick — the surface
- * only says which row the dice found. When the surface is `selectable` the roll
- * *selects* (and is reported as a selection), because there a roll is the way a
- * row is found and `confirm` is still the way it is taken.
+ * Roll one row and **mark** it. A weighted list rolls a die over the cumulative
+ * weights (the life-path rule) and reports the number rolled; an unweighted list
+ * picks uniformly and reports none. Locked and zero-weight rows are never rolled.
+ *
+ * It deliberately does not pick: the mark says *which row the dice found*, and
+ * taking it stays the player's click — on that row or on any other, which is how
+ * "the dice said the third one" and "actually, I want the first" stay one click
+ * apart instead of two presses and a confirm.
  */
 function pickRandom() {
   if (props.busy) return
@@ -240,9 +244,8 @@ function pickRandom() {
   if (!entries.length) return
 
   const land = (x, roll) => {
-    flashIndex.value = x.i
-    if (props.selectable) emit('select', x.r, x.i, roll)
-    else emit('pick', x.r, x.i, roll)
+    ownRoll.value = x.i
+    emit('roll', x.r, x.i, roll)
   }
 
   if (weighted.value) {
@@ -330,11 +333,23 @@ function pickRandom() {
 .ct-tone-gm { border-left: 2px solid var(--danger); }
 .ct-tone-player { border-left: 2px solid var(--success); }
 
-.ct-row.is-selected {
-  background: var(--accent-16);
+/* ── the row a roll found ──────────────────────────────────────────────────
+   A *mark*, not a selection: it says which row the dice found and it stays there
+   while the player decides, because the taking is their click and it can land on
+   any row. Distinct from `:hover` on purpose — a mark that looks like a pointer
+   passing over would not be read as the dice having spoken. */
+.ct-row.is-rolled {
+  background: var(--accent-12);
   border-color: var(--accent);
   box-shadow: inset 3px 0 0 var(--accent);
 }
+.ct-row.is-rolled .ct-pip {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 700;
+}
+
 .ct-row.is-locked { opacity: 0.55; cursor: not-allowed; border-style: dashed; }
 .ct-row.is-locked:hover { background: var(--overlay-4); border-color: var(--overlay-10); }
 
@@ -405,20 +420,14 @@ function pickRandom() {
 .ct-state { font-size: 11px; color: var(--text-dim); padding: 6px 2px; }
 .ct-actions { display: flex; gap: 6px; align-self: flex-start; margin-top: 2px; }
 
-/* ── the rolled row ────────────────────────────────────────────────────────
-   "The dice found this" is a different event from "you chose this", so it gets
-   its own beat: the pip fills and the row lifts, once. */
-.ct-row.is-rolled { animation: ct-land 0.85s ease-out; }
-.ct-row.is-rolled .ct-pip {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--text-on-accent);
-  font-weight: 700;
-}
+/* ── the landing beat ──────────────────────────────────────────────────────
+   The mark above is persistent; this is the *arrival* — one lift and one ring as
+   the dice land, so the row reads as found rather than as already chosen. */
+.ct-row.is-landing { animation: ct-land 0.85s ease-out; }
 @keyframes ct-land {
-  0% { box-shadow: 0 0 0 0 var(--accent-45); transform: translateY(0); }
+  0% { box-shadow: 0 0 0 0 var(--accent-45), inset 3px 0 0 var(--accent); transform: translateY(0); }
   12% { transform: translateY(-2px); }
-  100% { box-shadow: 0 0 0 14px transparent; transform: translateY(0); }
+  100% { box-shadow: 0 0 0 14px transparent, inset 3px 0 0 var(--accent); transform: translateY(0); }
 }
 
 /* ── entrance ──────────────────────────────────────────────────────────────
@@ -458,7 +467,7 @@ function pickRandom() {
 .ct-compact .ct-head { padding-bottom: 3px; font-size: 8px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ct-row, .ct-row.is-rolled { animation: none !important; }
+  .ct-row, .ct-row.is-landing { animation: none !important; }
   .ct-row { transition: none; }
 }
 </style>

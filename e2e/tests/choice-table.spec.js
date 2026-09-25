@@ -81,11 +81,18 @@ async function stub(page, { table = null, lifePaths = null, extras = {} } = {}) 
       return reply({ resolveStep: { done: true, applied: ['stubbed'], pendingChoices: [], mustered: false, mishapMuster: false, pendingTerm: null, scheduled: 0, error: null, tableId: 'rt-e2e', entryLabel: 'stub' } })
     }
     if (body.includes('startTerm(')) {
-      return reply({ startTerm: { factionId: 'fac-e2e', pathId: 'lp-e2e', currentTableId: 'rt-e2e', continuation: [] } })
+      // The checkpoint is *the server's* — it persists, and it is what the wizard
+      // resumes from. Modelling it here is not a detail: the sheet re-reads the
+      // entity when the step advances, and a remount that finds no `pendingTerm`
+      // legitimately falls back to the path list. A stub that always answered
+      // `null` was lying about the contract, and the symptom looked exactly like
+      // the app losing the term.
+      extras.pendingTerm = { factionId: 'fac-e2e', pathId: 'lp-e2e', currentTableId: 'rt-e2e', continuation: [] }
+      return reply({ startTerm: extras.pendingTerm })
     }
     if (lifePaths && body.includes('lifePaths(')) return reply({ lifePaths })
     if (lifePaths && body.includes('pendingTerm')) {
-      return reply({ entity: { pendingTerm: null } })
+      return reply({ entity: { pendingTerm: extras.pendingTerm ?? null } })
     }
     if (table && body.includes('rollTable(') && !body.includes('rollTables')) {
       return reply({ rollTable: table })
@@ -133,22 +140,33 @@ async function seed(page, size, { stack = false } = {}) {
   }, [character.playerId, character.playerName, character.entityId])
   await page.goto('/')
 
-  // The self dot fades in and the camera settles after it, so it is briefly
-  // "not stable" and a plain click retries against a moving target — measured as
-  // a whole-test timeout at 834×1194, which is a race rather than a fault. Poll
-  // its box until two reads agree, then click.
-  const self = page.locator('button.map-dot.self').first()
-  await self.waitFor({ state: 'visible', timeout: 20_000 })
-  let last = null
-  await expect.poll(async () => {
-    const b = await self.boundingBox()
-    const key = b && `${Math.round(b.x)},${Math.round(b.y)}`
-    const settled = !!key && key === last
-    last = key
-    return settled
-  }, { timeout: 15_000, intervals: [150, 150, 150, 250] }).toBe(true)
-  await self.click()
-  await page.locator('.sheet-embedded').first().waitFor({ state: 'visible', timeout: 20_000 })
+  // The identity overlay (`.name-entry.panel`) is up on the first load — there is
+  // no player yet — and it covers the map, so anything clicked through it is
+  // intercepted. It comes down once the seeded identity resolves; wait for that
+  // rather than racing a `visible` map dot that is visible *behind* it.
+  await page.locator('.name-entry.panel').first().waitFor({ state: 'hidden', timeout: 20_000 })
+
+  const sheet = page.locator('.sheet-embedded').first()
+  // Docked, the sheet is already up and there is nothing to click; in the
+  // portrait and phone layouts it has to be opened from the self dot.
+  if (!(await sheet.isVisible())) {
+    // The dot also fades in and the camera settles after it, so it is briefly
+    // "not stable" and a plain click retries against a moving target — measured
+    // as a whole-test timeout at 834×1194, a race rather than a fault. Poll its
+    // box until two reads agree, then click.
+    const self = page.locator('button.map-dot.self').first()
+    await self.waitFor({ state: 'visible', timeout: 20_000 })
+    let last = null
+    await expect.poll(async () => {
+      const b = await self.boundingBox()
+      const key = b && `${Math.round(b.x)},${Math.round(b.y)}`
+      const settled = !!key && key === last
+      last = key
+      return settled
+    }, { timeout: 15_000, intervals: [150, 150, 150, 250] }).toBe(true)
+    await self.click()
+  }
+  await sheet.waitFor({ state: 'visible', timeout: 20_000 })
 
   if (stack) {
     await focusBand(page, 'sheet-band')
@@ -318,7 +336,59 @@ test('picking a row reports it once, with the 1-based index the API takes', asyn
   expect(extras.created?.tableId).toBeTruthy()
 })
 
-test('a life-path step is rolled into a row, then confirmed — a roll is not a pick', async ({ page }) => {
+test('the 🎲 marks a row; the click takes it — there is no confirm', async ({ page }) => {
+  const extras = {}
+  const three = ['Alpha', 'Beta', 'Gamma'].map((label) => ({
+    label, description: `${label} archetype`, minValue: null, maxValue: null,
+    weight: null, tier: null, conditions: [], costEffects: [], effects: [],
+  }))
+  await stub(page, {
+    extras,
+    table: { id: 'rt-e2e', name: 'Three Things', scheme: 'INDEX', die: 'D6', entries: three },
+  })
+  await seed(page, DESKTOP)
+  await openCreateSupport(page)
+
+  // No confirm anywhere: taking a row is the click and nothing else.
+  const actions = page.locator('.ct-actions')
+  await expect(actions.getByRole('button', { name: /continue|confirm/i })).toHaveCount(0)
+
+  const roll = actions.getByRole('button', { name: /roll/i })
+
+  // Roll: a row is **marked**, and nothing is taken — the menu is still on the
+  // list, and no mutation has run.
+  await roll.click()
+  const marked = page.locator('.ct-row.is-rolled')
+  await expect(marked).toHaveCount(1)
+  await expect(page.locator('.rtm-done-title')).toHaveCount(0)
+  expect(extras.created).toBeUndefined()
+  const markedIndex = await page.locator('.ct-row').evaluateAll(
+    (rows) => rows.findIndex((r) => r.classList.contains('is-rolled')),
+  )
+  expect(markedIndex, 'a row was marked').toBeGreaterThanOrEqual(0)
+
+  // Clicking *that* row takes it, at the index the dice found.
+  await marked.click()
+  await expect(page.locator('.rtm-done-title')).toHaveText('Created')
+  expect(extras.created?.index).toBe(markedIndex + 1)
+
+  // And the other half of the same rule: a roll never locks the choice in, so a
+  // click on a *different* row takes that one instead.
+  await seed(page, DESKTOP)
+  await openCreateSupport(page)
+  await page.locator('.ct-actions').getByRole('button', { name: /roll/i }).click()
+  const other = await page.locator('.ct-row').evaluateAll(
+    (rows) => rows.findIndex((r) => !r.classList.contains('is-rolled')),
+  )
+  const markedAgain = await page.locator('.ct-row').evaluateAll(
+    (rows) => rows.findIndex((r) => r.classList.contains('is-rolled')),
+  )
+  expect(other).not.toBe(markedAgain)
+  await page.locator('.ct-row').nth(other).click()
+  await expect.poll(() => extras.created?.index).toBe(other + 1)
+})
+
+test('a life-path step is taken by the click, and the roll only marks it', async ({ page }) => {
   const extras = {}
   await stub(page, {
     extras,
@@ -349,19 +419,19 @@ test('a life-path step is rolled into a row, then confirmed — a roll is not a 
   await expect(orphan).toContainText('no offering faction')
   await expect(orphan).toBeDisabled()
 
+  // A path is taken by the click — no confirm, and the indexed scheme shows its
+  // keys rather than a range.
   await page.locator('.ct-row').filter({ hasText: 'Test Path' }).click()
-  await page.locator('.ct-row').first().waitFor({ state: 'visible', timeout: 15_000 })
-
-  // Step two: the term's table. Nothing is taken until Continue, and Continue
-  // refuses to do anything while no row has been found.
-  const confirm = page.getByRole('button', { name: 'Continue' })
-  await expect(confirm).toBeDisabled()
+  // The *phase label* is what says the step changed: the path list's rows are
+  // still on screen for a moment after the click, so waiting for "a row exists"
+  // would race the transition and then click the orphan path by index.
+  await expect(page.locator('.wiz-phase-label')).toBeVisible({ timeout: 15_000 })
   await expect(page.locator('.ct-pip').first()).toHaveText('1')
+  await expect(page.locator('.ct-actions').getByRole('button', { name: /continue|confirm/i })).toHaveCount(0)
 
+  // Step two: the term's table. Nothing has been resolved by arriving, and the
+  // step advances on the row the player clicks — as `2` for the second row.
+  expect(extras.resolved).toBeUndefined()
   await page.locator('.ct-row').nth(1).click()
-  await expect(confirm).toBeEnabled()
-  await expect(page.locator('.ct-row').nth(1)).toHaveClass(/is-selected/)
-
-  await confirm.click()
   await expect.poll(() => extras.resolved?.index).toBe(2)
 })
