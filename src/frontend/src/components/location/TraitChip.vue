@@ -2,7 +2,7 @@
   <div
     class="trait-chip"
     :class="{ 'scene-chip': isPlaced, draggable, expanded, 'no-image': !trait.navdotImage }"
-    :style="sceneStyle"
+    :style="[sceneStyle, { '--rating-w': ratingWidth + 'px' }]"
     :title="expanded ? '' : trait.name"
     :data-trait-id="trait.id"
   >
@@ -84,8 +84,26 @@ const sceneStyle = computed(() => (isPlaced.value ? { left: props.x + '%', top: 
 // before it by 20px and steps it down 4px, at 32×34 dice; these are the same
 // proportions at this chip's 24×26 (see `.trait-die-icon`), which keeps the dice
 // taller than a one-row chip so they overhang it.
-const FAN_X = '-15px'
+const DIE_W = 24          // .trait-die-icon width
+const FAN_X_PX = -15      // each die overlaps the one before it by this much
+const FAN_X = `${FAN_X_PX}px`
 const FAN_Y = 3
+const GROUP_GAP = 8       // .trait-die-groups gap
+
+// How much room the rating needs — which the chip then reserves as padding.
+//
+// The dice hang off the chip's RIGHT edge (`right: -6px` below) and so grow LEFTWARDS as
+// dice are added. The chip used to reserve a fixed 22px lane for them, which is a single
+// die's width: a three-die rating printed 14px inside its own name and a four-die mixed
+// one 92px, so the rating appeared to sit over the text rather than beside it. The rating
+// has to buy its own space, and this is the arithmetic of it.
+const ratingWidth = computed(() => {
+  const groups = traitDiceGroups(props.trait)
+  return groups.reduce(
+    (sum, group, i) => sum + (DIE_W * group.length + FAN_X_PX * (group.length - 1)) + (i ? GROUP_GAP : 0),
+    0,
+  )
+})
 
 // One staircase per die type, ascending d4 → d12 (`groupByDieType` in
 // `CharacterSheet.vue`), so `d6 d8 d6` draws a pair of d6s and a d8. Mirrored from
@@ -113,8 +131,11 @@ function traitDiceGroups(trait) {
   position: relative;           /* the rating is absolutely placed against this */
   display: flex; align-items: center; gap: 8px;
   /* The right padding is a LANE for the dice, not part of the chip's own size: the
-     height here is the text and its padding, nothing else. */
-  padding: 3px 22px 3px 9px;
+     height here is the text and its padding, nothing else. The lane is the rating's OWN
+     width (`--rating-w`, set from the dice) plus 2px, which with the rating's `right:
+     -6px` leaves 8px of air between the text and the first die while the last die still
+     straddles and hides the border. */
+  padding: 3px calc(var(--rating-w, 0px) + 2px) 3px 9px;
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 11px;          /* the ordinary chip edge, on every corner */
   background: rgba(10,10,20,0.55);

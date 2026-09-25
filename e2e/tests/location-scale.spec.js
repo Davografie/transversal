@@ -57,15 +57,22 @@ async function ratioAt(page, size) {
   await expect(page.locator('.scene-layer')).toBeAttached()
   await expect(page.locator('.name-entry')).toHaveCount(0)
   // The app opens on its default location and switches to the character's once the
-  // entity fetch lands, and the viewer's WIDTH changes as the sheet docks — which is
-  // the very input this test measures. Let the layout settle before reading it, or the
-  // ratio is read off a half-laid-out viewer.
-  await page.waitForTimeout(500)
-  return page.evaluate(() => {
-    const layer = document.querySelector('.scene-layer').getBoundingClientRect()
-    const viewer = document.querySelector('.location-viewer').getBoundingClientRect()
-    return layer.width / viewer.width
-  })
+  // entity fetch lands, and the viewer's WIDTH changes as the sheet docks — which is the
+  // very input this test measures. So read until two consecutive samples agree rather
+  // than trusting one: a fixed wait read a half-laid-out viewer under full-suite load
+  // and made this fail on firefox only.
+  let prev = null
+  for (let i = 0; i < 24; i++) {
+    const ratio = await page.evaluate(() => {
+      const layer = document.querySelector('.scene-layer').getBoundingClientRect()
+      const viewer = document.querySelector('.location-viewer').getBoundingClientRect()
+      return viewer.width ? layer.width / viewer.width : 0
+    })
+    if (prev !== null && ratio > 0 && Math.abs(ratio - prev) < 0.01) return ratio
+    prev = ratio
+    await page.waitForTimeout(250)
+  }
+  return prev
 }
 
 test('a narrow viewer gets a larger location, a wide one is left alone', async ({ page }) => {
