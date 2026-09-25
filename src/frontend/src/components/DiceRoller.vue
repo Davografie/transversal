@@ -187,7 +187,7 @@
             v-for="(d, i) in manualDice"
             :key="i"
             class="manual-die"
-            :class="{ set: manualFaces[i] != null }"
+            :class="{ set: manualFaces[i] != null, editing: manualEditing === i }"
             :title="`${d.label || d.die} · ${dieSize(d.die)} faces`"
             @pointerdown="manualDragStart($event, i)"
             @pointermove="manualDragMove"
@@ -195,7 +195,11 @@
             @pointercancel="manualDragEnd"
           >
             <DieIcon :die="d.die" :result="manualFaces[i] || 0" :label="d.label || d.die" />
+            <!-- The face box opens on tap; until then the value sits under the
+                 die. A screenful of empty boxes, with the commit button below
+                 them, reads as a form to fill before you can roll. -->
             <input
+              v-if="manualEditing === i"
               :ref="el => setManualInput(i, el)"
               class="manual-face-input"
               type="number"
@@ -205,8 +209,10 @@
               :value="manualFaces[i] ?? ''"
               :aria-label="`${d.label || d.die} result`"
               @pointerdown.stop
+              @blur="manualEditing = null"
               @input="setManualFace(i, $event.target.value)"
             />
+            <span v-else class="manual-value" :class="{ unset: manualFaces[i] == null }">{{ manualFaces[i] ?? '–' }}</span>
           </div>
         </div>
         <div class="manual-count">{{ manualSetCount }} / {{ manualDice.length }} set</div>
@@ -386,7 +392,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import { useEffectApplication } from '../composables/useEffectApplication.js'
 import { useHitchMenu } from '../composables/useHitchMenu.js'
@@ -1936,6 +1942,10 @@ async function prepareRollPool() {
 // and dragging up/down scrolls the face within the die's own size.
 const manualDice = ref([])      // the specs, in the order the pool was saved
 const manualFaces = ref([])     // null = not entered yet
+// Which die is being typed into. The face box exists only while it is open —
+// the author's spec is that *tapping a die* gives you the input, and a screenful
+// of empty boxes reads as UI you have to fill before you can start.
+const manualEditing = ref(null)
 const manualInputs = []
 let manualDrag = null
 
@@ -1956,8 +1966,12 @@ function setManualFace(i, raw) {
 }
 
 function manualDragStart(e, i) {
+  // Both matter on a touch screen: `preventDefault` stops the browser firing the
+  // compatibility click *after* the tap, which moved focus off the box we just
+  // opened — the keyboard appeared and vanished in the same gesture.
+  e.preventDefault()
   manualDrag = { i, y: e.clientY, moved: false, start: manualFaces.value[i] ?? 1 }
-  e.currentTarget?.setPointerCapture?.(e.pointerId)
+  try { e.currentTarget?.setPointerCapture?.(e.pointerId) } catch { /* not capturable */ }
 }
 function manualDragMove(e) {
   if (!manualDrag) return
@@ -1968,20 +1982,32 @@ function manualDragMove(e) {
   const size = dieSize(manualDice.value[manualDrag.i]?.die)
   manualFaces.value[manualDrag.i] = Math.max(1, Math.min(size, manualDrag.start + step))
 }
-function manualDragEnd() {
+function manualDragEnd(e) {
   if (!manualDrag) return
   const { i, moved } = manualDrag
   manualDrag = null
-  // A tap (no movement) means "I want to type this one".
-  if (!moved) manualInputs[i]?.focus?.()
+  try { e?.currentTarget?.releasePointerCapture?.(e.pointerId) } catch { /* already gone */ }
+  // A tap (no movement) means "I want to type this one" — open the box, then
+  // focus it in the same gesture so the on-screen keyboard stays up.
+  if (!moved) {
+    manualEditing.value = i
+    nextTick(() => manualInputs[i]?.focus?.({ preventScroll: true }))
+  }
 }
 
 async function enterManual() {
   if (props.mode === 'roll_table') return
   const prep = await prepareRollPool()
   if (!prep) return
+  // Nothing from a previous roll belongs on this screen: the result slots and
+  // the resolved status lines are both driven off `result`, and picking is the
+  // *next* phase — the entry screen should be dice and nothing else.
+  result.value = null
+  showConsequences.value = false
+  youTabBlink.value = false
   manualDice.value = prep.dice
   manualFaces.value = prep.dice.map(() => null)
+  manualEditing.value = null
   setPhase(Phase.MANUAL)
 }
 
@@ -2012,6 +2038,7 @@ async function commitManual() {
   emit('rolled', res)
   manualDice.value = []
   manualFaces.value = []
+  manualEditing.value = null
 }
 
 function commitPicks() {
@@ -2477,19 +2504,25 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 }
 /* Physical play ([[B17]]): each die carries its own face box. `touch-action:
    none` is what lets a vertical drag scroll the face instead of the panel. */
-.manual-entry { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.manual-entry { display: flex; flex-direction: column; gap: 6px; align-items: center; margin-bottom: 4px; }
 .manual-hint { font-size: 11px; color: var(--text-dim); text-align: center; }
-.manual-dice { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.manual-dice { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .manual-die {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
   cursor: ns-resize; touch-action: none; user-select: none;
+  padding: 2px 4px; border-radius: 8px; border: 1px solid transparent;
 }
+.manual-die.editing { border-color: var(--accent-dim); background: var(--overlay-6); }
+.manual-value {
+  min-width: 22px; text-align: center; font-size: 15px; font-weight: 700; color: var(--text);
+}
+.manual-value.unset { color: var(--text-dim); font-weight: 400; }
 .manual-face-input {
   width: 46px; text-align: center; font-size: 16px; font-weight: 700; padding: 3px;
   border-radius: 6px; border: 1px solid var(--overlay-12);
   background: var(--bg-input); color: var(--text);
 }
-.manual-die:not(.set) .manual-face-input { border-color: var(--accent-dim); }
+.manual-die:not(.set) .manual-value { border-bottom: 1px dashed var(--overlay-12); }
 .manual-count { font-size: 11px; color: var(--text-dim); }
 .manual-btn { color: var(--text-dim); }
 .resource-rolls {
