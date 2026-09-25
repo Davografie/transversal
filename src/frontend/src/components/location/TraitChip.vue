@@ -6,14 +6,15 @@
   >
     <!-- The trait's `navdot` marker image (`B200`) — the registry trait's picture,
          when it has one. Leading the chip, so it scans picture → name → rating, the
-         order the sheet's trait rows use. A cutout floats unframed, as there. -->
-    <MediaImage
+         order the sheet's trait rows use. A cutout becomes a RING the subject rises
+         out of, exactly as a cutout occupant dot composes on this map. -->
+    <span
       v-if="trait.navdotImage"
-      :src="trait.navdotImage"
       class="trait-chip-marker"
       :class="{ transparent: trait.navdotTransparent }"
-      :alt="trait.name"
-    />
+    >
+      <MediaImage :src="trait.navdotImage" class="trait-chip-marker-img" :alt="trait.name" />
+    </span>
     <div class="trait-chip-text">
       <span class="trait-chip-name">
         <span v-if="trait.inherited" class="trait-chip-inherited" aria-hidden="true">↳</span>{{ trait.name }}
@@ -127,25 +128,40 @@ function traitDiceGroups(trait) {
 .trait-chip-text { display: flex; flex-direction: column; min-width: 0; }
 .trait-chip-name { color: var(--map-text); }
 
-/* The trait's marker picture (`B200`). Round, because round is what a marker on this
-   map looks like (the nav dots), and sized between the text and the rating dice so it
-   leads the chip without competing with the dice. `flex-shrink: 0` so a long
-   statement cannot squash it. */
+/* The trait's marker picture (`B200`). Between the text and the rating dice, so it
+   leads the chip without competing with the dice; `flex-shrink: 0` so a long
+   statement cannot squash it. `align-self: stretch` gives it the height the chip's
+   TEXT set, which is what the cutout below measures itself against. */
 .trait-chip-marker {
+  position: relative;
+  align-self: stretch;
   width: 20px;
-  height: 20px;
   flex-shrink: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.25);
-  object-fit: cover;
 }
 
-/* A cutout carries its own shape, so it gets no frame and no crop — the same rule
-   the sheet's trait picture follows. */
-.trait-chip-marker.transparent {
-  border: none;
-  border-radius: 0;
+/* A plain picture is a small round thumbnail, contained in the chip. */
+.trait-chip-marker-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* A cutout does not sit IN the chip — it stands out of it. No ring and no frame: the
+   picture is absolutely placed (so the chip's height stays its text's, exactly as the
+   dice are) and sized taller than the chip, measured off the text height plus a fixed
+   overhang, so it breaks the chip's outline above and below whatever the chip's
+   height turns out to be. Same "the art is not confined to the widget" reading as a
+   cutout occupant dot on this map, without its ring. */
+.trait-chip-marker.transparent .trait-chip-marker-img {
+  width: auto;
+  height: calc(100% + 20px);
   object-fit: contain;
+  border-radius: 0;
 }
 
 .trait-chip-statement {
