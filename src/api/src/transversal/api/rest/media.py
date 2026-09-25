@@ -94,21 +94,42 @@ def _save_image_variants(image_data: bytes, output_dir: Path, base_name: str) ->
 
 
 @router.post("/media/upload")
-async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile = File(...)):
+async def upload_media(
+    owner_id: str = "",
+    owner_kind: str = "entity",
+    variant_id: str = "",
+    universe: str = "",
+    entity_id: str = "",  # legacy alias for owner_id, still sent by existing callers
+    projection_id: str = "",  # legacy alias for variant_id
+    file: UploadFile = File(...),
+):
     """Upload a media file. Converts to WebP, returns the public path on success.
 
-    Also registers the image as an MediaImage so it appears in the gallery
+    Also registers the image as a MediaImage so it appears in the gallery
     and can be animated.
 
+    The owner is an **entity** or a **trait** (`owner_kind` + `owner_id`), and
+    the image may sit on the tier below it (`variant_id` — a projection or a
+    traitsetting); empty means the owner-level *definition* image.
+
     If `universe` is provided, the image is registered under that universe.
-    If empty, the entity's current universe is used.
+    If empty, the owner's own universe is used — an entity's `current_universe`,
+    or a trait's first listed universe.
     """
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # These both become path components below — validate before anything
+    entity_id = entity_id or ""
+    owner_id = owner_id or entity_id
+    variant_id = variant_id or projection_id or ""
+
+    if owner_kind not in ("entity", "trait"):
+        raise HTTPException(status_code=400, detail="owner_kind must be 'entity' or 'trait'")
+
+    # These all become path components below — validate before anything
     # touches disk.
-    entity_id = _safe_component(entity_id, "entity_id") if entity_id else ""
+    owner_id = _safe_component(owner_id, "owner_id") if owner_id else ""
     universe = _safe_component(universe, "universe") if universe else ""
+    variant_id = _safe_component(variant_id, "variant_id") if variant_id else ""
 
     ext = Path(file.filename or "unknown").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -125,51 +146,74 @@ async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile
     out_ext = ext if ext == ".gif" else ".webp"
 
     # Original flat-file path (backward compat)
-    prefix = f"{entity_id}_" if entity_id else ""
+    prefix = f"{owner_id}_" if owner_id else ""
     flat_filename = f"{prefix}{uuid.uuid4().hex[:12]}{out_ext}"
     filepath = MEDIA_DIR / flat_filename
     filepath.write_bytes(converted)
 
     # ── Register as MediaImage for gallery + animation ──
     image_id = None
-    if entity_id:
+    if owner_id:
         try:
             repo = EntityRepository()
-            entity = repo.get_entity(entity_id)
-            if entity:
+            owner = (
+                repo.get_entity(owner_id) if owner_kind == "entity"
+                else repo.get_trait(owner_id)
+            )
+            if owner:
                 # Also a path component. The stored value is validated too, so a
                 # bad universe already in the data cannot traverse either.
-                resolved_universe = _safe_component(
-                    universe or entity.current_universe, "universe"
+                #
+                # A trait has no single `current_universe` — it lists the
+                # universes it belongs to — so its first is the default. The 9
+                # live traits with an empty list need the caller to name one.
+                default_universe = (
+                    owner.current_universe if owner_kind == "entity"
+                    else (owner.universes[0] if owner.universes else "")
                 )
-                image_id = uuid.uuid4().hex[:8]
-                output_dir = IMAGEN_DIR / entity_id / resolved_universe
-                base_name = f"upload_{image_id}"
+                if not (universe or default_universe):
+                    # A trait can belong to no universe, and then there is no
+                    # directory to file the image under. Registration is skipped
+                    # rather than raising: the flat file is already written and a
+                    # missing gallery row must not fail the upload (SEC-4 keeps
+                    # the stored-value guard on this same best-effort footing).
+                    # The caller sees `image_id: null`.
+                    owner = None
+                if owner:
+                    resolved_universe = _safe_component(
+                        universe or default_universe, "universe"
+                    )
+                    image_id = uuid.uuid4().hex[:8]
+                    output_dir = IMAGEN_DIR / owner_id / resolved_universe
+                    base_name = f"upload_{image_id}"
 
-                _save_image_variants(converted, output_dir, base_name)
+                    _save_image_variants(converted, output_dir, base_name)
 
-                img = Image.open(io.BytesIO(converted))
-                w, h = img.size
+                    img = Image.open(io.BytesIO(converted))
+                    w, h = img.size
 
-                entity_image = MediaImage(
-                    id=image_id,
-                    entity_id=entity_id,
-                    universe=resolved_universe,
-                    image_type=ImageType.UPLOADED,
-                    transparent=has_transparency(converted),
-                    width=w,
-                    height=h,
-                    filename=base_name,
-                    extension="webp",
-                    created_at=datetime.now(timezone.utc).isoformat(),
-                )
-                repo.create_image(entity_image)
+                    image = MediaImage(
+                        id=image_id,
+                        owner_kind=owner_kind,
+                        owner_id=owner_id,
+                        variant_id=variant_id or None,
+                        universe=resolved_universe,
+                        image_type=ImageType.UPLOADED,
+                        transparent=has_transparency(converted),
+                        width=w,
+                        height=h,
+                        filename=base_name,
+                        extension="webp",
+                        created_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                    repo.create_image(image)
 
-                # Auto-select all three roles when this upload is the sole
-                # entity-level image (the soul default for every role).
-                owner_images = repo.get_images_for_owner(entity_id)
-                if len(owner_images) == 1:
-                    repo.update_image(image_id, {"roles": ["background", "sheet", "navdot"]})
+                    # Auto-select all three roles when this upload is the sole
+                    # image on its rung — the soul default for every role, and for
+                    # a trait the one picture that renders wherever it is asked.
+                    owner_images = repo.get_images_for_owner(owner_id, variant_id or None)
+                    if len(owner_images) == 1:
+                        repo.update_image(image_id, {"roles": ["background", "sheet", "navdot"]})
         except Exception:
             pass  # Don't fail the upload if image registration fails
 

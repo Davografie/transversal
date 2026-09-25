@@ -78,6 +78,36 @@ class TraitRef:
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
+    #: Which stored variant a role renders from — the same map the entity
+    #: resolver uses, so a trait picture and an entity portrait behave alike.
+    _ROLE_VARIANT = {"background": "Large", "sheet": "Small", "navdot": "Large"}
+
+    @strawberry.field
+    def image(self, info: strawberry.Info, role: str = "sheet") -> Optional[str]:
+        """URL of this trait's image for ``role`` (`B200`).
+
+        Role-filtered exactly like an entity's image, but with no universe
+        preference: a trait has no projection to supply one, so a single
+        canonical picture answers for every universe the trait belongs to. The
+        sole-image rule gives a trait's first image all three roles, so a trait
+        with one picture renders wherever it is asked for. See [[Media Pipeline]].
+        """
+        variant = self._ROLE_VARIANT.get(role)
+        if variant is None:
+            return None
+        em = info.context["entity_manager"]
+        return em.repo.resolve_role_image(str(self.id), role, None, variant)
+
+    @strawberry.field
+    def image_transparent(self, info: strawberry.Info, role: str = "sheet") -> bool:
+        """Whether that image is a cutout, so the surface can float it rather
+        than crop it — mirrors the entity sheet-portrait flag."""
+        if role not in self._ROLE_VARIANT:
+            return False
+        em = info.context["entity_manager"]
+        entry = em.repo.resolve_role_image_entry(str(self.id), role, None)
+        return entry.transparent if entry is not None else False
+
 @strawberry.type
 class TraitSetRef:
     id: strawberry.ID

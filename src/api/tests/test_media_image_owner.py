@@ -8,9 +8,14 @@ fixture ids and skip when it is unavailable; stubbing the ladder would only test
 the stub.
 """
 
+import io
+
 import pytest
+from fastapi.testclient import TestClient
+from PIL import Image
 
 from transversal.db.repository import EntityRepository
+from transversal.main import app
 from transversal.domain import (
     DieType,
     Entity,
@@ -274,3 +279,79 @@ def test_projection_image_still_wins_for_its_body():
     # With no projection named, only the definition tier is considered.
     assert ENT_ID in repo.resolve_role_image(ENTITY, "sheet", None)
     _cleanup(repo)
+
+
+# ── Uploading to a trait owner ────────────────────────
+
+
+def _png_bytes() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), (10, 200, 90)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@requires_db
+def test_upload_registers_an_image_for_a_trait_owner():
+    """The upload endpoint speaks owners, and a trait's first image takes all
+    three roles by the sole-image rule — so one upload renders everywhere."""
+    repo = _repo
+    _fixtures(repo)
+    client = TestClient(app)
+
+    r = client.post(
+        f"/api/v1/media/upload?owner_kind=trait&owner_id={TRAIT}&universe=three_realms",
+        files={"file": ("spirit-herb.png", _png_bytes(), "image/png")},
+    )
+    assert r.status_code == 200, r.text
+    image_id = r.json()["image_id"]
+    assert image_id
+
+    try:
+        img = repo.get_image(image_id)
+        assert img is not None
+        assert (img.owner_kind, img.owner_id, img.variant_id) == ("trait", TRAIT, None)
+        assert img.roles == ["background", "sheet", "navdot"]
+        assert img.universe == "three_realms"
+        # It answers for every role surface, and for a traitsetting tier that has
+        # no image of its own.
+        for role in ("sheet", "background", "navdot"):
+            assert image_id in repo.resolve_role_image(TRAIT, role)
+        assert image_id in repo.resolve_role_image(TRAIT, "sheet", SETTING)
+    finally:
+        if repo.get_image(image_id) is not None:
+            repo.delete_image(image_id)
+    _cleanup(repo)
+
+
+@requires_db
+def test_upload_still_accepts_the_legacy_entity_id_parameter():
+    """Two frontend callers still send `entity_id`; the alias has to carry them
+    across the rename."""
+    repo = _repo
+    _fixtures(repo)
+    client = TestClient(app)
+
+    r = client.post(
+        f"/api/v1/media/upload?entity_id={ENTITY}&universe=earth",
+        files={"file": ("portrait.png", _png_bytes(), "image/png")},
+    )
+    assert r.status_code == 200, r.text
+    image_id = r.json()["image_id"]
+
+    try:
+        img = repo.get_image(image_id)
+        assert img is not None
+        assert (img.owner_kind, img.owner_id) == ("entity", ENTITY)
+    finally:
+        if repo.get_image(image_id) is not None:
+            repo.delete_image(image_id)
+    _cleanup(repo)
+
+
+def test_upload_rejects_an_unknown_owner_kind():
+    client = TestClient(app)
+    r = client.post(
+        "/api/v1/media/upload?owner_kind=projection&owner_id=whatever",
+        files={"file": ("x.png", _png_bytes(), "image/png")},
+    )
+    assert r.status_code == 400
