@@ -79,8 +79,9 @@ class MediaImage(BaseModel):
     #: purpose: roles are unique per (owner, role) and assigning one strips it
     #: from sibling images, so putting ``ai`` in there would make ticking one
     #: image's [AI] silently untag every other image of the same owner. A cutout
-    #: inherits its source's flags and gains ``ai``, because BiRefNet is itself a
-    #: model.
+    #: inherits its source's flags and adds **nothing** of its own: BiRefNet is not
+    #: one of the pipelines that declares AI, and a cutout is the same picture with
+    #: its background removed.
     flags: list[str] = Field(default_factory=list)
     #: Who made it and where it came from. The structured half of an attribution
     #: — Creative Commons' TASL *Author* and *Source* (and IPTC's Creator /
