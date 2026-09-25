@@ -21,8 +21,13 @@ export function useRollTableMenu() {
       const data = await graphql(
         `query($id: ID!) {
           rollTable(id: $id) {
-            id name
-            entries { label description weight costEffects { ${EFFECT_FIELDS} } effects { ${EFFECT_FIELDS} } }
+            id name scheme die
+            entries {
+              label description weight minValue maxValue tier
+              conditions { type subject target targets value operator narrative }
+              costEffects { ${EFFECT_FIELDS} }
+              effects { ${EFFECT_FIELDS} }
+            }
           }
         }`,
         { id: tableId },

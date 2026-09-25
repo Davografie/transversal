@@ -33,10 +33,14 @@ Living interaction-design reference for the Transversal frontend. Captures the c
 ## Shared primitives
 
 The reusable UI set lives in `src/frontend/src/components/ui/`: `GmList`/
-`GmListItem`, `TargetPicker`/`SearchDropdown`, `EntryPicker`, `Button`,
-`DangerButton`, `TagInput`, `TraitInstanceEditor`, `SegmentedControl`. (The `gm/`
-folder keeps the GM-specific panels, which compose these primitives.) New
-surfaces should compose the primitives instead of re-styling raw elements.
+`GmListItem`, `TargetPicker`/`SearchDropdown`, `EntryPicker`, **`ChoiceTable`**,
+`Button`, `DangerButton`, `TagInput`, `TraitInstanceEditor`, `SegmentedControl`.
+(The `gm/` folder keeps the GM-specific panels, which compose these primitives.)
+New surfaces should compose the primitives instead of re-styling raw elements.
+
+One resolver backs the row surfaces: `composables/useLabelResolver.js` — see
+[[#Choice table]]. Anything that would otherwise carry its own id → name map
+should take it from there instead.
 
 ### Autocomplete core
 
@@ -84,17 +88,17 @@ suppresses the create row so it never offers to create what the list holds.
 roll-table entry, a consequence and a hitch all need — plus an optional 🎲 and a
 cancel. Three menus had grown this separately; they now share it.
 
-**It reports what was chosen and nothing else.** Resolving the pick is the
-host's, and the hosts genuinely differ: the roll-table and consequence menus
-hand off to `EffectTargetWizard` and then apply, while the hitch menu hands the
-option back to the dice roller. Baking the wizard into the picker would have
-made it a one-host component.
+**It is the *compact* face of [[#Choice table]]** — the rows are rendered by
+`ChoiceTable` with `density="compact"`, so the app has one row engine and one set
+of row CSS rather than two. Its own contract is unchanged, because three hosts
+were written against it:
 
-- **An entry** is `{ id?, key?, label, description?, cost?, costFree?, hint?,
-  tone?, disabled?, weight? }`. `key` is the leading cell (a roll table's
-  range), `tone` is a semantic edge (`gm` / `player` — the consequence menu's
-  sides), `cost` is the trailing figure and `hint` the fallback when there is no
-  cost.
+- **An option** is `{ id?, key?, label, description?, cost?, costFree?, hint?,
+  tone?, disabled?, weight? }` — literally the choice table's row vocabulary.
+- **It reports what was chosen and nothing else.** Resolving the pick is the
+  host's, and the hosts genuinely differ: the roll-table and consequence menus
+  hand off to `EffectTargetWizard` and then apply, while the hitch menu hands the
+  option back to the dice roller.
 - **The random pick is opt-in** (`allow-random`, off by default): rolling is
   native to a roll table, while a consequence or a hitch is usually a deliberate
   choice, so each host decides. A list carrying `weight`s rolls a die over the
@@ -105,9 +109,160 @@ made it a one-host component.
   feeds is **1-based**, so `RollTableMenu` adds the 1 at the boundary.
 - **Busy is not loading.** While a host is applying a pick the list stays on
   screen and goes inert (`busy`); it only reads *Loading…* before it has options.
-- **Not yet on it:** the life-path wizard. It has the same shape (a table of
-  entries with a weighted roll) but resolves server-side per term and drives the
-  dice, so it is the natural next adopter rather than something to force.
+
+### Choice table
+
+`ui/ChoiceTable.vue` is the one surface behind everything that says *"here are
+things you may take"*: a played roll table, a life-path step, character creation
+from an archetype table, the consequence and hitch menus. Before it there were
+four implementations of one idea — `RollTableMenu`, `LifePathWizard` (its own
+`<table>`), and `ConsequenceMenu` / `HitchMenu` (two near-identical pickers) —
+each with its own rows, its own name map and its own idea of what a key meant.
+
+**It is presentational, and it is not a flow.** It renders what a row *is* and
+reports what was chosen; resolving the pick stays with the host. The **drivers**:
+
+| Driver | Fills the surface with | Owns |
+|---|---|---|
+| table resolver | a table's entries | which scheme's key applies, rolling |
+| menu assembler (`useConsequences`, `useHitchMenu`) | options assembled at a moment | `menuContext`/`side`/`effectDie`, exclusions |
+| flow step (`LifePathWizard`) | one step of a path | the checkpoint, `Back`, the named exits, mustering |
+| availability list | rules you may press | one phrase per unmet condition ([[B193]]) — **not a consumer yet**: the sheet's SFX cards are [[character-sheet]]'s and stay theirs |
+
+**Three acts it refuses to conflate.** These were the handoffs' warnings, and
+each one is a way a generic list would have been *wrong* rather than plain:
+
+1. **A roll and a pick are different acts.** The scheme decides whether a row can
+   be picked at all, so the 🎲 is a separate control, never a row, and it is
+   opt-in per host. On a surface where a roll *finds* a row (`selectable`), the
+   roll **selects** — it never applies — and `Continue` is still how the row is
+   taken. That is the life path's roll-then-confirm, expressed in the surface
+   rather than in a rule each host remembers.
+2. **A flow is not a list.** `Back` is not a navigation stack — a life path
+   returns through `return_map`, and a shared table has more than one valid way
+   out. The surface therefore offers no `Back`; a driver puts its own exit in the
+   `#actions` slot (`↩ Paths`), and the surface never guesses what leaving means.
+3. **Creating is not gaining and cost is not benefit.** A pick that *creates* an
+   entity (archetype → support character) orders pay → create → own → effects,
+   and its row can be picked exactly like one that only applies effects. The
+   price always has its own cell and is never merged into the label, because the
+   ordering guarantee (`cost_effects` first) is only legible if the cost is.
+
+**The key column belongs to the table's `scheme`, never the row.** A row cannot
+own it, because the same row means different things in different tables:
+
+| scheme | a row is | the key cell shows |
+|---|---|---|
+| `RANGE` | a band of the roll | `min–max` |
+| `INDEX` | one of N, in order | the position |
+| `TIER` | an outcome tier | the tier |
+| `WEIGHT` | a slice of a weighted roll | `w` |
+
+With no scheme (an archetype list, an authoring list) the surface reads the row:
+`tier` → `weight` → band → position. The fallback is not decoration — the live
+`rt-support-cast` table declares `RANGE` and **no entry declares min/max**, so
+the honest key for it is the position, which is exactly what the fallback
+produces. (`WEIGHT` remains implemented with **no live instance**.)
+
+**One resolver, supplied once.** `composables/useLabelResolver.js` is the app's
+id → label map and the phrasing built on it (a condition's "if …", an effect's
+"→ target (die)", a cost's "2 razmerit"). It is **registry-wide and
+universe-independent**: traits are read through *every traitset* (36 sets → all
+802), never `traitsByUniverse`.
+
+> [!warning] Why the resolver exists — a live defect, not tidiness
+> Each runtime surface used to resolve names from its own map, and every failure
+> was silent. `LifePathWizard` read `traitsByUniverse(<the path's universe>)`, so
+> in a `three_realms` path `trait-rel-tenure` — stamped `universes: ["earth"]` —
+> rendered as a **raw id**, on the two traits the life-path ladder is built from.
+> The canvas's `RollTableNode` resolved roll-table names only, so *every* trait
+> target there rendered raw. Both were correct code for their own map. A host
+> that carries a name map is now a bug, and `scripts/check-choice-table.mjs`
+> fails if the universe-scoped read comes back — the guard strips comments first,
+> because these files *explain* the read they replaced.
+
+**"Why not" renders in the row, not in a tooltip.** There are **four** gates and
+they are not interchangeable. The surface owns only the *presentation*; which gate
+is which is the driver's business:
+
+| Gate | Rendered as |
+|---|---|
+| row `conditions` ([[B179]]) | an `if …` line on the row — a *declaration*: whether it holds is resolved server-side at apply time, where a failing entry falls back for a roll and is refused **by name** for a pick |
+| locked / unaffordable | `why` in the row (🔒 **needs 9 razmerit**) plus `disabled` — never hidden ([[B190]]) |
+| path walkability ([[B194]]–[[B197]]) | visible and disabled carrying why — the human's call, not hidden |
+| offering (`factionIds`, derived) | the same, e.g. **no offering faction** |
+| path discovery | **inert today** — no production caller |
+
+**A row is:**
+
+```
+{ id?, key?, label, description?, cost?, costEffects?, costFree?, hint?,
+  tone?, state?, why?, disabled?, locked?, conditions?, effects?,
+  minValue?, maxValue?, weight?, tier? }
+```
+
+- `conditions` / `effects` are the **domain objects**; the surface phrases them.
+  A host with pre-phrased text passes `conditionLines` / `effectLines` / `cost`.
+- `state` is the GM lists' vocabulary (`active` · `disabled` · `warning` ·
+  `danger` · `success` · `muted`), so a row means the same thing here as in a
+  panel. `tone` (`gm` / `player`) is a semantic *edge*, not a fill, so a mixed
+  list still reads as one control.
+- **The `#row` slot is the escape hatch.** Rows are unbounded stacked blocks, so
+  an authoring host whose cells are data-driven (the effect form's merged field
+  list, a condition's type-dependent columns) can render its own cells inside the
+  same shell, selection, states and actions.
+
+**Responsive by container, not viewport.** The same surface is a ~340px column
+when the character sheet is docked, ~534px as a modal, and a phone's full width —
+so it asks how much room *it* has (`container-type: inline-size`, `@container
+ct`), not how wide the window is. Three columns → the cost wraps under the result
+(`≤520px`) → one column (`≤340px`). The **legend is dropped the moment the
+columns collapse**, because a header that labels columns which no longer exist is
+worse than no header; the **key survives to the narrowest width**, because on a
+phone the moment a row matters most is the moment the dice found it.
+
+**Where a prompt lives** (settled 2026-09-25, answering [[Effects]]' open question
+2 — it was blocking [[B5]]'s client half). A choice is a **flow step, not a roll's
+panel**:
+
+- **A choice attached to a roll** renders in the roller's panel, as it does today
+  (`ConsequenceMenu` is the live example: compact density, under the result).
+- **A choice that outlives the roll** renders at the **sheet's** level, in a
+  persistent prompt slot. The roller cannot host it: it is transient, a GM in
+  free-roam has none at all, and the next roll clears it — so a parked branch put
+  there would be lost by the act of playing on.
+- **The prompt is non-modal and never auto-dismisses.** A parked choice waits
+  ([[B5]]), and *answering nothing is a legitimate default* — so the only way to
+  leave it is an explicit "leave it" that writes nothing, and something on the
+  sheet's pill row has to say one is waiting, or "waiting" means "invisible".
+- **Both are the same surface**, driven by different things: the roller's copy is
+  fed by the roll's result, the sheet's by the parked prompt. The rows carry their
+  choice `kind`, and the kind decides whether a pick resolves immediately (a
+  branch) or opens the target wizard — which is a property of the *driver*, not of
+  the row, so the surface is already sufficient for both.
+
+**Flashy, and restrained.** A die-pip key column with tabular numerals, a short
+staggered entrance, and a *landing beat* when a roll finds a row (the pip fills,
+the row lifts once) — so "the dice found this" reads differently from "you chose
+this". All of it is off under `prefers-reduced-motion: reduce`. The tone is
+game-appropriate without becoming a slot machine: the row is still the row.
+
+**What it is not.** It is not `GmList`'s replacement *yet*. `GmList`/
+`GmListItem` keep the authoring half — drag-reorder with a ⠿ handle, `selectable`
+✓/+ picking, and the `.entity-row` shell — and 17 call sites use it. `ChoiceTable`
+shares the state vocabulary, `useDragDrop`'s row model and the `.entity-row`
+line-row shape, but reorder is deliberately **not** duplicated here until
+[[gm-panels]]' call sites migrate; a half-built second reorder path would be
+worse than one list primitive with a settled API. Editable cells still need form
+primitives that `components/ui/` does not have (there is no text/number/select
+input in the shared set), so the authoring editors stay on `GmList` until those
+exist.
+
+`scripts/check-choice-table.mjs` (52 assertions, no browser) pins the scheme's
+key column and its fallback order, the condition/effect/cost phrasing, and — as
+shipped text — the resolver's registry-wide read. `e2e/tests/choice-table.spec.js`
+measures the layout at all four viewports and drives the two gates and the
+roll-then-confirm against the live app.
 
 ### Button
 
@@ -238,10 +393,14 @@ location-viewer controls, and the rest of the character sheet's buttons.
 
 **Raw by design — do not convert these** (their surface owner's call, and [[gm-panels]]
 audited the list): segmented controls (mode / media-quality, the die-variable toggle), die
-and picker chips, toggles, wizard candidate rows, the composite imagen button, and the 🛠
+and picker chips, toggles, the composite imagen button, and the 🛠
 panel anchor — its 42px geometry feeds the rail anchor math. Segmented controls have their
 own primitive now ([[#SegmentedControl]]), so they are a `SegmentedControl` migration, not
 a `Button` one.
+
+A **wizard candidate row** is no longer raw *by design*: the life-path wizard's rows are
+[[#Choice table]] rows now. `EffectTargetWizard`'s `.etw-candidate` ([[gm-panels]]' file) is
+the last one standing, and migrating it is theirs to take or to leave.
 
 ### Trait instance editor
 
