@@ -18,15 +18,17 @@ import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
 
 const DESKTOP = { width: 1280, height: 950 }
-const TABLET_LANDSCAPE = { width: 1194, height: 834 }
-const TABLET_PORTRAIT = { width: 834, height: 1194 }
-const PHONE_PORTRAIT = { width: 390, height: 844 }
 
+// The human's four viewport modes, plus the one width that reaches the surface's
+// middle layout. `layout` is the *state under test*, not a restatement of the
+// viewport: the surface is responsive to its own container, and the container is
+// the modal's `min(560px, 96vw)`.
 const VIEWPORTS = [
-  ['desktop landscape', DESKTOP, true],
-  ['tablet landscape', TABLET_LANDSCAPE, true],
-  ['tablet portrait', TABLET_PORTRAIT, true],
-  ['phone portrait', PHONE_PORTRAIT, false],
+  ['desktop landscape', { width: 1280, height: 950 }, 'table', false],
+  ['tablet landscape', { width: 1194, height: 834 }, 'table', false],
+  ['tablet portrait', { width: 834, height: 1194 }, 'table', false],
+  ['phone portrait', { width: 390, height: 844 }, 'stack', true],
+  ['a 500px window (two columns)', { width: 500, height: 900 }, 'columns', true],
 ]
 
 // NEVER a real player character. Kael Drift is the project's testing character
@@ -169,7 +171,9 @@ const measure = (page) => page.evaluate(() => {
   const row = document.querySelector('.ct-row')
   const key = document.querySelector('.ct-cell-key')
   const cost = document.querySelector('.ct-cost')
+  const label = document.querySelector('.ct-label')
   const costBox = cost && cost.getBoundingClientRect()
+  const labelBox = label && label.getBoundingClientRect()
   const rowBox = row && row.getBoundingClientRect()
   return {
     containerW: ct.clientWidth,
@@ -180,6 +184,8 @@ const measure = (page) => page.evaluate(() => {
     rowW: rowBox && Math.round(rowBox.width),
     rowH: rowBox && Math.round(rowBox.height),
     costH: costBox && Math.round(costBox.height),
+    // Is the price beside the result (same line) or wrapped under it?
+    costBelowLabel: !!(costBox && labelBox) && costBox.top >= labelBox.bottom - 1,
     costText: cost && cost.innerText,
     rows: document.querySelectorAll('.ct-row').length,
     pips: Array.from(document.querySelectorAll('.ct-pip')).map((e) => e.innerText),
@@ -187,8 +193,15 @@ const measure = (page) => page.evaluate(() => {
 })
 
 // ── the viewport contract ────────────────────────────────────────────────────
+//
+// All three layouts the surface has, not just the ones the four named viewports
+// happen to produce: the modal is `min(560px, 96vw)`, so 834-wide portrait and
+// 1280-wide desktop give it the *same* 534px and only ever exercise the widest
+// state. The middle state (two columns, the price wrapped under the result) is
+// therefore driven by a viewport that lands the container in that band — it is a
+// real state of the component, and an unasserted one is an untested one.
 
-for (const [label, size, wide] of VIEWPORTS) {
+for (const [label, size, layout, stack] of VIEWPORTS) {
   test(`the table renders and fits at ${label}`, async ({ page }) => {
     const problems = []
     page.on('pageerror', (e) => problems.push('uncaught: ' + String(e)))
@@ -197,7 +210,7 @@ for (const [label, size, wide] of VIEWPORTS) {
     })
 
     await stub(page)
-    await seed(page, size, { stack: !wide })
+    await seed(page, size, { stack })
     await openCreateSupport(page)
 
     const m = await measure(page)
@@ -208,21 +221,31 @@ for (const [label, size, wide] of VIEWPORTS) {
     // Rows fill the surface rather than a fixed column width.
     expect(m.rowW).toBeGreaterThan(m.containerW - 2)
 
-    if (wide) {
-      // There is room: three columns, the legend up, the key cell present, and
-      // the cost on one line beside the result.
+    if (layout === 'table') {
+      // There is room: three columns, the legend up, the key present, and the
+      // cost on one line *beside* the result.
       expect(m.containerW).toBeGreaterThanOrEqual(520)
       expect(m.head, 'the column legend is up where there is room').not.toBe('(no legend)')
       expect(m.head).not.toBe('none')
       expect(m.key).not.toBe('(no key cell)')
       expect(m.key).not.toBe('none')
       expect(m.costH, 'the cost is not squeezed onto two lines').toBeLessThan(24)
-    } else {
-      // A phone: the columns collapse, the legend would label nothing, and the
-      // row still carries its key — that is what the dice found.
+      expect(m.costBelowLabel, 'the cost sits beside the result, not under it').toBe(false)
+    } else if (layout === 'columns') {
+      // Two columns: the cost has wrapped under the result, and the legend has
+      // gone with the column it labelled.
       expect(m.containerW).toBeLessThan(520)
+      expect(m.containerW).toBeGreaterThan(340)
+      expect(m.head, 'the legend leaves with the columns').toBe('none')
+      expect(m.key, 'the key survives').not.toBe('none')
+      expect(m.costBelowLabel, 'the cost wraps under the result').toBe(true)
+    } else {
+      // A phone: one column, and the row still carries its key — that is what the
+      // dice found, and it is the moment the row matters most.
+      expect(m.containerW).toBeLessThanOrEqual(340)
       expect(m.head, 'the legend is hidden once the columns collapse').toBe('none')
       expect(m.key, 'the key survives the collapse').not.toBe('none')
+      expect(m.costBelowLabel, 'the cost wraps under the result').toBe(true)
     }
 
     expect(problems, problems.join('\n')).toEqual([])
