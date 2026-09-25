@@ -16,9 +16,9 @@ aliases:
 
 > [!info] Built 2026-09-25 — **the drag gesture is the one piece not yet verified**
 > How a location's traits render on the map ([[B92]]'s rendering half). The chip,
-> the traits-tab filter and **placement** (`trait_positions`, the arrange-mode drag
-> and the `PUT /locations/{id}/trait-positions` endpoint) all landed; see *Built*
-> below and *What is still needed* for the single gap.
+> the traits-tab filter, **placement** (`trait_positions`, the arrange-mode drag and
+> the `PUT /locations/{id}/trait-positions` endpoint) and the **resting/open** form
+> all landed; see *Built* below and *What is still needed* for the single gap.
 
 ## The chip (human's spec, 2026-09-25)
 
@@ -42,6 +42,41 @@ A **chip**, in the same visual language as a trait row on the character sheet
 - **Right side: the trait's full rating**, rendered the way the sheet renders one —
   not the chip's own edge. A trait with several dice shows them all
   (`d6 d8 d6`), because live traits really do carry more than one.
+
+## Resting and open (human's spec, 2026-09-25)
+
+The chip above is the **open** form. At rest a placed chip is **only its marker** —
+its picture if it has one, else its rating — because a room with thirty traits in it
+must not be thirty labels. The words arrive when it opens.
+
+| | resting | open |
+| --- | --- | --- |
+| has a `navdot` picture | the picture alone | picture + name + statement + rating |
+| no picture | the rating alone | name + statement + rating |
+
+- **What opens it:** the **character's proximity** (the same radius and quadratic
+  curve the nav bubbles use — `EXPAND_PROXIMITY`, 24 image-%), the **pointer**, or a
+  **tap**.
+- **Proximity HOLDS.** The bubbles only expand *while a drag is running*: they are
+  driven from the drag frames and wiped on release. A chip is driven from a
+  `computed` over the character's position instead, so it stays open at rest and
+  after a drag — the human's stated difference. It measures from the character's own
+  body when that body is on this map, else the GM's free-roam dot, else nowhere:
+  `selfPos` falls back to the room's centre for the camera's sake, and opening chips
+  around a viewer who is standing nowhere would be a lie.
+- **A tap on a closed chip opens it; the tap after that plays it.** Resting there are
+  no words to read, so one tap must not spend a die. The stack's chips are always
+  open, so they still play on the first click.
+- **The stack never collapses.** It has no position to approach, and it is the legend
+  you read the map against (the human's call).
+- **The resting marker is given its own box** rather than deriving its width from the
+  picture: a cutout's `width: auto` is its intrinsic ratio, which is 0 until the file
+  decodes — a sliver on first paint, and permanent if the file ever 404s. A collapsed
+  chip also drops its padding and border, so its box — and therefore its click target
+  — is the marker, not an invisible pill.
+
+`e2e/tests/chip-proximity.spec.js` pins all of it on both engines, with both reads
+mocked so the geometry is exact.
 
 ## Only the trait tab's traits
 
