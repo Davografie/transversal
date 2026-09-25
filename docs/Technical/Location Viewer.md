@@ -171,15 +171,34 @@ and the pan (`panX`/`panY`) that anchors the self character (50/50 in the mobile
 `camera`/teaser mode, otherwise its `map_x`/`map_y`, with `TEASER_ZOOM` scaling
 the scene in teaser mode).
 
-**The scene also scales to the viewer's WIDTH** (`locationScale`: `760 / viewerWidth`,
-clamped 1–1.5, folded into `zoom`). Since everything in the scene layer is positioned in
+**The scene also scales to the viewer's WIDTH** (`locationScale`: `880 / viewerWidth`,
+clamped 1–2.2, folded into `zoom`). Since everything in the scene layer is positioned in
 `image-%`, the scene's size is what decides how far apart two chips or dots really sit:
 a chip is a fixed number of pixels, so the narrower the viewer, the smaller the share of
 the scene those pixels cover. The same location gave its nearest chip pair 44px apart on
-a 390px phone against 86px in the docked desktop view; the width compensation puts 66px
-between them on the phone and leaves the wide layout at exactly 1.0, so travel dots stay
-reachable where there is room. Raising the scale *flat* instead costs map coverage
-everywhere — at 1.1 the docked view stopped offering a reachable travel dot.
+a 390px phone against 86px in the docked desktop view; the compensation puts 66px between
+them and leaves the wide layout at exactly 1.0, so travel dots stay reachable where there
+is room. `880` is deliberately the docked view's own width: at `900` the wide layout
+picked up a 2% increase, and that alone was enough to put the docked view's travel dot
+out of reach — raising the scale *flat* costs map coverage everywhere.
+
+**Scale is bounded by the background art, not by taste.** Every location background in
+the database is at most 1080px wide (median 832; none reaches 1500), and the `background`
+role is served as the **`_Large`** variant — 478×700 — while an 832×1216 `_Original` sits
+beside it. A Pixel-class phone (412×915 CSS, DPR 2.625, ~817px viewer band) therefore
+draws the background at:
+
+| scale | scene tall (CSS) | drawn (device px) | vs `_Large` 700 | vs `_Original` 1216 |
+| --- | --- | --- | --- | --- |
+| 0.42 | 378 | 991 | 1.4× | 0.8× |
+| 1.0 | 899 | 2360 | 3.4× | 1.9× |
+| 1.845 | 1659 | 4355 | 6.2× | 3.6× |
+| 2.2 (cap) | 1978 | 5193 | 7.4× | 4.3× |
+
+So the background is upscaled in every configuration, before any compensation is applied:
+1:1 would need a scale of about **0.42**. Raising the cap buys map size and spends
+sharpness in proportion — the real levers are serving the `_Original` (1.74× linear) and
+larger source art, both outside this role.
 
 ```
 <viewer (overflow:hidden)>
