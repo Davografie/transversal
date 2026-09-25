@@ -236,11 +236,16 @@ and the files, because an owner that can own images has to clean them up —
 without that, deleting a trait seeds exactly the orphan class
 [[data-migration]] is already carrying 25 rows of.
 
-> [!note] Not built yet
-> The trait-shaped **generation** entry point (upload-first was the agreed
-> order), the registry editor's image controls in `gm/GmTraitEditPanel.vue`, and
-> the three partner surfaces above — those are owned by [[character-sheet]],
-> [[navigation]] and [[mcp-architect]], blocked on this half.
+> [!note] Built so far
+> Slice 1's media half has **landed**: the owner model, the collection rename and
+> backfill, owner-aware resolution and upload, GraphQL `Trait.image(role)`, and
+> the registry editor's Image section — upload, remove, and **cut out**. Nothing
+> else in slice 1 is media's.
+>
+> Not built: the trait-shaped **generation** entry point, slice 2's traitsetting
+> override, and the three partner surfaces above. Nothing *auto*-cuts a trait
+> image, because that rule hangs off a first *generated* image and trait
+> generation does not exist yet.
 
 ### Migrating the collection (`B200`)
 
@@ -272,8 +277,9 @@ the rollback.
 - `POST /animate/{entity_id}` — trigger async video-loop generation. Body may
   carry `image_id` to animate an existing image; when that image is
   `transparent`, the finished loop is matted (see below).
-- `POST /remove-background/{entity_id}` — body `{image_id}`; async, static
-  images only. Produces a new transparent cutout image (see below).
+- `POST /remove-background/{owner_id}` — body `{image_id}`; async, static
+  images only. Any owner: `?owner_kind=entity` (default) or `trait`. Produces a
+  new transparent cutout image (see below).
 - `POST /imagen/{entity_id}/cancel` — interrupt the active job.
 - `GET /imagen/jobs` — active generation/animation jobs + queue position.
 - `GET /imagen/loras` — available Flux LoRAs.
@@ -450,11 +456,31 @@ cutout that does not exist.
 
 ### Remove background (static cutout)
 
-`run_remove_background` turns an existing static image into a transparent
-cutout. It is **non-destructive**: the source is untouched and the result is a
-new `MediaImage` of type `cutout`, owned by the same entity *or projection* as
-the source, with `transparent=true` and no role tags (tag it `navdot` /`sheet`
-as needed).
+`run_remove_background(owner_id, image_id, display_name)` turns an existing
+static image into a transparent cutout. It is **non-destructive**: the source is
+untouched and the result is a new `MediaImage` of type `cutout`, owned by the
+same owner **and the same tier** as the source — the *source image* decides that,
+never the caller — with `transparent=true` and no role tags.
+
+It works for **any owner**:
+`POST /remove-background/{owner_id}?owner_kind=entity|trait` (`entity` is the
+default, so the image viewer's call is unchanged), and both the progress stream
+and the job registry at `GET /imagen/jobs` are keyed by `owner_id` — a trait's
+picture is cut out under the trait's id exactly as an entity's is under its own.
+`owner_id` and `display_name` are only the progress key and the file name; a
+trait has no `Entity` and needs none.
+
+> [!note] A trait's cutout becomes the trait's picture
+> The cutout lands untagged (the same non-destructive contract an entity cutout
+> has), and an untagged image renders on **none** of the three trait surfaces —
+> so the GM trait editor assigns the cutout all three roles once the job
+> completes. Role assignment strips siblings, which *moves* the picture to the
+> transparent version instead of leaving it invisible.
+>
+> Verified on the live stack: the cutout came back RGBA with all four corners
+> fully transparent and the subject opaque (70% of pixels transparent), the
+> source stayed RGB and untouched, and after adopting it all three roles resolved
+> to the cutout with `transparent: true`.
 
 Pipeline: read the source's `Large` variant → upload to ComfyUI →
 `bg_remove.json` → BiRefNet → alpha composite → RGBA PNG →
