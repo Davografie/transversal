@@ -240,8 +240,40 @@ def test_delete_trait_cascades_its_images():
     _cleanup(repo)
 
 
-# ── Entity behaviour, unchanged by the generalisation ─
+@requires_db
+async def test_deleting_a_trait_image_removes_its_files(tmp_path, monkeypatch):
+    """The variants must go with the record.
 
+    This is the bug the generalisation introduced and the suite could not see:
+    `delete_image` built the directory from the legacy `entity_id`, which is
+    empty for a trait, so it looked in the wrong place, deleted the row and left
+    the files behind. Asserting the row alone passes either way.
+    """
+    import transversal.imagen.orchestrator as orch
+
+    repo = _repo
+    _fixtures(repo)
+
+    monkeypatch.setattr(orch, "IMAGEN_DIR", tmp_path / "imagen")
+    monkeypatch.setattr(orch, "ANIMATED_DIR", tmp_path / "animated")
+    image_dir = tmp_path / "imagen" / TRAIT / "three_realms"
+    image_dir.mkdir(parents=True)
+    variant = image_dir / f"probe_{DEF_ID}_Large.webp"
+    variant.write_bytes(b"not really a webp")
+
+    repo.create_image(_trait_image(DEF_ID))
+    assert variant.exists()
+
+    orchestrator = orch.ImagenOrchestrator(repository=repo)
+    # `delete_image` returns the deleted document (truthy), not a bool.
+    assert await orchestrator.delete_image(DEF_ID)
+
+    assert not variant.exists()
+    assert repo.get_image(DEF_ID) is None
+    _cleanup(repo)
+
+
+# ── Entity behaviour, unchanged by the generalisation ─
 
 @requires_db
 def test_entity_projection_falls_back_to_the_entity_image():

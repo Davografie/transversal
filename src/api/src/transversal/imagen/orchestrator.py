@@ -626,7 +626,7 @@ class ImagenOrchestrator:
         if src.image_type == ImageType.ANIMATED:
             raise ValueError("Background removal only works on static images")
 
-        source_path = IMAGEN_DIR / f"{src.entity_id}/{src.universe}/{src.filename}_Large.{src.extension}"
+        source_path = IMAGEN_DIR / f"{src.owner_id}/{src.universe}/{src.filename}_Large.{src.extension}"
         if not source_path.exists():
             raise FileNotFoundError(f"Source image not found: {source_path}")
         source_bytes = source_path.read_bytes()
@@ -635,7 +635,7 @@ class ImagenOrchestrator:
         safe_name = _safe_filename(entity.name)
         safe_universe = _safe_filename(src.universe)
         base_name = f"{safe_name}_{safe_universe}_cut_{short_hash}"
-        output_subpath = f"{src.entity_id}/{src.universe}"
+        output_subpath = f"{src.owner_id}/{src.universe}"
         output_full = IMAGEN_DIR / output_subpath
         output_full.mkdir(parents=True, exist_ok=True)
 
@@ -669,8 +669,12 @@ class ImagenOrchestrator:
 
         entity_image = MediaImage(
             id=short_hash,
-            entity_id=src.entity_id,
-            projection_id=src.projection_id,
+            # The cutout belongs to the same owner and the same tier as its
+            # source, whatever kind that owner is — never assumed to be an
+            # entity with a projection.
+            owner_kind=src.owner_kind,
+            owner_id=src.owner_id,
+            variant_id=src.variant_id,
             universe=src.universe,
             image_type=ImageType.CUTOUT,
             roles=[],
@@ -702,9 +706,9 @@ class ImagenOrchestrator:
             return False
 
         if img.image_type == ImageType.ANIMATED:
-            base = ANIMATED_DIR / f"{img.entity_id}/{img.universe}"
+            base = ANIMATED_DIR / f"{img.owner_id}/{img.universe}"
         else:
-            base = IMAGEN_DIR / f"{img.entity_id}/{img.universe}"
+            base = IMAGEN_DIR / f"{img.owner_id}/{img.universe}"
 
         # Remove all variants (flat files by basename)
         for suffix in ["_Original.webp", "_Large.webp", "_Small.webp", "_Mini.webp", f".{img.extension}"]:

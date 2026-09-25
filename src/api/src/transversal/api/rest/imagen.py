@@ -299,7 +299,7 @@ async def generate_animation(
         repo = EntityRepository()
         img = repo.get_image(request.image_id)
         if img:
-            existing_image_path = f"{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
+            existing_image_path = f"{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}"
             source_transparent = img.transparent
             logger.info(f"Animating existing image: {existing_image_path} (transparent={source_transparent})")
 
@@ -339,7 +339,7 @@ async def remove_background(
         raise HTTPException(status_code=404, detail=f"Image '{request.image_id}' not found")
     if img.image_type == ImageType.ANIMATED:
         raise HTTPException(status_code=400, detail="Background removal only works on static images")
-    if img.entity_id != entity_id:
+    if img.owner_id != entity_id:
         raise HTTPException(status_code=400, detail=f"Image '{request.image_id}' does not belong to entity '{entity_id}'")
 
     logger.info(f"Enqueuing background removal for {entity_id} ({entity.name}) from image {request.image_id}")
