@@ -69,6 +69,28 @@ ACTIONS: list[EffectActionMeta] = [
         retired=True,
     ),
     EffectActionMeta(
+        action_id="set_trait_statement",
+        label="Set Trait Statement",
+        description=(
+            "Rewrite the statement on an existing trait instance — what the trait "
+            "*is* (a challenge redefined) rather than what it is rated. The prior "
+            "statement is recorded, so a duration can put it back."
+        ),
+        category="either",
+        effect_type="modify_trait",
+        effect_action="set_statement",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION",
+                       "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
+        fields=[
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="result", label="New Statement", field_type="text",
+                           required=True),
+        ],
+        supports_duration=True,
+        path_element=("trait",),
+        owner_elements=TRAIT_OWNER_ELEMENTS,
+    ),
+    EffectActionMeta(
         action_id="reduce_by_effect_die",
         label="Reduce by Effect Die",
         description=(

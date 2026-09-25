@@ -97,6 +97,7 @@ from transversal.domain.lifepath import (  # noqa: F401
 from transversal.domain.effects import (  # noqa: F401
     TargetRef,
     Effect,
+    EffectBranch,
     Timer,
     EffectDuration,
     ScheduledEvent,

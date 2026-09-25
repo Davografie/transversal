@@ -88,6 +88,10 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_trait", "set_polarity"): "set the polarity of {target}",
     ("modify_trait", "toggle"): "toggle {target}",
     ("modify_trait", "reveal"): "reveal {target}",
+    ("modify_trait", "set_statement"): "restate {target} as {result}",
+    # A choice node's clause is its options, which a template cannot list —
+    # `_effect_core` names them ("choose: let it stand, or change the statement").
+    ("branch", "choose"): "choose",
     ("create_entity", "create_asset"): "create the asset {target}",
     ("entity", "cancel_scheduled_event"): "end the active effect {target}",
     ("projection", "create"): "create the temporary projection {target}",

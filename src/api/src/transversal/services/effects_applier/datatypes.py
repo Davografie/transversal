@@ -56,6 +56,18 @@ class PendingChoice:
     field: str = "target"
 
 @dataclass
+class PendingBranch:
+    """A choice node that has been reached and is waiting for an answer.
+
+    ``options`` is ``(id, label)`` per branch, which is all a picker needs; the
+    effects themselves stay on the effect, so the answer is resolved by
+    ``resolve_branch_effects(effect, option_id)`` against the same authored object.
+    """
+    effect: Effect
+    options: list[tuple[str, str]] = field(default_factory=list)
+
+
+@dataclass
 class EffectsResult:
     """Everything produced by apply_effects, ready for the caller to persist."""
     applied: list[AppliedEffect] = field(default_factory=list)
@@ -70,6 +82,7 @@ class EffectsResult:
     updated_traitsetsettings: list = field(default_factory=list)
     entities_to_update: list[Entity] = field(default_factory=list)
     pending_choices: list[PendingChoice] = field(default_factory=list)
+    pending_branches: list[PendingBranch] = field(default_factory=list)
     passthrough: list[Effect] = field(default_factory=list)
     revealed: list[tuple[TraitSetting, str]] = field(default_factory=list)
     #: Instances an effect *found* rather than made or changed. Only a gain with

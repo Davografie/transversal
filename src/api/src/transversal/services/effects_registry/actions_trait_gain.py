@@ -173,4 +173,28 @@ ACTIONS: list[EffectActionMeta] = [
         path_element=("traitsetting",),
     ),
 
+
+    # ── Flow control ─────────────────────────────────────
+    # A **choice node** ([[B5]]): the effect is asked rather than applied, and the
+    # answer's own effects run. Its options are structured effects, so the editor's
+    # sub-form for them is the remaining client work; the action exists here so the
+    # picker offers it, the card names it, and validation can see it.
+    EffectActionMeta(
+        action_id="choose_branch",
+        label="Choice (branch)",
+        description=(
+            "Offer the player a labelled choice and run the chosen option's effects. "
+            "At a boundary (end of beat/scene/session) it is asked there, so the rule "
+            "holds its place instead of re-deriving what was chosen."
+        ),
+        category="either",
+        effect_type="branch",
+        effect_action="choose",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION",
+                       "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
+        fields=[],
+        context_fields=[_NOTES_CONTEXT_FIELD],
+        supports_duration=False,
+        requires_choice=True,
+    ),
 ]
