@@ -10,6 +10,7 @@ const loading = ref(false)
 const LIFE_PATH_FIELDS = `
   id name universe description entryTableId
   factionIds
+  conditions { type subject target targets value operator narrative spec }
   discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship }
 `
 
@@ -46,17 +47,17 @@ export function useLifePaths() {
     pathsByUniverse.value = next
   }
 
-  async function saveLifePath({ id, name, universe, description, entryTableId = '', discovery = null }) {
+  async function saveLifePath({ id, name, universe, description, entryTableId = '', discovery = null, conditions = [] }) {
     const isNew = !id
     const data = await graphql(
-      `mutation($id:String!,$name:String!,$universe:String!,$description:String!,$entryTableId:String!,$discovery:JSON){
-        saveLifePath(id:$id,name:$name,universe:$universe,description:$description,entryTableId:$entryTableId,discovery:$discovery)
+      `mutation($id:String!,$name:String!,$universe:String!,$description:String!,$entryTableId:String!,$discovery:JSON,$conditions:[ConditionInput!]){
+        saveLifePath(id:$id,name:$name,universe:$universe,description:$description,entryTableId:$entryTableId,discovery:$discovery,conditions:$conditions)
       }`,
-      { id: id || '', name, universe, description, entryTableId: entryTableId || '', discovery },
+      { id: id || '', name, universe, description, entryTableId: entryTableId || '', discovery, conditions: conditions || [] },
     )
     const result = data?.saveLifePath
     if (result?.ok) {
-      const full = { id: result.id, name, universe, description, entryTableId: entryTableId || '', discovery: discovery || null }
+      const full = { id: result.id, name, universe, description, entryTableId: entryTableId || '', discovery: discovery || null, conditions: conditions || [] }
       let placed = false
       _patchBuckets((list) => {
         const idx = list.findIndex(p => p.id === result.id)

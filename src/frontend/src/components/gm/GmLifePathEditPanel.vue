@@ -28,6 +28,18 @@
       <span class="lpe-hint">The first roll table of this path.</span>
     </div>
 
+    <div class="lpe-field">
+      <label>Conditions</label>
+      <!-- Walkability gate — may this character *walk* the path, as opposed to
+           `discovery`, which is the one-time reveal that it exists. `availableKeys`
+           is an empty list on purpose: a life path is a time-less gate with no
+           trigger and no source, so every condition type that reads a context key
+           is greyed out with its reason ("nothing to read here") and the offered
+           set is derived from the catalog rather than listed here. -->
+      <ConditionEditor v-model="form.conditions" :available-keys="[]" />
+      <span class="lpe-hint">A character may only walk this path while these pass.</span>
+    </div>
+
     <Button class="lpe-save" variant="success" solid :loading="saving" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save life path' }}</Button>
     <div v-if="error" class="lpe-error">{{ error }}</div>
   </div>
@@ -40,6 +52,7 @@ import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import Button from '@/components/ui/Button.vue'
+import ConditionEditor from './ConditionEditor.vue'
 import GmScopePicker from './GmScopePicker.vue'
 
 const panel = usePanel()
@@ -56,6 +69,9 @@ const form = reactive({
   universe: props.lp.universe || '',
   description: props.lp.description || '',
   entryTableId: props.lp.entryTableId || '',
+  // Copied, not aliased: the editor mutates in place, and the prop is the
+  // panel's own `lp` object — a cancelled edit must not leak into it.
+  conditions: (props.lp.conditions || []).map(c => ({ ...c })),
 })
 
 const entryTableOptions = ref([])
@@ -97,6 +113,7 @@ async function save() {
       description: form.description,
       entryTableId: form.entryTableId,
       discovery: props.lp.discovery || null,
+      conditions: form.conditions,
     })
     if (result?.ok) {
       bus.emit('lifepath-saved', { id: result.id, universe: form.universe, isNew: result.isNew })
