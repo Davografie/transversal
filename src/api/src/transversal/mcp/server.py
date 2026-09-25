@@ -113,7 +113,9 @@ def _rest_put(path: str, payload: Any) -> Any:
 
 _MUT_CREATE_ENTITY = """
 mutation($input: CreateEntityInput!) {
-  createEntity(input: $input) { id type name currentUniverse currentLocation unpublished }
+  createEntity(input: $input) {
+    id type name razmerit currentUniverse currentLocation starterLocation unpublished
+  }
 }
 """
 
@@ -129,7 +131,10 @@ mutation($input: UpdateEntityInput!) {
 
 _MUT_CREATE_RELATIONSHIP = """
 mutation($input: CreateRelationshipInput!) {
-  createRelationship(input: $input) { fromEntityId toEntityId type description }
+  createRelationship(input: $input) {
+    id fromEntityId toEntityId type description
+    relationTraits { id traitId relationshipType statement }
+  }
 }
 """
 
@@ -347,19 +352,31 @@ _MUT_REMOVE_TRAIT_SETTING = """
 mutation($id: ID!) { removeTraitSetting(id: $id) }
 """
 
+# Every readable field of a ``TraitRef``, so a registry write can be read back
+# from its own response rather than assumed. ``defaultEgo`` matters most: it is
+# what anchors an instance to the entity instead of the active projection, and
+# until this selection carried it a caller could set the flag and see nothing.
+_TRAIT_WRITE_FIELDS = (
+    "id name universes traitsetId defaultDieType defaultRatingType "
+    "possibleSfxIds defaultSfxIds possibleSubtraitIds possibleSubtraitsetIds "
+    "defaultEgo tags polarity displayNames { name universe ratings }"
+)
+
 _MUT_CREATE_TRAIT = """
 mutation($input: TraitInput!) {
-  createTrait(input: $input) { id name universes traitsetId defaultDieType defaultRatingType tags }
+  createTrait(input: $input) {
+    %s
+  }
 }
-"""
+""" % _TRAIT_WRITE_FIELDS
 
 _MUT_UPDATE_TRAIT = """
 mutation($id: ID!, $input: TraitUpdateInput!) {
   updateTrait(id: $id, input: $input) {
-    id name universes traitsetId defaultDieType defaultRatingType tags
+    %s
   }
 }
-"""
+""" % _TRAIT_WRITE_FIELDS
 
 _MUT_CREATE_TRAITSET = """
 mutation(
@@ -374,11 +391,31 @@ mutation(
 }
 """
 
-_MUT_SAVE_ROLL_TABLE = """
-mutation($input: RollTableInput!) {
-  saveRollTable(input: $input) { id name universe scheme }
-}
-"""
+# An effect is the substance of a rule: a four-field SFX response could not show
+# a condition or an action, so an author could write a rule and see none of it.
+_EFFECT_FIELDS = (
+    "timing type action target entity result dieFilter negative context "
+    "duration { timers { event remaining } combine } "
+    "targetSpec entitySpec ownerSpec resultSpec refs output "
+    "conditions { type subject target value operator narrative }"
+)
+
+_ROLL_ENTRY_FIELDS = (
+    "label description minValue maxValue weight tier "
+    "conditions { type subject target value operator narrative } "
+    "costEffects { %s } effects { %s }"
+) % (_EFFECT_FIELDS, _EFFECT_FIELDS)
+
+_MUT_SAVE_ROLL_TABLE = (
+    "mutation($input: RollTableInput!) {\n"
+    "  saveRollTable(input: $input) {\n"
+    "    id name universe lifePath scheme rollSource traitDiceCount die\n"
+    "    check { traitIds difficulty freeChoice }\n"
+    "    entries { " + _ROLL_ENTRY_FIELDS + " }\n"
+    "    boundVariables { name spec } canvasX canvasY\n"
+    "  }\n"
+    "}\n"
+)
 
 _MUT_SAVE_LIFE_PATH = """
 mutation(
@@ -392,11 +429,25 @@ mutation(
 }
 """
 
+# Every field of ``SfxInput`` that ``SfxRef`` exposes. An SFX is a rule, and its
+# rule *is* its conditions and effects — a four-field response (id, name,
+# description, trigger) let a caller author a rule and see none of it, so a
+# typo'd effect or a silently dropped placement was invisible.
+_SFX_WRITE_FIELDS = (
+    "id name description trigger limit sourceKind placement armingScope "
+    "listenerSpec acquireSpec implicit "
+    "boundVariables { name spec } conditions { type subject target value operator narrative } "
+    "duration { timers { event remaining } combine } "
+    "effects { %s }"
+) % _EFFECT_FIELDS
+
 _MUT_CREATE_SFX = """
 mutation($input: SfxInput!) {
-  createSfx(input: $input) { id name description trigger }
+  createSfx(input: $input) {
+    %s
+  }
 }
-"""
+""" % _SFX_WRITE_FIELDS
 
 _MUT_ADD_OWNER_SFX = """
 mutation($sfxId: ID!, $ownerRefs: [OwnerRefInput!]!) {
@@ -406,9 +457,11 @@ mutation($sfxId: ID!, $ownerRefs: [OwnerRefInput!]!) {
 
 _MUT_UPDATE_SFX = """
 mutation($input: SfxUpdateInput!) {
-  updateSfx(input: $input) { id name description trigger }
+  updateSfx(input: $input) {
+    %s
+  }
 }
-"""
+""" % _SFX_WRITE_FIELDS
 
 _MUT_DELETE_SFX = """
 mutation($id: ID!) {
@@ -658,18 +711,24 @@ def create_asset(args: dict) -> dict:
 
 
 def create_relationship(args: dict) -> dict:
+    payload = {
+        "fromEntityId": args["from_id"],
+        "toEntityId": args["to_id"],
+        "type": args["type"],
+        "description": args.get("description", ""),
+    }
+    # ``elevated`` resolves a non-structural edge's endpoints to the *entity*
+    # rather than to the active projection, so the tie outlives any one body.
+    # It is the lever the flashback design needs ("a tie that spans eras"), and
+    # omitting it silently produced projection-anchored ties instead.
+    if args.get("elevated") is not None:
+        payload["elevated"] = args["elevated"]
     steps = [_step(
         "createRelationship",
         _MUT_CREATE_RELATIONSHIP,
-        {
-            "input": {
-                "fromEntityId": args["from_id"],
-                "toEntityId": args["to_id"],
-                "type": args["type"],
-                "description": args.get("description", ""),
-            }
-        },
-        f"link {args['from_id']} --{args['type']}--> {args['to_id']}",
+        {"input": payload},
+        f"link {args['from_id']} --{args['type']}--> {args['to_id']}"
+        + (" (elevated to the entity)" if payload.get("elevated") else ""),
     )]
     return _run_steps(steps, args.get("dry_run", True))
 
@@ -1311,6 +1370,7 @@ _MUT_SET_AGENCY_MAIN = """
 mutation($input: SetAgencyMainInput!) {
   setAgencyMain(input: $input) {
     id name role lastMainEntityId mainEntity { id name }
+    agency { entityId main }
   }
 }
 """
@@ -2296,6 +2356,12 @@ TOOL_SCHEMAS = {
                 "to_id": {"type": "string"},
                 "type": {"type": "string", "description": "Edge type (membership, super, …)"},
                 "description": {"type": "string"},
+                "elevated": {
+                    "type": "boolean",
+                    "description": "Anchor a non-structural edge to the entity instead of the "
+                                   "active projection, so the tie outlives any one body (the "
+                                   "cross-era tie). Omit for the default.",
+                },
                 "dry_run": _dry_run_property(),
             },
             "required": ["from_id", "to_id", "type"],
