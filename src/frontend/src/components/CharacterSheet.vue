@@ -1163,9 +1163,44 @@ const visibleRows = computed(() => {
 // same set. Counts *picks*, not settings: a sub-trait rides its parent, while a
 // container contributes its children instead of itself.
 function limitReachedFor(t) {
-  const set = traitSets.value.find(ts => ts.traits.some(x => x.id === t.id))
+  const set = setOfTrait(t)
   if (!set || !set.limit) return false
   return countSetPicks(set.traits, isInPool) >= set.limit
+}
+
+/** The set a trait instance belongs to, as the sheet groups the settings. */
+function setOfTrait(t) {
+  return traitSets.value.find(ts => ts.traits.some(x => x.id === t.id)) || null
+}
+
+/**
+ * Land the reader back on the set list after adding a rating from the detail
+ * view (B185). The sets are an accordion (B178), not a drill-in, so "the
+ * traitset's trait list" is the set they came from — *opened*, since landing on
+ * a collapsed header would read as "the trait vanished". Nothing is closed: the
+ * sets a reader opened are theirs to keep, and several being open at once is the
+ * point of the accordion.
+ *
+ * B185 also asks to advance to the *next* set once this one's limit is reached.
+ * That clause belongs to the drill-in: the accordion has all the sets on screen
+ * at once with the limit dots filling as you pick, so there is no next list to
+ * go to, and the "full" answer only exists after the pool has round-tripped —
+ * which would make navigation off it racy. Recorded on the ticket, not built.
+ */
+function backToSetList(t) {
+  // Leaving the detail *is* the return; the rest is where it lands.
+  closeTraitDetail()
+  // Only the traits tab has a set list to come back to. The profile and relation
+  // tabs render their rows directly, so returning is just the line above — and
+  // expanding a set there would silently open a section of a *different* tab
+  // that the reader never asked for.
+  if (activeSheetView.value !== 'traits' || flatTraitList.value) return
+  const set = setOfTrait(t)
+  // Belt and braces: a row can only be clicked while its own set is open, so this
+  // is normally already satisfied. It states the requirement rather than relying
+  // on that, so a future entry point into the detail cannot land on a collapsed
+  // header and read as "the trait vanished".
+  if (set) expandSet(set.name)
 }
 
 // SFX usage tracking — reset per dice pool cycle
@@ -1594,10 +1629,13 @@ const projectionChoices = computed(() =>
 )
 
 // Helpers the read-only trait detail needs; functions only, so the child can
-// take them as one object without any unwrapping.
+// take them as one object without any unwrapping. Playing from the detail is a
+// navigation act as well as a play — the reader came here to find the trait, so
+// once its die is in the pool they want the list back (B185).
 const detailApi = {
-  canPlayTrait, playTrait, ratingTypeLabel, challengeProgressLabel, challengeRemainingGroups, detailContext,
+  canPlayTrait, ratingTypeLabel, challengeProgressLabel, challengeRemainingGroups, detailContext,
   displayName, sfxCardModel, activateSfx,
+  playTrait: async (t) => { await playTrait(t); backToSetList(t) },
 }
 
 // The inline trait editor's draft state + actions (see composables/useTraitEditor.js).
