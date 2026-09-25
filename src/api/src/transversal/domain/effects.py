@@ -60,6 +60,12 @@ class Effect(BaseModel):
     # (see ``EffectActionMeta.refs``); ``target``/``entity`` remain as the
     # legacy single-reference fallback until the Step-3 migration removes them.
     refs: dict[str, TargetRef] = Field(default_factory=dict)
+    # A **choice node**: the options this effect offers, each a labelled list of
+    # effects. Empty for every ordinary effect. When a branch is reached it is not
+    # applied — it is *asked*, and the answer's effects are applied instead
+    # (``effects_applier.resolve_branch_effects``). The rule keeps its place in the
+    # sequence, so a choice at a boundary parks there rather than being re-derived.
+    branches: list["EffectBranch"] = Field(default_factory=list)
     #: The author's name for *this step's result* ("beast"), bound into the
     #: activation scope so a later effect can `select variable {beast}` — when the
     #: action declares an ``output_element`` (what it produces). Empty = unnamed.
@@ -118,6 +124,18 @@ class ConsequenceOption(BaseModel):
     side: str = "player"  # "player" | "gm" | "either"
     effects: list[Effect] = Field(default_factory=list)
     source: str = "base"  # "base" | "entity" | "sfx"
+
+class EffectBranch(BaseModel):
+    """One option of a choice node: a label the player reads, and what it does.
+
+    ``id`` is stable and is what an answer names (so a re-ordered or re-labelled
+    option still means the same thing); it defaults to the option's position for
+    content authored before ids mattered.
+    """
+    id: str = ""
+    label: str = ""
+    effects: list[Effect] = Field(default_factory=list)
+
 
 class Condition(BaseModel):
     """A configurable, automatically-evaluated gate or limit.

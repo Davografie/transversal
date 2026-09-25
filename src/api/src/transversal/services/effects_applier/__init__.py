@@ -153,6 +153,8 @@ effect_registry = EffectRegistry()
 from transversal.services.effects_applier.entry import (  # noqa: F401
     apply_effects,
     resolve_effect_entity,
+    resolve_branch_effects,
+    branch_options,
     resolve_effect_owner,
     resolve_effect_result,
     _resolve_entity_spec,

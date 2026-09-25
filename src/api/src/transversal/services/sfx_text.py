@@ -1229,6 +1229,14 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
         # longer exposes it — reach is meant to come from how many targets the
         # "who" path resolves to.
         text = f"{text}, reaching everyone there"
+    if effect.type == "branch":
+        # The options *are* the clause: a card that says only "choose" hides the
+        # one thing the reader needs.
+        labels = [b.label or f"Option {i}" for i, b in enumerate(effect.branches or [], start=1)]
+        if labels:
+            text = "choose: " + ", or ".join(labels)
+        else:
+            text = "choose (no options authored)"
     if effect.type == "modify_trait" and effect.action == "set_polarity":
         # Which polarity *is* the effect ("set positive" vs "set negative"), and
         # the form's default hides that it was a choice — the same reason the

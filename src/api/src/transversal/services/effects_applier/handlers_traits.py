@@ -582,3 +582,32 @@ def _apply_reveal(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"revealed {target} to {learner}", ts.id))
     else:
         result.applied.append(AppliedEffect(effect, f"{learner} already knows {target}"))
+
+
+def _apply_set_statement(entity, effect, repo, result):
+    """Rewrite a trait instance's statement — what it *is*, not how it is rated.
+
+    The prior statement is recorded so a duration (or a take-back) restores it, which
+    is the whole difference between this and ``change`` (that re-points the instance
+    at a different registry trait; this keeps the trait and rewrites its statement).
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, repo)
+    if target is None:
+        return
+    ts = _find_traitsetting_by_target(subject, effect, repo, target)
+    if ts is None:
+        result.applied.append(AppliedEffect(effect, f"no trait {target} to restate"))
+        return
+    statement = (effect.result or "").strip()
+    if not statement:
+        result.applied.append(AppliedEffect(effect, f"no statement to set on {target}"))
+        return
+    prior = getattr(ts, "statement", "") or ""
+    ts.statement = statement
+    result.updated_trait_settings.append(ts)
+    result.applied.append(AppliedEffect(effect, f"{target} is now \u201c{statement}\u201d", ts.id))
+    _queue_trait_revert(repo, ts, effect, context_extra={"prior_statement": prior})

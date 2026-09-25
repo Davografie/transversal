@@ -6,7 +6,9 @@ from transversal.domain import Effect
 from transversal.domain import Entity
 from transversal.services.conditions import evaluate_conditions
 from transversal.services.effects_applier.datatypes import (
+    AppliedEffect,
     PendingChoice,
+    PendingBranch,
     BINDINGS_CONTEXT_KEY,
     EffectsResult,
 )
@@ -58,6 +60,7 @@ from transversal.services.effects_applier.handlers_sfx import (
     _apply_grant_sfx,
 )
 from transversal.services.effects_applier.handlers_traits import (
+    _apply_set_statement,
     _apply_change_trait,
     _apply_copy_trait,
     _apply_cortex_gain,
@@ -96,6 +99,7 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "cortex_gain"): _apply_cortex_gain,
     ("modify_trait", "step_up"): _apply_step_up,
     ("modify_trait", "step_down"): _apply_step_down,
+    ("modify_trait", "set_statement"): _apply_set_statement,
     ("modify_trait", "add_die"): _apply_add_die,
     ("modify_trait", "copy"): _apply_copy_trait,
     ("modify_trait", "move"): _apply_move_trait,
@@ -209,12 +213,59 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
         if effect.target_spec is not None and effect.target_spec.steps:
             _apply_spec_effect(effect, entity, repo, result, bindings)
             continue
+        # A **choice node** is asked, never applied: it reports its options and the
+        # work stops there for this effect (the caller presents them and resumes
+        # with `resolve_branch_effects`). An authored branch with no options is a
+        # defect, and says so rather than passing silently.
+        if _is_branch(effect):
+            options = branch_options(effect)
+            if options:
+                result.pending_branches.append(PendingBranch(effect=effect, options=options))
+            else:
+                result.applied.append(AppliedEffect(effect, "a choice with no options"))
+            continue
         handler = _MUTATION_HANDLERS.get((effect.type, effect.action))
         if handler is None:
             result.passthrough.append(effect)
             continue
         handler(entity, effect, repo, result)
     return result
+
+
+def _is_branch(effect: Effect) -> bool:
+    return effect.type == "branch"
+
+
+def branch_options(effect: Effect) -> list[tuple[str, str]]:
+    """``(id, label)`` per option — what a picker presents.
+
+    The id is the option's own when authored, else its position (1-based, so an
+    early hand-written branch means the same thing); an unlabelled option reads as
+    "Option N" rather than a blank button.
+    """
+    out: list[tuple[str, str]] = []
+    for index, branch in enumerate(effect.branches or [], start=1):
+        option_id = (getattr(branch, "id", "") or "").strip() or str(index)
+        label = (getattr(branch, "label", "") or "").strip() or f"Option {index}"
+        out.append((option_id, label))
+    return out
+
+
+def resolve_branch_effects(effect: Effect, option_id: str) -> list[Effect]:
+    """The effects an answer runs: the chosen option's list, or nothing.
+
+    Resolution is by the option's id, by its 1-based position, or by its label —
+    a picker sends whichever it has, and a label is what a client most often has.
+    An answer that names no option yields nothing, which is the honest reading of
+    "the choice was not made" (the caller decides whether that is a default).
+    """
+    wanted = str(option_id or "").strip()
+    if not wanted:
+        return []
+    for index, (oid, label) in enumerate(branch_options(effect), start=1):
+        if wanted in (oid, str(index), label):
+            return list((effect.branches or [])[index - 1].effects or [])
+    return []
 
 def _apply_spec_effect(effect: Effect, entity: Entity, repo, result: EffectsResult,
                        bindings: dict) -> None:
