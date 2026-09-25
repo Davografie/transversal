@@ -820,17 +820,35 @@ function openChild(spec) {
   panelLog('open', { childId: normalized.id, activeKey: activeKey.value })
 }
 
+// ── Child-close notification ──────────────────────────
+// Slot content that follows its own children needs to hear one go: the location
+// tree highlights the row whose panel is open, and a panel closed by its own ×
+// (or a chip, or Esc) never routes back through the opener (P7.18).
+//
+// `closeChild` is the one path every *close* takes, which is why the signal
+// lives there. **Detaching is deliberately not a close** — `detachChild` drops
+// the child into a floating window instead, where it is still open and still
+// registered under its own identity, so a listener keyed on a close correctly
+// leaves a detached panel's row lit.
+const childCloseListeners = new Set()
+function onChildClose(fn) {
+  childCloseListeners.add(fn)
+  return () => childCloseListeners.delete(fn)
+}
+
 // Closes a specific child by key, or the last child when no key is given.
 function closeChild(key) {
   const removing = key == null
     ? (children.value[children.value.length - 1]?.key ?? null)
     : key
+  const closing = children.value.find((c) => c.key === removing) || null
   children.value = key == null
     ? children.value.slice(0, -1)
     : children.value.filter((c) => c.key !== key)
   if (activeKey.value === removing) {
     activeKey.value = children.value[children.value.length - 1]?.key ?? null
   }
+  if (closing) for (const fn of childCloseListeners) fn(closing.spec)
   panelLog('close-child', { key: removing })
 }
 
@@ -961,6 +979,7 @@ provide(panelKey, {
   closeChild,
   close: closeSelf,
   replace: replaceSelf,
+  onChildClose,
 })
 </script>
 

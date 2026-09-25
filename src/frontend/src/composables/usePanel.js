@@ -8,6 +8,8 @@ import { inject, ref } from 'vue'
 //   closeChild(key?)       — close a specific child (or the last when omitted)
 //   close()                — close this panel (self)
 //   replace(spec)          — replace this panel with another spec
+//   onChildClose(fn)       — hear a child *close* (not detach); returns an
+//                            unsubscribe
 export const panelKey = Symbol('gm-panel')
 
 const NOOP_PANEL = {
@@ -15,6 +17,7 @@ const NOOP_PANEL = {
   closeChild: () => {},
   close: () => {},
   replace: () => {},
+  onChildClose: () => () => {},
 }
 
 export function usePanel() {

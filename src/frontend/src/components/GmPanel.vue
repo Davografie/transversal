@@ -150,6 +150,7 @@ const panel = usePanel()
 const bus = usePanelBus()
 let offCanvasInspect = null
 let offLocationsChanged = null
+let offChildClose = null
 
 const props = defineProps({
   universe: { type: String, default: 'earth' },
@@ -457,6 +458,22 @@ function onSelectUniverse(id) { toggleEntity({ id }) }
 function onSelectLocation(id) { toggleEntity({ id }) }
 function onSelectOccupant(e) { toggleEntity(e) }
 
+// The tree highlights the row whose entity panel is open, so the highlight has
+// to follow the *panel*, not the selection that opened it. A panel closed by its
+// own × (or a chip, or Esc) never routes back through `toggleEntity`, which left
+// the row lit while nothing was open — and, because the next click reads a lit
+// row as "already open", made that click close a panel that had already gone.
+// The panel reports its own closes; a *detached* panel is dropped into a
+// floating window rather than closed, so it keeps its row lit, which is why this
+// watches a close signal rather than the child list.
+function onPanelChildClose(spec) {
+  if (spec?.component !== GmEntityEditPanel) return
+  if (spec.id !== selectedId.value) return
+  editing.value = false
+  selected.value = null
+  selectedId.value = null
+}
+
 async function onSelectEntity(e) {
   const alreadyEditing = await selectEntity(e)
   if (!alreadyEditing) openEntityEdit()
@@ -656,11 +673,13 @@ onMounted(() => {
   fetchEntities(); fetchLocationTree(); fetchAgency(); startJobPolling()
   offCanvasInspect = bus.on('canvas:inspect', (id) => toggleEntity({ id }))
   offLocationsChanged = bus.on('locations-changed', () => { fetchLocationTree(); fetchEntities(); fetchAgency() })
+  offChildClose = panel.onChildClose(onPanelChildClose)
 })
 onUnmounted(() => {
   stopJobPolling()
   if (offCanvasInspect) offCanvasInspect()
   if (offLocationsChanged) offLocationsChanged()
+  if (offChildClose) offChildClose()
 })
 </script>
 
