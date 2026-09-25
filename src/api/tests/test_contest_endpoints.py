@@ -259,3 +259,46 @@ def test_an_outcome_effect_steps_the_result_the_contest_resolves_on(client, monk
     kael_state, _ = ct.get_contestants("loc-1", "kael")
     # The stored result carries the stepped die, not the one the client sent.
     assert kael_state.committed.effect_die == DieType.D8
+
+
+class TestCancelContest:
+    """The empty-pool exit for a mis-started contest ([[B118]])."""
+
+    def test_initiator_can_cancel_before_adding_dice(self, client):
+        _save_pool(client, "loc-1", "guard", [("d8", "agility")])
+        client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
+
+        r = client.post("/api/v1/locations/loc-1/pools/kael/cancel")
+        assert r.status_code == 200, r.text
+        assert r.json() == {"status": "cancelled"}
+
+        # A contest is shared state: the opponent must not be left holding a
+        # challenge to nothing, or the pair still reads as an active contest.
+        ct = ct_module.get_contest_tracker()
+        assert ct.get("loc-1", "kael") is None
+        assert ct.get("loc-1", "guard") is None
+        # The opponent's assembled dice are not the canceller's to throw away.
+        assert ss_module.get_scene_store().get_pool("loc-1", "guard")
+
+    def test_only_the_initiator_may_cancel(self, client):
+        _save_pool(client, "loc-1", "kael", [])
+        client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
+
+        r = client.post("/api/v1/locations/loc-1/pools/guard/cancel")
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "not_allowed"
+        assert ct_module.get_contest_tracker().get("loc-1", "kael") is not None
+
+    def test_cancel_blocked_once_dice_are_added(self, client):
+        _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
+        client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
+
+        # With dice on the table there is a contest to resolve, not to cancel —
+        # give-in is how a side leaves that one.
+        r = client.post("/api/v1/locations/loc-1/pools/kael/cancel")
+        assert r.json()["status"] == "not_allowed"
+        assert ct_module.get_contest_tracker().get("loc-1", "kael") is not None
+
+    def test_cancel_without_a_contest_is_a_no_op(self, client):
+        r = client.post("/api/v1/locations/loc-1/pools/kael/cancel")
+        assert r.json() == {"status": "no_contest"}

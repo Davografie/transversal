@@ -347,3 +347,41 @@ async def clear_pool(location_id: str, entity_id: str):
     ct.clear_pool(location_id, entity_id)
     broadcast_pool_change(location_id, entity_id, dice=[], phase="adding")
     return {"status": "cleared"}
+
+
+@router.post("/{location_id}/pools/{entity_id}/cancel")
+async def cancel_contest(location_id: str, entity_id: str):
+    """Cancel a contest the caller started, before they have rolled ([[B118]]).
+
+    A contest is *shared* state, so the initiator cannot simply walk away from
+    one: clearing only their own side would leave the opponent holding a
+    challenge to nothing, and the pair would still show up as an active contest.
+    So both sides' contest metadata goes, while only the canceller's pool is
+    cleared — the opponent may have dice assembled that are not theirs to lose.
+    Each side is told, because the opponent's screen is showing this contest.
+
+    Only the initiator may cancel it, and only while they have nothing rolled:
+    once a side has committed, the contest is a thing to resolve, and give-in is
+    how a side leaves that one.
+    """
+    ct = get_contest_tracker()
+    store = get_scene_store()
+    challenger, defendant = ct.get_contestants(location_id, entity_id)
+    if challenger is None or defendant is None:
+        return {"status": "no_contest"}
+    if challenger.entity_id != entity_id:
+        return {"status": "not_allowed", "reason": "Only the challenger can cancel"}
+    if challenger.committed is not None or store.get_pool(location_id, entity_id):
+        return {"status": "not_allowed", "reason": "You have already rolled"}
+
+    opponent_id = defendant.entity_id
+    store.clear_pool(location_id, entity_id)
+    ct.clear_pool(location_id, challenger.entity_id)
+    ct.clear_pool(location_id, defendant.entity_id)
+    broadcast_pool_change(location_id, entity_id, dice=[], phase="adding")
+    for eid in (entity_id, opponent_id):
+        _broadcast("contest_cancelled", location_id, eid, {
+            "entity_id": entity_id,
+            "opponent_id": opponent_id,
+        })
+    return {"status": "cancelled"}
