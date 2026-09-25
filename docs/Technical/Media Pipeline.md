@@ -1,7 +1,7 @@
 ---
 title: Media Pipeline
 date: 2026-09-06
-last-updated: 2026-09-11
+last-updated: 2026-09-25
 tags:
   - transversal
   - technical
@@ -34,10 +34,12 @@ Transversal]] model:
 - **Entity = soul** — the persistent identity.
 - **Projection = body** — one of possibly several per-universe incarnations.
 
-An image belongs to **a projection (body)** via `EntityImage.projection_id`.
-When `projection_id` is empty, the image is **entity-level** — the "soul
-default" that any body falls back to when it has no image of its own for a
-given role. One entity can have multiple projections even in the same universe
+An image belongs to an **owner** — an entity or a trait — and may sit one tier
+below it via `MediaImage.variant_id`: a **projection (body)** for an entity, a
+**traitsetting** for a trait. An empty `variant_id` is the owner-level
+**definition** image — the "soul default" that any body falls back to when it
+has no image of its own for a given role (and, for a trait, the canonical
+picture). One entity can have multiple projections even in the same universe
 (keys are `entity:universe`, `entity:universe:2`, …).
 
 Every image is tagged with one or more **canonical roles**:
@@ -50,20 +52,22 @@ Every image is tagged with one or more **canonical roles**:
 
 ## Data model
 
-> [!info] Planned change — the image owner
-> Traits are getting images (`B200`), which generalises this record's **owner**
-> from "an entity" to `owner_kind` + `owner_id` + `variant_id`, with a backfill
-> of existing rows. Everything below describes the model **as built today**;
-> [[Trait Images Design Log]] carries the target shape. Read it before changing
-> anything in this section.
+> [!info] The owner model (`B200`, landed 2026-09-25)
+> An image is owned by an **entity** or a **trait**, and may sit one tier below
+> its owner. The same change renamed the collection `entity_images` → `images`
+> and the class `EntityImage` → `MediaImage` (and the constant `ENTITY_IMAGES` →
+> `IMAGES`). [[Trait Images Design Log]] carries the decisions and the reasoning.
 
 `ImageType` (enum): `uploaded` · `imagen` · `animated` · `cutout`.
 
-`EntityImage` (`entity_images` collection) — one record per image file:
+`MediaImage` (`images` collection) — one record per image file:
 
 - `id` — uuid (`_key`).
-- `entity_id` — owning entity (soul).
-- `projection_id` — owning body; empty = entity-level default.
+- `owner_kind` — `entity` or `trait`.
+- `owner_id` — the owning record: an entity id (soul) or a registry trait id.
+  Ids are type-prefixed, which is why resolution needs no kind parameter.
+- `variant_id` — the tier below the owner; empty = the owner-level **definition**
+  image. A projection for an entity, a traitsetting for a trait.
 - `universe` — the universe the image was generated/uploaded in.
 - `image_type` — see above.
 - `roles` — subset of `background` / `sheet` / `navdot`.
@@ -75,10 +79,17 @@ Every image is tagged with one or more **canonical roles**:
 - `filename` — base name without variant suffix or extension.
 - `extension` — file extension (e.g. `webp`, `webm`, `mp4`).
 - `created_at` — ISO 8601.
+- `entity_id` / `projection_id` — **transitional mirrors** of `owner_id` /
+  `variant_id`. Rows written before the backfill carry only these, and the older
+  code still running against the shared database reads them, so they are kept in
+  sync in both directions. `update_image` normalises every write back through the
+  model, because a raw dict merge that updates one representation and not the
+  other is exactly how resolution ends up reading a stale owner. Dropped in a
+  later commit.
 
 ## Transparency
 
-`EntityImage.transparent` marks images whose background has been cut out. It is
+`MediaImage.transparent` marks images whose background has been cut out. It is
 **orthogonal to `roles`** — an image can be both `navdot`-tagged and transparent
 — and it is what lets the UI render a cutout differently from a full-bleed
 image (floating portrait instead of a cropped circle).
@@ -105,9 +116,14 @@ get the flag from the matting stage instead (see [[#Transparent animations]]).
 Static images are saved as WebP in several size variants:
 
 ```
-media/imagen/{entity_id}/{universe}/{filename}_{variant}.{ext}
+media/imagen/{owner_id}/{universe}/{filename}_{variant}.{ext}
     variant ∈ Original · Large (≤1024) · Small (≤240) · Mini (≤48)
 ```
+
+`owner_id` is the directory key, and it does not change when an entity gains a
+trait image: existing files stayed exactly where they were through the `B200`
+backfill. Trait images land under `media/imagen/trait-…/`, which cannot collide
+with entity keys because the ids are type-prefixed.
 
 Alpha survives the variant pass: sources with an alpha channel are converted
 RGBA→RGBA, so cutouts stay transparent in every variant.
@@ -121,7 +137,7 @@ RGBA→RGBA, so cutouts stay transparent in every variant.
 Animated loops live separately:
 
 ```
-media/animated/{entity_id}/{universe}/{filename}.{ext}   # .webm / .mp4 / .webp
+media/animated/{owner_id}/{universe}/{filename}.{ext}   # .webm / .mp4 / .webp
 ```
 
 Transparent loops are **VP9-alpha WebM** (`yuva420p`) written by the matting
@@ -133,20 +149,31 @@ above.
 
 ## Resolution
 
-The single resolution primitive is `EntityRepository.resolve_role_image(entity_id,
-role, projection_id, variant)`. Order of precedence:
+The single resolution primitive is
+`EntityRepository.resolve_role_image(owner_id, role, variant_id, variant)`.
+Order of precedence:
 
-1. The projection's own image carrying `role` (newest first).
-2. Entity-level image carrying `role` whose `universe` matches the projection's
+1. The variant's own image carrying `role` (newest first) — a projection's, or a
+   traitsetting's.
+2. The owner-level image carrying `role` whose `universe` matches the variant's
    **current**, then **origin**, universe.
-3. Any entity-level image carrying `role`.
+3. Any owner-level image carrying `role`.
 
-With no `projection_id`, only entity-level images are considered.
+With no `variant_id`, only owner-level images are considered.
 
-`resolve_role_image_entry(entity_id, role, projection_id)` runs the same
-resolution but returns the `EntityImage` record instead of a URL;
-`resolve_role_image` is a thin URL wrapper over it. Reach for the entry form
-whenever you need image metadata — `transparent` being the reason it exists.
+**The kind of owner never enters resolution.** Ids are type-prefixed
+(`character-…`, `loc-…`, `trait-…`), so the ladder is the same for an entity and
+a trait. The one rung that behaves differently is the universe match: it needs a
+projection to supply a universe to match against, and a trait has none, so it is
+simply skipped — which is what lets **one canonical trait image serve every
+universe the trait belongs to** (663 of the 802 live traits span more than one,
+up to 15 each). Trait images are stored in a universe for provenance, not as a
+filter.
+
+`resolve_role_image_entry(owner_id, role, variant_id)` runs the same resolution
+but returns the `MediaImage` record instead of a URL; `resolve_role_image` is a
+thin URL wrapper over it. Reach for the entry form whenever you need image
+metadata — `transparent` being the reason it exists.
 
 ### GraphQL surface
 
@@ -162,6 +189,10 @@ whenever you need image metadata — `transparent` being the reason it exists.
   booleans mirroring the sheet resolution above, so the sheet can render a
   cutout portrait differently. The legacy denormalized background fallback has
   no alpha information and reports `false` (opaque).
+- `Trait.image(role)` / `Trait.imageTransparent(role)` — the trait's picture for
+  a role, using the same role→variant map (`sheet` → `Small`), so a trait image
+  and an entity portrait follow one size convention. Resolved at the trait's
+  definition tier: role-filtered, universe-ignoring (`B200`).
 
 There is deliberately **no** fallback to the legacy `background_image` field
 from the role-based `image()` resolver — callers that want a role image use the
@@ -181,10 +212,61 @@ navigate endpoint surfaces it as `image_transparent` on occupants and
 Those two flags are what the map uses to float a cutout navdot instead of
 cropping it into a filled dot.
 
+### Traits as image owners
+
+A **trait** is an owner on the same ladder (`B200`). Its definition image is the
+trait's canonical picture; slice 2 lets a **traitsetting** override it per
+instance, exactly as a projection overrides an entity.
+
+**Roles are not ignored for traits** — the human's decision, 2026-09-25 — and
+each has a real surface, so they are not decorative:
+
+| role | trait surface | surface owner |
+| --- | --- | --- |
+| `sheet` | the trait's picture in the sheet row and the trait detail panel | [[character-sheet]] |
+| `background` | the trait detail panel's backdrop | [[character-sheet]] |
+| `navdot` | the trait's marker in the location-viewer scene (the chip) | [[navigation]] |
+
+The **sole-image rule applies here too**, so a trait's first image takes all
+three roles and renders in all three places without its author thinking about
+roles at all.
+
+A trait's images are **cascaded on deletion**: `delete_trait` removes the rows
+and the files, because an owner that can own images has to clean them up —
+without that, deleting a trait seeds exactly the orphan class
+[[data-migration]] is already carrying 25 rows of.
+
+> [!note] Not built yet
+> The trait-shaped **generation** entry point (upload-first was the agreed
+> order), the registry editor's image controls in `gm/GmTraitEditPanel.vue`, and
+> the three partner surfaces above — those are owned by [[character-sheet]],
+> [[navigation]] and [[mcp-architect]], blocked on this half.
+
+### Migrating the collection (`B200`)
+
+```bash
+docker compose exec api python -m transversal.migrate_images_owner          # dry run
+docker compose exec api python -m transversal.migrate_images_owner --apply  # write
+```
+
+One idempotent pass that both renames `entity_images` → `images` and stamps the
+owner fields, because the two touch the same documents. It preserves `_key`
+(image ids are referenced by stored rows), never overwrites a key already
+present, and is safe to re-run — which is how it picks up images the *older* code
+writes during the transition, since the containers at `:3000` keep running
+`release-build` until the branch merges. `entity_images` is **left in place** as
+the rollback.
+
 ## REST API
 
 - `POST /media/upload` — upload a file; convert to WebP, save variants, register
-  an `EntityImage`, auto-select roles when it is the sole entity-level image.
+  a `MediaImage`, auto-select all three roles when it is the sole image on its
+  rung. Takes `owner_kind` (`entity` | `trait`), `owner_id`, `variant_id` and
+  `universe`; `entity_id` / `projection_id` are still accepted as aliases
+  because two frontend callers send them. Registration is **best-effort**: if
+  the owner does not exist, or a trait belongs to no universe and none was
+  named, the file is still written and `image_id` comes back null rather than
+  failing an upload whose file already landed.
 - `POST /imagen/{entity_id}` — trigger async static generation (optional
   `projection_id` in body → per-projection generation).
 - `POST /animate/{entity_id}` — trigger async video-loop generation. Body may
@@ -346,7 +428,7 @@ exactly the prompt it did before.
 ### Imagen (static)
 
 `run_imagen` → ComfyUI Flux → `_save_image_variants` (Original/Large/Small/Mini
-WebP) → `EntityImage`. If the result is the sole image for its owner, all three
+WebP) → `MediaImage`. If the result is the sole image for its owner, all three
 roles are auto-selected.
 
 **The first image generated for a projection is also cut out** (`B166`). The
@@ -370,7 +452,7 @@ cutout that does not exist.
 
 `run_remove_background` turns an existing static image into a transparent
 cutout. It is **non-destructive**: the source is untouched and the result is a
-new `EntityImage` of type `cutout`, owned by the same entity *or projection* as
+new `MediaImage` of type `cutout`, owned by the same entity *or projection* as
 the source, with `transparent=true` and no role tags (tag it `navdot` /`sheet`
 as needed).
 
@@ -498,13 +580,13 @@ from the repo), so editing a workflow needs no image rebuild.
 ## Role assignment & auto-select
 
 Roles are **unique per (owner, role)**, where owner = `projection_id` when set,
-else `entity_id`. Assigning a role strips it from sibling images with the same
+else `owner_id`. Assigning a role strips it from sibling images with the same
 owner.
 
 Auto-select of all three roles happens whenever an image becomes the **sole**
 image in its owner scope:
 
-- **upload** — sole entity-level image.
+- **upload** — sole image on its rung (the owner's definition tier).
 - **generation** — sole image for the entity or projection.
 - **drop** — dragging an image onto an empty entity/projection gallery.
 
@@ -558,9 +640,12 @@ everything else is re-encoded to WebP. Size cap is 10 MB.
 > now rejected at upload. The removal is deliberate; don't re-add it without a
 > sanitizer.
 
-`entity_id` and `universe` become filesystem path components, so both are
-validated against `_SAFE_COMPONENT`
+`owner_id`, `variant_id` and `universe` all become filesystem path components, so
+all three are validated against `_SAFE_COMPONENT`
 (`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`) before anything touches disk — no
-separators, no `..`, no leading dot. The *stored* `current_universe` is
-validated on the same path, so a bad value already in the data cannot traverse
-either. A failure is a 400.
+separators, no `..`, no leading dot. A bad *request* value is a 400. The *stored*
+universe (`current_universe`, or a trait's first listed universe) is validated on
+the same path, so a bad value already in the data cannot traverse either — but
+that check runs inside the best-effort registration block, so it skips the gallery
+row rather than failing an upload whose file has already been written, which is
+what `test_media_upload_guard.py` pins.
