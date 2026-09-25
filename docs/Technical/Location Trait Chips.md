@@ -14,11 +14,11 @@ aliases:
 
 # Location Trait Chips
 
-> [!info] Built 2026-09-25 — **the drag gesture is the one piece not yet verified**
-> How a location's traits render on the map ([[B92]]'s rendering half). The chip,
-> the traits-tab filter, **placement** (`trait_positions`, the arrange-mode drag and
-> the `PUT /locations/{id}/trait-positions` endpoint) and the **resting/open** form
-> all landed; see *Built* below and *What is still needed* for the single gap.
+> [!info] Built 2026-09-25 — **verified end to end, drag included**
+> How a location's traits render on the map ([[B92]]'s rendering half). The chip, the
+> traits-tab filter, **placement** (`trait_positions`, the arrange-mode drag and the
+> `PUT /locations/{id}/trait-positions` endpoint) and the **resting/open** form all
+> landed, and the drag gesture is no longer a hand-check. See *Built* below.
 
 ## The chip (human's spec, 2026-09-25)
 
@@ -69,6 +69,9 @@ must not be thirty labels. The words arrive when it opens.
   open, so they still play on the first click.
 - **The stack never collapses.** It has no position to approach, and it is the legend
   you read the map against (the human's call).
+- **Arrange mode opens every chip.** The GM is placing these, and you cannot place what
+  you cannot read — otherwise dragging means chasing an unlabelled marker around the
+  map. The zone and nav dots already follow this rule (`:expanded="editZones || …"`).
 - **The resting marker is given its own box** rather than deriving its width from the
   picture: a cutout's `width: auto` is its intrinsic ratio, which is 0 until the file
   decodes — a sliver on first paint, and permanent if the file ever 404s. A collapsed
@@ -190,14 +193,14 @@ rating, the order the sheet's trait rows use.
 
 ## What is still needed
 
-**Only the drag gesture itself is unverified.** Everything it drives is proven:
-the endpoint round-trips, a stored position renders as a scene chip (out of the
-stack, with its fanned dice), and it survives a reload. But the *gesture* needs GM
-arrange mode, and the testing character's player is **not an architect**, so the
-e2e harness cannot enter it — it stays a hand-check. The gesture is the same
-composable the nav dots already use, gated on the same `editZones`.
+**Nothing on the chip is hand-checked any more.** The last gap — the drag *gesture* —
+closed on 2026-09-25: arrange mode is architect-only and the role comes from the
+player read, so `e2e/tests/chip-proximity.spec.js` mocks that read to `architect`
+instead of needing one of the human's own devices, drags a real chip, and asserts both
+that it moved and that the positions write fired. The gesture is the same composable
+the nav dots use, gated on the same `editZones`.
 
-Two things worth knowing for whoever tests it:
+Things worth knowing:
 
 - **A chip's first drag lands it under the pointer**, wherever the pointer was in
   the stack — not at the scene centre. If that feels wrong, the fallback is the one

@@ -265,9 +265,9 @@ here because they are the viewer's:
   in `e2e/tests/trait-chip-marker.spec.js`. See [[Location Trait Chips]] §marker.
 - **A placed chip rests as its marker and opens near the character.** Proximity here is
   a `computed` over `selfPos`, not the drag-time `expandLevels` the bubbles use, because
-  a chip has to *stay* open at rest; the pointer and a tap open it too, and a tap on a
-  closed chip opens it rather than playing it. The auto-stack never collapses. See
-  [[Location Trait Chips]] §resting and open.
+  a chip has to *stay* open at rest; the pointer and a tap open it too, a tap on a
+  closed chip opens it rather than playing it, and **arrange mode opens them all**. The
+  auto-stack never collapses. See [[Location Trait Chips]] §resting and open.
 
 Zones and nav dots show the destination's background as their expanded image
 (the `navdot_image` role) — the "hole": an inner `<img>` sized as the
