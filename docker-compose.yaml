@@ -119,3 +119,4 @@ volumes:
     external: true
   ollama_data:
     name: code_ollama_data
+    external: true
