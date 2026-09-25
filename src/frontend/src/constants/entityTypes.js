@@ -65,3 +65,35 @@ export function buildAgencyIndex(players) {
   return map
 }
 
+/**
+ * Which players hold each entity, from the same `players { name agency }`
+ * payload — the index a **player filter** needs (B188).
+ *
+ * Deliberately not {@link buildAgencyIndex}: that answers "which ONE player is
+ * this" for the PC(MC)/PC(SC) buckets, and collapsing to a single holder would
+ * make a character invisible to the filter under any *other* record that holds
+ * it. One human's per-device identities each hold their characters, so
+ * `character-20809` is held by eight player records live; a filter for one of
+ * them must find it rather than lose to whichever record the bucket rule picked.
+ *
+ * `holders` is entity → the set of player ids holding it; `byPlayer` lists the
+ * players worth offering, i.e. those holding something.
+ */
+export function buildPlayerHoldings(players) {
+  const byPlayer = new Map()
+  const holders = new Map()
+  for (const p of players || []) {
+    const edges = (p.agency || []).filter((e) => e?.entityId)
+    if (!edges.length) continue
+    byPlayer.set(p.id, { id: p.id, name: p.name || p.id })
+    for (const e of edges) {
+      if (!holders.has(e.entityId)) holders.set(e.entityId, new Set())
+      holders.get(e.entityId).add(p.id)
+    }
+  }
+  return { byPlayer, holders }
+}
+
+/** The empty {@link buildPlayerHoldings} shape, for callers with no players yet. */
+export const NO_PLAYER_HOLDINGS = { byPlayer: new Map(), holders: new Map() }
+

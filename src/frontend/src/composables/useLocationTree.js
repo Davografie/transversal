@@ -115,13 +115,15 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
     _groupOccupants(entities?.value ?? filteredEntities?.value ?? [], false))
 
   // ── Filter-aware location helpers ──────────────────
-  // A chip that names entities or their status, as opposed to a universe chip.
-  // The distinction is what the tree's pruning keys off: these chips mean "show
-  // the paths to whatever matched" (`filterMode`), while universe chips prune by
-  // universe instead, and the two combine as a union.
+  // A chip that selects entities — by type, by name, by status, or by the player
+  // holding them — as opposed to a universe chip. The distinction is what the
+  // tree's pruning keys off: these chips mean "show the paths to whatever
+  // matched" (`filterMode`), while universe chips prune by universe instead, and
+  // the two combine as a union.
   const hasEntityChip = computed(() =>
     (activeFilters?.value ?? []).some(f =>
-      f.type === 'entityType' || f.type === 'name' || f.type === 'unpublished')
+      f.type === 'entityType' || f.type === 'name' || f.type === 'unpublished' ||
+      f.type === 'player')
   )
 
   const activeUniverseFilters = computed(() => {

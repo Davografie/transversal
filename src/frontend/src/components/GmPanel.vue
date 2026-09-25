@@ -132,7 +132,7 @@ import Button from '@/components/ui/Button.vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLocationTree } from '@/composables/useLocationTree.js'
 import { useEntityFilter } from '@/composables/useEntityFilter.js'
-import { buildAgencyIndex } from '@/constants/entityTypes.js'
+import { buildAgencyIndex, buildPlayerHoldings, NO_PLAYER_HOLDINGS } from '@/constants/entityTypes.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
@@ -189,6 +189,18 @@ function startSession() { emit('start-session') }
 function endSession() { emit('end-session') }
 
 // ── Filtering (entities) ────────────────────────────
+// Who holds agency over each entity, for the tree's PC(MC)/PC(SC) buckets, and
+// which players hold each entity, for the player chips (B188). Both are filled
+// by `fetchAgency` below from ONE read for the whole roster (`players {
+// name agency }`) rather than an entity field: `Entity.agency` resolves with
+// queries of its own, which is fine for a sheet's handful of contacts and
+// ruinous over a ~970-entity tree. They are two views of the same payload and
+// deliberately not one: the buckets need the single holder the backend's
+// `get_agency_for_entity` rule picks, while the filter must not hide a character
+// from a player who holds it.
+const agencyByEntity = ref(new Map())
+const playerHoldings = ref(NO_PLAYER_HOLDINGS)
+
 const {
   activeFilters, filterInput, showSuggestions,
   filteredEntities, filteredFactions,
@@ -198,7 +210,7 @@ const {
   optionId: filterOptionId,
   activeDescendant: filterActiveDescendant,
   moveHighlight,
-} = useEntityFilter(entities)
+} = useEntityFilter(entities, playerHoldings)
 
 // The filter's suggestion list is keyboard-navigable (it was mouse-only): the
 // list mechanics are the shared combobox, so arrows/Enter work as they do in
@@ -224,13 +236,6 @@ watch(() => props.entityId, (id) => {
   const ent = entities.value.find((e) => e.id === id)
   activeFilters.value = [{ type: 'name', value: id, label: ent?.name || id }]
 }, { immediate: true })
-
-// Who holds agency over each entity, for the tree's PC(MC)/PC(SC) buckets —
-// filled by `fetchAgency` below. One read for the whole roster (`players {
-// agency }`) rather than an entity field: `Entity.agency` resolves with queries
-// of its own, which is fine for a sheet's handful of contacts and ruinous over a
-// ~970-entity tree.
-const agencyByEntity = ref(new Map())
 
 // ── Location tree ───────────────────────────────────
 const {
@@ -641,8 +646,9 @@ async function onMoveEntity({ entityId, entityKind, targetId, targetKind, target
 // ── Lifecycle ───────────────────────────────────────
 async function fetchAgency() {
   try {
-    const data = await graphql(`{ players { id agency { entityId main } } }`)
+    const data = await graphql(`{ players { id name agency { entityId main } } }`)
     agencyByEntity.value = buildAgencyIndex(data?.players)
+    playerHoldings.value = buildPlayerHoldings(data?.players)
   } catch {}
 }
 

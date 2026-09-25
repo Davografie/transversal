@@ -1,11 +1,15 @@
 import { ref, computed } from 'vue'
-import { ENTITY_TYPES } from '@/constants/entityTypes.js'
+import { ENTITY_TYPES, NO_PLAYER_HOLDINGS } from '@/constants/entityTypes.js'
 import { useCombobox } from '@/composables/useCombobox.js'
 
 // Entity filtering and autocomplete for the GM panel. Takes the reactive
 // entity list from useEntityCrud and exposes the filter bar state, the
 // filtered projections, and the suggestion autocomplete.
-export function useEntityFilter(entities) {
+//
+// `playerHoldings` is optional and only enables the player chips (B188): the
+// structure `buildPlayerHoldings` returns, or absent, in which case no player
+// is offered and nothing else changes.
+export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDINGS)) {
   const activeFilters = ref([])
   const filterInput = ref('')
 
@@ -82,6 +86,9 @@ export function useEntityFilter(entities) {
       if (f.type === 'universe') return e.currentUniverse === f.value
       if (f.type === 'entityType') return e.type === f.value
       if (f.type === 'unpublished') return !!e.unpublished
+      // A player chip is "the characters that player holds", so it asks the
+      // holders index rather than the entity: agency is an edge, not a field.
+      if (f.type === 'player') return !!playerHoldings.value?.holders?.get(e.id)?.has(f.value)
       if (f.type === 'name') {
         if (fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value)) return true
         const scope = matchedScope.value
@@ -150,6 +157,21 @@ export function useEntityFilter(entities) {
         filterValue: t,
         filterLabel: t.charAt(0) + t.slice(1).toLowerCase(),
         terms: [t],
+      })
+    }
+    // Players, ahead of the entity names: typing a person's name should reach
+    // the chip for that player before it drowns in entities called after them.
+    // Only players who hold something are offered — a chip that can match nothing
+    // is a dead end.
+    for (const p of playerHoldings.value?.byPlayer?.values() || []) {
+      out.push({
+        id: 'player:' + p.id,
+        name: p.name,
+        hint: 'player',
+        filterType: 'player',
+        filterValue: p.id,
+        filterLabel: p.name,
+        terms: [p.name, p.id].filter(Boolean),
       })
     }
     for (const e of entities.value) {
