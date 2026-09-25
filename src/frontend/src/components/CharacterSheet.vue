@@ -1416,6 +1416,10 @@ const sfxActivations = ref({})
 const seededInFlight = ref(new Set())  // what the server last reported as in flight
 const sfxCatalog = ref({})  // sfxId → { name, description }
 const availableSfxIds = ref(null)  // null = not loaded; else the conditions-filtered id list
+// Why a listed-but-unavailable rule is unavailable: id -> [phrase per unmet
+// condition]. `availableSfxIds` can only say yes/no, which is how a card ends up
+// greyed with no reason ([[B193]]); the server answers the *which*.
+const sfxUnmetReasons = ref({})
 // The rules the place you're standing in lends you: [{ locationId, locationName,
 // sfxIds }]. Nothing is attached to the entity — this is where the place's own
 // rules get a button to be pressed, which attached-only strips never gave them.
@@ -2392,7 +2396,15 @@ function sfxConditionBlocked(sfxId) {
 }
 
 function sfxTitle(sfxId) {
-  if (sfxConditionBlocked(sfxId)) return `${sfxName(sfxId)} (conditions not met)`
+  if (sfxConditionBlocked(sfxId)) {
+    // The server's phrases carry an `unmet:` prefix so they cannot read as the
+    // condition itself; the title supplies its own framing, so it is dropped here.
+    const detail = (sfxUnmetReasons.value[String(sfxId)] || [])
+      .map((r) => String(r).replace(/^unmet:\s*/, '')).join('; ')
+    return detail
+      ? `${sfxName(sfxId)} (conditions not met: ${detail})`
+      : `${sfxName(sfxId)} (conditions not met)`
+  }
   return sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`
 }
 
@@ -2427,9 +2439,32 @@ async function fetchAvailableSfxIds() {
       { id, u: props.universe },
     )
     availableSfxIds.value = (data?.availableSfxIds || []).map(String)
+    await fetchSfxUnmetReasons(id)
   } catch (e) {
     console.error('fetchAvailableSfxIds', e)
     availableSfxIds.value = null
+    sfxUnmetReasons.value = {}
+  }
+}
+
+// The *why* behind a greyed card. Asked for the rules the sheet can render, so the
+// answer is only about what is on screen.
+async function fetchSfxUnmetReasons(entityId) {
+  const ids = Object.keys(sfxCatalog.value || {})
+  if (!entityId || !ids.length) { sfxUnmetReasons.value = {}; return }
+  try {
+    const data = await graphql(
+      `query($id: ID!, $u: String!, $ids: [ID!]) {
+         unavailableSfx(entityId: $id, universe: $u, sfxIds: $ids) { sfxId reasons }
+       }`,
+      { id: entityId, u: props.universe, ids },
+    )
+    const map = {}
+    for (const row of data?.unavailableSfx || []) map[String(row.sfxId)] = row.reasons || []
+    sfxUnmetReasons.value = map
+  } catch (e) {
+    console.error('fetchSfxUnmetReasons', e)
+    sfxUnmetReasons.value = {}
   }
 }
 
@@ -2509,6 +2544,10 @@ async function fetchSfxCatalog() {
     const map = {}
     for (const s of json?.data?.sfxs || []) map[s.id] = s
     sfxCatalog.value = map
+    // The reasons are asked for *these* rules, so the catalog has to be in hand
+    // first; whichever fetch finishes last refreshes them.
+    const id = props.overrideEntityId || props.entityId
+    if (id && availableSfxIds.value != null) await fetchSfxUnmetReasons(id)
   } catch (e) {
     console.error('fetchSfxCatalog', e)
   }
