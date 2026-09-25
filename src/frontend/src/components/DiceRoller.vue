@@ -194,10 +194,11 @@
             @pointerup="manualDragEnd"
             @pointercancel="manualDragEnd"
           >
-            <DieIcon :die="d.die" :result="manualFaces[i] || 0" :label="d.label || d.die" />
-            <!-- The face box opens on tap; until then the value sits under the
-                 die. A screenful of empty boxes, with the commit button below
-                 them, reads as a form to fill before you can roll. -->
+            <!-- The die face *is* the readout: it shows the entered number, and
+                 its own size (d8) until a face is set. `null`, not 0 — a 0 would
+                 render as a literal zero, which no die has. -->
+            <DieIcon :die="d.die" :result="manualFaces[i] ?? null" :label="d.label || d.die" />
+            <!-- The box opens on tap, and until then there is nothing to fill in. -->
             <input
               v-if="manualEditing === i"
               :ref="el => setManualInput(i, el)"
@@ -212,7 +213,6 @@
               @blur="manualEditing = null"
               @input="setManualFace(i, $event.target.value)"
             />
-            <span v-else class="manual-value" :class="{ unset: manualFaces[i] == null }">{{ manualFaces[i] ?? '–' }}</span>
           </div>
         </div>
         <div class="manual-count">{{ manualSetCount }} / {{ manualDice.length }} set</div>
@@ -2513,16 +2513,14 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   padding: 2px 4px; border-radius: 8px; border: 1px solid transparent;
 }
 .manual-die.editing { border-color: var(--accent-dim); background: var(--overlay-6); }
-.manual-value {
-  min-width: 22px; text-align: center; font-size: 15px; font-weight: 700; color: var(--text);
-}
-.manual-value.unset { color: var(--text-dim); font-weight: 400; }
+/* A die with no face yet shows its size instead of a number; dimming it is what
+   says "still to do" now that there is no separate readout under it. */
+.manual-die:not(.set) :deep(.die-icon) { opacity: 0.5; }
 .manual-face-input {
   width: 46px; text-align: center; font-size: 16px; font-weight: 700; padding: 3px;
   border-radius: 6px; border: 1px solid var(--overlay-12);
   background: var(--bg-input); color: var(--text);
 }
-.manual-die:not(.set) .manual-value { border-bottom: 1px dashed var(--overlay-12); }
 .manual-count { font-size: 11px; color: var(--text-dim); }
 .manual-btn { color: var(--text-dim); }
 .resource-rolls {
