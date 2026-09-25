@@ -35,6 +35,38 @@ async def location_graph():
     return _repo().location_graph()
 
 
+@router.get("/locations/{location_id}/challenge-traits")
+async def location_challenge_traits(location_id: str):
+    """This location's doom/progress pools, **including what its zones inherit** ([[B191]]).
+
+    Read-only by construction: an inherited pool is returned as the *owner's own
+    trait setting* — same id and dice ledger — so nothing here is a copy, and a
+    die spent against it is spent on the one pool. ``inherited`` plus
+    ``owner_location_id``/``owner_name`` are what let the viewer show a room's
+    own doom pool differently from the district's.
+    """
+    repo = _repo()
+    traits = []
+    for ts in repo.get_location_challenge_traits(location_id):
+        registry = repo.get_trait(ts.trait_id)
+        owner = repo.get_entity(ts.entity_id)
+        traits.append({
+            "id": ts.id,
+            "trait_id": ts.trait_id,
+            "name": getattr(registry, "name", "") or ts.trait_id,
+            "traitset_id": ts.traitset_id,
+            "rating_type": ts.rating_type.value,
+            "polarity": ts.polarity.value,
+            "dice": [d.value for d in ts.dice],
+            "capacity": [d.value for d in (ts.capacity or [])],
+            "statement": ts.statement,
+            "owner_location_id": ts.entity_id,
+            "owner_name": getattr(owner, "name", "") or ts.entity_id,
+            "inherited": ts.entity_id != location_id,
+        })
+    return {"location_id": location_id, "traits": traits}
+
+
 @router.get("/locations/{location_id}/navigate")
 async def navigate(location_id: str, entity_id: str | None = None):
     """Return navigation options from a location.

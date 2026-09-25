@@ -10,7 +10,37 @@ from transversal.db.arango import RELATIONSHIPS
 from transversal.db.arango import TRAITS
 from transversal.db.arango import TRAITSETTINGS
 from transversal.domain import TraitSetting
+from transversal.domain import RatingType
 from typing import Optional
+
+
+def fold_challenge_traits(chain: list[str], grouped: dict[str, list[TraitSetting]]) -> list[TraitSetting]:
+    """A location's challenge traits along its ancestor chain, nearest wins.
+
+    **A zone is a pin to a child location**, so "this zone inherits the
+    district's doom pool" is a walk up the ``super`` chain — no new entity type,
+    no per-zone record ([[B191]]). ``chain`` runs nearest → root and ``grouped``
+    holds each location's own settings.
+
+    An inherited trait is returned as the **owner's own setting**, unchanged:
+    same id, same dice ledger. That is the author's call — the child *points at*
+    the parent's setting rather than keeping a copy — so a doom die spent
+    anywhere against that trait is one pool being spent, and the returned
+    setting's ``entity_id`` is what tells a caller where it lives.
+
+    Nearest wins **per registry trait**: a location that defines the trait at all
+    replaces its ancestors' instance rather than stacking with it. Full replace,
+    not a merge — a merged dice pool would make every pool's size unauditable.
+    """
+    seen: set[str] = set()
+    out: list[TraitSetting] = []
+    for location_id in chain:
+        for ts in grouped.get(location_id, []):
+            if ts.rating_type != RatingType.CHALLENGE or ts.trait_id in seen:
+                continue
+            seen.add(ts.trait_id)
+            out.append(ts)
+    return out
 
 
 class RepositoryTraitSettings:
@@ -143,6 +173,20 @@ class RepositoryTraitSettings:
             TraitSetting.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
         ]
+
+    def get_location_challenge_traits(self, location_id: str) -> list[TraitSetting]:
+        """Challenge (doom/progress) traits for a location, inherited included.
+
+        The location's own, plus what it inherits from its ancestors, nearest
+        wins per registry trait — see :func:`fold_challenge_traits` for the rule
+        and why an inherited trait comes back as the *owner's* setting. Reuses
+        the batched per-entity read and the index-scanned ancestor walk, so this
+        is one query plus a fold rather than a fresh traversal ([[B191]]).
+        """
+        if not location_id:
+            return []
+        chain = [location_id] + self.get_location_ancestors(location_id)
+        return fold_challenge_traits(chain, self.get_traitsettings_for_entities(chain))
 
     def get_traitsettings_for_entities(
         self, entity_ids: list[str]
