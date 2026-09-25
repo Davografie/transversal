@@ -18,5 +18,10 @@ export function normalizeLocationTrait(t) {
     ratingType: String(t.rating_type || '').toUpperCase(),
     polarity: String(t.polarity || '').toUpperCase(),
     sfxIds: t.sfx_ids || [],
+    // The trait's `navdot` marker image ([[B200]]): the registry trait's own
+    // picture, resolved server-side through the trait setting. Absent for a trait
+    // with no art — most of them — and then the chip draws text and dice as before.
+    navdotImage: t.navdot_image || null,
+    navdotTransparent: !!t.navdot_transparent,
   }
 }

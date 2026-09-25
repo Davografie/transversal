@@ -4,6 +4,16 @@
     :class="{ 'scene-chip': isPlaced, draggable }"
     :style="sceneStyle"
   >
+    <!-- The trait's `navdot` marker image (`B200`) — the registry trait's picture,
+         when it has one. Leading the chip, so it scans picture → name → rating, the
+         order the sheet's trait rows use. A cutout floats unframed, as there. -->
+    <MediaImage
+      v-if="trait.navdotImage"
+      :src="trait.navdotImage"
+      class="trait-chip-marker"
+      :class="{ transparent: trait.navdotTransparent }"
+      :alt="trait.name"
+    />
     <div class="trait-chip-text">
       <span class="trait-chip-name">
         <span v-if="trait.inherited" class="trait-chip-inherited" aria-hidden="true">↳</span>{{ trait.name }}
@@ -31,6 +41,7 @@
 <script setup>
 import { computed } from 'vue'
 import DieIcon from '../DieIcon.vue'
+import MediaImage from '../MediaImage.vue'
 
 // A location's trait, drawn as a chip. One component for BOTH places it appears —
 // the auto-stack beside the labels and, once placed, a scene element that pans with
@@ -114,8 +125,28 @@ function traitDiceGroups(trait) {
 .trait-chip.draggable { cursor: grab; }
 
 .trait-chip-text { display: flex; flex-direction: column; min-width: 0; }
-
 .trait-chip-name { color: var(--map-text); }
+
+/* The trait's marker picture (`B200`). Round, because round is what a marker on this
+   map looks like (the nav dots), and sized between the text and the rating dice so it
+   leads the chip without competing with the dice. `flex-shrink: 0` so a long
+   statement cannot squash it. */
+.trait-chip-marker {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.25);
+  object-fit: cover;
+}
+
+/* A cutout carries its own shape, so it gets no frame and no crop — the same rule
+   the sheet's trait picture follows. */
+.trait-chip-marker.transparent {
+  border: none;
+  border-radius: 0;
+  object-fit: contain;
+}
 
 .trait-chip-statement {
   color: var(--map-text-dim);

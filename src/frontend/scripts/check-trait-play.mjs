@@ -174,5 +174,23 @@ const progress = { id: 'ts-6', name: 'progress', ratingType: 'CHALLENGE', dice: 
   ok('…and pushed its raw dice instead (the bug)', calls.added.map(p => p.dice), [['d8', 'd8']])
 }
 
+{
+  // The `navdot` marker (`B200`) crosses the same boundary as the play fields: the
+  // wire says `navdot_image` / `navdot_transparent`, the chip reads `navdotImage` /
+  // `navdotTransparent`. A trait with no art must come out `null` / `false` rather
+  // than `undefined`, or the chip's `v-if` and its cutout class would disagree
+  // about what "no image" is.
+  const withArt = normalizeLocationTrait({
+    id: 'ts-w4', name: 'spirit herb', rating_type: 'static',
+    navdot_image: '/media/imagen/trait-1/u/herb_Large.png', navdot_transparent: true,
+  })
+  ok('the marker image crosses the boundary', withArt.navdotImage, '/media/imagen/trait-1/u/herb_Large.png')
+  ok('…and so does its cutout flag', withArt.navdotTransparent, true)
+
+  const noArt = normalizeLocationTrait({ id: 'ts-w5', name: 'plain', rating_type: 'static' })
+  ok('a trait with no art has no marker', noArt.navdotImage, null)
+  ok('…and is not a cutout', noArt.navdotTransparent, false)
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)
