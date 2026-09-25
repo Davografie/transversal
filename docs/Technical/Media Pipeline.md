@@ -470,17 +470,21 @@ picture is cut out under the trait's id exactly as an entity's is under its own.
 `owner_id` and `display_name` are only the progress key and the file name; a
 trait has no `Entity` and needs none.
 
-> [!note] A trait's cutout becomes the trait's picture
-> The cutout lands untagged (the same non-destructive contract an entity cutout
-> has), and an untagged image renders on **none** of the three trait surfaces —
-> so the GM trait editor assigns the cutout all three roles once the job
-> completes. Role assignment strips siblings, which *moves* the picture to the
-> transparent version instead of leaving it invisible.
+> [!note] A trait's cutout is a second image, tagged like any other
+> A cutout is **added, never swapped in** — the same non-destructive contract an
+> entity cutout has. The source keeps its file and its roles; the new transparent
+> image arrives untagged. The GM trait editor lists **every** image with the three
+> role checkboxes (Sheet / BG / Nav), so placing the cutout is an act the author
+> performs and can undo — the first cut of this editor moved the roles onto the
+> cutout automatically, which read as an in-place edit and buried the original.
+>
+> Role assignment is unique per (owner, role), so ticking a role strips it from
+> whichever sibling held it: the tag *moves*. To put the transparent version on
+> the surfaces you tick its boxes; to leave the original alone, you don't.
 >
 > Verified on the live stack: the cutout came back RGBA with all four corners
-> fully transparent and the subject opaque (70% of pixels transparent), the
-> source stayed RGB and untouched, and after adopting it all three roles resolved
-> to the cutout with `transparent: true`.
+> fully transparent and the subject opaque (70% of pixels transparent), while the
+> source stayed RGB and untouched.
 
 Pipeline: read the source's `Large` variant → upload to ComfyUI →
 `bg_remove.json` → BiRefNet → alpha composite → RGBA PNG →

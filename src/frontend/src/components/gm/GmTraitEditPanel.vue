@@ -44,43 +44,62 @@
         />
       </div>
 
-      <!-- Image (B200) — one picture per trait, shared across its universes -->
-      <h4 class="ps-section-title">Image</h4>
+      <!-- Images (B200) — a trait owns a gallery, tagged by role like an entity's -->
+      <h4 class="ps-section-title">Images</h4>
       <p class="section-hint">
-        One picture per trait, shared by every universe it belongs to. The first
-        image is tagged for all three surfaces (sheet, backdrop, scene chip)
-        automatically.
+        A trait can carry several pictures, shared by every universe it belongs
+        to, and each is tagged with where it renders: <strong>Sheet</strong> (the
+        trait row and detail panel), <strong>BG</strong> (the detail panel's
+        backdrop), <strong>Nav</strong> (the location-viewer scene chip). A tag
+        belongs to one image at a time, so ticking it moves the picture.
       </p>
-      <div class="trait-image">
-        <img
-          v-if="traitImageUrl"
+      <div v-for="img in traitImages" :key="img.id" class="trait-image-row">
+        <MediaImage
           class="trait-image-preview"
-          :class="{ 'is-transparent': traitImageTransparent }"
-          :src="traitImageUrl"
+          :class="{ 'is-transparent': img.transparent }"
+          :src="img.path_large"
           :alt="`${trait?.name || 'Trait'} image`"
+          lazy
         />
-        <div v-else class="trait-image-empty">No image</div>
-        <div class="trait-image-actions">
-          <label class="trait-image-upload" :class="{ 'is-busy': uploadingImage }">
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif"
-              :disabled="uploadingImage"
-              @change="onImagePicked"
-            />
-            <span>{{ uploadingImage ? 'Uploading…' : (traitImageUrl ? 'Replace' : 'Upload') }}</span>
-          </label>
-          <DangerButton v-if="traitImageId" @click="removeTraitImage">Remove</DangerButton>
-          <button
-            v-if="canCutOut"
-            type="button"
-            class="trait-image-cutout"
-            :disabled="cutoutBusy"
-            :title="'Remove the background, and use the transparent result as the trait\'s picture'"
-            @click="onCutOut"
-          >{{ cutoutBusy ? 'Cutting out…' : '✂ Cut out' }}</button>
+        <div class="trait-image-body">
+          <div class="trait-image-roles">
+            <label
+              v-for="tag in ROLE_TAGS"
+              :key="tag.key"
+              class="trait-role-check"
+              :title="tag.title"
+            >
+              <input
+                type="checkbox"
+                :checked="(img.roles || []).includes(tag.key)"
+                @change="toggleRole(img, tag.key)"
+              />
+              {{ tag.label }}
+            </label>
+          </div>
+          <div class="trait-image-actions">
+            <button
+              v-if="canCutOut(img)"
+              type="button"
+              class="trait-image-cutout"
+              :disabled="cutoutBusy"
+              title="Remove the background — adds a new transparent image below"
+              @click="onCutOut(img)"
+            >{{ cutoutBusy ? 'Cutting out…' : '✂ Cut out' }}</button>
+            <DangerButton @click="removeTraitImage(img.id)">Remove</DangerButton>
+          </div>
         </div>
       </div>
+      <div v-if="!traitImages.length" class="trait-image-empty">No image</div>
+      <label class="trait-image-upload" :class="{ 'is-busy': uploadingImage }">
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif"
+          :disabled="uploadingImage"
+          @change="onImagePicked"
+        />
+        <span>{{ uploadingImage ? 'Uploading…' : (traitImages.length ? 'Upload another' : 'Upload') }}</span>
+      </label>
       <p v-if="imageError" class="section-hint trait-image-error">{{ imageError }}</p>
 
       <!-- Display Names (read-only list → opens editor panel) -->
@@ -277,6 +296,7 @@ import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
 import GmList from '@/components/ui/GmList.vue'
+import MediaImage from '@/components/MediaImage.vue'
 import DangerButton from '@/components/ui/DangerButton.vue'
 import Button from '@/components/ui/Button.vue'
 import TagInput from '@/components/ui/TagInput.vue'
@@ -302,19 +322,25 @@ const props = defineProps({
 
 const saving = ref(false)
 
-// ── Image (B200) ─────────────────────────────────────
-// One picture per trait, shared across its universes. Authored here; the image
-// record comes over REST rather than GraphQL because removing it needs the
-// record's id, and the same list already carries the URL and the transparency
-// flag. The GraphQL `Trait.image(role)` fields serve the read-only surfaces.
+// ── Images (B200) ────────────────────────────────────
+// A trait owns a GALLERY, exactly like an entity: several images can coexist and
+// each carries role tags saying where it renders. Authored here; the records come
+// over REST rather than GraphQL because tagging and removing need the record id,
+// and the same list already carries the URL and the transparency flag. The
+// GraphQL `Trait.image(role)` fields serve the read-only surfaces.
+//
+// The first image is tagged for all three roles by the API's sole-image rule, so
+// a trait with one picture still just works — but a cutout is a SECOND image,
+// untagged, for the author to place (same contract as an entity cutout).
+const ROLE_TAGS = [
+  { key: 'sheet', label: 'Sheet', title: 'The trait row and detail-panel picture' },
+  { key: 'background', label: 'BG', title: "The detail panel's backdrop" },
+  { key: 'navdot', label: 'Nav', title: 'The scene chip in the location viewer' },
+]
+
 const traitImages = ref([])
 const uploadingImage = ref(false)
 const imageError = ref('')
-
-const traitImage = computed(() => traitImages.value[0] || null)
-const traitImageUrl = computed(() => traitImage.value?.path_large || '')
-const traitImageId = computed(() => traitImage.value?.id || '')
-const traitImageTransparent = computed(() => !!traitImage.value?.transparent)
 
 async function fetchTraitImages() {
   if (!props.traitId) {
@@ -365,11 +391,11 @@ async function onImagePicked(event) {
   }
 }
 
-async function removeTraitImage() {
-  if (!traitImageId.value) return
+async function removeTraitImage(imageId) {
+  if (!imageId) return
   imageError.value = ''
   try {
-    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(traitImageId.value)}`, { method: 'DELETE' })
+    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(imageId)}`, { method: 'DELETE' })
     if (!res.ok && res.status !== 404) throw new Error(`Remove failed (${res.status})`)
     await fetchTraitImages()
     await fetchTraitsConfig()
@@ -378,7 +404,28 @@ async function removeTraitImage() {
   }
 }
 
-// ── Cut out the trait's picture (B200) ───────────────
+// Tagging is per image, like the entity image viewer's BG/Sheet/Nav boxes. The
+// API enforces one image per (owner, role): assigning a role strips it from
+// siblings, so ticking a box here MOVES the tag off whichever image held it.
+async function toggleRole(img, role) {
+  const current = img.roles || []
+  const next = current.includes(role) ? current.filter(r => r !== role) : [...current, role]
+  imageError.value = ''
+  try {
+    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(img.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roles: next }),
+    })
+    if (!res.ok) throw new Error(`Tag failed (${res.status})`)
+    await fetchTraitImages()
+    await fetchTraitsConfig()
+  } catch (e) {
+    imageError.value = e?.message || 'Tag failed'
+  }
+}
+
+// ── Cut out a trait image (B200) ─────────────────────
 // BiRefNet runs on the GPU in the API's background task, keyed by owner id —
 // the trait's own id, exactly as an entity's is keyed by the entity's. So the
 // job registry at /imagen/jobs is polled with the trait id.
@@ -386,10 +433,9 @@ const cutoutJob = ref(null)
 const startingCutout = ref(false)
 const cutoutBusy = computed(() => startingCutout.value || !!cutoutJob.value)
 
-const canCutOut = computed(() => {
-  const img = traitImage.value
+function canCutOut(img) {
   return !!img && !img.transparent && img.image_type !== 'animated'
-})
+}
 
 async function pollCutoutJob() {
   if (!props.traitId) return
@@ -407,38 +453,17 @@ let _cutoutPoll = null
 onMounted(() => { pollCutoutJob(); _cutoutPoll = setInterval(pollCutoutJob, 2000) })
 onUnmounted(() => { clearInterval(_cutoutPoll) })
 
-// The job clearing means the cutout exists. A trait has ONE picture, so the
-// transparent result has to become it: the cutout lands untagged (the same
-// non-destructive contract an entity cutout has), and an untagged image renders
-// on none of the three surfaces.
+// The job clearing means the cutout exists — as a NEW image, exactly as it does
+// for an entity. It lands untagged by the non-destructive contract, so it simply
+// appears in the gallery above for the author to tag. Nothing is moved for them:
+// silently reassigning the roles is what made this look like an in-place edit.
 watch(cutoutJob, async (now, prev) => {
   if (!prev || now) return
   await fetchTraitImages()
-  await adoptNewestAsTraitImage()
   await fetchTraitsConfig()
 })
 
-async function adoptNewestAsTraitImage() {
-  const newest = traitImages.value[0]
-  if (!newest) return
-  const all = ['background', 'sheet', 'navdot']
-  if (all.every(r => (newest.roles || []).includes(r))) return
-  try {
-    // Assigning a role strips it from sibling images on the same owner, so this
-    // moves the picture rather than duplicating it.
-    await fetch(`/api/v1/imagen/${encodeURIComponent(newest.id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roles: all }),
-    })
-    await fetchTraitImages()
-  } catch (e) {
-    imageError.value = e?.message || 'Cut out finished, but the result could not be tagged'
-  }
-}
-
-async function onCutOut() {
-  const img = traitImage.value
+async function onCutOut(img) {
   if (!img || cutoutBusy.value || !trait.value) return
   startingCutout.value = true
   imageError.value = ''
@@ -925,20 +950,25 @@ async function onDelete() {
 .section-hint { font-size: 11px; color: var(--text-dim); margin: 0 0 6px; line-height: 1.4; }
 .section-hint strong { color: var(--text); }
 
-/* Trait image (B200) */
-.trait-image { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 6px; }
+/* Trait images (B200) — a tagged gallery, one row per image */
+.trait-image-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
 .trait-image-preview {
-  width: 88px; height: 88px; object-fit: cover; border-radius: 6px;
+  width: 72px; height: 72px; flex: none; object-fit: cover; border-radius: 6px;
   border: 1px solid var(--border); background: rgba(0, 0, 0, 0.25);
 }
 /* A cutout floats rather than sitting in a box, like the sheet portrait does. */
 .trait-image-preview.is-transparent { object-fit: contain; border-style: dashed; background: none; }
+.trait-image-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .trait-image-empty {
-  width: 88px; height: 88px; border-radius: 6px; border: 1px dashed var(--border);
+  width: 72px; height: 72px; margin-bottom: 8px;
+  border-radius: 6px; border: 1px dashed var(--border);
   display: flex; align-items: center; justify-content: center;
   font-size: 10px; color: var(--text-dim);
 }
-.trait-image-actions { display: flex; flex-direction: column; gap: 6px; }
+.trait-image-roles { display: flex; gap: 8px; }
+.trait-role-check { font-size: 10px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 3px; }
+.trait-role-check input { margin: 0; cursor: pointer; }
+.trait-image-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .trait-image-upload { position: relative; overflow: hidden; display: inline-flex; }
 .trait-image-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .trait-image-upload span {
