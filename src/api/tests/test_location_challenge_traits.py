@@ -89,6 +89,9 @@ class FakeRepo:
         self._hidden = hidden or {}
         self._known_to = known_to or {}
 
+    def get_location_traits(self, location_id):
+        return self._traits
+
     def get_location_challenge_traits(self, location_id):
         out = []
         for ts in self._traits:
@@ -186,3 +189,45 @@ class TestVisibilityPerViewer:
         assert data["viewer"] is None
         assert len(data["traits"]) == 1
         assert data["traits"][0]["hidden"] is True
+
+
+class TestTheViewerRead:
+    """[[B92]]: own traits of every kind + inherited challenge pools only."""
+
+    def test_own_traits_of_every_kind_come_through_with_the_inherited_pool(self, client, monkeypatch):
+        own_static = _ts("ts-smell", "room", "trait-smell", rating=RatingType.STATIC)
+        own_doom = _ts("ts-room-doom", "room", "trait-room")
+        inherited = _ts("ts-parent-doom", "district", "trait-curse")
+        repo = FakeRepo([own_static, own_doom])
+        repo.get_location_traits = lambda location_id: [own_static, own_doom, inherited]
+        monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+
+        data = client.get("/api/v1/locations/room/traits").json()
+        by_id = {t["id"]: t for t in data["traits"]}
+
+        assert set(by_id) == {"ts-smell", "ts-room-doom", "ts-parent-doom"}
+        assert by_id["ts-smell"]["rating_type"] == "static"
+        assert by_id["ts-smell"]["inherited"] is False
+        assert by_id["ts-parent-doom"]["inherited"] is True
+        assert by_id["ts-parent-doom"]["owner_name"] == "Krasnoyarsk-45"
+
+    def test_the_viewer_filter_applies_to_own_traits_too(self, client, monkeypatch):
+        own = _ts("ts-own", "room", "trait-smell", rating=RatingType.STATIC)
+        own.known_to = ["kael"]
+        repo = FakeRepo([own], hidden={"room": True})
+        repo.get_location_traits = lambda location_id: [own]
+        monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+
+        assert client.get("/api/v1/locations/room/traits?viewer=kael").json()["traits"] != []
+        assert client.get("/api/v1/locations/room/traits?viewer=antonov").json()["traits"] == []
+
+    def test_the_pools_read_stays_challenge_only(self, client, monkeypatch):
+        own_static = _ts("ts-smell", "room", "trait-smell", rating=RatingType.STATIC)
+        own_doom = _ts("ts-room-doom", "room", "trait-room")
+        repo = FakeRepo([own_doom])
+        # The fake stands in for the real fold, which returns challenge traits only.
+        repo.get_location_traits = lambda location_id: [own_static, own_doom]
+        monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+
+        data = client.get("/api/v1/locations/room/challenge-traits").json()
+        assert [t["id"] for t in data["traits"]] == ["ts-room-doom"]

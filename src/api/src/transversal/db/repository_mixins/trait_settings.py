@@ -206,6 +206,28 @@ class RepositoryTraitSettings:
         chain = [location_id] + self.get_location_ancestors(location_id)
         return fold_challenge_traits(chain, self.get_traitsettings_for_entities(chain))
 
+    def get_location_traits(self, location_id: str) -> list[TraitSetting]:
+        """Everything a viewer should list for a location ([[B92]]).
+
+        The location's **own** traits of every rating type, plus the **challenge
+        pools it inherits** from its ancestors. Inheritance is challenge-only by
+        the human's decision (2026-09-25): a doom pool is a condition of the
+        place and belongs to where it was authored, but pushing a district's
+        static and resource traits into every room under it is not something a
+        room should display as its own.
+
+        Sub-traits are excluded, as in every other entity-trait read: their parent
+        already carries them.
+        """
+        if not location_id:
+            return []
+        own = self.get_traitsettings_for_entity(location_id)
+        inherited = [
+            ts for ts in self.get_location_challenge_traits(location_id)
+            if ts.entity_id != location_id
+        ]
+        return own + inherited
+
     def get_traitsettings_for_entities(
         self, entity_ids: list[str]
     ) -> dict[str, list[TraitSetting]]:
