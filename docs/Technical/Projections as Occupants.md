@@ -14,14 +14,20 @@ aliases:
 
 # Projections as Occupants
 
-> [!info] Decided and ticketed — **not yet built**
+> [!info] Decided and ticketed — **S0 closed, S1 built, S2–S5 open**
 > Raised by the human 2026-09-15: *"I want the occupants to show the projections,
 > not the entities."* Investigated the same day; the findings below are measured
 > against the live database, not inferred. The human said **"Go"** on the 6-slice
 > plan, and the work is now **[[B137]]** — cross-domain ([[backend-platform]] +
-> [[navigation]]), sequenced by the [[Overseer]]. **Nothing has been implemented.**
-> S0's two decisions have an Overseer recommendation awaiting the human's nod —
-> see **S0** below.
+> [[navigation]]), sequenced by the [[Overseer]].
+> **S0 closed 2026-09-24** — the human nodded all three [[Overseer]] defaults —
+> and **S1 landed the same day** (`b03b2abe`). S2–S5 are still open; each slice
+> below carries its own status.
+>
+> One measurement has moved since this log was written: there are now **10**
+> left-behind bodies, not 4, and S1 changed the rendering for **3** of them
+> (Truck-Kun, Phaos Tyish, Dr. Strange). The other 7 have no navdot art or share
+> it, so they never showed the defect.
 
 ## The question
 
@@ -169,7 +175,7 @@ The human rejected the "resolution-only" shape and stated the model directly:
   see. (`unpublished` is currently filtered client-side in `occupantDots`; that
   could move with it.)
 
-### S0 — awaiting the human's nod (recommendation from the [[Overseer]], 2026-09-17)
+### S0 — ✅ closed: the human nodded the [[Overseer]]'s three defaults (2026-09-24)
 
 - **Where `hidden`/`known_to` live** — on the projection (per-body, pairing with
   the position move) or on the entity, merely honoured when reading.
@@ -184,7 +190,7 @@ The human rejected the "resolution-only" shape and stated the model directly:
 - **Position-migration default** (proposal): seed each body from its entity's
   current `map_x`/`map_y`, so nothing moves on day one.
 
-With those, **S0 closes** and S1–S5 are ready to sequence.
+With those, **S0 is closed** and S2–S5 are ready to sequence.
 
 ### Superseded framing (kept for the record)
 
@@ -199,8 +205,8 @@ spelled out.
 ## Open decisions
 
 1. **~~`unpublished` vs `hidden`~~** — **decided: separate axes, keep both.**
-2. **Where `hidden`/`known_to` live** — **Overseer recommends the projection**
-   (2026-09-17); awaiting the human's nod. See **S0** above.
+2. **Where `hidden`/`known_to` live** — **✅ decided 2026-09-24: on the projection**
+   (the [[Overseer]]'s recommendation, nodded by the human). See **S0** above.
 3. **~~Do bodies get their own map position?~~** — **decided: yes** (direction 1).
    Remaining question is migration: the 152 bodies standing somewhere today have
    no stored coordinate of their own, so they need a starting value.
@@ -221,12 +227,21 @@ noted per slice.
 body from its entity's current `map_x`/`map_y`, so nothing moves on day one).
 Blocks S2 and S5.
 
-**S1 — the portrait follows the body present.** `get_navdot_images` resolves
-through the *present* body instead of `entity.current_projection`. Independent of
-everything else, small, and the only slice that is purely a fix: it corrects the
-**4** left-behind bodies (3 of which own their own art). *Owner: mostly
-backend-platform.* **Done when:** a body shows its own portrait, not the
-portrait of the body the consciousness went to.
+**S1 — ✅ landed 2026-09-24 (`b03b2abe`).** `get_navdot_images` resolves
+through the ***present* body** instead of `entity.current_projection`. The
+override is `bodies={entity_id: body_id}`, threaded through `_role_urls` /
+`_navdot_urls` / `get_navdot_images` / `get_navdot_transparency` and
+**defaulting to the active body when absent** — so a caller listing the entities
+at a *place* passes the body standing there, while a sheet, roster or plan row
+keeps exactly the resolution it always had. `navigate_from` and the canvas's
+`_occupants_for_locations` resolve it and **both now carry `body_id`**; the REST
+`navigate` endpoint passes it through so its own re-resolution cannot undo the
+repository's. The canvas also had to merge its two `UNION` branches on
+`(location, entity)` rather than first-wins, or a body found by only one branch
+could be dropped. *Owner: mostly backend-platform.* **Done when:** a body shows
+its own portrait, not the portrait of the body the consciousness went to. ✅ —
+verified live: 3 of today's 10 left-behind bodies change what is drawn, and
+`body_id` is correct on all 10.
 
 **S2 — bodies get their own position.** Add `map_x`/`map_y` to `Projection`,
 migrate the 152 standing bodies per S0, and let the map-position write address a
@@ -260,8 +275,9 @@ badge. Blocked by S0. *Owner: both.*
 
 Ticketed as **[[B137]]** (2026-09-17). The query and the resolver are
 [[backend-platform]]'s surface (`canvas.py`, `images.py`); the dot is
-[[navigation]]'s. Cross-domain, so the [[Overseer]] sequences the slices. Still
-owed from the human: the nod on S0's three defaults above.
+[[navigation]]'s. Cross-domain, so the [[Overseer]] sequences the slices. The
+human's nod on S0's three defaults came **2026-09-24**, so nothing is owed from
+them; **S1 is landed** and S2–S5 are sequenced from here.
 
 ## Related
 
