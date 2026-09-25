@@ -6,7 +6,12 @@
     </div>
     <div class="lpe-field">
       <label>Universe</label>
-      <input v-model="form.universe" placeholder="e.g. three_realms" />
+      <GmScopePicker
+        v-model="form.universe"
+        :options="universeOptions"
+        empty-label="Fundamental (all universes)"
+        placeholder="Select universe…"
+      />
     </div>
     <div class="lpe-field">
       <label>Description</label>
@@ -54,15 +59,18 @@ const form = reactive({
 })
 
 const entryTableOptions = ref([])
+const universeOptions = ref([])
 
 // Table names repeat across life paths ("Learn", "Mishap", "Survival" ×2), so
 // the owning path — or the shared/fundamental scope — disambiguates the label.
-async function loadEntryTableOptions() {
+async function loadOptions() {
   try {
-    const [tables, lps] = await Promise.all([
+    const [tables, lps, unis] = await Promise.all([
       graphql(`{ rollTables { id name universe lifePath } }`),
       graphql(`{ lifePaths { id name } }`),
+      graphql(`query($type: EntityType){ entities(type: $type){ id name currentUniverse } }`, { type: 'UNIVERSE' }),
     ])
+    universeOptions.value = (unis?.entities || []).map(u => ({ value: u.currentUniverse, label: u.name }))
     const pathNames = Object.fromEntries((lps?.lifePaths || []).map(l => [l.id, l.name]))
     entryTableOptions.value = (tables?.rollTables || []).map(t => ({
       value: t.id,
@@ -73,7 +81,7 @@ async function loadEntryTableOptions() {
   } catch { /* leave empty */ }
 }
 
-onMounted(loadEntryTableOptions)
+onMounted(loadOptions)
 
 const saving = ref(false)
 const error = ref('')

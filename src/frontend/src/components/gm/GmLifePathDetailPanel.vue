@@ -1,16 +1,16 @@
 <template>
   <div class="lpd-root">
     <div class="lpd-header">
-      <span class="lpd-name">{{ lp.name }}</span>
-      <span class="lpd-type">{{ lp.universe }}</span>
+      <span class="lpd-name">{{ path.name }}</span>
+      <span class="lpd-type">{{ path.universe }}</span>
       <Button class="lpd-canvas" variant="neutral" title="Open in canvas" @click="openFullCanvas">🗺</Button>
       <Button class="lpd-edit" variant="neutral" @click="editPath">✎ Edit</Button>
     </div>
-    <p class="lpd-desc">{{ lp.description || 'No description' }}</p>
+    <p class="lpd-desc">{{ path.description || 'No description' }}</p>
 
     <div class="lpd-subsection">
       <span class="lpd-subtitle">Entry table</span>
-      <span class="lpd-detail">{{ lp.entryTableId || 'None' }}</span>
+      <span class="lpd-detail">{{ path.entryTableId || 'None' }}</span>
     </div>
 
     <div class="lpd-subsection">
@@ -61,11 +61,25 @@ import Button from '@/components/ui/Button.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { deleteLifePath } = useLifePaths()
+const { deleteLifePath, pathsByUniverse } = useLifePaths()
 const { tablesFor, fetchTables } = useRollTables()
 
 const props = defineProps({
   lp: { type: Object, required: true },
+})
+
+// The *stored* copy wins over the prop we were opened with. The panel is handed
+// a plain object snapshot, and saving from the editor patches the store — so
+// reading through the store is what makes an edited description (or conditions,
+// or the entry table) show up here instead of going stale (B41). Falls back to
+// the prop when the store has no bucket for this path, e.g. opened from the
+// canvas, which never fetched a universe list.
+const path = computed(() => {
+  for (const list of Object.values(pathsByUniverse.value || {})) {
+    const found = (list || []).find(p => p.id === props.lp.id)
+    if (found) return found
+  }
+  return props.lp
 })
 
 // This path's tables, from the per-path store (a sibling panel on another path
@@ -96,22 +110,22 @@ function addTable() {
   panel.open({
     component: GmRollTableEditPanel,
     title: 'New Roll Table',
-    props: { tableId: '', lifePathId: props.lp.id, universe: props.lp.universe },
+    props: { tableId: '', lifePathId: path.value.id, universe: path.value.universe },
   })
 }
 
 function editPath() {
   panel.open({
     component: GmLifePathEditPanel,
-    title: 'Edit ' + props.lp.name,
-    id: props.lp.id,
+    title: 'Edit ' + path.value.name,
+    id: path.value.id,
     badge: 'LIFE-PATH',
-    props: { lp: props.lp },
+    props: { lp: path.value },
   })
 }
 
 function openFullCanvas() {
-  bus.emit('canvas:open-full', { mode: 'life-path', entityId: props.lp.id, lifePath: props.lp })
+  bus.emit('canvas:open-full', { mode: 'life-path', entityId: path.value.id, lifePath: path.value })
 }
 
 async function onDeleteConfirmed() {
@@ -122,7 +136,7 @@ async function onDeleteConfirmed() {
 
 const discoveryRows = computed(() => {
   const rows = []
-  const d = props.lp.discovery
+  const d = path.value.discovery
   if (!d) return rows
   for (const loc of (d.atLocation || [])) rows.push({ typeLabel: '📍 Location', valueLabel: loc })
   for (const ent of (d.knowsEntity || [])) rows.push({ typeLabel: '👤 Knows', valueLabel: ent })
