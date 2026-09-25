@@ -95,18 +95,19 @@ were written against it:
 
 - **An option** is `{ id?, key?, label, description?, cost?, costFree?, hint?,
   tone?, disabled?, weight? }` — literally the choice table's row vocabulary.
-- **It reports what was chosen and nothing else.** Resolving the pick is the
-  host's, and the hosts genuinely differ: the roll-table and consequence menus
-  hand off to `EffectTargetWizard` and then apply, while the hitch menu hands the
-  option back to the dice roller.
-- **The random pick is opt-in** (`allow-random`, off by default): rolling is
+- **It reports what happened and nothing else.** `pick(option, index)` is the click
+  that takes a row; `roll(option, index, number)` is the 🎲 *finding* one. Resolving
+  either is the host's, and the hosts genuinely differ: the roll-table and
+  consequence menus hand off to `EffectTargetWizard` and then apply, while the
+  hitch menu hands the option back to the dice roller.
+- **The random roll is opt-in** (`allow-random`, off by default): rolling is
   native to a roll table, while a consequence or a hitch is usually a deliberate
   choice, so each host decides. A list carrying `weight`s rolls a die over the
-  cumulative weights and reports the number as a third `pick` argument; an
-  unweighted list picks uniformly and reports none. Disabled and zero-weight
-  entries are never rolled.
-- **The index is 0-based** — `pick(entry, index, roll)`. The roll-table API it
-  feeds is **1-based**, so `RollTableMenu` adds the 1 at the boundary.
+  cumulative weights and reports the number rolled; an unweighted list picks
+  uniformly and reports none. Disabled and zero-weight entries are never rolled.
+  In both cases it **marks** the row — it does not take it (see [[#Choice table]]).
+- **The index is 0-based** — `pick(option, index)`. The roll-table API it feeds is
+  **1-based**, so `RollTableMenu` adds the 1 at the boundary.
 - **Busy is not loading.** While a host is applying a pick the list stays on
   screen and goes inert (`busy`); it only reads *Loading…* before it has options.
 
@@ -132,12 +133,15 @@ reports what was chosen; resolving the pick stays with the host. The **drivers**
 **Three acts it refuses to conflate.** These were the handoffs' warnings, and
 each one is a way a generic list would have been *wrong* rather than plain:
 
-1. **A roll and a pick are different acts.** The scheme decides whether a row can
-   be picked at all, so the 🎲 is a separate control, never a row, and it is
-   opt-in per host. On a surface where a roll *finds* a row (`selectable`), the
-   roll **selects** — it never applies — and `Continue` is still how the row is
-   taken. That is the life path's roll-then-confirm, expressed in the surface
-   rather than in a rule each host remembers.
+1. **A roll finds a row; the click takes it.** The 🎲 is a separate control, never
+   a row, and opt-in per host — but it only **marks** the row it lands on. Taking a
+   row is always the click, on that row *or on another one*. There is deliberately
+   **no confirm button anywhere in the surface**: a marked row that needs a second
+   press to take is a step with nothing in it, and a roll that took the row itself
+   would take the choice away from the player. So "the dice said the third one" and
+   "actually, I want the first" stay one click apart rather than two presses. The
+   same mark is used when the roll comes from outside — the dice roller reporting
+   `rolledIndex` — which is how a life-path step works.
 2. **A flow is not a list.** `Back` is not a navigation stack — a life path
    returns through `return_map`, and a shared table has more than one valid way
    out. The surface therefore offers no `Back`; a driver puts its own exit in the
@@ -210,7 +214,8 @@ is which is the driver's business:
 - **The `#row` slot is the escape hatch.** Rows are unbounded stacked blocks, so
   an authoring host whose cells are data-driven (the effect form's merged field
   list, a condition's type-dependent columns) can render its own cells inside the
-  same shell, selection, states and actions.
+  same shell and keep the marking, states and actions. The slot is handed
+  `{ row, index, rolled }`.
 
 **Responsive by container, not viewport.** The same surface is a ~340px column
 when the character sheet is docked, ~534px as a modal, and a phone's full width —
@@ -242,10 +247,11 @@ panel**:
   the row, so the surface is already sufficient for both.
 
 **Flashy, and restrained.** A die-pip key column with tabular numerals, a short
-staggered entrance, and a *landing beat* when a roll finds a row (the pip fills,
-the row lifts once) — so "the dice found this" reads differently from "you chose
-this". All of it is off under `prefers-reduced-motion: reduce`. The tone is
-game-appropriate without becoming a slot machine: the row is still the row.
+staggered entrance, and a *landing beat* when a roll finds a row — one lift and one
+ring as the dice land, while the mark itself **persists** until the row is taken or
+the rows change. The beat is the arrival; the mark is the record. So "the dice found
+this" reads differently from "you chose this", and the row is still waiting for the
+click that takes it. All of it is off under `prefers-reduced-motion: reduce`.
 
 **What it is not.** It is not `GmList`'s replacement *yet*. `GmList`/
 `GmListItem` keep the authoring half — drag-reorder with a ⠿ handle, `selectable`
@@ -258,12 +264,14 @@ primitives that `components/ui/` does not have (there is no text/number/select
 input in the shared set), so the authoring editors stay on `GmList` until those
 exist.
 
-`scripts/check-choice-table.mjs` (52 assertions, no browser) pins the scheme's
-key column and its fallback order, the condition/effect/cost phrasing, and — as
-shipped text — the resolver's registry-wide read. `e2e/tests/choice-table.spec.js`
+`scripts/check-choice-table.mjs` (64 assertions, no browser) pins the scheme's
+key column and its fallback order, the condition/effect/cost phrasing, the
+roll-marks-then-click rule (including that no confirm control can creep back), and
+— as shipped text — the resolver's registry-wide read. `e2e/tests/choice-table.spec.js`
 measures the layout at all four viewports **plus the two-column state between
 them** — the modal is `min(560px, 96vw)`, so the named viewports alone never reach
-it — and drives the two gates and the roll-then-confirm against the live app.
+it — and drives the two gates, the marking roll, and the click that takes a row
+against the live app.
 
 ### Button
 
