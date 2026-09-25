@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import sys
 
-from transversal.db.arango import get_db, ENTITIES, ENTITY_IMAGES
+from transversal.db.arango import get_db, ENTITIES, IMAGES
 
 ROLES = ("background", "navdot", "sheet")
 
@@ -38,7 +38,7 @@ ROLES = ("background", "navdot", "sheet")
 def migrate(dry_run: bool = True) -> int:
     db = get_db()
     entities = db.collection(ENTITIES)
-    images_col = db.collection(ENTITY_IMAGES)
+    images_col = db.collection(IMAGES)
 
     assigned = 0
     skipped_complete = 0

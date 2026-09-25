@@ -15,7 +15,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from transversal.db.arango import get_db, ENTITY_IMAGES
+from transversal.db.arango import get_db, IMAGES
 from transversal.services.media_utils import has_transparency
 
 MEDIA_DIR = Path("/app/media")
@@ -24,7 +24,7 @@ IMAGEN_DIR = MEDIA_DIR / "imagen"
 
 def migrate(apply: bool = False) -> int:
     db = get_db()
-    images_col = db.collection(ENTITY_IMAGES)
+    images_col = db.collection(IMAGES)
 
     flagged = 0
     already_ok = 0

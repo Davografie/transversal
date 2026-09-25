@@ -27,7 +27,7 @@ from __future__ import annotations
 import sys
 from collections import defaultdict
 
-from transversal.db.arango import get_db, ENTITIES, ENTITY_IMAGES
+from transversal.db.arango import get_db, ENTITIES, IMAGES
 
 SHEET_TYPES = {"character", "gmc"}
 
@@ -35,7 +35,7 @@ SHEET_TYPES = {"character", "gmc"}
 def migrate(apply: bool = False) -> int:
     db = get_db()
     entities = db.collection(ENTITIES)
-    images_col = db.collection(ENTITY_IMAGES)
+    images_col = db.collection(IMAGES)
 
     entity_types = {e["_key"]: e.get("type", "") for e in entities.all()}
 

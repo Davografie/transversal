@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from transversal.db.arango import ENTITIES
-from transversal.db.arango import ENTITY_IMAGES
+from transversal.db.arango import IMAGES
 from transversal.domain import MediaImage
 from transversal.domain import ImageType
 
@@ -14,13 +14,13 @@ class RepositoryImages:
     def create_entity_image(self, image: MediaImage) -> MediaImage:
         doc = image.model_dump()
         doc["_key"] = image.id
-        self._entity_images.insert(doc)
+        self._images.insert(doc)
         return image
 
     def get_entity_images(
         self, entity_id: str, universe: str | None = None, image_type: ImageType | None = None
     ) -> list[MediaImage]:
-        filters = [("entity_id", entity_id)]
+        filters = [("owner_id", entity_id)]
         if universe:
             filters.append(("universe", universe))
         if image_type:
@@ -30,7 +30,7 @@ class RepositoryImages:
         parts = [f"doc.{f} == @v{i}" for i, (f, _) in enumerate(filters)]
         binds = {f"v{i}": v for i, (_, v) in enumerate(filters)}
         query = f"""
-            FOR doc IN {ENTITY_IMAGES}
+            FOR doc IN {IMAGES}
             FILTER {' AND '.join(parts)}
             SORT doc.created_at DESC
             RETURN doc
@@ -41,18 +41,18 @@ class RepositoryImages:
         ]
 
     def get_entity_image(self, image_id: str) -> MediaImage | None:
-        doc = self._entity_images.get(image_id)
+        doc = self._images.get(image_id)
         return MediaImage.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
     def update_entity_image(self, image_id: str, updates: dict) -> MediaImage | None:
-        doc = self._entity_images.get(image_id)
+        doc = self._images.get(image_id)
         if not doc:
             return None
-        self._entity_images.update({**doc, **updates})
+        self._images.update({**doc, **updates})
         return self.get_entity_image(image_id)
 
     def delete_entity_image(self, image_id: str) -> bool:
-        return self._entity_images.delete(image_id)
+        return self._images.delete(image_id)
 
     def get_images_for_owner(self, entity_id: str, projection_id: str | None = None) -> list[MediaImage]:
         """Images belonging to an owner: a specific projection, or the entity.

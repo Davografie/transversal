@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from transversal.db.arango import ENTITIES
-from transversal.db.arango import ENTITY_IMAGES
+from transversal.db.arango import IMAGES
 from transversal.db.arango import MESSAGES
 from transversal.db.arango import PROJECTIONS
 from transversal.db.arango import RELATIONSHIPS
@@ -227,7 +227,7 @@ class RepositoryEntities:
 
         # Delete entity image records from DB
         self.db.aql.execute(
-            f"FOR img IN {ENTITY_IMAGES} FILTER img.entity_id == @eid REMOVE img IN {ENTITY_IMAGES}",
+            f"FOR img IN {IMAGES} FILTER img.owner_id == @eid REMOVE img IN {IMAGES}",
             bind_vars={"eid": entity_id},
         )
         # Delete messages involving this entity

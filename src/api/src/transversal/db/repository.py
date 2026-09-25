@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 from transversal.db.arango import (
     ENTITIES,
-    ENTITY_IMAGES,
+    IMAGES,
     HISTORICAL_RECORDS,
     LIFE_PATHS,
     MESSAGES,
@@ -92,7 +92,7 @@ class EntityRepository(
         self._roll_tables = self.db.collection(ROLL_TABLES)
         self._relationships = self.db.collection(RELATIONSHIPS)
         self._players = self.db.collection(PLAYERS)
-        self._entity_images = self.db.collection(ENTITY_IMAGES)
+        self._images = self.db.collection(IMAGES)
         self._messages = self.db.collection(MESSAGES)
         self._historical_records = self.db.collection(HISTORICAL_RECORDS)
         self._plan_entities = self.db.collection(PLAN_ENTITIES)

@@ -57,7 +57,7 @@ SCHEDULED_EVENTS = "scheduled_events"  # document: centrally-scheduled timed rev
 PLAYERS = "players"
 RELATIONSHIPS = "relationships"    # edge collection
 MESSAGES = "messages"              # inter-entity persistent messages
-ENTITY_IMAGES = "entity_images"    # generated image metadata
+IMAGES = "images"                  # image metadata, owned by an entity or a trait
 LIFE_PATHS = "life_paths"          # life path definitions
 ROLL_TABLES = "roll_tables"        # reusable roll tables (life path steps + general)
 HISTORICAL_RECORDS = "historical_records"  # append-only entity event log
@@ -77,7 +77,7 @@ COLLECTIONS = {
     PLAYERS: False,
     RELATIONSHIPS: True,  # edge
     MESSAGES: False,      # document
-    ENTITY_IMAGES: False,
+    IMAGES: False,
     LIFE_PATHS: False,    # document
     ROLL_TABLES: False,   # document
     HISTORICAL_RECORDS: False,  # document
@@ -166,9 +166,9 @@ def _ensure_indexes(db) -> None:
     # relationships (edge)
     _add_hash_index(db, RELATIONSHIPS, ["type"])
 
-    # entity_images
-    _add_hash_index(db, ENTITY_IMAGES, ["entity_id"])
-    _add_hash_index(db, ENTITY_IMAGES, ["entity_id", "universe"])
+    # images (owner: an entity or a trait; variant_id: projection / traitsetting)
+    _add_hash_index(db, IMAGES, ["owner_id"])
+    _add_hash_index(db, IMAGES, ["owner_id", "universe"])
 
     # life paths
     _add_hash_index(db, LIFE_PATHS, ["universe"])

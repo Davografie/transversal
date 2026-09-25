@@ -36,7 +36,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-from transversal.db.arango import ENTITY_IMAGES, get_db
+from transversal.db.arango import IMAGES, get_db
 from transversal.db.repository import EntityRepository
 from transversal.domain import MediaImage, ImageType
 from transversal.imagen.orchestrator import _safe_filename, _save_image_variants
@@ -81,7 +81,7 @@ def migrate(apply: bool = False, include_archetypes: bool = False,
     repo = EntityRepository()
     new_entities = {e["_key"]: e for e in db.collection("entities").all()}
     entities_with_images: set[str] = (
-        {img["entity_id"] for img in db.collection(ENTITY_IMAGES).all()}
+        {img["entity_id"] for img in db.collection(IMAGES).all()}
         if skip_existing else set()
     )
 

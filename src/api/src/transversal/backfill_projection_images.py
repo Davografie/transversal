@@ -28,14 +28,14 @@ from __future__ import annotations
 
 import sys
 
-from transversal.db.arango import get_db, ENTITIES, ENTITY_IMAGES, PROJECTIONS
+from transversal.db.arango import get_db, ENTITIES, IMAGES, PROJECTIONS
 
 
 def migrate(dry_run: bool = True) -> int:
     db = get_db()
     entities = db.collection(ENTITIES)
     projections = db.collection(PROJECTIONS)
-    images_col = db.collection(ENTITY_IMAGES)
+    images_col = db.collection(IMAGES)
 
     assigned = 0
     left_entity = 0

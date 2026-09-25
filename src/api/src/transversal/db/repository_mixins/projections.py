@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from transversal.db.arango import ENTITY_IMAGES
+from transversal.db.arango import IMAGES
 from transversal.db.arango import PROJECTIONS
 from transversal.db.arango import RELATIONSHIPS
 from transversal.db.arango import TRAITSETSETTINGS
@@ -134,7 +134,7 @@ class RepositoryProjections:
 
         # Projection-scoped images (entity-level images have no projection_id).
         self.db.aql.execute(
-            f"FOR img IN {ENTITY_IMAGES} FILTER img.projection_id == @pid REMOVE img IN {ENTITY_IMAGES}",
+            f"FOR img IN {IMAGES} FILTER img.variant_id == @pid REMOVE img IN {IMAGES}",
             bind_vars={"pid": projection_id},
         )
 
