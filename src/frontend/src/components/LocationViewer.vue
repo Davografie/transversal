@@ -108,7 +108,21 @@
           </span>
           <span v-if="t.statement" class="trait-chip-statement">{{ t.statement }}</span>
         </div>
-        <span v-if="t.dice.length" class="trait-chip-rating">{{ t.dice.join(' ') }}</span>
+        <!-- The rating renders exactly as the sheet's trait rows do: one fanned
+             staircase per die type (see `traitDiceGroups`), not a flat row. -->
+        <div v-if="t.dice.length" class="trait-chip-rating">
+          <div class="trait-die-groups">
+            <div v-for="(group, gi) in traitDiceGroups(t)" :key="gi" class="trait-die-group">
+              <DieIcon
+                v-for="(die, i) in group"
+                :key="i"
+                :die="die"
+                class="trait-die-icon"
+                :style="i ? { marginLeft: CHIP_DIE_FAN_X, marginTop: `${i * CHIP_DIE_FAN_Y}px` } : null"
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -201,6 +215,7 @@ import SceneEffectsLayer from './location/SceneEffectsLayer.vue'
 import ArrivalRings from './location/ArrivalRings.vue'
 import TravelOverlay from './location/TravelOverlay.vue'
 import MapDot from './MapDot.vue'
+import DieIcon from './DieIcon.vue'
 import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import { isVideoUrl, coverOverscan, probeAspect, preloadMedia } from '@/composables/media.js'
@@ -1280,6 +1295,33 @@ const unplacedTraits = computed(
   () => locationTraits.value.filter(t => !traitPositions.value[t.id])
 )
 
+// Fan geometry for a group's staircase. The sheet overlaps each die onto the one
+// before it by 20px and steps it down 4px, at 32×34 dice; these are the same
+// proportions at this chip's 22×24 (see `.trait-die-icon`).
+const CHIP_DIE_FAN_X = '-14px'
+const CHIP_DIE_FAN_Y = 3
+
+// The rating's dice, grouped exactly as the sheet groups them — one staircase per
+// die type, ascending d4 → d12 (`groupByDieType` in `CharacterSheet.vue`), so
+// `d6 d8 d6` draws a pair of d6s and a d8 rather than three loose dice. Mirrored
+// rather than imported because the sheet keeps the helper component-local; if a
+// third surface ever needs it, that is the moment to extract it to a shared util.
+function traitDiceGroups(t) {
+  const groups = []
+  const byType = new Map()
+  for (const d of (t.dice || [])) {
+    const die = String(d).toLowerCase()
+    if (!byType.has(die)) {
+      const group = []
+      byType.set(die, group)
+      groups.push(group)
+    }
+    byType.get(die).push(die)
+  }
+  groups.sort((a, b) => parseInt(a[0].slice(1), 10) - parseInt(b[0].slice(1), 10))
+  return groups
+}
+
 async function fetchLocationTraits() {
   try {
     const q = props.entityId ? `?viewer=${encodeURIComponent(props.entityId)}` : ''
@@ -1917,11 +1959,28 @@ onMounted(() => {
 
 .trait-chip-inherited { color: var(--map-text-dim); opacity: 0.75; margin-right: 4px; }
 
-.trait-chip-rating {
-  color: var(--map-text-dim);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 1px;
-  white-space: nowrap;
+.trait-chip-rating { display: flex; align-items: center; }
+
+/* ── The rating's dice, as the SHEET draws them ───────────────────────────────
+   Same markup and treatment as `TraitRow`: one `.trait-die-group` per die type,
+   each a fanned staircase (every die after the first overlaps its predecessor by
+   `CHIP_DIE_FAN_X` and steps down by `CHIP_DIE_FAN_Y`), groups separated by a
+   gap. Only the scale differs — the sheet draws 32×34 dice, which would make a
+   map chip several times the height of its own text. */
+.trait-die-groups {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.trait-die-group {
+  display: flex;
+  align-items: flex-start;
+}
+
+.trait-die-icon {
+  width: 22px;
+  height: 24px;
 }
 
 /* ── Overlay switcher ────────────────────────────── */
