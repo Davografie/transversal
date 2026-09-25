@@ -91,7 +91,6 @@
             {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
             <span v-if="img.universe_label" class="universe-badge">{{ img.universe_label }}</span>
             <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
-            <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
             <!-- The XLarge tier is real detail only once the master reaches the
                  ceiling; below it, XLarge is just a copy of the master. -->
             <span
@@ -148,7 +147,6 @@
               <MediaImage :src="img.image_type === 'animated' ? img.path_animated : img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
               <span class="gallery-label">
                 {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
-                <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
                 <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
                 <!-- The XLarge tier is real detail only once the master reaches the
                      ceiling; below it, XLarge is just a copy of the master. -->
