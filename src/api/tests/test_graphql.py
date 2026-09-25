@@ -564,6 +564,42 @@ class TestGraphQLMutations:
         assert "earth" in universes
         assert "three_realms" in universes
 
+    def test_a_projections_location_can_be_cleared(self, client):
+        """``''`` clears the location; ``None`` still means "leave it alone".
+
+        That is the contract `EntityManager.update_projection` documents, and the
+        resolver used to collapse every falsy `current_location` to `None` — so
+        the projection editor's clear gesture sent `''`, reached the service as
+        "unchanged", and a body could never be detached from its place.
+        """
+        eid = _gql(client, """
+            mutation { createEntity(input: { name: "Cleared", type: CHARACTER, universe: "earth" }) { id } }
+        """)["createEntity"]["id"]
+        loc = _gql(client, """
+            mutation { createEntity(input: { name: "Somewhere", type: LOCATION, universe: "earth" }) { id } }
+        """)["createEntity"]["id"]
+
+        added = _gql(client, """
+            mutation($eid: ID!, $loc: ID!) {
+                addProjection(entityId: $eid, universe: "earth", location: $loc) {
+                    projections { id currentLocation }
+                }
+            }
+        """, {"eid": eid, "loc": loc})["addProjection"]
+        placed = next(p for p in added["projections"] if p["currentLocation"] == loc)
+        assert placed["currentLocation"] == loc
+
+        # A no-op update must not be mistaken for a clear.
+        unchanged = _gql(client, """
+            mutation($pid: ID!) { updateProjection(projectionId: $pid, name: "Renamed") { currentLocation } }
+        """, {"pid": placed["id"]})["updateProjection"]
+        assert unchanged["currentLocation"] == loc
+
+        cleared = _gql(client, """
+            mutation($pid: ID!) { updateProjection(projectionId: $pid, currentLocation: "") { currentLocation } }
+        """, {"pid": placed["id"]})["updateProjection"]
+        assert cleared["currentLocation"] is None
+
 
 class TestCharacterView:
     def test_character_assembly(self, client):

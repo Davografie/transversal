@@ -91,7 +91,11 @@ class MutationsEntities:
 
     @strawberry.mutation
     def update_projection(self, info: strawberry.Info, projection_id: strawberry.ID, name: Optional[str] = None, background_image: Optional[str] = None, current_location: Optional[strawberry.ID] = None, transversal_type: Optional[TransversalTypeEnum] = None) -> Projection:
-        p = _em(info).update_projection(str(projection_id), name=name, background_image=background_image, current_location=str(current_location) if current_location else None, transversal_type=transversal_type)
+        # ``None`` is "leave unchanged" and ``""`` is "clear it" — that is the
+        # service's contract, so the empty string must reach it as itself.
+        # Collapsing falsy to None here made clearing a projection's location
+        # impossible: the editor already sends ``''`` and got a silent no-op.
+        p = _em(info).update_projection(str(projection_id), name=name, background_image=background_image, current_location=str(current_location) if current_location is not None else None, transversal_type=transversal_type)
         return Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe, universe=p.universe, name=p.name, background_image=p.background_image, current_location=p.current_location, transversal_type=p.transversal_type, sfx_ids=p.sfx_ids)
 
     @strawberry.mutation
