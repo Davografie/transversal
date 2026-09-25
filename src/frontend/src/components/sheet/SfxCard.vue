@@ -1,9 +1,9 @@
 <template>
   <div
     class="sfx-card"
-    :class="{ 'sfx-active': active, 'sfx-used': used && !active, 'sfx-blocked': blocked }"
+    :class="{ 'sfx-active': active, 'sfx-used': used && !active, 'sfx-blocked': blocked && !readonly, 'sfx-readonly': readonly }"
     :title="title"
-    @click.stop.prevent="!disabled && $emit('activate')"
+    @click.stop.prevent="!disabled && !readonly && $emit('activate')"
   >
     <span class="sfx-card-name">{{ name }}</span>
     <span v-if="description" class="sfx-card-desc">{{ description }}</span>
@@ -28,6 +28,11 @@ defineProps({
   used: { type: Boolean, default: false },
   blocked: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
+  // `readonly` is a different axis from `blocked`: the card *states* a rule
+  // rather than offering a control that happens to be unavailable right now.
+  // It is inert by construction, so it needs neither `disabled` nor `blocked`,
+  // and it is not dimmed — see the styles for why (B189).
+  readonly: { type: Boolean, default: false },
 })
 
 defineEmits(['activate'])
@@ -62,6 +67,24 @@ defineEmits(['activate'])
   opacity: 0.45;
   cursor: not-allowed;
   border-style: dashed;
+}
+/* B189 — a place-lent automatic rule is a *statement*, not a spent button. It
+   keeps the dashed "this is not a control" border but not the opacity: at 0.45
+   the *name* fell below readable contrast, and the name is all a reader needs
+   from a rule they cannot press anyway. The dimming is confined to the border
+   and background instead.
+   A variant rather than a change to `.sfx-blocked`, which the owned-SFX strips
+   also use for a rule whose conditions fail — there the dimming earns its keep,
+   because that rule *would* be pressable once the condition held.
+   Two classes, so it also outranks the duplicated `.sfx-card` root rule the
+   sheet carries in its own scoped block, whatever order they load in. */
+.sfx-card.sfx-readonly {
+  cursor: default;
+  border-style: dashed;
+  background: transparent;
+}
+.sfx-card.sfx-readonly:hover {
+  border-color: var(--overlay-8);
 }
 .sfx-card-name {
   font-size: 11px;

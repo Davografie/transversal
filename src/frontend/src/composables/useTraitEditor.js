@@ -73,6 +73,14 @@ export function useTraitEditor({
     return String(id).replace(/^trait-/, '').replace(/-[a-z0-9]{4}$/i, '').replace(/-/g, ' ')
   }
 
+  // The sub-trait list this editor offers, from the registry's nomination
+  // (`possible_subtrait_ids`). The nomination is **guidance, not a gate**: the
+  // drag-into-a-container path deliberately accepts any trait the sheet is
+  // showing (see `moveTraitInto` in CharacterSheet.vue and the
+  // `from_type: 'traitsetting'` branch on the write path). So this list is a
+  // shortcut to the traits the container was authored for, not the only ones it
+  // may hold — the two authoring paths agreeing on intent while differing on
+  // offer is the decision B142 asked to have recorded (B142).
   const availableSubtraits = computed(() => {
     const assigned = new Set((editingTrait.value?.subTraitSettings || []).map(st => st.traitId))
     return (editingTrait.value?.possibleSubtraitIds || [])

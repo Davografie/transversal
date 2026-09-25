@@ -1,9 +1,15 @@
 <template>
   <!-- Embedded: single root for attribute inheritance -->
   <div v-if="embedded" class="sheet-embedded" :class="{ 'transparent-portrait': sheetPortraitTransparent }">
-    <div v-if="loading" class="loading">Loading…</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
-    <template v-else-if="entity">
+    <!-- The loading/error placeholders are gated on `!hasEntity`, not on
+         `loading` alone. `useApi()`'s `loading` ref is set by *every* call, so a
+         plain `v-if="loading"` swaps this branch out during each background
+         refresh — and a `v-if` branch key is its index, so swapping back
+         unmounts and remounts the entire entity subtree (B125). Once an entity
+         is in hand the sheet stays mounted and refreshes in place. -->
+    <div v-if="!hasEntity && loading" class="loading">Loading…</div>
+    <div v-else-if="!hasEntity && error" class="error">{{ error }}</div>
+    <template v-else-if="hasEntity">
       <div class="header">
         <div class="header-top">
           <div class="header-title">
@@ -521,6 +527,12 @@ const { loading, error, graphql, triggerSfx, endSfx, spendResourceDie, recoverRe
 const entityCache = useEntityCache()
 const { fetchFor: fetchScheduledEvents, formatTimers } = useScheduledEvents()
 const entity = ref(null)
+// A primitive gate for the body's `v-if` chain. Binding the branch to the
+// entity *object* kept a stable identity anyway (Vue keys `v-if` branches by
+// index), but read as if a refresh would remount; `hasEntity` says what is
+// meant, and pairs with the `!hasEntity &&` guards above so a refresh patches
+// in place instead of rebuilding (B125).
+const hasEntity = computed(() => !!entity.value)
 const activeProjection = computed(() => {
   const e = entity.value
   if (!e || !e.projections) return null
@@ -1004,6 +1016,17 @@ const { dragging, source, over, touchStart, dragStart, dragOver, dragLeave, drop
   },
 })
 
+// Dropping a trait into a container is **direct manipulation**: any trait the
+// sheet is showing may go in, not only the ones the container's definition
+// nominates. That is deliberate, not an oversight — the write path refuses only
+// cycles and cross-entity parents, and says the same thing in
+// `mutations_traitsettings` under `from_type: 'traitsetting'`. The editor's
+// sub-trait list offers the nomination as a *shortcut* to the traits a container
+// was authored for (see `availableSubtraits` in useTraitEditor); it is guidance,
+// not a gate. The two paths disagree about the list and agree about the intent,
+// which is the decision B142 asked to have recorded rather than left as an
+// accident. Changing that — gating the drop or widening the editor — is a design
+// call, not a cleanup.
 async function moveTraitInto(traitSettingId, containerId) {
   if (!traitSettingId || !containerId || traitSettingId === containerId) return
   perfMark('trait-move-start', { traitSettingId, containerId })
@@ -1151,9 +1174,44 @@ const visibleRows = computed(() => {
 // same set. Counts *picks*, not settings: a sub-trait rides its parent, while a
 // container contributes its children instead of itself.
 function limitReachedFor(t) {
-  const set = traitSets.value.find(ts => ts.traits.some(x => x.id === t.id))
+  const set = setOfTrait(t)
   if (!set || !set.limit) return false
   return countSetPicks(set.traits, isInPool) >= set.limit
+}
+
+/** The set a trait instance belongs to, as the sheet groups the settings. */
+function setOfTrait(t) {
+  return traitSets.value.find(ts => ts.traits.some(x => x.id === t.id)) || null
+}
+
+/**
+ * Land the reader back on the set list after adding a rating from the detail
+ * view (B185). The sets are an accordion (B178), not a drill-in, so "the
+ * traitset's trait list" is the set they came from — *opened*, since landing on
+ * a collapsed header would read as "the trait vanished". Nothing is closed: the
+ * sets a reader opened are theirs to keep, and several being open at once is the
+ * point of the accordion.
+ *
+ * B185 also asks to advance to the *next* set once this one's limit is reached.
+ * That clause belongs to the drill-in: the accordion has all the sets on screen
+ * at once with the limit dots filling as you pick, so there is no next list to
+ * go to, and the "full" answer only exists after the pool has round-tripped —
+ * which would make navigation off it racy. Recorded on the ticket, not built.
+ */
+function backToSetList(t) {
+  // Leaving the detail *is* the return; the rest is where it lands.
+  closeTraitDetail()
+  // Only the traits tab has a set list to come back to. The profile and relation
+  // tabs render their rows directly, so returning is just the line above — and
+  // expanding a set there would silently open a section of a *different* tab
+  // that the reader never asked for.
+  if (activeSheetView.value !== 'traits' || flatTraitList.value) return
+  const set = setOfTrait(t)
+  // Belt and braces: a row can only be clicked while its own set is open, so this
+  // is normally already satisfied. It states the requirement rather than relying
+  // on that, so a future entry point into the detail cannot land on a collapsed
+  // header and read as "the trait vanished".
+  if (set) expandSet(set.name)
 }
 
 // SFX usage tracking — reset per dice pool cycle
@@ -1582,10 +1640,13 @@ const projectionChoices = computed(() =>
 )
 
 // Helpers the read-only trait detail needs; functions only, so the child can
-// take them as one object without any unwrapping.
+// take them as one object without any unwrapping. Playing from the detail is a
+// navigation act as well as a play — the reader came here to find the trait, so
+// once its die is in the pool they want the list back (B185).
 const detailApi = {
-  canPlayTrait, playTrait, ratingTypeLabel, challengeProgressLabel, challengeRemainingGroups, detailContext,
+  canPlayTrait, ratingTypeLabel, challengeProgressLabel, challengeRemainingGroups, detailContext,
   displayName, sfxCardModel, activateSfx,
+  playTrait: async (t) => { await playTrait(t); backToSetList(t) },
 }
 
 // The inline trait editor's draft state + actions (see composables/useTraitEditor.js).
@@ -2226,13 +2287,15 @@ async function fetchPlaceSfxRules() {
 // A place's rule wears the same card as the entity's own, with one difference:
 // a rule that fires on its own when the world moves isn't something you press,
 // so it reads its rules line and stays inert instead of looking like a button.
+// `readonly` rather than `blocked`: it is not a control that is unavailable, it
+// is a statement — and the dimming `blocked` carries made the name unreadable,
+// which is the one thing a reader wants from it (B189).
 function placeCardModel(sfxId) {
-  const model = sfxCardModel(sfxId)
   const trigger = sfxCatalog.value[sfxId]?.trigger
   if (trigger && trigger !== 'manual') {
-    return { ...sfxCardModel(sfxId, 'full'), disabled: true, blocked: true, title: 'Fires by itself.' }
+    return { ...sfxCardModel(sfxId, 'full'), readonly: true, title: 'Fires by itself.' }
   }
-  return model
+  return sfxCardModel(sfxId)
 }
 
 async function fetchSfxCatalog() {
@@ -3393,6 +3456,21 @@ watch(() => props.externalPoolSources, (sources) => {
   border-color: var(--accent);
 }
 .sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: 20px; overflow: hidden; border: 1px solid var(--overlay-8); }
+/* The tabs are a *row*, and the group is drawn as one rounded control. Below
+   roughly 200px — which the phone-landscape dock reaches, at 179px of sheet —
+   the tab buttons used to wrap onto a second line *inside* that rounded border,
+   so the group stopped reading as a group. One scrollable row instead: the tabs
+   keep their size, the group keeps its shape, and the overflow is reachable by
+   swiping. The `↩` settings button is a sibling of this wrapper, so it stays
+   pinned to the right rather than scrolling away with the tabs. */
+.sheet-pills > div {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sheet-pills > div::-webkit-scrollbar { display: none; }
 .pill { padding: 5px 14px; font-size: 11px; border: none; cursor: pointer; background: var(--overlay-2); color: var(--text-dim); transition: background 0.15s, color 0.15s; }
 .pill + .pill { border-left: 1px solid var(--overlay-6); }
 .pill:hover { background: var(--overlay-4); color: var(--text); }
