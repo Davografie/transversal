@@ -168,6 +168,156 @@ Panels receive IDs or small config (`id`, `index`, `universe`), or the specific
 object being edited when the opener already holds it. They never receive a data
 tree that a parent assembled specifically to pass down.
 
+## Shared table component — what the GM surfaces need
+
+> [!note] Handover to [[ui-ux]], 2026-09-20 — requirements, not conventions
+> Written at the human's request, ahead of [[ui-ux]] building a **unified table
+> component** to serve consequence menus, roll tables, life paths and
+> character-creation wizards. The durable home for the *conventions* is
+> [[UI-UX Design]] § *Shared primitives*, which is [[ui-ux]]'s doc and does not
+> yet have a table/list-row section (its nearest is § *Character sheet →
+> Sub-traits and containers*). This section is the GM-side input to that; it is
+> evidence about the surfaces, not a proposed API.
+
+**Read alongside [[applied-mechanics]]' brief.** They have briefed [[ui-ux]] on the
+same component from the *behaviour* side (2026-09-25): the consequence menu's
+`menuContext`, `side`, `effectDie` and `excludeIds` are computed from the roll's
+outcome in `DiceRoller.vue`, not by the menu, and each can be lost silently by a
+generic table. That is their half and this section does not repeat it — but the
+split is worth stating, because the files are split the same way: the menu
+**components** (`ConsequenceMenu`, `HitchMenu`, `RollTableMenu`) are gm-panels',
+while their **data wiring** (`useConsequences`, `useHitchMenu`,
+`useRollTableMenu`, `DiceRoller`) is theirs. They also count **five table-like
+pickers, not three** — `EntryPicker` is the shared renderer behind all of them —
+which agrees with the surface list below.
+
+### Half of it already exists
+
+`GmList` + `GmListItem` (`components/ui/`) are the existing controlled list:
+`items`/`itemKey`, selection (`selectedIds`, or `selectable` for a ✓/+ pick
+affordance), drag-reorder (`reorderable`, plus `dragHandle` for rows containing
+inputs, where whole-row drag would break text selection), per-row semantics
+(`rowState` → `is-active|disabled|warning|danger|success|muted`, `rowClass`),
+and the `loading` / `emptyText` / `maxHeight` states. Rows render the global
+`.entity-row` shell from `assets/gm-panel.css`; drag is `useDragDrop` (HTML5 dnd
+plus touch long-press, ⠿ handle = instant).
+
+**13 files, 17 call sites** consume it — `GmPanel` (factions), `TargetSpecBuilder`,
+`EffectList`, `GmRollTableEditPanel`, `GmRollTableGroupPanel`, `GmRollTablesPanel`,
+`GmLifePathDetailPanel`, `GmTraitEditPanel` (×5), `GmTraitBatchEditPanel`,
+`GmTraitsetDetail`, `GmTraitsetsPanel`, `GmSfxManagementPanel`, `GmSfxPickerPanel`.
+Which capability each uses is not uniform: `reorderable` in `EffectList`,
+`GmRollTableEditPanel`, `TargetSpecBuilder`, `GmTraitsetsPanel`; `selectable` in
+`GmSfxPickerPanel`, `GmTraitBatchEditPanel`; `:loading` in only three. A unified
+component should **subsume or wrap this**, not sit beside it — otherwise my
+surfaces get a second list vocabulary on top of the first.
+
+### What these surfaces need that a fixed-column table cannot give
+
+1. **Column sets that are data-driven, not declared.** `ConditionEditor`'s
+   columns change with the condition *type*; `EffectForm` builds one merged field
+   list from backend action metadata (`fieldOrder`, `refsFirst`); my
+   `GmRollTableEditPanel`'s entry rows switch between min/max, weight, tier and
+   nothing depending on the table's sibling `scheme` field. A per-row template
+   escape hatch is mandatory.
+2. **Rows are stacked blocks of unbounded height**, not single lines —
+   `BoundVariablesEditor`, `EffectRefField`, and `TargetSpecBuilder`'s step cards
+   embed a whole nested builder per row, and a roll-table entry nests
+   `ConditionEditor` + `EffectEditor`.
+3. **A row pick can spawn a wizard.** `RollTableMenu` and `ConsequenceMenu` are
+   menu → target-resolution (`EffectTargetWizard`) → applied; the row is phase one
+   of three, not the whole interaction.
+4. **Weighted random pick, and rows that are disabled / priced / toned**
+   (`EntryPicker`: 🎲 weighted choice, `cost`, `tone` gm/player edge, disabled).
+5. **Async, backend-computed per-row validity.** `TargetSpecBuilder` shows
+   `.tsb-valid` / `.tsb-error` from a server-side trace, plus a destination
+   summary — validity is not a local predicate.
+6. **Order that is semantic but not draggable.** `BoundVariablesEditor`'s
+   `scopeFor(i)` exposes only *earlier* rows' variables to row `i`; the order
+   matters and there is deliberately no reorder control.
+7. **Real read-only tables with derived cells.** `GmRollTableDetailPanel` is a true
+   `<table>` (`# | Key | Label | Effects`) whose Key is derived from min–max /
+   weight / tier, and `GmLifePathDetailPanel`'s discovery is a two-column table.
+8. **Three different reorder write paths, three selection semantics.** Reorder
+   either splices a local array and re-PUTs the whole parent
+   (`GmRollTableEditPanel`), or emits `update:modelValue` (`EffectList`), or
+   writes a path's step order (`TargetSpecBuilder`). Selection is either absent,
+   an `editingIndex` highlight, a multi-count candidate set, or a phase machine.
+
+An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
+
+### Constraints it must respect (from this scope)
+
+- **Theme tokens only, and my harness will judge it.** `--accent-dim` is a **fill**
+  token and flips to a pale tint in light theme, so it must never carry text.
+  `scripts/check-theme-tokens.mjs` walks **all** of `src/` and holds every
+  `color: var(…)` to a **3:1** floor against the light panel — a new `ui/`
+  component is covered automatically — and it asserts it can still fail.
+- **`Button` for every action, with `:loading` always wired** when the handler
+  awaits. Mind the stale-prop trap: pass the **live ref or shared singleton**,
+  never a value snapshotted at panel-open.
+- **There are no form primitives.** `components/ui/` has Button, DangerButton,
+  EntryPicker, GmList/GmListItem, SearchDropdown, SegmentedControl, TagInput,
+  TargetPicker, TraitInstanceEditor — and **no text, number, select or checkbox
+  input**. The app hand-rolls **100** `<input>`, **85** `<select>` and 5
+  `<textarea>`. An *editable* unified table therefore needs those primitives
+  first, or it will hard-code raw elements and reproduce the inconsistency being
+  removed.
+- **Fix the literals while in there:** `RollTableMenu.vue` overlay
+  `rgba(0,0,0,0.5)`, `EffectForm.vue` `rgba(64,184,96,0.2)`, `ConditionEditor.vue`
+  `var(--warn, #d8a13a)` fallbacks.
+- **"Wizard candidate rows" are on [[UI-UX Design]]'s *raw by design* list** —
+  `.etw-candidate` in `EffectTargetWizard.vue` (mine) and the life-path wizard's
+  ([[life-path]]'s). Absorbing them retires that entry; the list is [[ui-ux]]'s
+  to update (I audited it, per `a1b9ff5`).
+- **Reuse the existing form/state vocabulary** in `assets/gm-panel.css` rather
+  than inventing a parallel one: `.ps-form` + `.ps-form label` (the stacked
+  label/field layout every row editor uses), `.ps-section-title`, `.danger-zone`,
+  and the shared `.empty` / `.loading` state text (which is what `GmList` renders
+  for `emptyText` and `loading`). The panel header's own actions — detach ⤢, dock
+  ⤓, close ×, collapse ▾ — are the vocabulary a table toolbar should sit beside,
+  not replace.
+- **My scope is the roll-table and menu half of the brief.** Of the four named
+  targets, **character-creation wizards** are [[character-sheet]]'s (with
+  [[life-path]]'s `LifePathWizard.vue`); the consequence menus, roll tables and
+  life-path *authoring* panels are mine. Worth asking those two for their half
+  before fixing the API — and [[life-path]] already has an open
+  [[ui-ux]] request for a *runtime* choice surface (menu → pick → effects) that
+  overlaps `EntryPicker`, so the two requests should be settled together.
+- **Panel conventions still apply** (Rules 1–6 above): data and mutations in
+  composables, singleton domain state, navigation via `usePanel()`, cross-panel
+  events via `usePanelBus()`, props carry identity/context only.
+- **A row editor in a child panel cannot be handed a draft by `provide`.**
+  Slot content cannot provide to that panel's *children* — use the panel spec's
+  `context` + `PanelScope` (see `effects.md`'s note). And a **detached** window
+  copies the spec, and so its context, at spawn: it keeps editing the draft it
+  was spawned with. Roll-table entries currently open in child panels
+  (`GmRollTableEntryEditPanel`), so this is live.
+- **Never re-read a list on a row save — patch the row in place.** A re-read
+  blanks the list and re-renders it under the cursor; that was [[P7.17]]/`82cb2949`.
+- **Ordering must be a total order.** The entity list has no `SORT`, so where a
+  table's order matters it is rank → name → id (or position), never arrival order.
+- **`.entity-row` and `useDragDrop` are shared with the location tree.** The tree
+  is **not** a table consumer — its rows come from `useLocationTree.flattenTree`
+  (depth, `more`/`add` rows, three reveal states) — so do not try to fold it in,
+  but changing the row shell or the drag composable reaches it.
+- **Don't regress the a11y that exists.** `SearchDropdown`, `TagInput` and
+  `SegmentedControl` carry proper combobox/listbox/option or radiogroup roles;
+  most table-ish GM surfaces carry none, so there is room to add, not to remove.
+
+### Verification
+
+There is no frontend test runner: checks are plain `node` scripts in
+`src/frontend/scripts/check-*.mjs`, run against the `transversal2-frontend:latest`
+image (build the same way, in Docker). **14 suites exist** and a shared primitive
+can move several — `check-theme-tokens`, `check-combobox`, `check-trait-tree`,
+`check-panel-close`, `check-player-filter`, `check-tree-expand/order/locate`,
+`check-place-filter`, `check-sheet-profile`, `check-sheet-api`, `check-landing`,
+`check-auth-gate`, `check-entity-create`. **Ping [[gm-panels]] when the component
+lands** and I will re-run all 14 and migrate my 17 call sites — tell me whether
+you want that migration or will take it, and once the API is chosen, which of the
+eight capabilities above it covers.
+
 ## Reference panels
 
 - Thin consumer panels: `GmPanel.vue` (root), `GmEntityEditPanel.vue`, `GmTraitEditPanel.vue`.
