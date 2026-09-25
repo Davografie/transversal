@@ -118,6 +118,13 @@ class Entity(BaseModel):
     overlay: Optional[str] = None  # null, "mist", "fire", "rain", "snow", "sparkles", "fog"
     # Navigation dot positions
     nav_positions: dict = Field(default_factory=dict)  # e.g. {"parent": {"x": 90, "y": 15}}
+    # Trait chip positions, keyed by trait-setting id: {"<ts-id>": {"x": 30, "y": 55}}.
+    # Image-space percentages, exactly like `nav_positions`, so a chip pans with
+    # the scene. Per LOCATION, deliberately: an inherited trait's chip is placed
+    # where this location wants it, and nothing is written onto the owner — the
+    # same doom pool can sit differently in the hall and in the cellar ([[B92]],
+    # [[Location Trait Chips]]). A trait with no entry is auto-stacked.
+    trait_positions: dict = Field(default_factory=dict)
     # Faction (conspyramid)
     node_ids: list[str] = Field(default_factory=list)
     # Asset

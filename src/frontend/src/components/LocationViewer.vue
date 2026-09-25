@@ -90,18 +90,25 @@
     <div class="uni-label fade-in" v-if="showElements && gmMode">{{ displayUniverse }}</div>
 
     <!-- Location traits (B92) — the location's own, plus the challenge pools it
-         inherits from its ancestors. Visible to EVERYONE, unlike the two labels
-         above: the server has already resolved what this viewer may see, so a
-         hidden owner simply is not in the list. -->
+         inherits from its ancestors, TRAITS tab only (the server reports each
+         trait's tab; profile traits like the imagen/appearance settings stay off
+         the map). Visible to EVERYONE, unlike the two labels above: the server has
+         already resolved what this viewer may see, so a hidden owner simply is not
+         in the list. A chip is a scene element once it has a stored position
+         ([[Location Trait Chips]]); until then it stays in this stack. -->
     <div
-      v-if="showElements && locationTraits.length"
+      v-if="showElements && unplacedTraits.length"
       class="loc-traits fade-in"
       :class="{ 'has-switcher': gmMode }"
     >
-      <div v-for="t in locationTraits" :key="t.id" class="loc-trait">
-        <span v-if="t.inherited" class="loc-trait-inherited" aria-hidden="true">↳</span>
-        <span class="loc-trait-name">{{ t.name }}</span>
-        <span v-if="t.dice.length" class="loc-trait-dice">{{ t.dice.join(' ') }}</span>
+      <div v-for="t in unplacedTraits" :key="t.id" class="trait-chip">
+        <div class="trait-chip-text">
+          <span class="trait-chip-name">
+            <span v-if="t.inherited" class="trait-chip-inherited" aria-hidden="true">↳</span>{{ t.name }}
+          </span>
+          <span v-if="t.statement" class="trait-chip-statement">{{ t.statement }}</span>
+        </div>
+        <span v-if="t.dice.length" class="trait-chip-rating">{{ t.dice.join(' ') }}</span>
       </div>
     </div>
 
@@ -1262,12 +1269,26 @@ async function fetchNav() {
 // leaves the block empty, like every other background read here.
 const locationTraits = ref([])
 
+// A chip is a SCENE element once it has a stored position — image-space x/y in the
+// location's `trait_positions`, keyed by trait-setting id, exactly like a nav dot's
+// `nav_positions`. Until then it sits in the auto-stack beside the labels, so
+// nothing has to be placed by hand to be readable. (Drawing the placed ones in the
+// scene, and the GM's arrange-mode drag that writes the position, are the next
+// slice — see [[Location Trait Chips]].)
+const traitPositions = computed(() => nav.value.location?.trait_positions || {})
+const unplacedTraits = computed(
+  () => locationTraits.value.filter(t => !traitPositions.value[t.id])
+)
+
 async function fetchLocationTraits() {
   try {
     const q = props.entityId ? `?viewer=${encodeURIComponent(props.entityId)}` : ''
     const r = await fetch(`/api/v1/locations/${props.locationId}/traits${q}`)
     const data = await r.json()
-    locationTraits.value = data.traits || []
+    // TRAITS tab only: a trait's tab is its trait SET's `sheet_tab`, reported by the
+    // server. Profile-tab traits are the place's imagen/appearance configuration,
+    // which has no business on the map (B92, the human's rule).
+    locationTraits.value = (data.traits || []).filter(t => (t.sheet_tab || 'traits') === 'traits')
   } catch { /* silent */ }
 }
 
@@ -1847,16 +1868,19 @@ onMounted(() => {
   pointer-events: none;
 }
 
-/* Location traits (B92). Sits under the two labels above; when the GM's overlay
+/* Location traits (B92) — chips in the sheet's visual language ([[TraitRow]]), so a
+   trait reads the same wherever it appears: an ordinary rounded chip, the name on
+   row 1 and the statement on row 2, and the FULL rating (every die) on the right —
+   not the chip's edge. Sits under the two labels above; when the GM's overlay
    switcher is present (also GM-only, at +44px) it steps below it rather than
    overlapping. `pointer-events: none` like the labels, so the map keeps every
-   click — which also means no tooltips here, so the inherited marker has to read
-   on its own. */
+   click. This block is the AUTO-STACK for chips with no stored position yet; a
+   placed chip is drawn in the scene instead ([[Location Trait Chips]]). */
 .loc-traits {
   position: absolute;
   top: calc(env(safe-area-inset-top, 16px) + 44px);
   left: 16px;
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: 4px;
   max-width: 40vw;
   z-index: 2;
   pointer-events: none;
@@ -1866,21 +1890,39 @@ onMounted(() => {
   top: calc(env(safe-area-inset-top, 16px) + 80px);
 }
 
-.loc-trait {
-  display: flex; align-items: baseline; gap: 6px;
+.trait-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 8px 3px 9px;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 11px;          /* the ordinary chip edge, on every corner */
+  background: rgba(10,10,20,0.55);
+  backdrop-filter: blur(4px);
   font-size: 12px;
   text-shadow: 0 1px 6px rgba(0,0,0,0.85);
 }
 
-.loc-trait-name { color: var(--map-text); }
+.trait-chip-text { display: flex; flex-direction: column; min-width: 0; }
 
-.loc-trait-dice {
+.trait-chip-name { color: var(--map-text); }
+
+.trait-chip-statement {
+  color: var(--map-text-dim);
+  font-size: 11px;
+  font-style: italic;
+  /* Two rows at most: the name is row 1, the statement row 2, and a long statement
+     clips rather than wrapping the chip taller. */
+  max-width: 34vw;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.trait-chip-inherited { color: var(--map-text-dim); opacity: 0.75; margin-right: 4px; }
+
+.trait-chip-rating {
   color: var(--map-text-dim);
   font-variant-numeric: tabular-nums;
   letter-spacing: 1px;
+  white-space: nowrap;
 }
-
-.loc-trait-inherited { color: var(--map-text-dim); opacity: 0.75; }
 
 /* ── Overlay switcher ────────────────────────────── */
 

@@ -50,11 +50,17 @@ def _trait_entry(repo, ts, location_id: str, viewer: str):
     if viewer and not trait_visible_to(hidden, known_to, viewer):
         return None
     registry = repo.get_trait(ts.trait_id)
+    # Which sheet tab this trait belongs on. It is a property of the trait's **set**,
+    # not of the trait or the entity (`TraitSet.sheet_tab`), and it is the same
+    # read-through the GraphQL `traitsetTab` field does — the viewer needs it to keep
+    # profile traits (a location's "appearance", say) off the map ([[B92]]).
+    traitset = repo.get_traitset_by_id(ts.traitset_id)
     return {
         "id": ts.id,
         "trait_id": ts.trait_id,
         "name": getattr(registry, "name", "") or ts.trait_id,
         "traitset_id": ts.traitset_id,
+        "sheet_tab": getattr(getattr(traitset, "sheet_tab", None), "value", None) or "traits",
         "rating_type": ts.rating_type.value,
         "polarity": ts.polarity.value,
         "dice": [d.value for d in ts.dice],

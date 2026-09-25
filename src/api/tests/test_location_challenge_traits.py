@@ -101,6 +101,13 @@ class FakeRepo:
     def get_trait(self, trait_id):
         return _Named({"trait-curse": "The Curse"}.get(trait_id, ""))
 
+    def get_traitset_by_id(self, traitset_id):
+        # A trait's tab is its trait SET's `sheet_tab`, so `_trait_entry` looks the set
+        # up (real repo: `repository_mixins/traits.py`). These fixtures are traits-tab
+        # traits: a set with no `sheet_tab` falls back to "traits" in `_trait_entry`,
+        # so nothing here is a profile trait.
+        return _Named("traits")
+
     def get_entity(self, entity_id):
         hidden = bool(self._hidden.get(entity_id, False))
         entity = _Named({"district": "Krasnoyarsk-45"}.get(entity_id, ""))
