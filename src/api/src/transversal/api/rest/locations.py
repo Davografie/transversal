@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.db.repository import EntityRepository
+from transversal.db.repository_mixins.trait_settings import trait_visible_to
 from transversal.domain import ArrivalKind
 from transversal.services.entity_manager import EntityManager, EntityNotFoundError
 
@@ -36,20 +37,37 @@ async def location_graph():
 
 
 @router.get("/locations/{location_id}/challenge-traits")
-async def location_challenge_traits(location_id: str):
+async def location_challenge_traits(location_id: str, viewer: str = ""):
     """This location's doom/progress pools, **including what its zones inherit** ([[B191]]).
 
     Read-only by construction: an inherited pool is returned as the *owner's own
     trait setting* — same id and dice ledger — so nothing here is a copy, and a
-    die spent against it is spent on the one pool. ``inherited`` plus
-    ``owner_location_id``/``owner_name`` are what let the viewer show a room's
-    own doom pool differently from the district's.
+    die spent against it is spent on the one pool.
+
+    ``viewer`` is the viewing character's entity id, and it is what makes the
+    fog-of-war rule ([B92], the human's decision 2026-09-23) resolvable
+    **server-side** — the client cannot apply it, because only the payload knows
+    who is asking:
+
+      * the owner is **not hidden** → the pool is visible to everyone;
+      * the owner **is hidden** → only a viewer the trait's ``known_to`` names.
+
+    ``hidden`` is the **owning location's** entity flag (`TraitSetting` has no
+    flag of its own), and because an inherited pool belongs to its owner, both
+    ``hidden`` and ``known_to`` are the owner's — a zone cannot un-hide the
+    district's curse. Omit ``viewer`` to get the whole set with the flags on it
+    (the GM's read); the flags are in the payload either way so a caller can
+    always tell why something was or was not shown.
     """
     repo = _repo()
     traits = []
     for ts in repo.get_location_challenge_traits(location_id):
         registry = repo.get_trait(ts.trait_id)
         owner = repo.get_entity(ts.entity_id)
+        hidden = bool(getattr(owner, "hidden", False))
+        known_to = [str(k) for k in (ts.known_to or [])]
+        if viewer and not trait_visible_to(hidden, known_to, viewer):
+            continue
         traits.append({
             "id": ts.id,
             "trait_id": ts.trait_id,
@@ -63,8 +81,10 @@ async def location_challenge_traits(location_id: str):
             "owner_location_id": ts.entity_id,
             "owner_name": getattr(owner, "name", "") or ts.entity_id,
             "inherited": ts.entity_id != location_id,
+            "hidden": hidden,
+            "known_to": known_to,
         })
-    return {"location_id": location_id, "traits": traits}
+    return {"location_id": location_id, "viewer": viewer or None, "traits": traits}
 
 
 @router.get("/locations/{location_id}/navigate")

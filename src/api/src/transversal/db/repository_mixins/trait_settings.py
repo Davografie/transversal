@@ -43,6 +43,24 @@ def fold_challenge_traits(chain: list[str], grouped: dict[str, list[TraitSetting
     return out
 
 
+def trait_visible_to(hidden: bool, known_to: list[str], viewer_entity_id: str) -> bool:
+    """Whether the owner of a trait lets this viewer see it ([[B92]]).
+
+    The human's rule (2026-09-23): a trait of a location that is **not hidden**
+    is visible to everyone; one whose owner **is hidden** is visible only to a
+    viewer its ``known_to`` names. ``hidden`` is the owning location's entity flag
+    — ``TraitSetting`` carries no flag of its own — so an inherited pool is
+    governed by the location it belongs to and never by the zone inheriting it:
+    a zone cannot un-hide the district's curse.
+
+    A viewer that names no entity sees only the un-hidden set, which is why this
+    filter has to be resolved in the payload rather than by the client.
+    """
+    if not hidden:
+        return True
+    return bool(viewer_entity_id) and viewer_entity_id in (known_to or [])
+
+
 class RepositoryTraitSettings:
     """Mixin contributing 18 member(s) to the repository."""
 
