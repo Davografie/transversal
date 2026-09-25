@@ -220,7 +220,7 @@ class RepositoryImages:
         """
         if img is None:
             return None
-        render, tier = render_for(role, img.available_renders)
+        render, tier = render_for(role, img.renders)
         return self._image_url(img, render, tier)
 
     def resolve_role_image(

@@ -147,17 +147,3 @@ class MediaImage(BaseModel):
             self.projection_id = self.variant_id
         return self
 
-    @property
-    def available_renders(self) -> list[str]:
-        """``renders``, with a row written before the tier migration read in.
-
-        A pre-``B210`` row carries no ``renders``: an ``animated`` row's only render
-        was its video, and a ``cutout`` row was a separate matte record that serves
-        its own static ladder (so it has no *derived* render). Dropped with the
-        legacy ``ImageType`` members, once no row has them.
-        """
-        if self.renders:
-            return self.renders
-        if self.image_type == ImageType.ANIMATED:
-            return ["animated"]
-        return []

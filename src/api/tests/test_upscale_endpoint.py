@@ -38,11 +38,11 @@ def _cleanup(repo):
         repo.delete_entity(ENTITY, rmtree=True)
 
 
-def _image(image_id, width, height, image_type=ImageType.IMAGEN, roles=("background",)):
+def _image(image_id, width, height, renders=(), roles=("background",)):
     return MediaImage(
         id=image_id, owner_kind="entity", owner_id=ENTITY, universe=UNIVERSE,
-        image_type=image_type, roles=list(roles), width=width, height=height,
-        filename=image_id, extension="webp", created_at=EARLY,
+        image_type=ImageType.IMAGEN, renders=list(renders), roles=list(roles),
+        width=width, height=height, filename=image_id, extension="webp", created_at=EARLY,
     )
 
 
@@ -53,7 +53,8 @@ def _fixtures(repo):
     ))
     repo.create_image(_image(SMALL, 832, 1216))
     repo.create_image(_image(BIG, UPSCALE_MASTER_CAP, UPSCALE_MASTER_CAP))
-    repo.create_image(_image(LOOP, 832, 1216, image_type=ImageType.ANIMATED, roles=()))
+    # A loop is a picture with an animated render now, not an `animated` type.
+    repo.create_image(_image(LOOP, 832, 1216, renders=("animated",), roles=()))
 
 
 def _stub_job(monkeypatch):

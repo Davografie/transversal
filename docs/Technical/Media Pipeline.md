@@ -67,11 +67,9 @@ Every image is tagged with one or more **canonical roles**:
 > and the class `EntityImage` → `MediaImage` (and the constant `ENTITY_IMAGES` →
 > `IMAGES`). [[Trait Images Design Log]] carries the decisions and the reasoning.
 
-`ImageType` (enum): `uploaded` · `imagen` — the **source's** provenance. Since
-[[B210]] a matte and a loop are renders of the picture rather than types of their
-own; `animated` and `cutout` survive only as transitional members so rows the
-older code still writes keep validating, and are retired in the commit after the
-merge.
+`ImageType` (enum): `uploaded` · `imagen` — the **source's** provenance, and
+nothing else. Since [[B210]] a matte and a loop are `renders` of the picture, not
+types of their own, and the `animated`/`cutout` members are gone.
 
 `MediaImage` (`images` collection) — one record per image file:
 
@@ -478,11 +476,11 @@ that was missing is rebuilt from the matte's own `Original`. A loop's source is
 *recovered* rather than assumed — the animate pipeline re-encodes what it copies,
 so byte equality misses almost all of them and a 64-bit average hash finds them.
 
-Re-run it **after this merges**: the `:3000` containers keep running the older code
-until then and still write `image_type=cutout`/`animated` rows, which the pass
-picks up. `ImageType.CUTOUT` and `ImageType.ANIMATED` are retired in the commit
-after that window closes, not before — `MediaImage` has to keep validating what
-the older code writes.
+Re-run it after any window in which older code could have written
+`image_type=cutout`/`animated` rows: the pass still recognises those two strings
+and folds them in, even though `ImageType` no longer names them. It reads the raw
+value for classification and normalises it only so the row validates, which is
+what makes the cleanup independent of the enum it is cleaning up.
 
 ## REST API
 

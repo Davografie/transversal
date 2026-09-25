@@ -147,8 +147,10 @@ def _delete_still_ladder(img: MediaImage, report: dict) -> None:
 # ── the two passes ───────────────────────────────────
 
 
-def _migrate_cutouts(images: list[MediaImage], by_name: dict, apply: bool, report: dict) -> None:
-    for cut in [i for i in images if i.image_type == ImageType.CUTOUT]:
+def _migrate_cutouts(
+    images: list[MediaImage], by_name: dict, legacy: dict, apply: bool, report: dict
+) -> None:
+    for cut in [i for i in images if legacy.get(i.id) == "cutout"]:
         report["cutouts"] += 1
         source_name = cut.prompt[len(CUTOUT_PREFIX):].strip() if cut.prompt.startswith(CUTOUT_PREFIX) else ""
         source = by_name.get((cut.owner_id, cut.universe, source_name)) if source_name else None
@@ -156,12 +158,12 @@ def _migrate_cutouts(images: list[MediaImage], by_name: dict, apply: bool, repor
             report["cutouts_unmatched"] += 1
             print(f"  SKIP cutout {cut.id}: source {source_name or 'UNNAMED'!r} not found on {cut.owner_id}")
             continue
-        if source.image_type == ImageType.CUTOUT:
+        if legacy.get(source.id) == "cutout":
             report["cutouts_unmatched"] += 1
             print(f"  SKIP cutout {cut.id}: its source {source.id} is itself a cutout")
             continue
 
-        if "cutout" in source.available_renders:
+        if "cutout" in source.renders:
             # The new writer made this matte during the transition; the picture's
             # own render is the one to keep.
             report["cutouts_duplicate"] += 1
@@ -183,16 +185,16 @@ def _migrate_cutouts(images: list[MediaImage], by_name: dict, apply: bool, repor
                 report["files_renamed"] += 1
         _synthesise_missing_tiers(source, report)
 
-        source.renders = sorted(set(source.available_renders) | {"cutout"})
+        source.renders = sorted(set(source.renders) | {"cutout"})
         source.transparent = source.transparent or cut.transparent
         source.roles = sorted(set(source.roles) | set(cut.roles))
         _db_update(source)
         _db_delete(cut.id)
 
 
-def _migrate_loops(images: list[MediaImage], apply: bool, report: dict) -> None:
-    loops = [i for i in images if i.image_type == ImageType.ANIMATED]
-    statics = [i for i in images if i.image_type not in (ImageType.CUTOUT, ImageType.ANIMATED)]
+def _migrate_loops(images: list[MediaImage], legacy: dict, apply: bool, report: dict) -> None:
+    loops = [i for i in images if legacy.get(i.id) == "animated"]
+    statics = [i for i in images if legacy.get(i.id) not in ("cutout", "animated")]
 
     # Match every loop's still against its owner's static pictures.
     matches: dict[str, MediaImage] = {}
@@ -245,7 +247,7 @@ def _migrate_loops(images: list[MediaImage], apply: bool, report: dict) -> None:
                 elif _move(_loop_path(loop), destination):
                     report["files_moved"] += 1
                 _delete_still_ladder(loop, report)
-                source.renders = sorted(set(source.available_renders) | {"animated"})
+                source.renders = sorted(set(source.renders) | {"animated"})
                 source.animated_extension = loop.extension
                 source.flags = sorted(set(source.flags) | set(loop.flags))
                 # The loop's own roles move onto the picture too: a loop that was
@@ -317,12 +319,25 @@ def migrate(apply: bool = False) -> int:
         return 0
 
     docs = list(db.aql.execute("FOR d IN images RETURN d"))
-    images = [MediaImage.model_validate({**d, "id": d["_key"]}) for d in docs]
+    # A row written before the migration carries `cutout` or `animated`, which are
+    # no longer `ImageType` members. Normalise the type **for validation only**:
+    # the classification below reads the raw string, which is the thing that
+    # actually says what the row is — so this pass keeps working even though the
+    # enum no longer names the shape it is cleaning up.
+    legacy = {d["_key"]: d.get("image_type") for d in docs}
+    images = [
+        MediaImage.model_validate({
+            **d,
+            "id": d["_key"],
+            "image_type": ImageType.IMAGEN if legacy[d["_key"]] in ("cutout", "animated") else d["image_type"],
+        })
+        for d in docs
+    ]
 
     # A cutout names its source by filename, so index the pictures that can be one.
     by_name: dict[tuple[str, str, str], MediaImage] = {}
     for img in images:
-        if img.image_type == ImageType.CUTOUT:
+        if legacy.get(img.id) == "cutout":
             continue
         key = (img.owner_id, img.universe, img.filename)
         if key in by_name:
@@ -338,10 +353,10 @@ def migrate(apply: bool = False) -> int:
     }
 
     print("=== CUTOUTS: fold each matte into its picture ===")
-    _migrate_cutouts(images, by_name, apply, report)
+    _migrate_cutouts(images, by_name, legacy, apply, report)
     print()
     print("=== LOOPS: a loop is a render, not a picture ===")
-    _migrate_loops(images, apply, report)
+    _migrate_loops(images, legacy, apply, report)
 
     print()
     print("=== IMAGE TIER MIGRATION (B210) ===")

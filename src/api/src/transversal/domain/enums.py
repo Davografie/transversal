@@ -227,13 +227,6 @@ class ImageType(str, Enum):
     """
     UPLOADED = "uploaded"
     IMAGEN = "imagen"
-    # ── Transitional ([[B210]]): no live row carries these after the migration ──
-    # Kept until the tier model has merged, because the containers at `:3000` run
-    # the older code and still write them; `MediaImage` must validate what they
-    # write. `migrate_image_tiers` folds such rows in — re-run it after the merge.
-    # Retired in the commit that follows, per the design log's two-step.
-    ANIMATED = "animated"
-    CUTOUT = "cutout"
 
 class MessageKind(str, Enum):
     LETTER = "letter"

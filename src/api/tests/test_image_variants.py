@@ -148,16 +148,3 @@ def test_a_picture_without_renders_serves_the_plain_ladder():
     assert repo.role_image_url(img, "background") == "/media/imagen/loc-1/three_realms/pic_XLarge.webp"
     assert repo.role_image_url(img, "sheet") == "/media/imagen/loc-1/three_realms/pic_Small.webp"
     assert repo.role_image_url(img, "navdot") == "/media/imagen/loc-1/three_realms/pic_Large.webp"
-
-
-def test_a_pre_b210_loop_row_still_serves_its_video():
-    """`available_renders` reads the old row shape in, so nothing 404s mid-migration."""
-    from transversal.db.repository_mixins.images import RepositoryImages
-    from transversal.domain import ImageType
-
-    repo = RepositoryImages()
-    img = _record(image_type=ImageType.ANIMATED, filename="oldloop", extension="webm",
-                  roles=["background"])
-
-    assert img.renders == [], "the row itself carries no renders"
-    assert repo.role_image_url(img, "background") == "/media/animated/loc-1/three_realms/oldloop.webm"

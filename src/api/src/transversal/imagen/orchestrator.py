@@ -503,7 +503,7 @@ class ImagenOrchestrator:
         # copies in sync by hand, and this is the defect class [[B210]] removes.
         if source is not None:
             updated = self.repo.update_image(source.id, {
-                "renders": sorted(set(source.available_renders) | {"animated"}),
+                "renders": sorted(set(source.renders) | {"animated"}),
                 "animated_extension": ext.lstrip("."),
                 # Only the animate pipeline's motion claim is added. It generated no
                 # still here, so `ai_generated` is not its to assert: the picture
@@ -632,7 +632,7 @@ class ImagenOrchestrator:
         img = self.repo.get_image(image_id)
         if not img:
             raise FileNotFoundError(f"Image '{image_id}' not found")
-        if img.image_type == ImageType.ANIMATED or "animated" in img.available_renders:
+        if "animated" in img.renders:
             raise ValueError("Upscaling works on still images; a loop has no tiers")
 
         out_dir = IMAGEN_DIR / img.owner_id / img.universe
@@ -732,7 +732,7 @@ class ImagenOrchestrator:
         src = self.repo.get_image(image_id)
         if not src:
             raise FileNotFoundError(f"Image '{image_id}' not found")
-        if src.image_type == ImageType.ANIMATED or "animated" in src.available_renders:
+        if "animated" in src.renders:
             raise ValueError("Background removal only works on static images")
 
         source_path = IMAGEN_DIR / f"{src.owner_id}/{src.universe}/{src.filename}_Large.{src.extension}"
@@ -780,7 +780,7 @@ class ImagenOrchestrator:
         # picture came from. `transparent` is set because the picture now has a
         # transparent render — which is what a portrait surface asks about.
         updated = self.repo.update_image(src.id, {
-            "renders": sorted(set(src.available_renders) | {"cutout"}),
+            "renders": sorted(set(src.renders) | {"cutout"}),
             "transparent": src.transparent or has_transparency(cutout_bytes),
         })
 
