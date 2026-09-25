@@ -20,20 +20,22 @@
       </optgroup>
     </select>
 
-    <label>Razmerit</label>
-    <div class="raz-dots" role="radiogroup" aria-label="Starting razmerit">
-      <button
-        v-for="n in 5"
-        :key="n"
-        type="button"
-        class="raz-dot"
-        :class="{ filled: form.razmerit >= n }"
-        role="radio"
-        :aria-checked="form.razmerit === n"
-        :aria-label="`${n} razmerit`"
-        @click="setRazmerit(n)"
-      ></button>
-    </div>
+    <template v-if="showRazmerit">
+      <label>Razmerit</label>
+      <div class="raz-dots" role="radiogroup" aria-label="Starting razmerit">
+        <button
+          v-for="n in 5"
+          :key="n"
+          type="button"
+          class="raz-dot"
+          :class="{ filled: form.razmerit >= n }"
+          role="radio"
+          :aria-checked="form.razmerit === n"
+          :aria-label="`${n} razmerit`"
+          @click="setRazmerit(n)"
+        ></button>
+      </div>
+    </template>
 
     <Button class="save-btn" block @click="onSubmit" :loading="saving" :disabled="saving || !form.name.trim()" variant="success" solid>
       {{ saving ? 'Creating…' : 'Create' }}
@@ -43,7 +45,7 @@
 
 <script setup>
 import { reactive, computed, watch } from 'vue'
-import { ENTITY_TYPES } from '@/constants/entityTypes.js'
+import { ENTITY_TYPES, hasRazmerit } from '@/constants/entityTypes.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import Button from '@/components/ui/Button.vue'
 
@@ -98,9 +100,17 @@ const initForm = () => ({
 })
 const form = reactive(initForm())
 
-// Universe entities have no location; clear and disable the picker.
+// Rated types only — a location or a universe has no razmerit to set, and the
+// form must not offer one (the edit panel asks the same question of the same
+// shared rule).
+const showRazmerit = computed(() => hasRazmerit(form.type))
+
+// Universe entities have no location; clear and disable the picker. Switching to
+// an unrated type clears a rating already clicked, so the panel cannot submit a
+// razmerit it no longer shows — and never mind a stale one from a prior type.
 watch(() => form.type, (t) => {
   if (t === 'UNIVERSE') form.location = ''
+  if (!hasRazmerit(t)) form.razmerit = 0
 })
 
 function setRazmerit(n) {

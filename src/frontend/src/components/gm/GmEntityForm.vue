@@ -35,6 +35,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { hasRazmerit } from '@/constants/entityTypes.js'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
@@ -59,8 +60,9 @@ function onToggleBool(field, e) {
 }
 
 // ── Field visibility by entity type ──────────────────
-const RAZMERIT_TYPES = new Set(['CHARACTER', 'GMC', 'FACTION'])
-const showRazmerit = computed(() => RAZMERIT_TYPES.has(local.value.type))
+// The rule itself lives in `constants/entityTypes.js`, shared with the create
+// panel, so the two doors cannot disagree about which types are rated.
+const showRazmerit = computed(() => hasRazmerit(local.value.type))
 </script>
 
 <style scoped>

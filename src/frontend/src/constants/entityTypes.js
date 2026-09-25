@@ -2,6 +2,18 @@
 // Values are the GraphQL enum member names (see EntityType in the API domain).
 export const ENTITY_TYPES = ['CHARACTER', 'GMC', 'ASSET', 'FACTION', 'UNIVERSE', 'LOCATION']
 
+// The types that carry a razmerit rating. A location is a place and a universe
+// is a container — neither is rated — so a form must not offer the field for
+// them. Shared because the create and edit panels both ask the question, and
+// they had drifted: the edit form hid the field, the create form always showed
+// it, so the same entity was authored differently depending on the door used.
+export const RAZMERIT_TYPES = new Set(['CHARACTER', 'GMC', 'FACTION'])
+
+/** Whether an entity type is rated, and so whether a form should offer razmerit. */
+export function hasRazmerit(type) {
+  return RAZMERIT_TYPES.has(String(type || '').toUpperCase())
+}
+
 // The buckets an entity list groups by, in the order it shows them.
 //
 // Characters are the only type that splits, and `memberTypeBadge` (which calls
