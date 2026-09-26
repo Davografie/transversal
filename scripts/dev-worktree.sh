@@ -3,11 +3,18 @@
 #
 # :3000 is RESERVED for the canonical tv2_frontend (release-build). This script
 # never uses it, so a worktree can never shadow the integration tree.
+#
+# The port is published on LOOPBACK ONLY, matching the canonical frontend in
+# docker-compose.yaml. The dev server proxies the ungated API, so binding it
+# wider publishes that API to the LAN — reach it from another device with
+# `tailscale serve --http=<port> <port>` (see [[Private Access Runbook]]) rather
+# than by rebinding here. Set DEV_BIND_ADDR deliberately if you truly need more.
 set -euo pipefail
 
 IMAGE="${FRONTEND_IMAGE:-transversal2-frontend:latest}"
 NETWORK="${FRONTEND_NETWORK:-transversal2_default}"
 BASE_PORT="${FRONTEND_BASE_PORT:-3002}"
+BIND_ADDR="${DEV_BIND_ADDR:-127.0.0.1}"
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -51,8 +58,9 @@ fi
 echo "Serving $WT_ROOT"
 echo "  container: $NAME"
 echo "  url:       http://localhost:$port"
+echo "  bind:      $BIND_ADDR:$port (remote: tailscale serve --http=$port $port)"
 
-docker run -d --name "$NAME" -p "${port}:3000" \
+docker run -d --name "$NAME" -p "${BIND_ADDR}:${port}:3000" \
   --network "$NETWORK" \
   -v "$SRC:/app/src" \
   -v "$PUBLIC:/app/public" \
