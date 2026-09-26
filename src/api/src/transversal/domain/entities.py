@@ -147,6 +147,12 @@ class Entity(BaseModel):
     # per-location and off by default. Sub-locations ("zones") are always
     # included and are not gated by this.
     prompt_include_ancestors: bool = False
+    # Universe — the universe's look: accent, surfaces, borders and type, as
+    # semantic knob groups ("dark"/"light") plus "font"/"radius". Applied by the
+    # frontend as `:root` custom-property overrides while that universe is in
+    # play ([[UI-UX Design#Theming]]). The shape and two worked examples live in
+    # `db/universe_palettes.py`; a knob outside that vocabulary does nothing.
+    palette: Optional[dict] = None
     # Life path tracking
     life_paths: list["Enrollment"] = Field(default_factory=list)  # memberships (faction + path)
     active_universes: list[str] = Field(default_factory=list)  # faction-only: where active
