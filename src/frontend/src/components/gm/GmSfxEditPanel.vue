@@ -69,6 +69,18 @@
           <TargetSpecBuilder v-model="draft.listener_spec" :destination="{ elements: ['entity'] }" :source-element="sourceElement" />
           <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>). Resolved once, when the rule arms.</p>
         </div>
+
+        <!-- The listening window answers the *same* question one step later:
+             "Listens to" says whose rolls feed the part of this rule that waits,
+             this says how long it waits for them. They exist together and only
+             together, so they sit together rather than at opposite ends of the
+             panel — which is what made "Listens to" read as unrelated. -->
+        <div class="sfx-duration">
+          <h5 class="sfx-slot">How long it's held</h5>
+          <label>Armed for (listening window)</label>
+          <DurationBuilder v-model="draft.duration" allow-rolls />
+          <p class="hint">How long this SFX stays armed before its delayed effects fire and it drops. Only affects <em>On roll / On result / On contest</em> effects — immediate effects fire once regardless. This is <strong>not</strong> an undo timer; each effect's own duration governs when a change reverts.</p>
+        </div>
       </template>
 
       <!-- Values the rule is about, named *before* anything is checked. Above the
@@ -103,14 +115,6 @@
       @add="openEffectEditor(null)"
       @edit="openEffectEditor"
     />
-
-    <!-- Armed window: only meaningful when the SFX has delayed effects. -->
-    <div v-if="hasDeferredEffects" class="sfx-duration">
-      <h4 class="ps-section-title">How long it's held</h4>
-      <label>Armed for (listening window)</label>
-      <DurationBuilder v-model="draft.duration" allow-rolls />
-      <p class="hint">How long this SFX stays armed before its delayed effects fire and it drops. Only affects <em>On roll / On result / On contest</em> effects — immediate effects fire once regardless. This is <strong>not</strong> an undo timer; each effect's own duration governs when a change reverts.</p>
-    </div>
 
     <!-- Where this may be *taken*, not where it works: the last question on the
          panel, because it is optional and it describes the rule's history rather
@@ -393,9 +397,13 @@ const storedPlacement = unknownPlacement
 // Mirror of `derive_arming_scope` (domain/traits.py): every trigger listens to
 // the entity that activated it, except a session-start passive, which watches
 // everyone. Shown resolved rather than as "auto", so the empty option says where
-// it lands instead of naming a value the author has to translate.
+// it lands instead of naming a value the author has to translate. The phrase
+// matches the explicit options below — "self"/"global" are enum values, and the
+// author read them as naming a *mode* rather than an audience.
 const derivedArmingScope = computed(() =>
-  (draft.trigger || '') === 'on_session_start' ? 'global' : 'self')
+  (draft.trigger || '') === 'on_session_start'
+    ? "everyone's rolls"
+    : 'whoever activated it')
 
 const ARMING_SCOPES = ['self', 'global', 'listener_spec']
 const unknownArmingScope = computed(() =>

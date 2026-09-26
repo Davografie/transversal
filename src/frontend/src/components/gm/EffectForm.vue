@@ -64,6 +64,29 @@
           :variables="scopedVariables"
         />
       </div>
+      <!-- The in-line trait editor (die/polarity/statement/notes) describes the
+           trait this effect *creates*, so for a gain verb it renders directly
+           under the trait picker. `orderedInputs` places it there; it used to
+           render after every field, which is what separated the two halves the
+           author reads as one control. -->
+      <TraitInstanceEditor
+        v-else-if="item.kind === 'gainEditor'"
+        mode="single"
+        variant="box"
+        allow-variable
+        :show-capacity="false"
+        :die="newEffect.fields.result"
+        :polarity="newEffect.negative ? 'NEGATIVE' : 'POSITIVE'"
+        :rating-type="(newEffect.context.rating_type || 'STATIC').toUpperCase()"
+        :statement="newEffect.context.statement"
+        :notes="newEffect.context.notes"
+        :variables="dieVariables"
+        @update:die="newEffect.fields.result = $event"
+        @update:polarity="newEffect.negative = $event === 'NEGATIVE'"
+        @update:rating-type="newEffect.context.rating_type = $event.toLowerCase()"
+        @update:statement="newEffect.context.statement = $event"
+        @update:notes="newEffect.context.notes = $event"
+      />
       <template v-else>
       <div class="ee-field">
         <label>{{ item.f.label }}</label>
@@ -203,24 +226,6 @@
       </div>
       </template>
       </template>
-      <TraitInstanceEditor
-        v-if="isGainAction"
-        mode="single"
-        variant="box"
-        allow-variable
-        :show-capacity="false"
-        :die="newEffect.fields.result"
-        :polarity="newEffect.negative ? 'NEGATIVE' : 'POSITIVE'"
-        :rating-type="(newEffect.context.rating_type || 'STATIC').toUpperCase()"
-        :statement="newEffect.context.statement"
-        :notes="newEffect.context.notes"
-        :variables="dieVariables"
-        @update:die="newEffect.fields.result = $event"
-        @update:polarity="newEffect.negative = $event === 'NEGATIVE'"
-        @update:rating-type="newEffect.context.rating_type = $event.toLowerCase()"
-        @update:statement="newEffect.context.statement = $event"
-        @update:notes="newEffect.context.notes = $event"
-      />
       <div v-if="hasExtraContext" class="ee-field">
         <label>Other context</label>
         <div v-for="(value, key) in newEffect.extraContext" :key="key" class="ee-extra-row">
@@ -637,10 +642,20 @@ const orderedInputs = computed(() => {
   // An action that declares an owner path but does not rank it still shows it, at
   // the end — the anchor reads after the thing it anchors.
   if (ownerPathDestination.value && !declaredNames.has('owner')) tail.push(OWNER_INPUT)
-  return [...declared, ...tail]
+  const items = [...declared, ...tail]
+  // A gain verb's in-line trait editor belongs with the trait it is about (see
+  // the template). Placed *after* the trait field, wherever that field landed —
+  // and appended when the action has no target field, which is exactly where it
+  // rendered before for every gain verb.
+  if (!isGainAction.value) return items
+  const at = items.findIndex((x) => x.kind === 'field' && x.f.name === 'target')
+  return at === -1
+    ? [...items, GAIN_EDITOR_INPUT]
+    : [...items.slice(0, at + 1), GAIN_EDITOR_INPUT, ...items.slice(at + 1)]
 })
 
 const OWNER_INPUT = { kind: 'owner', f: { name: 'owner', label: 'Anchored to' } }
+const GAIN_EDITOR_INPUT = { kind: 'gainEditor', f: { name: 'gain_editor' } }
 
 // A declared order ranks refs among the fields, so it decides their side itself;
 // without one, the action's own `refsFirst` does.
