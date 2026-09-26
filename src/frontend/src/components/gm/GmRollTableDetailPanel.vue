@@ -93,7 +93,13 @@ onMounted(async () => {
 onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function editTable() {
-  panel.open({ component: GmRollTableEditPanel, title: 'Edit ' + (table.value?.name || props.name), props: { tableId: props.tableId, lifePathId: table.value?.lifePath || '' } })
+  panel.open({
+    component: GmRollTableEditPanel,
+    title: 'Edit ' + (table.value?.name || props.name),
+    id: props.tableId,
+    badge: 'ROLL-TABLE',
+    props: { tableId: props.tableId, lifePathId: table.value?.lifePath || '' },
+  })
 }
 
 function openEntry(i) {

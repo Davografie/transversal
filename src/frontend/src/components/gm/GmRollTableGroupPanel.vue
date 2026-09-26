@@ -50,7 +50,7 @@ onMounted(() => {
 onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function openTable(t) {
-  panel.open({ component: GmRollTableDetailPanel, title: t.name, id: t.id, props: { tableId: t.id, name: t.name } })
+  panel.open({ component: GmRollTableDetailPanel, title: t.name, id: t.id, badge: 'ROLL-TABLE', props: { tableId: t.id, name: t.name } })
 }
 
 function addTable() {
@@ -58,6 +58,7 @@ function addTable() {
   panel.open({
     component: GmRollTableEditPanel,
     title: props.kind === 'fundamental' ? 'New Fundamental Table' : 'New Roll Table',
+    badge: 'ROLL-TABLE',
     props: { tableId: '', universe, lifePathId: '' },
   })
 }
