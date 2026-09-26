@@ -19,6 +19,12 @@
       <label>Description</label>
       <textarea v-model="draft.description" rows="2" placeholder="Flavour text…"></textarea>
 
+      <!-- The author's grouping: where a rule *lives* and what *starts* it are
+           one subject — the trigger — and were two sibling headings that read as
+           unrelated questions. The group heading says so; the two questions keep
+           their own names underneath it. -->
+      <h4 class="ps-section-title">Trigger</h4>
+
       <h5 class="sfx-slot">Lives on</h5>
       <label>Source</label>
       <select v-model="draft.source_kind">
@@ -98,11 +104,11 @@
       />
       <p class="hint">Resolved once per activation, in order, before the conditions. Refer to one by name — <code>{name}</code> — and a later row may start from an earlier one.</p>
 
-      <!-- Where this may be *taken*, not where it works. It sits at the end of
-           the panel (below) rather than here, because it answers a question
-           about the rule's *history* — how it came to be attached — and the
-           fields above answer what it does. -->
-      <h5 class="sfx-slot">When it applies</h5>
+      <!-- "Limits", not "when it applies" (the author's naming, 2026-09-26): the
+           conditions do not decide *when* the rule fires — the trigger does — they
+           narrow where it is allowed to. Reading them as a second trigger is the
+           confusion the old name invited. -->
+      <h5 class="sfx-slot">Limits</h5>
       <label>Conditions</label>
       <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" :variables="allVariables" />
     </div>
