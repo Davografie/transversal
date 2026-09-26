@@ -412,3 +412,39 @@ def test_the_matte_is_trimmed_to_its_subject_before_it_is_saved(stub_gpu, monkey
     asyncio.run(orchestrator.run_remove_background(source.owner_id, source.id))
 
     assert seen["size"] == (80, 80), f"the matte was saved at {seen['size']}, untrimmed"
+
+
+def test_the_auto_cutout_trims_the_matte_too(stub_gpu, monkeypatch):
+    """The projection's first generated image gets its matte from the same
+    `run_remove_background`, so it is trimmed like any other cutout ([[B213]]).
+
+    This is the path with no button on it — the one a future change could quietly
+    leave behind while the endpoint stays correct."""
+    repo = _FakeRepo()
+
+    canvas = Image.new("RGBA", (400, 400), (0, 0, 0, 0))
+    canvas.paste(Image.new("RGBA", (80, 80), (200, 30, 30, 255)), (300, 300))
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG")
+    png = buf.getvalue()
+
+    sizes = {}
+
+    def _capture(data, out, base):
+        if base.endswith("_Cutout"):
+            with Image.open(io.BytesIO(data)) as im:
+                sizes["matte"] = im.size
+        out.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (8, 8)).save(out / f"{base}_Large.webp")
+        return {"original": f"{base}_Original.webp", "large": f"{base}_Large.webp"}
+
+    async def _get_image(self, *args, **kwargs):
+        return png
+
+    monkeypatch.setattr(orch, "_save_image_variants", _capture)
+    monkeypatch.setattr(_FakeComfyUI, "get_image", _get_image)
+
+    image, _ = _generate(repo, monkeypatch, real_cutout=True)
+
+    assert sizes.get("matte") == (80, 80), f"auto-cutout saved {sizes.get('matte')}, untrimmed"
+    assert image.renders == ["cutout"]
