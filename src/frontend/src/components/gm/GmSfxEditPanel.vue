@@ -113,8 +113,12 @@
       <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" :variables="allVariables" />
     </div>
 
-    <!-- Effects: list inline; each effect's form opens in a child panel -->
-    <h4 class="ps-section-title">What it does</h4>
+    <!-- Effects: list inline; each effect's form opens in a child panel.
+         "Costs & Effects" rather than "What it does" (the author's call,
+         2026-09-26): the list is one ordered sequence — the array *is* the
+         execution order — so the title names both kinds instead of implying a
+         split the order could not honour. -->
+    <h4 class="ps-section-title">Costs &amp; Effects</h4>
     <EffectList
       :model-value="draft.effects"
       @update:model-value="draft.effects = $event"
