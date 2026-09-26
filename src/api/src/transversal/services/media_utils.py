@@ -23,6 +23,56 @@ def has_transparency(data: bytes) -> bool:
         return False
 
 
+#: Alpha at or below this counts as empty when finding a matte's subject. A
+#: lossy WebP's alpha plane carries compression noise well above zero across the
+#: whole canvas, so trimming on "any non-zero alpha" would find the full frame
+#: and remove nothing.
+TRIM_ALPHA_THRESHOLD = 8
+
+#: A margin thinner than this fraction of a side is not worth a re-encode. It also
+#: makes the trim **stable**: a lossy WebP's alpha bleeds about a pixel at the
+#: edge, so trimming on an exact bounding box would shave a pixel on every pass.
+TRIM_MIN_MARGIN_RATIO = 0.02
+
+
+def subject_box(img: Image.Image) -> tuple[int, int, int, int] | None:
+    """The box a matte's subject occupies, or None when there is none.
+
+    Uses ``TRIM_ALPHA_THRESHOLD`` so a noisy alpha plane does not read as content.
+    """
+    alpha = img.getchannel("A").point(lambda v: 255 if v > TRIM_ALPHA_THRESHOLD else 0)
+    return alpha.getbbox()
+
+
+def trim_transparent_margins(data: bytes) -> tuple[bytes, bool]:
+    """Crop an image to its subject: ``(bytes, changed)``.
+
+    A cutout keeps the source's canvas, so a subject that filled a third of the
+    frame is served at a third of the size the tier allows — a navdot or a
+    portrait renders it small and floating in empty space. Trimming discards only
+    transparent pixels, so nothing visible is lost, and an image whose margin is
+    already thin is returned **untouched** rather than re-encoded — which costs
+    quality for no gain and would let a lossy alpha edge shave a pixel per pass.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as opened:
+            img = opened.convert("RGBA")
+            box = subject_box(img)
+            if box is None:
+                return data, False
+            left, top, right, bottom = box
+            if box == (0, 0, img.width, img.height):
+                return data, False
+            slack = round(min(img.width, img.height) * TRIM_MIN_MARGIN_RATIO)
+            if left <= slack and top <= slack and right >= img.width - slack and bottom >= img.height - slack:
+                return data, False   # already tight, to within what is worth doing
+            buf = io.BytesIO()
+            img.crop(box).save(buf, format="PNG")  # lossless intermediate
+            return buf.getvalue(), True
+    except Exception:
+        return data, False
+
+
 #: The variant ladder. Each tier is scaled to fit this **long side**, aspect
 #: preserved. ``XLarge`` exists because a full-bleed location backdrop is drawn
 #: at viewport size: a 1080p screen wants ~1920 device pixels and a phone held

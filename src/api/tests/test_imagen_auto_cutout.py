@@ -12,6 +12,7 @@ failure policy, not about ComfyUI.
 """
 
 import asyncio
+import io
 
 import pytest
 from PIL import Image
@@ -373,3 +374,41 @@ def test_a_sourced_loop_lands_under_the_pictures_own_name(stub_gpu, monkeypatch)
     assert loop.exists(), "the loop sits beside the still under one base name"
     # And no second still ladder was written for the loop.
     assert not (orch.IMAGEN_DIR / "char-1" / "earth" / "src7_anim_Large.webp").exists()
+
+
+def test_the_matte_is_trimmed_to_its_subject_before_it_is_saved(stub_gpu, monkeypatch):
+    """A matte keeps the source's canvas, so a subject in one corner of the frame
+    would be served at that fraction of the tier — small, and floating in empty
+    space on every surface ([[B213]])."""
+    source = _image("src-9", PROJECTION)
+    source.filename = "src9"
+    repo = _FakeRepo(existing=[source])
+    src_dir = orch.IMAGEN_DIR / source.owner_id / source.universe
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / f"src9_Large.{source.extension}").write_bytes(b"bytes")
+
+    canvas = Image.new("RGBA", (400, 400), (0, 0, 0, 0))
+    canvas.paste(Image.new("RGBA", (80, 80), (200, 30, 30, 255)), (300, 300))
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG")
+    png = buf.getvalue()
+
+    seen = {}
+
+    def _capture(data, out, base):
+        with Image.open(io.BytesIO(data)) as im:
+            seen["size"] = im.size
+        out.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (4, 4)).save(out / "o.webp")
+        return {"original": "o.webp", "large": "L.webp"}
+
+    monkeypatch.setattr(orch, "_save_image_variants", _capture)
+    async def _get_image(self, *args, **kwargs):
+        return png
+
+    monkeypatch.setattr(_FakeComfyUI, "get_image", _get_image)
+
+    orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
+    asyncio.run(orchestrator.run_remove_background(source.owner_id, source.id))
+
+    assert seen["size"] == (80, 80), f"the matte was saved at {seen['size']}, untrimmed"

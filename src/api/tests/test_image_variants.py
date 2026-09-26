@@ -148,3 +148,111 @@ def test_a_picture_without_renders_serves_the_plain_ladder():
     assert repo.role_image_url(img, "background") == "/media/imagen/loc-1/three_realms/pic_XLarge.webp"
     assert repo.role_image_url(img, "sheet") == "/media/imagen/loc-1/three_realms/pic_Small.webp"
     assert repo.role_image_url(img, "navdot") == "/media/imagen/loc-1/three_realms/pic_Large.webp"
+
+
+# ── Trimming a matte to its subject ([[B213]]) ────────
+
+
+def _rgba(width, height, subject=None, noise=None):
+    """A transparent canvas, optionally with an opaque box and a noise border."""
+    from PIL import Image
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    px = img.load()
+    if noise is not None:
+        for x in range(width):
+            px[x, 0] = (10, 10, 10, noise)
+            px[x, height - 1] = (10, 10, 10, noise)
+        for y in range(height):
+            px[0, y] = (10, 10, 10, noise)
+            px[width - 1, y] = (10, 10, 10, noise)
+    if subject:
+        left, top, right, bottom = subject
+        for x in range(left, right):
+            for y in range(top, bottom):
+                px[x, y] = (200, 30, 30, 255)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_a_matte_is_trimmed_to_its_subject():
+    from transversal.services.media_utils import trim_transparent_margins
+
+    data = _rgba(1000, 1000, subject=(300, 400, 400, 500))
+    out, changed = trim_transparent_margins(data)
+
+    assert changed is True
+    with Image.open(io.BytesIO(out)) as im:
+        # Exactly the subject: the margin is what was being trimmed, so a pad
+        # would be putting some of it back.
+        assert im.size == (100, 100), im.size
+
+
+def test_an_already_tight_matte_is_returned_untouched():
+    """No re-encode for no gain — which is also what makes the trim idempotent."""
+    from transversal.services.media_utils import trim_transparent_margins
+
+    from PIL import Image as _Image
+    buf = io.BytesIO()
+    _Image.new("RGBA", (64, 64), (10, 20, 30, 255)).save(buf, format="PNG")
+    data = buf.getvalue()
+
+    out, changed = trim_transparent_margins(data)
+
+    assert changed is False
+    assert out == data, "the bytes themselves, not a re-encode"
+
+
+def test_faint_alpha_noise_does_not_count_as_content():
+    """A lossy WebP's alpha plane is noisy right across the canvas; measuring on
+    'any non-zero alpha' would find the full frame and trim nothing."""
+    from transversal.services.media_utils import subject_box, trim_transparent_margins
+
+    data = _rgba(400, 400, subject=(150, 150, 250, 250), noise=5)
+    with Image.open(io.BytesIO(data)) as im:
+        assert subject_box(im.convert("RGBA")) == (150, 150, 250, 250)
+
+    _, changed = trim_transparent_margins(data)
+    assert changed is True, "the subject is a quarter of the frame; it must trim"
+
+
+def test_a_thin_margin_is_not_worth_a_re_encode():
+    """Trimming 1% off is not worth losing a generation of quality for, and
+    ignoring it is what makes the operation stable across a lossy round trip."""
+    from transversal.services.media_utils import trim_transparent_margins
+
+    # A 10px margin on a 1000px canvas is 1%.
+    _, changed = trim_transparent_margins(_rgba(1000, 1000, subject=(10, 10, 990, 990)))
+    assert changed is False
+
+
+def test_a_fully_transparent_image_is_left_alone():
+    from transversal.services.media_utils import trim_transparent_margins
+
+    data = _rgba(50, 50)
+    out, changed = trim_transparent_margins(data)
+
+    assert changed is False
+    assert out == data
+
+
+def test_an_opaque_image_is_left_alone():
+    """Nothing transparent to trim — a plain picture must not be re-cropped."""
+    from transversal.services.media_utils import trim_transparent_margins
+
+    from PIL import Image as _Image
+    buf = io.BytesIO()
+    _Image.new("RGB", (30, 40), "blue").save(buf, format="PNG")
+
+    _, changed = trim_transparent_margins(buf.getvalue())
+    assert changed is False
+
+
+def test_trimming_is_idempotent():
+    from transversal.services.media_utils import trim_transparent_margins
+
+    once, _ = trim_transparent_margins(_rgba(600, 600, subject=(200, 200, 300, 300)))
+    twice, changed = trim_transparent_margins(once)
+
+    assert changed is False, "a trimmed matte is tight"
+    assert twice == once

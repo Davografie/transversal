@@ -45,6 +45,7 @@ from transversal.imagen.prompt_builder import build_imagen_prompt
 from transversal.services.media_utils import (
     VARIANT_LONG_SIDES,
     has_transparency,
+    trim_transparent_margins,
     save_image_variants as _save_image_variants,
 )
 
@@ -768,6 +769,14 @@ class ImagenOrchestrator:
             await self.comfyui.free_memory()
 
         await self._report(owner_id, gen_type, GenerationStatus.SAVING, "Saving cutout...", 85)
+
+        # Trim the matte to its subject ([[B213]]). A cutout keeps the source's
+        # canvas, so a subject that filled a third of the frame would be served at
+        # a third of the size its tier allows — small, and floating in empty space
+        # on every surface. Only transparent pixels are discarded.
+        cutout_bytes, trimmed = trim_transparent_margins(cutout_bytes)
+        if trimmed:
+            logger.info(f"Trimmed the matte for {src.filename} ({src.owner_id}) to its subject")
 
         # The matte gets the picture's own base name, so it is a render *of* it —
         # the name is the whole ownership story.

@@ -730,8 +730,35 @@ picture is cut out under the trait's id exactly as an entity's is under its own.
 > transparent), while the picture stayed RGB.
 
 Pipeline: read the picture's `Large` variant → upload to ComfyUI →
-`bg_remove.json` → BiRefNet → alpha composite → RGBA PNG →
-`_save_image_variants` under `{filename}_Cutout` → the picture's `renders`.
+`bg_remove.json` → BiRefNet → alpha composite → RGBA PNG → **trimmed to the
+subject** → `_save_image_variants` under `{filename}_Cutout` → the picture's
+`renders`.
+
+**A matte is trimmed to its subject** ([[B213]]). It used to keep the source's
+canvas, so a subject that filled a third of the picture was served at a third of
+the size its tier allowed — small, and floating in empty space. Now
+`trim_transparent_margins` crops it, with two rules worth knowing: content is
+alpha **> 8** (a lossy WebP's alpha plane is noisy right across the canvas, so
+"any non-zero alpha" would find the full frame and trim nothing), and a margin
+thinner than **2% of the short side is not worth a re-encode**, which is also what
+makes the pass stable — an exact bounding box would shave a pixel per pass as the
+lossy edge bleeds. An already-tight matte is returned byte-identical.
+
+The **source picture is never touched**: its framing is its own, and the record's
+`width`/`height` describe that master, not the matte. Because a tier is fitted to
+the long side, trimming also makes the subject *sharper* — `Small` spends its
+240px on the subject instead of on empty space. The consequence to be aware of is
+that a matte's aspect ratio becomes the subject's, which is rarely the canvas's.
+
+```bash
+docker compose exec api python -m transversal.trim_cutout_margins          # dry run
+docker compose exec api python -m transversal.trim_cutout_margins --apply
+```
+
+Run on the live library 2026-09-25: **148 of 225** mattes trimmed, 77 already
+tight, 0 left loose after — the worst were being served at half size or worse
+(`Lin` covered 42% of its frame). Idempotent: a second pass reports 0. New cutouts
+are trimmed by the pipeline itself, so the pass exists only for what predates it.
 
 The workflow is `LoadImage → LoadBackgroundRemovalModel → RemoveBackground →
 InvertMask → JoinImageWithAlpha → SaveImage`.
