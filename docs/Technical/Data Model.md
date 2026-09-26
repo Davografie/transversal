@@ -208,6 +208,8 @@ Core entity metadata. Every significant thing in Transversal is an entity. Trait
 | `sfx_ids` | string[] | | SFX owned directly by this entity |
 | `scheduled_events` | ScheduledEvent[] | | Pending timed reverts |
 | `lora_config` | dict? | | Per-entity-type LoRA config (e.g. `{"CHARACTER": ["lora1"]}`) |
+| `prompt_steering` | string | | Universe-only: free-text style steering appended to every prompt generated there |
+| `palette` | dict? | | Universe-only: the universe's look — `dark`/`light` colour groups plus `font` and `radius`, applied by the frontend as `:root` overrides ([[UI-UX Design#The universe palette]]) |
 | `life_paths` | Enrollment[] | | Life-path memberships (faction + path) |
 | `active_universes` | string[] | | Faction-only: where active |
 | `suitable_life_path_ids` | string[] | | Faction-only: offered paths |

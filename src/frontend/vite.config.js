@@ -3,6 +3,10 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
 
+// The API the dev server proxies to. `docker run … -e VITE_API_TARGET=…` lets a
+// worktree serve its own API container; unset, this is the compose service name.
+const API_TARGET = process.env.VITE_API_TARGET || 'http://api:8080'
+
 export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
@@ -62,8 +66,12 @@ export default defineConfig({
     // worktree servers on :3002+ (scripts/dev-worktree.sh).
     allowedHosts: ['ptdave', 'ptdave.ts.transversal.app'],
     proxy: {
-      '/api': 'http://api:8080',
-      '/media': 'http://api:8080'
+      // Default: the compose service. `VITE_API_TARGET` points a worktree dev
+      // server at its own API container instead (a worktree's API changes are
+      // not in `tv2_api`), which is the only way to exercise a backend change
+      // against a browser without touching the :3000 tree.
+      '/api': API_TARGET,
+      '/media': API_TARGET
     }
   }
 })

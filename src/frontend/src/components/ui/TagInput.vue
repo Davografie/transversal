@@ -226,7 +226,7 @@ function focusInput() { if (!props.disabled) inputEl.value?.focus() }
   min-height: 30px;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: text;
   transition: border-color 0.15s;
 }
@@ -239,7 +239,7 @@ function focusInput() { if (!props.disabled) inputEl.value?.focus() }
   gap: 2px;
   padding: 1px 2px 1px 6px;
   font-size: 11px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-12);
   color: var(--accent);
   max-width: 100%;
@@ -254,7 +254,7 @@ function focusInput() { if (!props.disabled) inputEl.value?.focus() }
   line-height: 1;
   padding: 0 4px;
   cursor: pointer;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   opacity: 0.7;
 }
 .tag-x:hover { opacity: 1; background: var(--accent-20); }
@@ -283,7 +283,7 @@ function focusInput() { if (!props.disabled) inputEl.value?.focus() }
   overflow-y: auto;
   background: var(--bg-panel-solid);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 6px 18px var(--shadow);
 }
 
@@ -294,7 +294,7 @@ function focusInput() { if (!props.disabled) inputEl.value?.focus() }
   padding: 5px 8px;
   font-size: 12px;
   color: var(--text);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
 }
 .tag-option.is-highlighted { background: var(--accent-12); color: var(--accent); }

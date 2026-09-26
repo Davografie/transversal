@@ -64,7 +64,7 @@ onUnmounted(clearTimer)
 <style scoped>
 /* Squarer than the default radius (matches the old danger-button look) and a
    pulse while armed, so the confirm step reads as a distinct state. */
-.danger-button.btn-md { border-radius: 6px; font-size: 12px; padding: 6px; }
+.danger-button.btn-md { border-radius: var(--radius-sm); font-size: 12px; padding: 6px; }
 .danger-button.is-active { font-weight: 600; animation: pulse-confirm 0.6s ease-in-out infinite alternate; }
 
 @keyframes pulse-confirm {

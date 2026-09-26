@@ -76,6 +76,8 @@ class MutationsEntities:
             e.prompt_steering = input.prompt_steering.strip()
         if input.prompt_include_ancestors is not None:
             e.prompt_include_ancestors = input.prompt_include_ancestors
+        if input.palette is not None:
+            e.palette = json.loads(input.palette) if input.palette else None
         updated = _em(info).update(e)
         return _entity_to_gql(updated)
 

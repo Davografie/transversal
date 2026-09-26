@@ -2136,6 +2136,7 @@ def update_entity(args: dict) -> dict:
         ("lora_config", "loraConfig"),
         ("prompt_steering", "promptSteering"),
         ("prompt_include_ancestors", "promptIncludeAncestors"),
+        ("palette", "palette"),
     ):
         if args.get(key) is not None:
             inp[gql_key] = args[key]
@@ -3236,6 +3237,8 @@ TOOL_SCHEMAS = {
                 "lora_config": {"type": "string"},
                 "prompt_steering": {"type": "string"},
                 "prompt_include_ancestors": {"type": "boolean"},
+                "palette": {"type": "string",
+                    "description": "JSON palette on a universe entity — the universe's accent, surfaces, borders and type ([[UI-UX Design#Theming]]); {} clears it"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["entity_id"],

@@ -277,7 +277,7 @@ watch(effective, load)
 .tp-chip {
   display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 6px;
   background: var(--overlay-8); border: 1px solid var(--overlay-12);
-  border-radius: 3px; font-size: 10px; color: var(--text);
+  border-radius: var(--radius-xs); font-size: 10px; color: var(--text);
 }
 .tp-chip-x {
   border: 0; background: none; padding: 0 2px; cursor: pointer;
@@ -288,7 +288,7 @@ watch(effective, load)
 .tp-random {
   flex: none; width: 26px; height: 24px; line-height: 1; cursor: pointer;
   background: var(--overlay-6); border: 1px solid var(--overlay-12);
-  border-radius: 3px; color: var(--text-dim); font-size: 13px;
+  border-radius: var(--radius-xs); color: var(--text-dim); font-size: 13px;
 }
 .tp-random:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .tp-random:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -298,19 +298,19 @@ watch(effective, load)
 .tp-filter {
   flex: none; position: relative; width: 26px; height: 24px; line-height: 1; cursor: pointer;
   background: var(--overlay-6); border: 1px solid var(--overlay-12);
-  border-radius: 3px; color: var(--text-dim); font-size: 12px;
+  border-radius: var(--radius-xs); color: var(--text-dim); font-size: 12px;
 }
 .tp-filter:hover { color: var(--accent); border-color: var(--accent); }
 .tp-filter.active { color: var(--accent); border-color: var(--accent); background: var(--accent-12); }
 .tp-filter-count {
   position: absolute; top: -6px; right: -6px; min-width: 13px; height: 13px;
-  border-radius: 7px; background: var(--accent); color: var(--text-on-accent);
+  border-radius: var(--radius-sm); background: var(--accent); color: var(--text-on-accent);
   font-size: 9px; font-weight: 700; line-height: 13px; text-align: center;
 }
 .tp-filter-panel {
   position: absolute; top: calc(100% + 4px); right: 0; z-index: 40;
   min-width: 210px; padding: 8px; display: flex; flex-direction: column; gap: 6px;
-  background: var(--bg-panel); border: 1px solid var(--overlay-12); border-radius: 6px;
+  background: var(--bg-panel); border: 1px solid var(--overlay-12); border-radius: var(--radius-sm);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 .tp-filter-head {
@@ -326,6 +326,6 @@ watch(effective, load)
 .tp-filter-row select, .tp-filter-row input[type="text"] {
   flex: 1; max-width: 120px; padding: 3px 6px; font-size: 11px;
   background: var(--overlay-4); border: 1px solid var(--overlay-12);
-  border-radius: 4px; color: var(--text);
+  border-radius: var(--radius-xs); color: var(--text);
 }
 </style>

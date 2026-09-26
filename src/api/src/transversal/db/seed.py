@@ -1,6 +1,7 @@
 """Seed data — populate the trait registry and SFX definitions."""
 
 from transversal.db.repository import EntityRepository
+from transversal.db.universe_palettes import palette_for
 from transversal.domain import (
     DieType,
     Effect,
@@ -274,7 +275,12 @@ def seed_locations(em) -> None:
 
 
 def seed_universes(em) -> None:
-    """Create universe entities. Idempotent."""
+    """Create universe entities. Idempotent.
+
+    A new universe is created with its **example palette** when one is known
+    (`db/universe_palettes.py`) — the entity field is the source of truth after
+    that, so an existing universe is never overwritten here ([[UI-UX Design#Theming]]).
+    """
     repo = em.repo
 
     universes = [
@@ -288,6 +294,7 @@ def seed_universes(em) -> None:
                 id=u["id"], type=EntityType.UNIVERSE,
                 name=u["name"], current_universe=u["key"],
                 current_location=None, razmerit=0,
+                palette=palette_for(u["key"]),
             ))
 
 

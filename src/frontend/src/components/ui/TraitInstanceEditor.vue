@@ -308,7 +308,7 @@ function togglePolarity() {
 }
 .rating-type-btn {
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--overlay-12);
   background: transparent;
   color: var(--text-dim);
@@ -330,7 +330,7 @@ function togglePolarity() {
   font-size: 14px;
   font-weight: 700;
   padding: 3px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--overlay-10);
   background: var(--overlay-6);
   color: var(--text);
@@ -373,7 +373,7 @@ function togglePolarity() {
   font-size: 13px;
   font-weight: 700;
   padding: 2px 9px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 2px dashed var(--overlay-25);
   background: var(--overlay-4);
   color: var(--text-dim);
@@ -406,7 +406,7 @@ function togglePolarity() {
   box-sizing: border-box;
   background: var(--overlay-4);
   border: 1px solid var(--overlay-12);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 12px;
   font-family: inherit;
@@ -445,7 +445,7 @@ function togglePolarity() {
   gap: 10px;
   padding: 10px;
   border: 1px solid var(--overlay-10);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 .is-box .te-label {
   font-weight: 400;

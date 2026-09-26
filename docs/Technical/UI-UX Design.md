@@ -900,10 +900,13 @@ the dock.
 
 ## Theming
 
-Light and dark are **fallback layers** over one token API; a future
-per-universe palette is an **override layer** (universe entity → inline
-`--` overrides on `:root`). Both share the rule that no palette color appears
-as a literal in components.
+Three layers over one token API, bound by one rule: **no palette colour appears
+as a literal in a component.**
+
+1. **Dark** — `:root` (the default).
+2. **Light** — `html.light`: the same tokens with light values.
+3. **Universe** — a palette on the universe entity, applied **inline** on
+   `<html>` while that universe is in play (see [[#The universe palette]]).
 
 - **Tokens are the only API.** `:root` holds the dark values (the default);
   `html.light` overrides the same tokens with light values. `color-scheme`
@@ -914,8 +917,10 @@ as a literal in components.
   base hue, so a universe palette only needs to override the base color.
 - **Detection** — `useColorMode` (VueUse) in `App.vue`: follows the OS,
   persists a manual override to `localStorage`, toggles a `.light`/`.dark`
-  class on `<html>`, and keeps the `theme-color` meta in sync. No toggle UI
-  yet (settings overlay later).
+  class on `<html>`, and keeps the `theme-color` meta in sync. `useThemeMode`
+  also exposes `isLight` — the **resolved** theme — because a universe palette
+  has to know which of its two halves to paint, and the *preference* cannot
+  answer that in Auto.
 - **Theme-stable surfaces** stay dark in both themes because they render on
   their own dark canvas: the location map (`LocationViewer`, `MapDot`), the GM
   graph (`canvas/*`), dice (`DieIcon`, `PoolDiceRing`, die chips), and the
@@ -926,12 +931,108 @@ as a literal in components.
   `--offered`); `--accent-dim` flips to a pale blue `#b9d3ec` so its
   `background + var(--text)` pairing stays readable in both themes.
 
-
 **In-app control.** Settings → *Appearance* offers Auto / Light / Dark
 (`app/AppearanceBlock.vue` over a `SegmentedControl`). It stores the
 *preference*, not the resolved theme: `useThemeMode` runs `useColorMode` with
 `emitAuto`, so Auto stays visible and the `theme-color` meta tracks whatever
 theme is actually applied (in Auto, the device's).
+
+### The universe palette
+
+**The universe in play repaints the app's chrome** — accent, surfaces, borders
+and type — so Earth reads as a filing system and the Three Realms as jade and
+bamboo paper. The **map, the GM canvas and the dice do not follow it**: they
+render on their own dark canvas and answer to the scene's art and to the
+semantic colour of a die face, not to the universe's ink.
+
+**Authored, not coded.** The palette is a field on the **universe entity**
+(`Entity.palette`, a JSON object — the same shape as `lora_config`: one field
+per universe, a JSON string on the GraphQL wire, no frontend release per
+universe). `db/universe_palettes.py` is the shape reference and carries two
+worked examples; `seed_universes` gives a *new* universe its example, and
+`backfill_universe_palettes.py` fills a blank one on an existing database —
+**never overwriting an authored palette**, because the entity is the source of
+truth from the moment it has a value.
+
+**Two halves in one object.** The palette carries both themes, because it is
+written inline where it would otherwise outrank `html.light`:
+
+```json
+{
+  "font":   { "ui": "…", "display": "…" },
+  "radius": "0px",
+  "dark":   { "accent": "#4a7fb5", "bgDeep": "#0e1013", "…": "…" },
+  "light":  { "accent": "#1f4e79", "bgDeep": "#e6e2d6", "…": "…" }
+}
+```
+
+`font` and `radius` sit **outside** the theme groups, because type and shape
+are not per-theme: a light/dark flip must not change them.
+
+**Semantic knobs, one mapping table.** `assets/universePalette.js` is the only
+place a knob becomes a token, so the token API can move without breaking
+authored content and a misspelled knob is *reported* instead of silently doing
+nothing (`check-universe-theme.mjs` fails on one; the composable warns once).
+
+| Group | Knobs | Tokens |
+|---|---|---|
+| accent | `accent` · `accentDim` · `accentActive` | `--accent` (and every `--accent-N` tint, mixed from it), `--accent-dim`, `--accent-active` |
+| surfaces | `bgDeep` · `bgOverlay` · `bgPanel` · `bgPanelSolid` · `bgPanelRaised` | the `--bg-*` family |
+| text | `text` · `textDim` | `--text` (neutral overlays derive from it), `--text-dim` |
+| borders | `border` · `borderSoft` · `borderStrong` | `--border`, `--border-soft`, `--border-strong` |
+| type | `font.ui` · `font.display` | `--font-ui`, `--font-display` |
+| shape | `radius` | `--radius` + the derived step scale |
+
+**The step scale is derived, so a palette sets one number.** `--radius-lg`,
+`-sm`, `-xs` and `-chip` are computed in `styles.css` from `--radius`
+(−2/−4/−6 px, +10 px, each clamped at 0), and their defaults at `--radius: 10px`
+are **exactly** the values the app shipped with (8/6/4/20). A palette that sets
+`radius` also squares the pills (`--radius-pill` follows it), because a corner
+language is one decision, not two.
+
+**Four rules the layer keeps:**
+
+1. **Inline, and re-applied on a theme flip.** `useUniverseTheme` watches the
+   resolved theme and repaints, because an inline override outranks
+   `html.light`; an unreactive palette would leave a dark accent in light mode.
+2. **Cleared, then written.** The vars a palette can write are removed before
+   the next one is painted, so a knob the *next* universe does not set returns
+   to the stylesheet's value instead of following the player across universes
+   (a dark-only palette contributes no colour in light mode).
+3. **A missing or broken palette is not a failure.** No palette — or none for
+   this theme — leaves the app's own tokens standing; unparseable content is
+   warned about and the universe keeps the default look.
+4. **Nothing else may set a palette token inline.** The composable owns the
+   `:root` overrides; `html[data-universe="<key>"]` names the owner and is an
+   inspection hook, never a style hook.
+
+**Not on the scale yet, deliberately.** ~315 `border-radius` literals remain in
+surface files. `styles.css`, the shared `ui/` primitives, `gm/Panel` and the
+sheet's own chrome are on the scale; a component that hard-codes a radius
+simply does not follow the knob, and migrating it is its owner's call
+(`var(--radius-sm|-lg|-xs)` — the defaults are unchanged). Typography is
+similarly partial: `--font-ui` reaches the body, buttons, inputs, textareas and
+the four real headings (settings title, player name, panel title, sheet name),
+and `--font-display` reaches only those headings.
+
+**Verification, three ways.** `scripts/check-universe-theme.mjs` (mapping: every
+var it writes exists in `styles.css`, nothing it can paint escapes the clear
+list, a dark-only palette paints no dark colour in light, unknown knobs are
+reported). `src/api/tests/test_universe_palettes.py` (the authored examples:
+vocabulary shape, opaque colours, and the 3:1 text-on-panel visibility floor in
+both themes — the same floor `check-theme-tokens.mjs` applies to the stylesheet,
+which cannot see runtime overrides). `e2e/tests/universe-theme.spec.js` (the
+wiring, in a browser: the palette reaches `:root` for the universe in play, a
+live theme flip repaints the other half without a reload, and a different
+palette clears what the last one set).
+
+**Adding a palette** — in order: write the JSON on the universe entity (the GM
+panel's palette field, an MCP `update_entity`, or a new example in
+`db/universe_palettes.py` plus the backfill); keep both `dark` and `light`
+readable (the palette test is the floor); check it in the app in both themes.
+Nothing in the frontend changes, and a universe without one keeps the app's
+default look.
+
 ## Razmerit
 
 `− value +` controls around the amount, with touch-friendly round buttons (no background). Tapping the value opens direct numeric input.

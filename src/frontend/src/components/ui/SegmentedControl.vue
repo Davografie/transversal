@@ -58,7 +58,7 @@ function step(delta) {
   gap: 0;
   width: 100%;
   border: 1px solid var(--overlay-10);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .segmented-btn {

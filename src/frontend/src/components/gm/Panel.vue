@@ -1045,7 +1045,7 @@ provide(panelKey, {
   gap: 5px;
   padding: 3px 8px;
   font-size: 11px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg-panel, var(--bg-panel));
   border: 1px solid var(--overlay-12);
   cursor: pointer;
@@ -1070,7 +1070,7 @@ provide(panelKey, {
   background: var(--bg-panel, var(--bg-panel));
   backdrop-filter: blur(12px);
   border: 1px solid var(--overlay-8);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   /* Variable width: content-driven, floored and capped. The cap is also
      viewport-bound: the panel's right edge sits at vw-34 (under the action
      rail), leaving a 12px left margin, so width ≤ vw-46. */
@@ -1151,6 +1151,7 @@ provide(panelKey, {
 .panel-title {
   flex: 1; min-width: 0;
   font-size: 12px; font-weight: 600; color: var(--text-dim);
+  font-family: var(--font-display);
   text-transform: uppercase; letter-spacing: 0.5px;
 }
 /* spec.badge — what kind of panel this is. Right-aligned (the title flexes),

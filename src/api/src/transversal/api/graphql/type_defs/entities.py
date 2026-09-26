@@ -109,6 +109,7 @@ class Entity:
     lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
     prompt_steering: Optional[str] = None  # universe-only: one steering sentence for prompts
     prompt_include_ancestors: bool = False  # location-only: add the ancestor chain to its image prompt
+    palette: Optional[str] = None  # universe-only: JSON palette — {"font": {...}, "radius": "0px", "dark": {...}, "light": {...}}
 
     @strawberry.field
     async def projections(self, info: strawberry.Info) -> list[Projection]:
@@ -311,6 +312,7 @@ class UpdateEntityInput:
     lora_config: Optional[str] = None
     prompt_steering: Optional[str] = None
     prompt_include_ancestors: Optional[bool] = None
+    palette: Optional[str] = None
 
 @strawberry.type
 class RazmeritResult:
