@@ -203,10 +203,16 @@ async def copy_media(
     )
     repo.create_image(image)
 
-    # The sole-image rule, exactly as upload has it: the first picture on a rung
-    # takes every role, so a fresh override takes effect without a tagging step.
-    if len(repo.get_images_for_owner(owner_id, variant_id or None)) == 1:
-        repo.update_image(new_id, {"roles": ["background", "sheet", "navdot"]})
+    # Roles. An **empty** rung takes all three, exactly as upload does, so a first
+    # override takes effect without a tagging step. A rung that already carries
+    # pictures hands the copy *their* roles instead: picking a picture is meant to
+    # take over from the one that was there, and since assigning a role strips it
+    # from its siblings, the tags MOVE off the previous picture rather than being
+    # duplicated — the copy renders where the old one did, and the old one stays
+    # in the gallery untagged.
+    siblings = repo.get_images_for_owner(owner_id, variant_id or None)
+    inherited = sorted({r for img in siblings if img.id != new_id for r in (img.roles or [])})
+    repo.set_image_roles(new_id, inherited or ["background", "sheet", "navdot"])
 
     return {"image_id": new_id, "filename": base}
 

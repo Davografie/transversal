@@ -135,6 +135,27 @@ class RepositoryImages:
         self._images.update({**merged, **normalised})
         return self.get_image(image_id)
 
+    def set_image_roles(self, image_id: str, roles: list[str]) -> MediaImage | None:
+        """Set a picture's roles, keeping each role unique per (owner, rung).
+
+        Assigning a role **strips it from the sibling pictures** on the same rung,
+        so a role names exactly one picture at a time. The PATCH route used to
+        spell this out inline — and `copy_media` therefore bypassed it, leaving two
+        pictures claiming `sheet`. One implementation, one invariant.
+        """
+        img = self.get_image(image_id)
+        if img is None:
+            return None
+        added = set(roles) - set(img.roles or [])
+        if added:
+            for sibling in self.get_images_for_owner(img.owner_id, img.variant_id):
+                if sibling.id == image_id:
+                    continue
+                kept = [r for r in (sibling.roles or []) if r not in added]
+                if kept != sibling.roles:
+                    self.update_image(sibling.id, {"roles": kept})
+        return self.update_image(image_id, {"roles": list(roles)})
+
     def delete_image(self, image_id: str) -> bool:
         return self._images.delete(image_id)
 

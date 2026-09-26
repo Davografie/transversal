@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from PIL import Image
 
 from transversal.api.rest import media as media_mod
+from transversal.db.repository_mixins.images import RepositoryImages
 from transversal.domain import ImageType, MediaImage
 from transversal.services.media_utils import save_image_variants
 
@@ -19,7 +20,11 @@ TRAIT = "trait-1"
 SETTING = "character-1:earth:trait-1"
 
 
-class _Repo:
+class _Repo(RepositoryImages):
+    """Stands in for the storage primitives, and **inherits** `set_image_roles`
+    from the real mixin — the sibling-stripping invariant is what this test is
+    about, so it must not be a second implementation in the fake."""
+
     def __init__(self, images=()):
         self.images = list(images)
 
@@ -142,3 +147,23 @@ async def test_copy_needs_an_owner(media, monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await media_mod.copy_media("def_1", variant_id=SETTING)
     assert exc.value.status_code == 400
+
+
+async def test_a_second_pick_takes_over_from_the_one_that_was_there(media, monkeypatch):
+    """Picking a picture is meant to *replace* the override, not to add an
+    untagged sibling that renders nowhere. Assigning a role strips it from the
+    siblings, so the tags move onto the copy."""
+    _write(media, "def_4")
+    _write(media, "mine_1")
+    existing = _record(key="mine_1", filename="mine_1", variant_id=SETTING,
+                       roles=["sheet", "navdot"])
+    repo = _Repo([_record(key="def_4", filename="def_4"), existing])
+    monkeypatch.setattr(media_mod, "EntityRepository", lambda: repo)
+
+    res = await media_mod.copy_media(
+        "def_4", owner_kind="trait", owner_id=TRAIT, variant_id=SETTING
+    )
+
+    copied = repo.get_image(res["image_id"])
+    assert sorted(copied.roles) == ["navdot", "sheet"], "it took over what was rendering"
+    assert existing.roles == [], "and the previous picture gave the tags up"

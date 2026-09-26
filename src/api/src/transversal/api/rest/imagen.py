@@ -631,18 +631,9 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
 
     # ── Roles (owner-scoped uniqueness) ──
     if "roles" in payload and isinstance(payload.get("roles"), list):
-        new_roles = set(payload["roles"])
-        old_roles = set(img.roles)
-        added = new_roles - old_roles
-        if added:
-            siblings = repo.get_images_for_owner(img.owner_id, img.variant_id)
-            for sib in siblings:
-                if sib.id == image_id:
-                    continue
-                sib_roles = [r for r in sib.roles if r not in added]
-                if sib_roles != sib.roles:
-                    repo.update_image(sib.id, {"roles": sib_roles})
-        updates["roles"] = payload["roles"]
+        # The repository owns the invariant (assigning a role strips it from the
+        # siblings); this route no longer spells it out for itself.
+        repo.set_image_roles(image_id, payload["roles"])
 
     # ── Provenance flags (independent of roles) ──
     # No sibling stripping here, on purpose: a provenance label describes how an
@@ -682,7 +673,7 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
         owner = payload.get("variant_id", payload.get("projection_id")) or None
         others = [s for s in repo.get_images_for_owner(img.owner_id, owner) if s.id != image_id]
         if not others:
-            updates["roles"] = ["background", "sheet", "navdot"]
+            repo.set_image_roles(image_id, ["background", "sheet", "navdot"])
 
     # ── Universe (and file move) ──
     new_universe = payload.get("universe")
