@@ -52,6 +52,20 @@ def _safe_component(value: str, field: str) -> str:
     return value
 
 
+#: A **record id**, not a path component: a projection id or a traitsetting id.
+#: Real ids contain colons (`faction-44351398:trait-description`), so the path
+#: pattern above cannot be used — but the value is stored and echoed back in the
+#: image list, so it is still bounded and free of control characters.
+_SAFE_RECORD_ID = re.compile(r"^[^\x00-\x1f\x7f]{1,200}$")
+
+
+def _safe_record_id(value: str, field: str) -> str:
+    """Validate a request value that is an id, never a filename. Raises 400."""
+    if not _SAFE_RECORD_ID.match(value):
+        raise HTTPException(status_code=400, detail=f"Invalid {field}")
+    return value
+
+
 def _parse_flags(raw: str) -> list[str]:
     """Parse a comma-separated provenance flag list. Raises 400 on an unknown one.
 
@@ -124,11 +138,14 @@ async def upload_media(
     if owner_kind not in ("entity", "trait"):
         raise HTTPException(status_code=400, detail="owner_kind must be 'entity' or 'trait'")
 
-    # These all become path components below — validate before anything
-    # touches disk.
+    # Only these two become path components below — validate before anything
+    # touches disk. `variant_id` names no file, so it is validated as a record id
+    # instead (see `_safe_record_id`): the path rules rejected the colons every
+    # real projection and traitsetting id contains, which made a per-instance
+    # upload impossible.
     owner_id = _safe_component(owner_id, "owner_id") if owner_id else ""
     universe = _safe_component(universe, "universe") if universe else ""
-    variant_id = _safe_component(variant_id, "variant_id") if variant_id else ""
+    variant_id = _safe_record_id(variant_id, "variant_id") if variant_id else ""
 
     ext = Path(file.filename or "unknown").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:

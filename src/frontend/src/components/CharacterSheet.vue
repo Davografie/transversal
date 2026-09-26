@@ -313,6 +313,7 @@
           @update:definitionFilter="definitionFilter = $event"
           @update:definitionTraitsetFilter="definitionTraitsetFilter = $event"
           @change-definition="changeDefinition"
+          @image-changed="fetchEntity('trait-image')"
         />
 
         <!-- Trait detail (read-only) — the row's "elsewhere" click zone.

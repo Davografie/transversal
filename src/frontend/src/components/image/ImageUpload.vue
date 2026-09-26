@@ -26,6 +26,12 @@ const props = defineProps({
   ownerId: { type: String, default: '' },
   /** Stored with the picture for provenance; a trait needs it to be listed. */
   universe: { type: String, default: '' },
+  /**
+   * The rung below the owner this picture belongs to — a projection, or a
+   * traitsetting whose picture overrides the registry trait's. Empty for the
+   * owner's own definition picture.
+   */
+  variantId: { type: String, default: '' },
   label: { type: String, default: '📤 Upload' },
   title: { type: String, default: 'Upload an image' },
 })
@@ -46,6 +52,7 @@ async function pick(event) {
       kind: props.ownerKind,
       id: props.ownerId,
       universe: props.universe,
+      variantId: props.variantId,
       file,
     })
     emit('uploaded')

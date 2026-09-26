@@ -85,3 +85,86 @@ async def test_bad_stored_universe_cannot_traverse(tmp_path, monkeypatch):
 
     assert res["image_id"] is None  # registration skipped, not written
     assert not (tmp_path.parent / "evil").exists()
+
+
+class _RecordingRepo:
+    """Captures what the upload registers, so the rung it lands on can be read."""
+
+    def __init__(self, universe="earth"):
+        self._universe = universe
+        self.created = []
+        self.updated = {}
+
+    def get_entity(self, entity_id):
+        return SimpleNamespace(current_universe=self._universe, universes=[self._universe])
+
+    def get_trait(self, trait_id):
+        return SimpleNamespace(universes=[self._universe])
+
+    def get_images_for_owner(self, owner_id, variant_id=None):
+        # After `create_image`, so this is the sole-image rule's view.
+        return [i for i in self.created if (i.variant_id or None) == variant_id]
+
+    def create_image(self, image):
+        self.created.append(image)
+        return image
+
+    def update_image(self, image_id, updates):
+        self.updated.setdefault(image_id, {}).update(updates)
+        return next((i for i in self.created if i.id == image_id), None)
+
+
+async def test_a_colon_bearing_variant_id_is_accepted(tmp_path, monkeypatch):
+    """The per-instance override is addressed by a **traitsetting id**, and every
+    live one contains a colon (`faction-44351398:trait-description`). Validating it
+    with the path pattern made every one of them a 400, which put the whole
+    override out of reach — the file has never named the variant.
+    """
+    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
+    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
+    repo = _RecordingRepo()
+    monkeypatch.setattr(media_mod, "EntityRepository", lambda: repo)
+
+    setting = "faction-44351398:trait-description"
+    res = await media_mod.upload_media(
+        owner_kind="trait", owner_id="trait-probe", variant_id=setting,
+        universe="", file=_upload(),
+    )
+
+    assert res["image_id"], "the upload registered"
+    assert repo.created[0].variant_id == setting, "the rung is the setting"
+    # The file names the owner, never the variant: the variant is metadata.
+    assert (tmp_path / "imagen" / "trait-probe" / "earth").is_dir()
+    # And the sole-image rule fires on that rung, so the first instance picture
+    # overrides the definition for every role without a tagging step.
+    assert repo.updated[res["image_id"]]["roles"] == ["background", "sheet", "navdot"]
+
+
+async def test_a_variant_id_cannot_reach_the_filesystem(tmp_path, monkeypatch):
+    """It is an id, not a path, so traversal in it is inert — the file lands under
+    the owner's directory whatever it says."""
+    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
+    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
+    monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
+
+    res = await media_mod.upload_media(
+        owner_kind="trait", owner_id="trait-probe", variant_id="../../evil",
+        universe="", file=_upload(),
+    )
+
+    assert res["image_id"]
+    written = [p for p in (tmp_path / "imagen").rglob("*") if p.is_file()]
+    assert written and all("trait-probe" in str(p) for p in written)
+    assert not (tmp_path.parent / "evil").exists()
+
+
+async def test_a_control_character_in_a_variant_id_is_refused(tmp_path, monkeypatch):
+    """Bounded rather than path-checked — it is stored and echoed in the list."""
+    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
+    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
+    with pytest.raises(HTTPException) as exc:
+        await media_mod.upload_media(
+            owner_kind="trait", owner_id="trait-probe", variant_id="a\nb",
+            universe="", file=_upload(),
+        )
+    assert exc.value.status_code == 400

@@ -20,10 +20,14 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
  * for a trait, whose pictures are stored in a universe for provenance, and
  * `flags` lets an upload declare `ai` for art whose workflow the author knows.
  */
-export async function uploadImage({ kind, id, universe = '', flags = '', file }) {
+export async function uploadImage({ kind, id, universe = '', flags = '', variantId = '', file }) {
   const params = new URLSearchParams({ owner_kind: kind, owner_id: id })
   if (universe) params.set('universe', universe)
   if (flags) params.set('flags', flags)
+  // A picture can sit one rung below its owner — a **traitsetting** overriding
+  // the registry trait's picture, exactly as a projection overrides an entity's.
+  // The id is a record id (it may contain a colon); it never names a file.
+  if (variantId) params.set('variant_id', variantId)
   const body = new FormData()
   body.append('file', file)
   const res = await fetch(`/api/v1/media/upload?${params}`, { method: 'POST', body })

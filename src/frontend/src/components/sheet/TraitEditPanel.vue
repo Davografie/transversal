@@ -146,6 +146,49 @@
           </div>
           <span v-else-if="!(trait.possibleSubtraitIds || []).length" class="edit-subtrait-empty">No sub-traits configured for this trait.</span>
         </div>
+
+        <!-- Image (B200 slice 2) — this instance's own picture. It is stored on
+             the setting's rung of the ladder, so it **overrides the registry
+             trait's** for whichever roles it carries: inheritance is the empty
+             case, not a copy. -->
+        <div class="edit-field">
+          <span class="edit-label">Image</span>
+          <ImageGallery
+            :images="instanceImages"
+            :selected-id="openedImageId"
+            empty="Inherits the definition's picture."
+            @open="openInstanceImage"
+          />
+          <div class="edit-image-actions">
+            <ImageUpload
+              owner-kind="trait"
+              :owner-id="trait.traitId"
+              :variant-id="trait.id"
+              :universe="trait.universe || ''"
+              :label="instanceImages.length ? 'Upload another' : 'Upload an override'"
+              @uploaded="onInstanceImageChanged"
+            />
+            <span v-if="instanceImages.length" class="edit-image-hint">
+              the first picture takes every role, so it overrides at once
+            </span>
+          </div>
+          <span v-if="imagesError" class="edit-image-error">{{ imagesError }}</span>
+          <!-- The shared viewer, rendered **inline**: this panel is mounted both
+               inside a GM panel and directly by the player app, and only the
+               former has a panel stack to push a child panel onto. -->
+          <div v-if="openedImageId" class="edit-image-viewer">
+            <Button variant="link" size="sm" @click="openedImageId = ''">← Done with this picture</Button>
+            <ImageViewer
+              owner-kind="trait"
+              :owner-id="trait.traitId"
+              :image-id="openedImageId"
+              :image="openedImageRecord"
+              @close="openedImageId = ''"
+              @deleted="onInstanceImageChanged()"
+              @refresh="onInstanceImageChanged()"
+            />
+          </div>
+        </div>
       </template>
 
       <template #actions>
@@ -170,6 +213,10 @@ import { computed, ref } from 'vue'
 import Button from '@/components/ui/Button.vue'
 import TagInput from '@/components/ui/TagInput.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
+import { useImageGallery } from '@/composables/useImageGallery.js'
+import ImageGallery from '@/components/image/ImageGallery.vue'
+import ImageUpload from '@/components/image/ImageUpload.vue'
+import ImageViewer from '@/components/gm/ImageViewer.vue'
 
 // The sheet's full-panel trait editor: a header, the shared rating editor, and
 // the sheet-specific extras (SFX chips, ego/morph + projection, sub-traits,
@@ -256,8 +303,40 @@ const emit = defineEmits([
   'back', 'delete', 'toggle-sfx', 'toggle-ego', 'toggle-polarity',
   'toggle-projection-picker', 'select-projection', 'add-subtrait', 'remove-subtrait',
   'toggle-definition-picker', 'update:definitionFilter', 'change-definition',
-  'update:definitionTraitsetFilter',
+  'update:definitionTraitsetFilter', 'image-changed',
 ])
+
+// ── The instance's own picture ───────────────────────
+// Owner is the **registry trait**, rung is the **setting** — the same shape a
+// projection has against an entity, and the reason one canonical definition
+// picture can serve every instance until an instance wants its own.
+const openedImageId = ref('')
+const {
+  images: instanceImages,
+  error: imagesError,
+  load: loadInstanceImages,
+} = useImageGallery(
+  () => ({ kind: 'trait', id: props.trait?.traitId || '', universe: props.trait?.universe || '' }),
+  // Only this instance's rung: the definition's pictures are the registry
+  // editor's, and mixing them here would make "override" ambiguous.
+  { filter: (i) => (i.variant_id || null) === (props.trait?.id || null) },
+)
+
+const openedImageRecord = computed(
+  () => instanceImages.value.find(i => i.id === openedImageId.value) || null,
+)
+
+function openInstanceImage(img) {
+  openedImageId.value = img.id
+}
+
+function onInstanceImageChanged() {
+  loadInstanceImages()
+  // The row's picture comes from the sheet's own query (`sheetImage` on the
+  // setting), which this panel does not own — so the sheet has to re-read for the
+  // change to show on the row behind it.
+  emit('image-changed')
+}
 
 /** The set actually being filtered on: the chosen one, else the instance's own. */
 const effectiveTraitsetFilter = computed(
@@ -337,6 +416,11 @@ function definitionLabel(opt) {
   gap: 14px;
   padding: 4px 0 8px;
 }
+.edit-image-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.edit-image-hint { font-size: 10px; color: var(--text-dim); }
+.edit-image-error { font-size: 10px; color: var(--danger, #e06c75); }
+.edit-image-viewer { margin-top: 8px; border-top: 1px solid var(--overlay-12); padding-top: 6px; }
+
 .edit-field {
   display: flex;
   flex-direction: column;
