@@ -723,16 +723,15 @@ was cut out, and uploads never were):
 WebP) → `MediaImage`. If the result is the sole image for its owner, all three
 roles are auto-selected.
 
-**The first image generated for a projection also gains a matte** (`B166`). The
-generated image keeps every role auto-select gave it and simply gains the `cutout`
-render, so `sheet` and `navdot` serve the floating portrait without any role being
-moved onto a second record. The trigger is the first *generated image* for the
-projection, not entity creation — a matte needs a source, and creation has no
-image. It reuses the sole-image condition above (`owner and not existing`).
-
-Two paths intentionally do **not** trigger it: **uploads**, and **entity-level**
-generation (the gallery's main Imagen button, `projection_id` empty) — the rule
-is scoped per projection. See `B129` for whether to widen it.
+**An occupant's generated picture also gains a matte** ([[B214]], superseding
+`B166`'s first-image trigger — see § A matte is part of making an occupant's or a
+trait's picture above). The generated image keeps every role auto-select gave it
+and simply gains the `cutout` render, so `sheet` and `navdot` serve the floating
+portrait without any role being moved onto a second record. A matte needs a source,
+so the trigger is the picture *arriving*, never entity creation — and it is **not**
+scoped per projection: an entity-level generation (the gallery's main Imagen
+button) is cut out too, while a location's is not. [[B129]] asked for that widening
+and is **closed**.
 
 If the matte fails the generation is unaffected: the picture is already recorded
 and simply renders opaque, exactly as it would have without the render.
