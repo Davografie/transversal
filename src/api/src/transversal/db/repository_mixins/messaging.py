@@ -238,7 +238,7 @@ class RepositoryMessaging:
         if threads:
             # Any tag match (OR semantics)
             filters.append("LENGTH(INTERSECTION(m.threads, @tags)) > 0")
-            bind_vars["tags"] = tags
+            bind_vars["tags"] = threads
         filter_clause = f"FILTER {' AND '.join(filters)}" if filters else ""
         query = f"""
             FOR m IN {MESSAGES}
