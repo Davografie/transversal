@@ -58,6 +58,20 @@ class _FakeOllama:
         return None
 
 
+def _matte_png(size=(64, 64), subject=(20, 20, 44, 44)):
+    """A real matte: a transparent canvas with an opaque subject.
+
+    The stub used to hand back `b"png-bytes"`, which nothing opened — until the
+    empty-matte guard did. ComfyUI returns an image, so the stub does too.
+    """
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    left, top, right, bottom = subject
+    img.paste(Image.new("RGBA", (right - left, bottom - top), (200, 30, 30, 255)), (left, top))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 class _FakeComfyUI:
     async def submit_workflow(self, workflow):
         return "pid"
@@ -66,7 +80,7 @@ class _FakeComfyUI:
         return {"filename": "out.png", "subfolder": "", "type": "output"}
 
     async def get_image(self, filename, subfolder="", image_type="output"):
-        return b"png-bytes"
+        return _matte_png()
 
     async def upload_image(self, data, filename):
         return None
@@ -466,3 +480,48 @@ def test_the_auto_cutout_trims_the_matte_too(stub_gpu, monkeypatch):
 
     assert sizes.get("matte") == (80, 80), f"auto-cutout saved {sizes.get('matte')}, untrimmed"
     assert image.renders == ["cutout"]
+
+
+def test_an_empty_matte_is_refused_rather_than_recorded(stub_gpu, monkeypatch):
+    """A matte with no subject would make `sheet` and `navdot` serve an invisible
+    picture. That is worth refusing anyway, and since [[B214]] it happens
+    automatically — so nobody chose it and nobody would be looking for it."""
+    source = _image("src-10", PROJECTION)
+    source.filename = "src10"
+    repo = _FakeRepo(existing=[source])
+    src_dir = orch.IMAGEN_DIR / source.owner_id / source.universe
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / f"src10_Large.{source.extension}").write_bytes(b"bytes")
+
+    blank = io.BytesIO()
+    Image.new("RGBA", (64, 64), (0, 0, 0, 0)).save(blank, format="PNG")
+
+    async def _get_image(self, *args, **kwargs):
+        return blank.getvalue()
+
+    monkeypatch.setattr(_FakeComfyUI, "get_image", _get_image)
+
+    orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
+    with pytest.raises(ValueError, match="empty matte"):
+        asyncio.run(orchestrator.run_remove_background(source.owner_id, source.id))
+
+    assert source.renders == [], "nothing was recorded"
+
+
+def test_an_empty_matte_leaves_the_generated_picture_alone(stub_gpu, monkeypatch):
+    """The auto-cutout is best-effort: an empty matte must not fail the
+    generation that already succeeded."""
+    repo = _FakeRepo()
+
+    blank = io.BytesIO()
+    Image.new("RGBA", (400, 400), (0, 0, 0, 0)).save(blank, format="PNG")
+
+    async def _get_image(self, *args, **kwargs):
+        return blank.getvalue()
+
+    monkeypatch.setattr(_FakeComfyUI, "get_image", _get_image)
+
+    image, _ = _generate(repo, monkeypatch, real_cutout=True)
+
+    assert image.renders == [], "no matte recorded"
+    assert image.roles == ["background", "sheet", "navdot"], "the picture still renders"

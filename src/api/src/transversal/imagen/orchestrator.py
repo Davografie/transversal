@@ -45,6 +45,7 @@ from transversal.imagen.prompt_builder import build_imagen_prompt
 from transversal.services.media_utils import (
     VARIANT_LONG_SIDES,
     has_transparency,
+    subject_box,
     trim_transparent_margins,
     wants_auto_matte,
     save_image_variants as _save_image_variants,
@@ -779,6 +780,14 @@ class ImagenOrchestrator:
         cutout_bytes, trimmed = trim_transparent_margins(cutout_bytes)
         if trimmed:
             logger.info(f"Trimmed the matte for {src.filename} ({src.owner_id}) to its subject")
+
+        # A matte with **no subject** is a failed cutout, not a render. Recording
+        # one would make `sheet` and `navdot` serve an invisible picture — and
+        # since [[B214]] this happens by itself, so nobody chose it and nobody
+        # would be looking for it. Better to leave the picture opaque and say so.
+        with Image.open(io.BytesIO(cutout_bytes)) as _matte:
+            if subject_box(_matte.convert("RGBA")) is None:
+                raise ValueError("background removal produced an empty matte")
 
         # The matte gets the picture's own base name, so it is a render *of* it —
         # the name is the whole ownership story.
