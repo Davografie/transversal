@@ -41,7 +41,16 @@
 
       <div class="eep-subsection">
         <span class="eep-subtitle">Effects</span>
-        <EffectEditor v-model="form.effects" :universe="table?.universe" :life-path="table?.lifePath" />
+        <!-- The list stays in the row; each effect's form opens in a *child*
+             panel (as the SFX editor's does), because an effect is a stacked
+             builder of unbounded height and the list has to stay in view. -->
+        <EffectList
+          :model-value="form.effects"
+          :editing-index="editingEffectIndex"
+          @update:model-value="form.effects = $event"
+          @add="openEffectEditor(null)"
+          @edit="openEffectEditor"
+        />
       </div>
 
       <Button class="eep-save" variant="success" solid :loading="saving" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save entry' }}</Button>
@@ -51,12 +60,13 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, onUnmounted } from 'vue'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import ConditionEditor from './ConditionEditor.vue'
-import EffectEditor from './EffectEditor.vue'
+import EffectList from './EffectList.vue'
+import GmRollTableEntryEffectPanel from './GmRollTableEntryEffectPanel.vue'
 import Button from '@/components/ui/Button.vue'
 
 const panel = usePanel()
@@ -71,6 +81,8 @@ const props = defineProps({
 const table = ref(null)
 const saving = ref(false)
 const error = ref('')
+const editingEffectIndex = ref(null)
+let offChildClose = null
 
 const form = reactive({
   label: '',
@@ -84,6 +96,10 @@ const form = reactive({
 })
 
 onMounted(async () => {
+  // The row highlight follows the open effect. `onChildClose` is the one path
+  // every *close* takes, and a detach is deliberately not a close, so a detached
+  // effect panel keeps its row lit (P7.18's rule).
+  offChildClose = panel.onChildClose(() => { editingEffectIndex.value = null })
   try {
     table.value = await fetchTable(props.tableId)
     const e = table.value?.entries?.[props.index]
@@ -101,6 +117,29 @@ onMounted(async () => {
     error.value = e?.message || 'Failed to load entry'
   }
 })
+
+onUnmounted(() => { offChildClose?.() })
+
+// ── Effect editor (child panel) ──
+// The row's effects are edited by a *child* panel, as the SFX editor's are: an
+// effect is a stacked builder of unbounded height, and the list has to stay in
+// view while one is edited.
+function openEffectEditor(index) {
+  editingEffectIndex.value = index
+  panel.open({
+    component: GmRollTableEntryEffectPanel,
+    title: index === null ? 'Add effect' : 'Edit effect',
+    props: {
+      index,
+      universe: table.value?.universe || '',
+      lifePath: table.value?.lifePath || '',
+    },
+    // The row draft, as a live reference, through the spec's `context` — a panel
+    // cannot `provide` to its own child panels. The child writes effects back
+    // into this row; nothing is persisted until the row's own Save.
+    context: { rowDraft: form },
+  })
+}
 
 async function save() {
   if (!table.value) return
