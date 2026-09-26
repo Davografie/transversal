@@ -181,11 +181,18 @@ const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * When the sheet is drilled into a set, the picker opens straight on *that* set's
  * traits (by design — the set you are looking at is the set you are adding to), so
  * reach the list through Back when it is not already showing.
+ *
+ * Wait for the picker to exist before deciding which phase it opened in:
+ * `openAddTrait` sets `showAddTrait` only *after* its two `…ByUniverse` queries
+ * return, so immediately after the click the picker is not in the DOM at all. A
+ * bare `count()` there reads 0 and sends the test looking for a `.picker-back`,
+ * which the set phase never renders — a guaranteed 120 s timeout, not a flake.
  */
 async function openRelationsStep(page) {
   await page.getByRole('button', { name: /Add Trait/i }).click()
-  const relations = page.locator('.trait-picker .picker-item')
-    .filter({ hasText: /^relations$/i })
+  const picker = page.locator('.trait-picker')
+  await picker.waitFor({ state: 'visible', timeout: 20_000 })
+  const relations = picker.locator('.picker-item').filter({ hasText: /^relations$/i })
   if (!(await relations.count())) await page.locator('.picker-back').first().click()
   await relations.first().click()
   await expect(page.locator('.picker-filter'), 'picking relations must ask which relationship')
