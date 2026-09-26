@@ -115,9 +115,16 @@
          the map). Visible to EVERYONE, unlike the two labels above: the server has
          already resolved what this viewer may see, so a hidden owner simply is not
          in the list. A chip is a scene element once it has a stored position
-         ([[Location Trait Chips]]); until then it stays in this stack. -->
+         ([[Location Trait Chips]]); until then it belongs to this stack.
+
+         The stack is **arrange-mode only** (the human, 2026-09-25): unplaced traits are
+         hidden from the map by default, because a room's whole trait list down the side
+         of the screen was crowding the map — on a phone the stack alone ran 526px of an
+         844px screen. It appears while the GM is placing things, which is the only time
+         it is needed: a chip dragged out of it becomes a scene element and never
+         returns. -->
     <div
-      v-if="showElements && unplacedTraits.length"
+      v-if="showElements && editZones && unplacedTraits.length"
       class="loc-traits fade-in"
       :class="{ 'has-switcher': gmMode }"
     >

@@ -44,11 +44,16 @@ test.beforeAll(async ({ request }) => {
 })
 
 test('every rating keeps clear of the text, however many dice it has', async ({ page }) => {
+  // The traits are PLACED with the character standing among them, so all five chips are
+  // open — the rating's lane is a property of the OPEN chip, and unplaced chips only
+  // exist in arrange mode now, so the stack is not a fixture this can lean on.
+  const positions = {}
+  TRAITS.forEach((t, i) => { positions[t.id] = { x: 50 + i * 2, y: 50 } })
   await page.route('**/api/v1/locations/*/navigate*', (route) => route.fulfill({
     json: {
-      location: { name: 'Lane Hall', zones: [], trait_positions: {} },
+      location: { name: 'Lane Hall', zones: [], trait_positions: positions },
       parent: null, children: [], transversal: [],
-      occupants: [{ id: KAEL, type: 'character', name: 'Kael Drift', image: null, map_x: 95, map_y: 95 }],
+      occupants: [{ id: KAEL, type: 'character', name: 'Kael Drift', image: null, map_x: 50, map_y: 50 }],
     },
   }))
   await page.route('**/api/v1/locations/*/traits*', (route) =>
@@ -65,11 +70,13 @@ test('every rating keeps clear of the text, however many dice it has', async ({ 
   }, [character.playerId, character.playerName, character.entityId, LOC])
   await page.goto('/')
 
-  const chips = page.locator('.loc-traits .trait-chip')
+  const chips = page.locator('.scene-chip')
   await expect(chips).toHaveCount(TRAITS.length)
   await expect(page.locator('.name-entry')).toHaveCount(0)
+  // All open, or there is no rating on screen to measure.
+  await expect(page.locator('.scene-chip.expanded')).toHaveCount(TRAITS.length)
 
-  const measured = await page.evaluate(() => [...document.querySelectorAll('.loc-traits .trait-chip')].map((chip) => {
+  const measured = await page.evaluate(() => [...document.querySelectorAll('.scene-chip')].map((chip) => {
     const box = chip.getBoundingClientRect()
     const text = chip.querySelector('.trait-chip-text').getBoundingClientRect()
     const rating = chip.querySelector('.trait-chip-rating').getBoundingClientRect()

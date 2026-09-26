@@ -21,6 +21,7 @@
 
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { asArchitect } from '../helpers/arrange.js'
 
 // NEVER a real player character — Kael Drift is the project's testing character, a
 // main of a dedicated test player. The owner is resolved by the RELATIONSHIP rather
@@ -117,7 +118,7 @@ async function open(page, self) {
   return { chip }
 }
 
-test('resting, a chip is only its marker — and the stack stays open', async ({ page }) => {
+test('resting, a chip is only its marker — and unplaced traits are not on the map', async ({ page }) => {
   const { chip } = await open(page, FAR)
 
   // Nothing placed is open at this distance.
@@ -137,10 +138,9 @@ test('resting, a chip is only its marker — and the stack stays open', async ({
   await expect(ratingOnly.locator('.trait-chip-rating')).toBeVisible()
   await expect(page.locator(`.scene-chip[data-trait-id="${STACKED}"]`)).toHaveCount(0)
 
-  // The stack has no position to approach, so it is the legend: always open.
-  const stacked = page.locator('.loc-traits .trait-chip')
-  await expect(stacked).toHaveCount(1)
-  await expect(stacked.first()).toHaveClass(/expanded/)
+  // An unplaced trait is not on the map at all by default: the stack is arrange-mode
+  // furniture (the human, 2026-09-25), and this chip has no position to sit at.
+  await expect(page.locator('.loc-traits')).toHaveCount(0)
 })
 
 test('proximity opens a chip and holds it open at rest', async ({ page }) => {
@@ -186,13 +186,10 @@ test('a tap opens a closed chip, and the next tap plays it', async ({ page }) =>
 })
 
 test('arrange mode opens every chip, and a chip can then be dragged', async ({ page }) => {
-  // Arrange mode is architect-only, and the role comes from the player read: mock that
-  // read rather than logging in as one of the human's own devices. This is also the one
-  // way to reach the chip DRAG, which until now was the role's only hand-check.
-  await page.route('**/api/v1/players/*', async (route) => {
-    const body = await (await route.fetch()).json()
-    return route.fulfill({ json: { ...body, role: 'architect' } })
-  })
+  // Arrange mode is architect-only and the role comes from the player read, so the shared
+  // helper mocks that one read rather than logging in as one of the human's own devices.
+  // This is also the one way to reach the chip DRAG, which was the role's last hand-check.
+  await asArchitect(page)
   // The drag persists the whole positions map; accept it and record it, so the test
   // proves the write happened without touching the location's real placements.
   const writes = []
@@ -211,6 +208,12 @@ test('arrange mode opens every chip, and a chip can then be dragged', async ({ p
   await expect(page.locator('.scene-chip.expanded')).toHaveCount(2)
   await page.mouse.move(5, 5)
   await expect(page.locator('.scene-chip.expanded')).toHaveCount(2)
+
+  // The unplaced traits appear here — the only place they exist now — already open,
+  // because nothing in the stack can be approached.
+  const stack = page.locator('.loc-traits .trait-chip')
+  await expect(stack).toHaveCount(1)
+  await expect(stack.first()).toHaveClass(/expanded/)
 
   // The gesture itself: grab a chip and move it.
   const target = chip(WITH_IMAGE)

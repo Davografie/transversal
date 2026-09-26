@@ -15,6 +15,7 @@
 
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { asArchitect, enterArrangeMode } from '../helpers/arrange.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 const LOC = 'loc-chip-width-test'
@@ -49,10 +50,12 @@ test.beforeAll(async ({ request }) => {
   character = { playerId: owner.id, playerName: owner.name, entityId: KAEL }
 })
 
-/** Load at `size`, with the character standing ON the placed chip so it is open too. */
+/** Load at `size` in arrange mode, where the unplaced stack and its chips are shown. */
 async function open(page, size) {
-  // The two chips have to be in the same state to compare widths: a placed chip the
-  // character is away from rests as a bare marker, which is legitimately narrower.
+  // The stack is arrange-mode only (the human, 2026-09-25), and arrange mode also opens
+  // every placed chip — so this is where a stacked chip and a placed one are in the same
+  // state and their widths can honestly be compared.
+  await asArchitect(page)
   const at = { x: 70, y: 70 }
   await page.route('**/api/v1/locations/*/navigate*', (route) => route.fulfill({
     json: {
@@ -74,10 +77,11 @@ async function open(page, size) {
     localStorage.setItem('currentLocationId', loc)
   }, [character.playerId, character.playerName, character.entityId, LOC])
   await page.goto('/')
+  await expect(page.locator('.name-entry')).toHaveCount(0)
+  await enterArrangeMode(page)
 
   await expect(page.locator('.loc-traits .trait-chip')).toHaveCount(2)
   await expect(page.locator(`.scene-chip[data-trait-id="${PLACED}"]`)).toHaveClass(/expanded/)
-  await expect(page.locator('.name-entry')).toHaveCount(0)
 
   return page.evaluate(() => {
     const width = (sel) => document.querySelector(sel).getBoundingClientRect().width

@@ -52,8 +52,19 @@ test.beforeAll(async ({ request }) => {
 /** Plant the session and load the app with the trait payload mocked. */
 async function openWithMockedTraits(page) {
   await page.setViewportSize({ width: 1280, height: 950 })
+  // Both traits are PLACED with the character standing on them, so both chips are open:
+  // the marker's composition is a property of the open chip, and unplaced chips only
+  // exist in arrange mode now, so the stack is not a fixture this can lean on.
+  await page.route('**/api/v1/locations/*/navigate*', (route) => route.fulfill({
+    json: {
+      location: { name: 'Marker Hall', zones: [], trait_positions: { 'ts-cutout': { x: 50, y: 50 }, 'ts-opaque': { x: 52, y: 50 } } },
+      parent: null, children: [], transversal: [],
+      occupants: [{ id: KAEL, type: 'character', name: 'Kael Drift', image: null, map_x: 50, map_y: 50 }],
+    },
+  }))
   await page.route('**/api/v1/locations/*/traits*', (route) =>
     route.fulfill({ json: { location_id: 'loc-x', viewer: null, traits: TRAITS } }))
+  await page.route('**/api/v1/locations/*/pools**', (route) => route.fulfill({ json: { pools: {} } }))
   await page.goto('/')
   await page.evaluate(([pid, pname, eid]) => {
     localStorage.setItem('playerId', pid)
@@ -61,6 +72,9 @@ async function openWithMockedTraits(page) {
     localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
   await page.goto('/')
+  await expect(page.locator('.name-entry')).toHaveCount(0)
+  // Open, or there is no marker composition on screen to measure.
+  await expect(page.locator('.scene-chip.expanded')).toHaveCount(2)
 }
 
 /** The chip carrying `name`, with its picture decoded. */
