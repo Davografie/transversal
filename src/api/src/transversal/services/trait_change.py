@@ -166,18 +166,25 @@ def _refuse_collision(ts: TraitSetting, wanted: Trait, repo) -> None:
     here, repointing onto a definition the owner already holds would silently
     produce a twin — two rows claiming the same trait, which the set's one-per-
     trait rule exists to prevent.
+
+    It asks ``may_hold_another`` — the **set's** rule — because that is the same
+    question the create path asks, and the two must agree or the picker and the
+    write path drift. A set that allows duplicates permits the repoint however
+    many instances it already holds, statement or no statement; a set that does
+    not permits none.
+
+    Nothing needs excluding by id: the instance being edited points at a
+    *different* definition by the time this runs (one already pointing at the
+    wanted definition returns earlier as ``already``), so it is never among the
+    wanted definition's instances.
     """
-    finder = getattr(repo, "find_traitsetting_collision", None)
-    if finder is None:
+    asker = getattr(repo, "may_hold_another", None)
+    if asker is None:
         return
-    allow_duplicates = _allow_duplicates(wanted.traitset_id, repo)
-    collision = finder(str(ts.entity_id), str(wanted.id),
-                       statement=ts.statement or "", allow_duplicates=allow_duplicates)
-    if collision is not None and str(collision.id) != str(ts.id):
-        raise TraitChangeError(
-            f"'{wanted.name or wanted.id}' is already held"
-            + (f" with statement '{ts.statement}'" if allow_duplicates and ts.statement else "")
-        )
+    if _allow_duplicates(wanted.traitset_id, repo):
+        return
+    if not asker(str(ts.entity_id), str(wanted.id), False):
+        raise TraitChangeError(f"'{wanted.name or wanted.id}' is already held")
 
 
 def _allow_duplicates(traitset_id: str, repo) -> bool:

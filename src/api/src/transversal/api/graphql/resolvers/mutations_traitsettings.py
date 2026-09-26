@@ -55,15 +55,13 @@ class MutationsTraitSettings:
             ts_id = repo.resolve_subtrait_id(
                 str(parent.id), str(input.trait_id), input.statement or "")
         else:
-            collision = repo.find_traitsetting_collision(
-                str(entity_id), str(input.trait_id),
-                statement=input.statement or "", allow_duplicates=allow_duplicates,
-            )
-            if collision is not None:
-                raise ValueError(
-                    f"Trait '{input.trait_id}' already present"
-                    + (f" with statement '{input.statement}'" if allow_duplicates and input.statement else "")
-                )
+            # The **set's** question, not an instance's: a set that allows
+            # duplicates takes any number of one definition, so nothing here
+            # depends on a statement. (The effects gain path asks the different
+            # question — "is this exact instance already here?" — via
+            # `find_traitsetting_collision`.)
+            if not repo.may_hold_another(str(entity_id), str(input.trait_id), allow_duplicates):
+                raise ValueError(f"Trait '{input.trait_id}' already present")
             ts_id = repo.resolve_traitsetting_id(
                 str(entity_id), str(input.trait_id),
                 statement=input.statement or "", allow_duplicates=allow_duplicates,

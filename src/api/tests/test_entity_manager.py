@@ -194,6 +194,14 @@ class InMemoryRepository(EntityRepository):
         self._store(self._traitsets, ts.id, ts.model_dump())
         return ts
 
+    def get_traitset_by_id(self, tsid: str) -> TraitSet | None:
+        """Without this the double falls through to the Arango implementation and
+        answers `None` for a set it is holding — which silently turned
+        `allow_duplicates` off for every GraphQL test, since the create path reads
+        that flag from here."""
+        d = self._traitsets.get(tsid)
+        return TraitSet.model_validate(d) if d else None
+
     # traitsettings
     def create_traitsetting(self, ts: TraitSetting) -> TraitSetting:
         self._store(self._traitsettings, ts.id, ts.model_dump())
@@ -441,9 +449,56 @@ class TestAllowDuplicates:
         assert repo.find_traitsetting_collision("kael", "trait-y") is None
 
     def test_collision_allow_duplicates_by_statement(self, repo):
-        repo.create_traitsetting(TraitSetting(id="kael:trait-x", entity_id="kael", trait_id="trait-x",  statement="computers"))
+        """The *instance* question, which the effects gain path asks: a statement is
+        what makes two instances the same one, so a repeated grant is a no-op."""
+        repo.create_traitsetting(TraitSetting(id="kael:trait-x", entity_id="kael", trait_id="trait-x", statement="computers"))
         assert repo.find_traitsetting_collision("kael", "trait-x", statement="networks", allow_duplicates=True) is None
         assert repo.find_traitsetting_collision("kael", "trait-x", statement="computers", allow_duplicates=True) is not None
+
+    def test_may_hold_another_is_the_sets_question(self, repo):
+        """The *set* question, which the sheet's create and repoint paths ask:
+        duplicates are the set's rule, and a statement has nothing to do with it."""
+        repo.create_traitsetting(TraitSetting(
+            id="dupes:trait-y", entity_id="dupes", trait_id="trait-y"))
+        assert repo.may_hold_another("dupes", "trait-y") is False
+        assert repo.may_hold_another("dupes", "trait-y", allow_duplicates=True) is True
+        assert repo.may_hold_another("dupes", "trait-z") is True
+        assert repo.may_hold_another("nobody", "trait-y") is True
+
+    def test_a_duplicate_allowing_set_gets_a_key_per_instance(self, repo):
+        """A duplicate needs no statement to exist, so the *key* has to carry the
+        instance's identity instead — and the first instance keeps the short key
+        this used to produce, so nothing already stored moves."""
+        first = repo.resolve_traitsetting_id("dupkeys", "trait-y", allow_duplicates=True)
+        assert first == "dupkeys:trait-y", "the first instance keeps its short key"
+        repo.create_traitsetting(TraitSetting(
+            id=first, entity_id="dupkeys", trait_id="trait-y"))
+        second = repo.resolve_traitsetting_id("dupkeys", "trait-y", allow_duplicates=True)
+        assert second != first
+        assert second.startswith("dupkeys:trait-y-")
+
+    def test_a_taken_statement_key_also_gets_a_suffix(self, repo):
+        """Two instances with the *same* statement are two instances now — the key
+        must not collide on the statement hash the way it used to."""
+        first = repo.resolve_traitsetting_id("dupkeys2", "trait-y", statement="mine", allow_duplicates=True)
+        repo.create_traitsetting(TraitSetting(
+            id=first, entity_id="dupkeys2", trait_id="trait-y", statement="mine"))
+        second = repo.resolve_traitsetting_id("dupkeys2", "trait-y", statement="mine", allow_duplicates=True)
+        assert second != first
+
+    def test_a_container_may_repeat_one_definition(self, repo):
+        """A nested setting is scoped to its *container*, not the entity, and one
+        definition legitimately repeats under one parent (every portent in an
+        agenda). ``addTraitSetting`` checks no collision for sub-traits, so the key
+        itself must differ per instance — and a second container must not be
+        blocked by the first container's key."""
+        first = repo.resolve_subtrait_id("agenda", "trait-portent")
+        assert first == "agenda:trait-portent"
+        repo.create_traitsetting(TraitSetting(
+            id=first, entity_id="e", trait_id="trait-portent",
+            from_type="traitsetting", parent_traitsetting_id="agenda"))
+        assert repo.resolve_subtrait_id("agenda", "trait-portent") != first
+        assert repo.resolve_subtrait_id("other", "trait-portent") == "other:trait-portent"
 
 
 class TestRazmerit:

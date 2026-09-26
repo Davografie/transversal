@@ -33,6 +33,75 @@ def _gql(client, query: str, variables: dict | None = None):
     return data["data"]
 
 
+class TestDuplicateTraitInstances:
+    """A set that allows duplicates takes **any number** of one definition.
+
+    The rule is the set's, not the text's (the human, 2026-09-25): a duplicate
+    needs no statement to exist, so the write path must mint a key per instance.
+    Before this, `resolve_traitsetting_id` returned `{entity}:{trait}` for a
+    statement-less duplicate — the key the first instance already held — so the
+    second instance was refused and the sheet's add list offered a dead option.
+    """
+
+    def _sheet(self, client, *, allow_duplicates):
+        suffix = "dup" if allow_duplicates else "one"
+        _gql(client, f"""
+            mutation {{
+              createTraitset(id: "ts-{suffix}", name: "dupes {suffix}", universes: ["earth"],
+                             allowDuplicates: {str(allow_duplicates).lower()}) {{ id }}
+            }}
+        """)
+        _gql(client, f"""
+            mutation {{
+              createTrait(input: {{id: "trait-{suffix}", name: "Sabre",
+                                  universes: ["earth"], traitsetId: "ts-{suffix}"}}) {{ id }}
+            }}
+        """)
+        eid = _gql(client, """
+            mutation { createEntity(input: {name: "Dupes", type: GMC, universe: "earth"}) { id } }
+        """)["createEntity"]["id"]
+        return eid, f"ts-{suffix}", f"trait-{suffix}"
+
+    def _add(self, client, eid, trait_id, traitset_id, statement=""):
+        return _gql(client, """
+            mutation($e: ID!, $i: TraitSettingInput!) {
+              addTraitSetting(entityId: $e, input: $i) { id traitId statement }
+            }
+        """, {"e": eid, "i": {
+            "traitId": trait_id, "traitsetId": traitset_id,
+            "dice": ["D6"], "ratingType": "STATIC", "statement": statement,
+        }})["addTraitSetting"]
+
+    def test_two_instances_need_no_statement(self, client):
+        eid, ts, trait = self._sheet(client, allow_duplicates=True)
+        first = self._add(client, eid, trait, ts)
+        second = self._add(client, eid, trait, ts)
+        assert first["id"] != second["id"], "each instance needs its own key"
+        assert first["statement"] == second["statement"] == ""
+
+    def test_the_same_statement_is_also_allowed(self, client):
+        """It used to be the duplicate's identity; now it is just text."""
+        eid, ts, trait = self._sheet(client, allow_duplicates=True)
+        first = self._add(client, eid, trait, ts, statement="mine")
+        second = self._add(client, eid, trait, ts, statement="mine")
+        assert first["id"] != second["id"]
+
+    def test_a_one_per_trait_set_still_refuses_a_twin(self, client):
+        eid, ts, trait = self._sheet(client, allow_duplicates=False)
+        self._add(client, eid, trait, ts)
+        r = client.post("/api/v1/graphql", json={
+            "query": """mutation($e: ID!, $i: TraitSettingInput!) {
+                addTraitSetting(entityId: $e, input: $i) { id }
+            }""",
+            "variables": {"e": eid, "i": {
+                "traitId": trait, "traitsetId": ts, "dice": ["D6"], "ratingType": "STATIC",
+            }},
+        })
+        assert "errors" in r.json(), r.json()
+        assert "already present" in r.json()["errors"][0]["message"]
+
+
+
 class TestGraphQLQueries:
     def test_trait_tags_round_trip(self, client):
         """Tags survive create → read (B116: a trait can carry tags)."""

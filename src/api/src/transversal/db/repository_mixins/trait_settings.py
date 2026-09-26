@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import secrets
 
 from transversal.db.arango import ENTITIES
 from transversal.db.arango import PROJECTIONS
@@ -12,6 +13,10 @@ from transversal.db.arango import TRAITSETTINGS
 from transversal.domain import TraitSetting
 from transversal.domain import RatingType
 from typing import Optional
+
+
+class TraitSettingKeyError(RuntimeError):
+    """A free trait-setting key could not be generated (see `_free_key`)."""
 
 
 def fold_challenge_traits(chain: list[str], grouped: dict[str, list[TraitSetting]]) -> list[TraitSetting]:
@@ -142,6 +147,29 @@ class RepositoryTraitSettings:
                 return ts
         return None
 
+    def may_hold_another(self, entity_id: str, trait_id: str, allow_duplicates: bool = False) -> bool:
+        """Whether the owner may take **another instance** of ``trait_id``.
+
+        A different question from :meth:`find_traitsetting_collision`, and the two
+        must not be confused:
+
+        * this one is the **set's** rule — "does this set permit more than one
+          instance of a definition?" A set that allows duplicates permits any
+          number, and one that does not permits exactly one;
+        * that one is the **instance's** rule — "is this specific instance already
+          here?", where a statement is what tells two instances apart. The effects
+          gain path asks that one, because a repeated grant of the same thing is a
+          no-op rather than a second copy.
+
+        They agreed by accident while a statement was also what made a duplicate's
+        *key* unique, and the sheet read the instance rule where it needed the set
+        rule — so a duplicate-allowing set still refused a second instance whose
+        statement happened to match (reported 2026-09-25 on `resources`).
+        """
+        if allow_duplicates:
+            return True
+        return not self.get_traitsettings_for_entity_and_trait(entity_id, trait_id)
+
     def resolve_traitsetting_id(
         self,
         entity_id: str,
@@ -152,34 +180,59 @@ class RepositoryTraitSettings:
         """Deterministic TraitSetting key for a new instance.
 
         ``allow_duplicates=False`` → ``{entity}:{trait}`` (backward-compatible,
-        one instance per trait). ``allow_duplicates=True`` + non-empty statement
-        → ``{entity}:{trait}:{hash8(statement)}`` so same-statement duplicates
-        collide (and are caught by :meth:`find_traitsetting_collision`) while
-        distinct statements get distinct keys.
+        one instance per trait). ``allow_duplicates=True`` → a key unique to this
+        instance: a statement still seeds it, so the first instance under a given
+        statement keeps exactly the key this used to produce and the common case
+        stays readable, but a **repeat takes a unique suffix** because the set
+        permits it. A duplicate no longer needs a statement to exist — the set is
+        what decides, not the text.
         """
         base = f"{entity_id}:{trait_id}"
-        if allow_duplicates and statement:
-            h = hashlib.sha1(statement.encode("utf-8")).hexdigest()[:8]
-            return f"{base}:{h}"
-        return base
+        if not allow_duplicates:
+            return base
+        seed = hashlib.sha1(statement.encode("utf-8")).hexdigest()[:8] if statement else ""
+        candidate = f"{base}:{seed}" if seed else base
+        return candidate if self._key_is_free(candidate) else self._free_key(base, seed)
+
+    def _free_key(self, base: str, seed: str = "") -> str:
+        """``base`` (or ``base:seed``) with a suffix that no setting holds yet.
+
+        The suffix is random because a duplicate's identity is its key, not
+        anything in the text — two instances of one definition with the same
+        statement are two instances. Retried a handful of times and then refused
+        loudly: 24 random bits colliding *and* every retry hitting a taken key is
+        a broken generator, not a busy table.
+        """
+        prefix = f"{base}:{seed}" if seed else base
+        for _ in range(8):
+            candidate = f"{prefix}-{secrets.token_hex(3)}"
+            if self._key_is_free(candidate):
+                return candidate
+        raise TraitSettingKeyError(
+            f"could not find a free trait-setting key under '{prefix}'")
+
+    def _key_is_free(self, key: str) -> bool:
+        getter = getattr(self, "get_traitsetting", None)
+        return getter is None or getter(key) is None
 
     def resolve_subtrait_id(
         self, parent_traitsetting_id: str, trait_id: str, statement: str = ""
     ) -> str:
-        """Deterministic key for a setting nested under ``parent_traitsetting_id``.
+        """Key for a setting nested under ``parent_traitsetting_id``.
 
         A nested setting is scoped to its **parent container**, not to the entity —
         and one registry trait legitimately appears many times under one parent
         (every portent in an agenda is a setting of the same generic trait). So the
-        key is parent-scoped and disambiguated by the statement, the same
-        convention :meth:`resolve_traitsetting_id` uses for duplicates: the same
-        statement collides deliberately, distinct statements get distinct keys.
+        key is parent-scoped and a statement seeds it, the same convention
+        :meth:`resolve_traitsetting_id` uses. **The create path does not check
+        collisions for sub-traits** (`addTraitSetting` skips it, so a container may
+        hold many of one definition), so the key itself has to stay unique: a
+        repeat takes a suffix rather than colliding on insert.
         """
         base = f"{parent_traitsetting_id}:{trait_id}"
-        if statement:
-            h = hashlib.sha1(statement.encode("utf-8")).hexdigest()[:8]
-            return f"{base}:{h}"
-        return base
+        seed = hashlib.sha1(statement.encode("utf-8")).hexdigest()[:8] if statement else ""
+        candidate = f"{base}:{seed}" if seed else base
+        return candidate if self._key_is_free(candidate) else self._free_key(base, seed)
 
     def get_traitsettings_for_entity(self, entity_id: str) -> list[TraitSetting]:
         query = f"""

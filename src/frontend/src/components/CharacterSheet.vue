@@ -2006,12 +2006,18 @@ function toggleDefinitionPicker() {
  * definition from another universe is not one this body can hold. Two filters,
  * both mirroring rules the write path enforces (``services/trait_change``), so
  * the list never offers a change that would be refused: a container may only
- * become another container, and a definition the entity already holds is not a
- * legal destination (its one instance is not this one).
+ * become another container, and a definition the entity already holds is a
+ * collision **only in a set that forbids duplicates** — a set that allows them
+ * holds any number of one definition, statement or no statement. Reading the
+ * second filter as "already held anywhere" (or as "held under this statement")
+ * hid the whole point of such a set from the control (reported 2026-09-25 on
+ * `resources`).
  *
  * ``tags`` must be selected here: ``isContainer`` reads them, and a query that
  * omitted them would make every candidate look like a non-container — which
  * passes by accident for an ordinary trait and empties the list for a container.
+ * ``allowDuplicates`` likewise: without it every candidate set would read as
+ * one-per-trait and the filter would be wrong in the other direction.
  */
 async function fetchDefinitionOptions() {
   if (definitionOptions.value) return
@@ -2020,18 +2026,37 @@ async function fetchDefinitionOptions() {
   const u = entity.value?.currentUniverse || props.universe
   const [data, setData] = await Promise.all([
     graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId tags } }`, { u }),
-    // Only for the set *names* and their order — the candidates below decide which
-    // sets are worth offering. Deliberately the whole registry rather than
-    // `traitsetsByUniverse`: a trait can sit in a set that universe does not list
-    // (25 of 36 sets, in three_realms), and then the filter would label it with a
-    // raw id.
-    graphql(`query { traitsets { id name order } }`),
+    // The set *names* and their order, and `allowDuplicates` — the candidate's set
+    // is what decides whether a definition it already holds is a collision. The
+    // whole registry rather than `traitsetsByUniverse`: a trait can sit in a set
+    // that universe does not list (25 of 36 sets, in three_realms), and then the
+    // filter would label it with a raw id.
+    graphql(`query { traitsets { id name order allowDuplicates } }`),
   ])
-  const alreadyHeld = new Set(
-    ((showAllTraits.value ? allTraitSettings.value : effectiveSettings.value) || [])
-      .filter(s => s.id !== t.id)
-      .map(s => s.traitId),
-  )
+  const sets = new Map((setData?.traitsets || []).map(s => [s.id, s]))
+  const orderOf = (id) => sets.get(id)?.order ?? 999
+
+  // The definitions the entity already holds. The edited instance is excluded: it
+  // is not a collision with itself, and the list marks it selected below.
+  const held = new Set()
+  for (const s of ((showAllTraits.value ? allTraitSettings.value : effectiveSettings.value) || [])) {
+    if (s.id === t.id) continue
+    held.add(s.traitId)
+  }
+
+  /**
+   * Whether repointing at `o` would be refused as a twin.
+   *
+   * **The write path's rule, mirrored** — `repoint_trait_setting` →
+   * `_refuse_collision` → `may_hold_another` — not a rule of this control's own:
+   * a set that allows duplicates permits any number of one definition, so a held
+   * definition is not a collision there at all; a set that forbids them collides
+   * on any instance. Note it asks the **candidate's** set, not the instance's: a
+   * repoint moves the instance into the new definition's set, and that is the set
+   * whose rule the write path applies.
+   */
+  const wouldCollide = (o) => held.has(o.id) && !sets.get(o.traitsetId)?.allowDuplicates
+
   const wantContainer = isContainer(t)
   definitionOptions.value = (data?.traitsByUniverse || [])
     // The instance's *own* definition is always offered, even when the entity
@@ -2039,13 +2064,11 @@ async function fetchDefinitionOptions() {
     // it selected so the control never reads as a dead end. Choosing it is a
     // no-op, not a mutation.
     .filter(o => isContainer(o) === wantContainer
-      && (o.id === t.traitId || !alreadyHeld.has(o.id)))
+      && (o.id === t.traitId || !wouldCollide(o)))
 
   // The sets to offer are the ones the candidates actually landed in, so the
   // filter can never send the player to an empty list. Ordered as the sheet
   // orders its own sets, so the picker's list and the sheet's agree.
-  const sets = new Map((setData?.traitsets || []).map(s => [s.id, s]))
-  const orderOf = (id) => sets.get(id)?.order ?? 999
   definitionTraitsets.value = [...new Set(definitionOptions.value.map(o => o.traitsetId))]
     .map(id => ({ id, name: sets.get(id)?.name || id }))
     .sort((a, b) => (orderOf(a.id) - orderOf(b.id)) || a.name.localeCompare(b.name))

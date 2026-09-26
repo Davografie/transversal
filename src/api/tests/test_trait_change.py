@@ -54,6 +54,7 @@ class FakeRepo:
         return self.traitsets.get(traitset_id)
 
     def find_traitsetting_collision(self, entity_id, trait_id, statement="", allow_duplicates=False):
+        """The *instance* question — kept because the effects path asks it."""
         existing = [ts for ts in self.traitsettings
                     if ts.entity_id == entity_id and ts.trait_id == trait_id]
         if not existing:
@@ -61,6 +62,13 @@ class FakeRepo:
         if not allow_duplicates:
             return existing[0]
         return next((ts for ts in existing if (ts.statement or "") == (statement or "")), None)
+
+    def may_hold_another(self, entity_id, trait_id, allow_duplicates=False):
+        """The *set* question — what the repoint and the create path ask."""
+        if allow_duplicates:
+            return True
+        return not [ts for ts in self.traitsettings
+                    if ts.entity_id == entity_id and ts.trait_id == trait_id]
 
 
 def _setting(trait_id, **overrides):
@@ -229,10 +237,14 @@ def test_a_definition_the_owner_already_holds_is_refused():
     assert ts.trait_id == "trait-blade"
 
 
-def test_a_duplicate_allowing_set_collides_on_the_statement():
-    """When a set allows duplicates, two instances are distinguished by statement —
-    so the same statement still collides, and a different one does not. Both
-    instances belong to the same owner: a collision is per owner, not global."""
+def test_a_duplicate_allowing_set_takes_any_number():
+    """A set that allows duplicates permits the repoint **however many** instances
+    it already holds, and whatever their statements say.
+
+    The statement used to *be* a duplicate's identity, so a matching one collided.
+    It is not any more (the human, 2026-09-25): the set is what decides, and a
+    duplicate needs no distinguishing text — so both the same statement and a
+    different one are legal, and only a one-per-trait set refuses."""
     held = _setting("trait-fire-blade", id="char-1:trait-fire-blade", statement="other")
     repo = FakeRepo(
         traits=[FakeTrait("trait-blade", "ts-weapons"),
@@ -245,10 +257,9 @@ def test_a_duplicate_allowing_set_collides_on_the_statement():
     ts = _setting("trait-blade", statement="my blade")
     assert repoint_trait_setting(ts, "trait-fire-blade", repo).changed
 
-    # Same statement → collides
+    # The *same* statement → also legal; this is the case that used to be refused.
     other = _setting("trait-blade", id="char-1:trait-blade-2", statement="other")
-    with pytest.raises(TraitChangeError):
-        repoint_trait_setting(other, "trait-fire-blade", repo)
+    assert repoint_trait_setting(other, "trait-fire-blade", repo).changed
 
 
 def test_a_definition_held_by_another_owner_does_not_collide():
