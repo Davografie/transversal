@@ -40,6 +40,25 @@ export async function uploadImage({ kind, id, universe = '', flags = '', variant
   return data
 }
 
+/**
+ * Copy an existing picture onto another rung ([[B215]]).
+ *
+ * The instance editor uses this to take one of the **trait's** pictures as this
+ * instance's override. The server copies the files rather than sharing them,
+ * because a rung's URL comes from its own record's filename.
+ */
+export async function copyImage({ imageId, ownerKind, ownerId, variantId = '' }) {
+  const params = new URLSearchParams({
+    image_id: imageId, owner_kind: ownerKind, owner_id: ownerId,
+  })
+  if (variantId) params.set('variant_id', variantId)
+  const res = await fetch(`/api/v1/media/copy?${params}`, { method: 'POST' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.detail || `Copy failed (${res.status})`)
+  if (!data.image_id) throw new Error('The copy was not attached to this trait.')
+  return data
+}
+
 export function useImageGallery(owner, { pollMs = 2000, filter = null } = {}) {
   const images = ref([])
   const loading = ref(false)

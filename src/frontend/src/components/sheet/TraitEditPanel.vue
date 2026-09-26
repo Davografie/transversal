@@ -172,7 +172,20 @@
               the first picture takes every role, so it overrides at once
             </span>
           </div>
+          <!-- The trait's own pictures, as a pool this instance can draw from:
+               the trait carries the canonical art, and an instance picks which
+               of it is its own rather than uploading another copy by hand. -->
+          <div v-if="definitionImages.length" class="edit-image-picks">
+            <span class="edit-image-hint">or take one of the trait's own:</span>
+            <ImageGallery
+              :images="definitionImages"
+              empty=""
+              :draggable="false"
+              @open="useDefinitionImage"
+            />
+          </div>
           <span v-if="imagesError" class="edit-image-error">{{ imagesError }}</span>
+          <span v-if="pickError" class="edit-image-error">{{ pickError }}</span>
           <!-- The shared viewer, rendered **inline**: this panel is mounted both
                inside a GM panel and directly by the player app, and only the
                former has a panel stack to push a child panel onto. -->
@@ -213,7 +226,7 @@ import { computed, ref } from 'vue'
 import Button from '@/components/ui/Button.vue'
 import TagInput from '@/components/ui/TagInput.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
-import { useImageGallery } from '@/composables/useImageGallery.js'
+import { copyImage, useImageGallery } from '@/composables/useImageGallery.js'
 import ImageGallery from '@/components/image/ImageGallery.vue'
 import ImageUpload from '@/components/image/ImageUpload.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
@@ -311,16 +324,40 @@ const emit = defineEmits([
 // projection has against an entity, and the reason one canonical definition
 // picture can serve every instance until an instance wants its own.
 const openedImageId = ref('')
+const pickError = ref('')
 const {
-  images: instanceImages,
+  images: traitImages,
   error: imagesError,
   load: loadInstanceImages,
 } = useImageGallery(
   () => ({ kind: 'trait', id: props.trait?.traitId || '', universe: props.trait?.universe || '' }),
-  // Only this instance's rung: the definition's pictures are the registry
-  // editor's, and mixing them here would make "override" ambiguous.
-  { filter: (i) => (i.variant_id || null) === (props.trait?.id || null) },
+  // One read of the trait, and the two lists below are derived from it: this
+  // instance's rung, and the definition pictures it may take one from. Two
+  // filtered readers would be two fetches and two job pollers for one section.
 )
+
+//: This instance's own pictures — the rung is the setting.
+const instanceImages = computed(
+  () => traitImages.value.filter(i => (i.variant_id || null) === (props.trait?.id || null)),
+)
+//: The trait's definition pictures — the pool an instance may pick from.
+const definitionImages = computed(() => traitImages.value.filter(i => !i.variant_id))
+
+async function useDefinitionImage(img) {
+  if (!img || !props.trait) return
+  pickError.value = ''
+  try {
+    await copyImage({
+      imageId: img.id,
+      ownerKind: 'trait',
+      ownerId: props.trait.traitId,
+      variantId: props.trait.id,
+    })
+    onInstanceImageChanged()
+  } catch (e) {
+    pickError.value = e?.message || 'Could not use that picture'
+  }
+}
 
 const openedImageRecord = computed(
   () => instanceImages.value.find(i => i.id === openedImageId.value) || null,
@@ -419,6 +456,7 @@ function definitionLabel(opt) {
 .edit-image-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .edit-image-hint { font-size: 10px; color: var(--text-dim); }
 .edit-image-error { font-size: 10px; color: var(--danger, #e06c75); }
+.edit-image-picks { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
 .edit-image-viewer { margin-top: 8px; border-top: 1px solid var(--overlay-12); padding-top: 6px; }
 
 .edit-field {

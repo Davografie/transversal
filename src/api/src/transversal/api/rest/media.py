@@ -120,6 +120,97 @@ def _convert_to_webp(data: bytes, source_ext: str) -> bytes:
 
 
 
+@router.post("/media/copy")
+async def copy_media(
+    image_id: str,
+    owner_kind: str = "trait",
+    owner_id: str = "",
+    variant_id: str = "",
+):
+    """Copy an existing picture onto another rung of the ladder ([[B215]]).
+
+    The trait-instance editor uses this to take one of the **trait's own**
+    pictures as this instance's override, instead of uploading a new file.
+
+    It **copies** rather than references, because every rung owns its files: a
+    rung's URL is built from its own record's filename, so two records sharing a
+    filename would share a file, and deleting either one would remove it from
+    under the other.
+    """
+    # The module-level import, not a local one: a re-import here would shadow it
+    # and make the route untestable without a database.
+    repo = EntityRepository()
+    src = repo.get_image(image_id)
+    if not src:
+        raise HTTPException(status_code=404, detail=f"Image '{image_id}' not found")
+
+    if owner_kind not in ("entity", "trait"):
+        raise HTTPException(status_code=400, detail="owner_kind must be 'entity' or 'trait'")
+    owner_id = _safe_component(owner_id, "owner_id") if owner_id else ""
+    if not owner_id:
+        raise HTTPException(status_code=400, detail="owner_id is required")
+    variant_id = _safe_record_id(variant_id, "variant_id") if variant_id else ""
+
+    src_dir = IMAGEN_DIR / src.owner_id / src.universe
+    master = src_dir / f"{src.filename}_Original.{src.extension}"
+    if not master.exists():
+        raise HTTPException(status_code=404, detail="The picture's master is missing")
+
+    new_id = uuid.uuid4().hex[:8]
+    base = f"copy_{new_id}"
+    out_dir = IMAGEN_DIR / owner_id / src.universe
+    _save_image_variants(master.read_bytes(), out_dir, base)
+
+    # The matte travels with the picture: a copy that lost it would render opaque
+    # exactly where the original floats.
+    renders = list(src.renders or [])
+    if "cutout" in renders:
+        for tier in ("Original", "XLarge", "Large", "Small", "Mini"):
+            matte = src_dir / f"{src.filename}_Cutout_{tier}.webp"
+            if matte.exists():
+                (out_dir / f"{base}_Cutout_{tier}.webp").write_bytes(matte.read_bytes())
+        if not (out_dir / f"{base}_Cutout_Original.webp").exists():
+            renders = [r for r in renders if r != "cutout"]
+
+    with Image.open(out_dir / f"{base}_Original.webp") as copied:
+        width, height = copied.size
+
+    image = MediaImage(
+        id=new_id,
+        owner_kind=owner_kind,
+        owner_id=owner_id,
+        variant_id=variant_id or None,
+        universe=src.universe,
+        # The artwork is the artwork: provenance, citation and origin travel.
+        image_type=src.image_type,
+        roles=[],
+        flags=list(src.flags),
+        credits=[c.model_copy() for c in src.credits],
+        license=src.license,
+        credit_text=src.credit_text,
+        renders=renders,
+        transparent=src.transparent,
+        prompt=src.prompt,
+        negative_prompt=src.negative_prompt,
+        loras=list(src.loras),
+        width=width,
+        height=height,
+        seed=src.seed,
+        steps=src.steps,
+        filename=base,
+        extension="webp",
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    repo.create_image(image)
+
+    # The sole-image rule, exactly as upload has it: the first picture on a rung
+    # takes every role, so a fresh override takes effect without a tagging step.
+    if len(repo.get_images_for_owner(owner_id, variant_id or None)) == 1:
+        repo.update_image(new_id, {"roles": ["background", "sheet", "navdot"]})
+
+    return {"image_id": new_id, "filename": base}
+
+
 @router.post("/media/upload")
 async def upload_media(
     background_tasks: BackgroundTasks,
