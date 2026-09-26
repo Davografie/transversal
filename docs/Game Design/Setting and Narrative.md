@@ -53,7 +53,7 @@ In winter, Krasnoyarsk-45 is frozen, silent, and cut off. Perfect for hiding som
 
 It is a straight, double-edged Chinese sword of elegant construction, with a blade that shows no corrosion despite its age. Its name — Still Waters — comes from the appearance of the metal: dark and depthless, like a mountain lake at midnight. When razmerit flows through it, faint characters in seal script shimmer along the blade: the remnant of a cultivation technique imprinted by its original wielder.
 
-**Discovery.** The jian was recovered by a Russian deep-sea expedition in the Sea of Okhotsk, where it had lain in a submerged temple structure of unknown origin. It changed hands through artifact traffickers before being acquired by the Russian Federation and assigned to the ARD.
+**Discovery.** The jian was recovered by a Russian deep-sea expedition in the South China Sea, at **Amber Shoal** — a wreck-field the charts disagree about — where it had lain in a submerged temple structure of unknown origin (charted as **The Sunken Temple**). It changed hands through artifact traffickers before being acquired by the Russian Federation and assigned to the ARD.
 
 **Properties.** The jian is a Three Realms attunement source of exceptional purity. Anyone holding or near it (within roughly the same room) gains Three Realms attunement at d8 strength. It holds 25 razmerit in its own pool. Its SFX "Law Bridge" can temporarily boost attunement strength, enabling full cultivation trait access in a non-Three Realms environment — for a cost.
 
@@ -72,7 +72,7 @@ Antonov knows the Russian Federation well enough to fear what it would do with a
 His missive — encrypted, routed through academic networks, bouncing through dead-drop servers — finds the players. It contains his location, a brief explanation of what he's found, and a warning: *"They will use it. I cannot stop them. Please help me and my family leave. I will tell you everything."*
 
 > [!note] Antonov's Family
-> Antonov's wife, Dr. Elena Antonova, is a geologist who met him at university. She knows his work and has helped him hide his communications. Their daughter, Katya (14), is unaware of the situation. The extraction must include all three.
+> Antonov's wife, **Irina Antonova**, is a geologist who met him at university. She knows his work and has helped him hide his communications. Their son, **Yuri Antonov** (10), is unaware of the situation. The extraction must include all three.
 
 ## The Three Realms
 
@@ -212,7 +212,7 @@ The players arrive in Krasnoyarsk-45. It's winter. The town is small, frozen, an
 
 The ARD facility is an aging Soviet-era research complex built into the mountainside. Security is light — the Russian Federation doesn't fully understand what they have. The players infiltrate, locate Antonov's lab, and find him.
 
-Antonov is in a wheelchair — a childhood polio complication. He sits near a humming machine, an array of sensors and harmonic resonators surrounding a central pedestal. On the pedestal, suspended in a magnetic field, the jian spins slowly.
+Antonov is in a wheelchair — a spinal injury, waist down. He sits near a humming machine, an array of sensors and harmonic resonators surrounding a central pedestal. On the pedestal, suspended in a magnetic field, the jian spins slowly.
 
 Antonov explains:
 - What the jian is (a bridge to another universe)

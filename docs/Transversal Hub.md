@@ -64,6 +64,7 @@ status: canonical
 - [[Performance and Resilience Plan]] — client caching, draft persistence, backend latency, multi-worker
 - [[Life Path Editor and Wizard Plan]], [[Unified Effects Plan]] — feature plans
 - [[Content Completeness Checklist]], [[MCP Tool Experience]] — authoring guidelines and worklog
+- **Design logs** *(draft — decisions recorded before they are built)*: [[UN Scenario Design Log]], [[Time and Flashbacks Design Log]], [[AI GM Design Log]], [[Appearance Authoring Guide]]
 
 ### 📚 Reference
 
