@@ -2,7 +2,7 @@
   <div>
     <div class="ps-form">
       <label>Name</label>
-      <input v-model="form.name" placeholder="Display name…" />
+      <input ref="nameInput" v-model="form.name" placeholder="Display name…" />
       <label>Universe</label>
       <select v-model="form.universe">
         <option value="">-- pick --</option>
@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed, watch } from 'vue'
+import { reactive, ref, computed, watch, inject, nextTick } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import Button from '@/components/ui/Button.vue'
@@ -63,21 +63,30 @@ const props = defineProps({
 
 const emit = defineEmits(['saved', 'deleted'])
 
+// The opener hands the *live* display-name list across in the panel spec's
+// `context`, because a panel's own `provide` cannot reach its child panels (they
+// are rendered by `Panel.vue`, as siblings of the slot outlet — see
+// `PanelScope.vue`). Reading the live list rather than the `allDisplayNames`
+// prop matters: a prop is captured when the panel opens, so a second entry saved
+// from this same panel would rebuild the list from that stale snapshot and drop
+// the first. The prop stays as the fallback for a panel opened outside that tree.
+const displayNamesDraft = inject('displayNamesDraft', null)
+const liveList = () => displayNamesDraft?.value ?? props.allDisplayNames
+
 const DICE = ['D4', 'D6', 'D8', 'D10', 'D12']
 
 const isNew = computed(() => props.editIndex === null || props.editIndex === undefined)
 const saving = ref(false)
 const errorMsg = ref('')
 const isDirty = ref(false)
+const nameInput = ref(null)
 
 // ── Form state ──
-const entry = isNew.value ? { name: '', universe: '', ratings: [] } : (props.allDisplayNames[props.editIndex] || { name: '', universe: '', ratings: [] })
-
-const form = reactive({
-  name: entry.name || '',
-  universe: entry.universe || '',
-  ratings: (entry.ratings || []).map(r => [...r]),
-})
+// Seeded by `seedForm` below. The panel is *reused in place* when the opener
+// replaces its spec — add → edit, edit → add, and editing another row all share
+// this component with no identity `id` — so the fields cannot be built once here
+// and then left alone.
+const form = reactive({ name: '', universe: '', ratings: [] })
 
 const showDiePicker = ref(null)  // rating index with open picker, or null
 
@@ -104,41 +113,91 @@ function removeDie(ri, di) {
 }
 
 // ── Build updated list ──
-function buildUpdatedList() {
-  const list = props.allDisplayNames.map(dn => ({
+// Pure, so the check script can run it directly rather than restating it.
+function mergeDisplayName(list, entry, editIndex) {
+  const out = (list || []).map(dn => ({
     name: dn.name || '',
     universe: dn.universe || '',
     ratings: (dn.ratings || []).map(r => [...r]),
   }))
-  const newEntry = {
-    name: form.name.trim(),
-    universe: form.universe || '',
-    ratings: form.ratings.filter(r => r.length > 0),
+  const next = {
+    name: (entry.name || '').trim(),
+    universe: entry.universe || '',
+    ratings: (entry.ratings || []).filter(r => r.length > 0).map(r => [...r]),
   }
-  if (isNew.value) {
-    list.push(newEntry)
-  } else {
-    list[props.editIndex] = newEntry
-  }
-  return list.filter(dn => dn.name)
+  if (editIndex === null || editIndex === undefined) out.push(next)
+  else out[editIndex] = next
+  return out.filter(dn => dn.name)
+}
+
+function buildUpdatedList() {
+  return mergeDisplayName(liveList(), form, props.editIndex)
+}
+
+function entrySignature() {
+  return JSON.stringify([form.name, form.universe, form.ratings])
 }
 
 // ── Auto-save ──
 let saveTimer = null
+// Set while `seedForm` writes the form, so seeding does not look like a new edit
+// and schedule a save (which would also make the empty add form write itself).
+let suppressWatch = false
+
+// Load the form from the entry the spec now points at: blank for an add, the
+// entry at `editIndex` for an edit. Runs at setup and again when the spec changes
+// identity, because a reused instance would otherwise keep the previous entry in
+// its fields — editing a row after adding would save the added text into it, and
+// adding after an edit would append the edited text a second time.
+function seedForm() {
+  const source = isNew.value
+    ? { name: '', universe: '', ratings: [] }
+    : (liveList()[props.editIndex] || { name: '', universe: '', ratings: [] })
+  suppressWatch = true
+  form.name = source.name || ''
+  form.universe = source.universe || ''
+  form.ratings = (source.ratings || []).map(r => [...r])
+  showDiePicker.value = null
+  isDirty.value = false
+  clearTimeout(saveTimer)
+  nextTick(() => { suppressWatch = false })
+}
+
+seedForm()
+
+// Keyed on the spec's *identity*, not its content: a re-open with the same index
+// (pressing `+ Add Display Name` twice) is left alone, so in-progress typing is
+// never thrown away.
+watch([() => props.editIndex, () => props.traitId], seedForm)
+
 watch([
   () => form.name,
   () => form.universe,
   () => form.ratings.map(r => [...r]),
 ], () => {
+  if (suppressWatch) return
   isDirty.value = true
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => doSave(), 500)
 }, { deep: true })
 
+// A *new* entry leaves the panel open and ready for the next one: it goes back to
+// a blank "Add Display Name" and focuses the name field. The panel is reused in
+// place when the same component is opened again (`Panel.openChild` replaces the
+// spec and Vue reuses the instance), so without this the next `+ Add Display Name`
+// shows the entry that was just saved instead of a fresh form — display names
+// could not be added consecutively.
+function resetForm() {
+  seedForm()
+  nextTick(() => nameInput.value?.focus())
+}
+
 async function doSave() {
   if (!isDirty.value) return
   saving.value = true
   errorMsg.value = ''
+  const wasNew = isNew.value
+  const snapshot = entrySignature()
   try {
     const displayNames = buildUpdatedList()
     await graphql(
@@ -146,8 +205,12 @@ async function doSave() {
       { id: props.traitId, input: { displayNames } }
     )
     patchData('traits', props.traitId, { displayNames })
-    isDirty.value = false
+    // Typing that landed while this write was in flight is the newer truth: leave
+    // it dirty for its own debounce, and never reset the form under it.
+    const unchanged = entrySignature() === snapshot
+    if (unchanged) isDirty.value = false
     emit('saved', displayNames)
+    if (wasNew && unchanged) resetForm()
   } catch (e) {
     errorMsg.value = e?.message || 'Save failed'
   } finally {

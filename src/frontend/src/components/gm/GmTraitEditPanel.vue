@@ -507,6 +507,10 @@ function openDisplayNameEditor(index) {
       editIndex: index,
       traitId: trait.value.id,
     },
+    // The live list, as a ref, through the spec's `context` — the editor reads it
+    // so a second entry saved from the same (reused) panel extends the list
+    // instead of rebuilding it from the snapshot `props` froze at open.
+    context: { displayNamesDraft: displayNames },
     listeners: {
       'saved': (updatedList) => {
         displayNames.value = updatedList
