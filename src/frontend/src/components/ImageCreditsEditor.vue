@@ -77,31 +77,34 @@ function seed() {
   savedAt.value = 0
 }
 
-//: Whether the local state has edits the server has not confirmed. Declared
-//: **before** the watchers below, because the first one is `immediate` and runs
-//: during setup — reading it from a later `let` is a temporal-dead-zone crash.
-let dirty = false
-//: Incremented on every edit, so a save that lands after further typing knows not
-//: to call the editor clean again.
-let editSeq = 0
+//: Whether this picture has been edited here. Declared **before** the watchers
+//: below, because the first one is `immediate` and runs during setup — reading it
+//: from a later `let` is a temporal-dead-zone crash.
+//:
+//: Once true it stays true until the picture changes, and it gates the props
+//: watch. That matters more than it looks: the server keeps a credit row only when
+//: it has a **name or a url**, so choosing a role on a row you have not filled in
+//: yet saves `[]` and the reload that follows comes back empty. Re-seeding from
+//: that response deletes the row you are about to type into — which is exactly the
+//: reported bug ("as soon as I click source, it disappears").
+let touched = false
 let timer = null
 
 // The viewer reuses one component instance across images, so follow the picture
 // id rather than seeding once — otherwise switching image would show (and then
 // save) the previous image's credits.
-watch(() => props.imageId, () => { dirty = false; seed() }, { immediate: true })
+watch(() => props.imageId, () => { touched = false; seed() }, { immediate: true })
 
 // Before the first edit, follow the props: the viewer's opener may hand over only
-// an id, and the picture's credits arrive with the list a moment later. After an
-// edit the local state wins, so a save's own reload cannot clobber what is being
-// typed.
+// an id, and the picture's credits arrive with the list a moment later. After
+// that the local rows win, so nothing the server sends back can take a row away
+// from under the cursor.
 watch(() => [props.credits, props.license, props.creditText], () => {
-  if (!dirty) seed()
+  if (!touched) seed()
 }, { deep: true })
 
 function onEdit(delay = DEBOUNCE_MS) {
-  dirty = true
-  editSeq += 1
+  touched = true
   if (timer) clearTimeout(timer)
   timer = setTimeout(save, delay)
 }
@@ -111,8 +114,7 @@ function addRow() {
   // would delete the row the user is about to type into. The first keystroke
   // schedules the save; a row left blank is simply nothing to persist.
   rows.value.push({ role: 'artist', name: '', url: '' })
-  dirty = true
-  editSeq += 1
+  touched = true
 }
 
 function removeRow(index) {
@@ -123,7 +125,6 @@ function removeRow(index) {
 async function save() {
   if (timer) { clearTimeout(timer); timer = null }
   if (!props.imageId) return
-  const seq = editSeq
   saving.value = true
   error.value = ''
   try {
@@ -139,8 +140,6 @@ async function save() {
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.detail || `Save failed (${res.status})`)
     savedAt.value = Date.now()
-    // Only clean if nothing was typed while this request was in flight.
-    if (editSeq === seq) dirty = false
     emit('saved')
   } catch (e) {
     error.value = e?.message || 'Save failed'

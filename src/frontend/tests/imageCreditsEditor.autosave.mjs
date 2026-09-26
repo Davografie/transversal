@@ -27,7 +27,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { parse, compileScript } from '@vue/compiler-sfc'
-import { createRenderer, h, nextTick } from 'vue'
+import { createRenderer, h, nextTick, reactive } from 'vue'
 
 // ── compile the SFC to a client component, mount it with a stub renderer ──
 
@@ -225,6 +225,48 @@ const nameInput = (c) => find(c, n => n.tag === 'input' && n.props.placeholder =
   assert.match(textOf(container), /bad url/, 'the server reason is shown')
   app.unmount()
   fail = false
+}
+
+// ── 7. a row the user is still filling in must not be yanked away ──
+// Picking a role on a row with no name yet is a change the SERVER treats as blank
+// and drops (`_validated_credits` keeps a row only when it has a name or a url).
+// Re-seeding from that empty response deleted the row the user was about to type
+// into — which is the live report: "as soon as I click source, it disappears".
+{
+  calls = []
+  let serverCredits = []
+  globalThis.fetch = async (url, opts = {}) => {
+    if (opts.method === 'PATCH') {
+      const body = JSON.parse(opts.body)
+      calls.push(body)
+      serverCredits = (body.credits || []).filter(c => c.name || c.url)
+    }
+    return { ok: true, status: 200, json: async () => ({}) }
+  }
+  const state = reactive({ credits: [] })
+  const container = makeEl('div')
+  const app = createApp({
+    setup() {
+      return () => h(ImageCreditsEditor, {
+        imageId: 'img-1', credits: state.credits, license: '', creditText: '',
+        onSaved: () => { state.credits = [...serverCredits] },
+      })
+    },
+  })
+  app.mount(container)
+
+  fire(find(container, n => n.tag === 'button' && /add credit/.test(n.text || '')), 'click')
+  await nextTick()
+  const select = find(container, n => n.tag === 'select')
+  assert.ok(select, 'the new row has a role picker')
+  select.value = 'source'
+  fire(select, 'change')
+  await sleep(100)
+  await nextTick()
+
+  assert.equal(calls.length, 1, 'choosing a role saves at once')
+  assert.ok(nameInput(container), 'the row being filled in is still on screen')
+  app.unmount()
 }
 
 unlinkSync(compiled)
