@@ -44,121 +44,30 @@
         />
       </div>
 
-      <!-- Images (B200) — a trait owns a gallery, tagged by role like an entity's -->
+      <!-- Images (B200) — one gallery and one viewer, shared with the entity
+           editor. Editing a picture happens in the viewer, so this surface owns
+           no role checkboxes, no flags and no cut-out buttons of its own. -->
       <h4 class="ps-section-title">Images</h4>
       <p class="section-hint">
         A trait can carry several pictures, shared by every universe it belongs
-        to, and each is tagged with where it renders: <strong>Sheet</strong> (the
+        to. Each is tagged with where it renders: <strong>Sheet</strong> (the
         trait row and detail panel), <strong>BG</strong> (the detail panel's
-        backdrop), <strong>Nav</strong> (the location-viewer scene chip). A tag
-        belongs to one image at a time, so ticking it moves the picture.
+        backdrop), <strong>Nav</strong> (the scene chip in the location viewer).
+        Click a picture to tag it, label it or cite it.
       </p>
-      <div v-for="img in traitImages" :key="img.id" class="trait-image-row">
-        <MediaImage
-          class="trait-image-preview"
-          :class="{ 'is-transparent': img.transparent }"
-          :src="img.path_large"
-          :alt="`${trait?.name || 'Trait'} image`"
-          lazy
-        />
-        <div class="trait-image-body">
-          <div class="trait-image-roles">
-            <label
-              v-for="tag in ROLE_TAGS"
-              :key="tag.key"
-              class="trait-role-check"
-              :title="tag.title"
-            >
-              <input
-                type="checkbox"
-                :checked="(img.roles || []).includes(tag.key)"
-                @change="toggleRole(img, tag.key)"
-              />
-              {{ tag.label }}
-            </label>
-          </div>
-          <div class="trait-image-flags">
-            <label class="trait-flag-check" title="AI was somewhere in this image's workflow">
-              <input
-                type="checkbox"
-                :checked="(img.flags || []).includes('ai')"
-                @change="toggleFlag(img, 'ai')"
-              />
-              <span class="trait-flag-pill" :class="{ 'is-on': (img.flags || []).includes('ai') }">AI</span>
-            </label>
-            <span
-              v-for="f in autoFlagsOf(img)"
-              :key="f"
-              class="trait-flag-pill is-on is-auto"
-              :title="f === 'ai_generated' ? 'Made by the imagen pipeline' : 'Motion made by the animate pipeline'"
-            >{{ AUTO_FLAG_LABELS[f] }}</span>
-            <!-- Real detail only once the master reaches the ceiling. -->
-            <span
-              v-if="img.can_upscale === false"
-              class="trait-flag-pill is-on is-auto"
-              title="At the 2048px ceiling — the XLarge tier is real detail"
-            >XL</span>
-          </div>
-          <ImageProvenance
-            v-if="hasProvenance(img)"
-            compact
-            :flags="img.flags || []"
-            :credits="img.credits || []"
-            :license="img.license || ''"
-            :credit-text="img.credit_text || ''"
-          />
-          <button
-            v-if="creditsOpenFor === img.id"
-            type="button"
-            class="credit-add"
-            @click="creditsOpenFor = ''"
-          >Done</button>
-          <button
-            v-else
-            type="button"
-            class="credit-add"
-            @click="creditsOpenFor = img.id"
-          >Credits &amp; source</button>
-          <ImageCreditsEditor
-            v-if="creditsOpenFor === img.id"
-            :image-id="img.id"
-            :credits="img.credits || []"
-            :license="img.license || ''"
-            :credit-text="img.credit_text || ''"
-            @saved="fetchTraitImages()"
-          />
-          <div class="trait-image-actions">
-            <button
-              v-if="canCutOut(img)"
-              type="button"
-              class="trait-image-cutout"
-              :disabled="cutoutBusy"
-              title="Remove the background — adds a new transparent image below"
-              @click="onCutOut(img)"
-            >{{ cutoutBusy ? 'Cutting out…' : '✂ Cut out' }}</button>
-            <button
-              v-if="canUpscale(img) || upscaleJob"
-              type="button"
-              class="trait-image-cutout"
-              :disabled="startingUpscale || !!upscaleJob"
-              title="Upscale the master with 4x-UltraSharp — adds detail, keeps the art"
-              @click="onUpscale(img)"
-            >{{ upscaleJob ? 'Upscaling…' : '⤢ Upscale' }}</button>
-            <DangerButton @click="removeTraitImage(img.id)">Remove</DangerButton>
-          </div>
-        </div>
-      </div>
-      <div v-if="!traitImages.length" class="trait-image-empty">No image</div>
-      <label class="trait-image-upload" :class="{ 'is-busy': uploadingImage }">
-        <input
-          type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif"
-          :disabled="uploadingImage"
-          @change="onImagePicked"
-        />
-        <span>{{ uploadingImage ? 'Uploading…' : (traitImages.length ? 'Upload another' : 'Upload') }}</span>
-      </label>
-      <p v-if="imageError" class="section-hint trait-image-error">{{ imageError }}</p>
+      <ImageGallery
+        :images="traitImages"
+        empty="No image yet."
+        @open="openTraitImage"
+      />
+      <ImageUpload
+        owner-kind="trait"
+        :owner-id="props.traitId"
+        :universe="trait?.universes?.[0] || ''"
+        :label="traitImages.length ? 'Upload another' : 'Upload'"
+        @uploaded="onImageUploaded"
+      />
+      <p v-if="imagesError" class="section-hint trait-image-error">{{ imagesError }}</p>
 
       <!-- Display Names (read-only list → opens editor panel) -->
       <h4 class="ps-section-title">Display Names</h4>
@@ -349,14 +258,15 @@
 import { reactive, ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { useImageGallery } from '@/composables/useImageGallery.js'
+import ImageGallery from '@/components/image/ImageGallery.vue'
+import ImageUpload from '@/components/image/ImageUpload.vue'
+import ImageViewer from '@/components/gm/ImageViewer.vue'
 import { usePanel } from '@/composables/usePanel.js'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
 import GmList from '@/components/ui/GmList.vue'
-import ImageCreditsEditor from '@/components/ImageCreditsEditor.vue'
-import ImageProvenance from '@/components/ImageProvenance.vue'
-import MediaImage from '@/components/MediaImage.vue'
 import DangerButton from '@/components/ui/DangerButton.vue'
 import Button from '@/components/ui/Button.vue'
 import TagInput from '@/components/ui/TagInput.vue'
@@ -382,235 +292,35 @@ const props = defineProps({
 
 const saving = ref(false)
 
-// ── Images (B200) ────────────────────────────────────
-// A trait owns a GALLERY, exactly like an entity: several images can coexist and
-// each carries role tags saying where it renders. Authored here; the records come
-// over REST rather than GraphQL because tagging and removing need the record id,
-// and the same list already carries the URL and the transparency flag. The
-// GraphQL `Trait.image(role)` fields serve the read-only surfaces.
-//
-// The first image is tagged for all three roles by the API's sole-image rule, so
-// a trait with one picture still just works — but a cutout is a SECOND image,
-// untagged, for the author to place (same contract as an entity cutout).
-const ROLE_TAGS = [
-  { key: 'sheet', label: 'Sheet', title: 'The trait row and detail-panel picture' },
-  { key: 'background', label: 'BG', title: "The detail panel's backdrop" },
-  { key: 'navdot', label: 'Nav', title: 'The scene chip in the location viewer' },
-]
+// ── Images (B200 / B211) ─────────────────────────────
+// One gallery and one viewer, shared with the entity editor. The trait's
+// *definition* tier only: a trait has no projections, so anything carrying a
+// variant belongs to the per-instance override (slice 2) and is not edited here.
+const {
+  images: traitImages,
+  error: imagesError,
+  load: fetchTraitImages,
+} = useImageGallery(
+  () => ({ kind: 'trait', id: props.traitId, universe: trait.value?.universes?.[0] || '' }),
+  { filter: (i) => !i.projection_id && !i.variant_id },
+)
 
-const traitImages = ref([])
-const uploadingImage = ref(false)
-const imageError = ref('')
-
-async function fetchTraitImages() {
-  if (!props.traitId) {
-    traitImages.value = []
-    return
-  }
-  try {
-    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(props.traitId)}`)
-    const data = res.ok ? await res.json() : { images: [] }
-    // The definition tier only: a trait has no projections, so anything with a
-    // variant belongs to the per-instance override (slice 2) and is not what
-    // this control edits.
-    traitImages.value = (data.images || []).filter(i => !i.projection_id && !i.variant_id)
-  } catch {
-    traitImages.value = []
-  }
-}
-
-watch(() => props.traitId, fetchTraitImages, { immediate: true })
-
-async function onImagePicked(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''  // let the same file be re-picked after an error
-  if (!file || !trait.value) return
-
-  uploadingImage.value = true
-  imageError.value = ''
-  try {
-    const form = new FormData()
-    form.append('file', file)
-    // A trait lists its universes; the first is the storage default. Passing it
-    // explicitly keeps a universe-less trait from silently skipping registration.
-    const universe = trait.value.universes?.[0] || ''
-    const res = await fetch(
-      `/api/v1/media/upload?owner_kind=trait&owner_id=${encodeURIComponent(trait.value.id)}`
-        + `&universe=${encodeURIComponent(universe)}`,
-      { method: 'POST', body: form },
-    )
-    if (!res.ok) throw new Error(`Upload failed (${res.status})`)
-    const data = await res.json()
-    if (!data.image_id) throw new Error('The file was saved but not attached to the trait.')
-    await fetchTraitImages()
-    await fetchTraitsConfig()
-  } catch (e) {
-    imageError.value = e?.message || 'Upload failed'
-  } finally {
-    uploadingImage.value = false
-  }
-}
-
-async function removeTraitImage(imageId) {
-  if (!imageId) return
-  imageError.value = ''
-  try {
-    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(imageId)}`, { method: 'DELETE' })
-    if (!res.ok && res.status !== 404) throw new Error(`Remove failed (${res.status})`)
-    await fetchTraitImages()
-    await fetchTraitsConfig()
-  } catch (e) {
-    imageError.value = e?.message || 'Remove failed'
-  }
-}
-
-// Tagging is per image, like the entity image viewer's BG/Sheet/Nav boxes. The
-// API enforces one image per (owner, role): assigning a role strips it from
-// siblings, so ticking a box here MOVES the tag off whichever image held it.
-async function toggleRole(img, role) {
-  const current = img.roles || []
-  const next = current.includes(role) ? current.filter(r => r !== role) : [...current, role]
-  imageError.value = ''
-  try {
-    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(img.id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roles: next }),
-    })
-    if (!res.ok) throw new Error(`Tag failed (${res.status})`)
-    await fetchTraitImages()
-    await fetchTraitsConfig()
-  } catch (e) {
-    imageError.value = e?.message || 'Tag failed'
-  }
-}
-
-// ── Provenance flags (independent of the role tags) ──
-// `AI` is the human's label for art whose workflow they know involved AI;
-// `AI-generated` / `AI-animated` are set by the pipelines and only shown.
-// Flags never strip siblings, unlike roles.
-const AUTO_FLAG_LABELS = { ai_generated: 'AI-generated', ai_animated: 'AI-animated' }
-
-// Per-image credits editor, opened on demand so the row stays compact.
-const creditsOpenFor = ref('')
-
-function hasProvenance(img) {
-  return (img.credits || []).length > 0 || !!img.license || !!img.credit_text
-}
-
-function autoFlagsOf(img) {
-  return (img.flags || []).filter(f => f in AUTO_FLAG_LABELS)
-}
-
-async function toggleFlag(img, flag) {
-  const current = img.flags || []
-  const next = current.includes(flag) ? current.filter(f => f !== flag) : [...current, flag]
-  imageError.value = ''
-  try {
-    const res = await fetch(`/api/v1/imagen/${encodeURIComponent(img.id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ flags: next }),
-    })
-    if (!res.ok) throw new Error(`Tag failed (${res.status})`)
-    await fetchTraitImages()
-  } catch (e) {
-    imageError.value = e?.message || 'Tag failed'
-  }
-}
-
-// ── Cut out a trait image (B200) ─────────────────────
-// BiRefNet runs on the GPU in the API's background task, keyed by owner id —
-// the trait's own id, exactly as an entity's is keyed by the entity's. So the
-// job registry at /imagen/jobs is polled with the trait id.
-const cutoutJob = ref(null)
-const upscaleJob = ref(null)
-const startingCutout = ref(false)
-const cutoutBusy = computed(() => startingCutout.value || !!cutoutJob.value)
-
-const startingUpscale = ref(false)
-
-function canUpscale(img) {
-  // The server owns the ceiling; `can_upscale` is its answer, and it is absent
-  // on rows fetched before the field existed — treat that as "no".
-  return img?.can_upscale === true
-}
-
-async function onUpscale(img) {
-  if (!img || startingUpscale.value || upscaleJob.value) return
-  startingUpscale.value = true
-  imageError.value = ''
-  try {
-    const res = await fetch(`/api/v1/upscale/${encodeURIComponent(img.id)}`, { method: 'POST' })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.detail || `Upscale failed (${res.status})`)
-    pollCutoutJob()
-  } catch (e) {
-    imageError.value = e?.message || 'Upscale failed'
-  } finally {
-    startingUpscale.value = false
-  }
-}
-
-function canCutOut(img) {
-  // A picture that already has a matte or a loop has nothing to cut out.
-  const renders = (img && img.renders) || []
-  return !!img && !renders.includes('cutout') && !renders.includes('animated')
-}
-
-async function pollCutoutJob() {
-  if (!props.traitId) return
-  try {
-    const res = await fetch('/api/v1/imagen/jobs')
-    if (res.ok) {
-      const jobs = (await res.json()).jobs || {}
-      const job = jobs[props.traitId]
-      cutoutJob.value = (job && job.type === 'remove_bg') ? job : null
-      upscaleJob.value = (job && job.type === 'upscale') ? job : null
-    }
-  } catch { /* the job list is best-effort; the button just stays enabled */ }
-}
-
-let _cutoutPoll = null
-onMounted(() => { pollCutoutJob(); _cutoutPoll = setInterval(pollCutoutJob, 2000) })
-onUnmounted(() => { clearInterval(_cutoutPoll) })
-
-// The job clearing means the cutout exists — as a NEW image, exactly as it does
-// for an entity. It lands untagged by the non-destructive contract, so it simply
-// appears in the gallery above for the author to tag. Nothing is moved for them:
-// silently reassigning the roles is what made this look like an in-place edit.
-watch(upscaleJob, async (now, prev) => {
-  if (!prev || now) return
-  await fetchTraitImages()
-})
-
-watch(cutoutJob, async (now, prev) => {
-  if (!prev || now) return
+async function onImageUploaded() {
   await fetchTraitImages()
   await fetchTraitsConfig()
-})
+}
 
-async function onCutOut(img) {
-  if (!img || cutoutBusy.value || !trait.value) return
-  startingCutout.value = true
-  imageError.value = ''
-  try {
-    const res = await fetch(
-      `/api/v1/remove-background/${encodeURIComponent(trait.value.id)}?owner_kind=trait`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_id: img.id }),
-      },
-    )
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.detail || `Cut out failed (${res.status})`)
-    pollCutoutJob()
-  } catch (e) {
-    imageError.value = e?.message || 'Cut out failed'
-  } finally {
-    startingCutout.value = false
-  }
+function openTraitImage(img) {
+  panel.open({
+    component: ImageViewer,
+    title: img.id,
+    badge: (img.renders || []).includes('animated') ? 'ANIMATED' : 'IMAGE',
+    props: { ownerKind: 'trait', ownerId: props.traitId, imageId: img.id, image: img },
+    listeners: {
+      'refresh': () => fetchTraitImages(),
+      'deleted': () => { fetchTraitImages(); fetchTraitsConfig() },
+    },
+  })
 }
 
 // allSfxs is now provided by useTraitsConfig() composable — no local fallback needed
@@ -1077,52 +787,8 @@ async function onDelete() {
 .section-hint { font-size: 11px; color: var(--text-dim); margin: 0 0 6px; line-height: 1.4; }
 .section-hint strong { color: var(--text); }
 
-/* Trait images (B200) — a tagged gallery, one row per image */
-.trait-image-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
-.trait-image-preview {
-  width: 72px; height: 72px; flex: none; object-fit: cover; border-radius: 6px;
-  border: 1px solid var(--border); background: rgba(0, 0, 0, 0.25);
-}
-/* A cutout floats rather than sitting in a box, like the sheet portrait does. */
-.trait-image-preview.is-transparent { object-fit: contain; border-style: dashed; background: none; }
-.trait-image-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.trait-image-empty {
-  width: 72px; height: 72px; margin-bottom: 8px;
-  border-radius: 6px; border: 1px dashed var(--border);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; color: var(--text-dim);
-}
-.trait-image-roles { display: flex; gap: 8px; }
-.trait-role-check { font-size: 10px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 3px; }
-.trait-role-check input { margin: 0; cursor: pointer; }
-.trait-image-flags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.trait-flag-check { display: flex; align-items: center; gap: 3px; cursor: pointer; }
-.trait-flag-check input { margin: 0; cursor: pointer; }
-.trait-flag-pill {
-  font-size: 9px; padding: 1px 5px; border-radius: 3px;
-  border: 1px solid var(--border); color: var(--text-dim); opacity: 0.65;
-}
-.trait-flag-pill.is-on { opacity: 1; color: var(--text); border-color: var(--accent, #6c8cff); }
-.trait-flag-pill.is-auto { cursor: default; }
-.trait-image-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.trait-image-upload { position: relative; overflow: hidden; display: inline-flex; }
-.trait-image-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.trait-image-upload span {
-  font-size: 11px; padding: 4px 10px; border-radius: 4px;
-  border: 1px solid var(--border); color: var(--text);
-}
-.trait-image-upload.is-busy span { opacity: 0.6; }
-.trait-image-cutout {
-  font-size: 11px; padding: 4px 10px; border-radius: 4px;
-  border: 1px solid var(--border); color: var(--text);
-  background: none; cursor: pointer;
-}
-.trait-image-cutout:disabled { opacity: 0.6; cursor: default; }
-.credit-add {
-  align-self: flex-start; font-size: 10px; padding: 2px 6px;
-  border: 1px dashed var(--border); border-radius: 3px;
-  background: none; color: var(--text-dim); cursor: pointer;
-}
+/* The trait's gallery and upload are the shared ones ([[B211]]); only the
+   error line is this panel's own. */
 .trait-image-error { color: var(--danger, #e06c75); }
 .ego-toggle {
   padding: 3px 12px;

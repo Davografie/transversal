@@ -257,24 +257,6 @@ export function createEntityCrud() {
     return result?.removeProjection || null
   }
 
-  // ── Image upload ───────────────────────────────────
-  async function uploadBgImage(e) {
-    const file = e.target?.files?.[0]
-    if (!file || !selected.value?.id) return
-    const fd = new FormData()
-    fd.append('file', file)
-    try {
-      await fetch(
-        `/api/v1/media/upload?entity_id=${encodeURIComponent(selected.value.id)}`,
-        { method: 'POST', body: fd }
-      )
-      // The upload registers the image in entity_images; roles (background/
-      // sheet/navdot) are assigned in the image viewer. No legacy field write.
-    } catch (err) {
-      console.error('uploadBgImage:', err)
-    }
-  }
-
   // ── Imagen ─────────────────────────────────────────
   const imagenJob = computed(() => {
     const j = jobStatuses.value[selectedId.value]
@@ -366,7 +348,6 @@ export function createEntityCrud() {
     updateProjection,
     activateProjection,
     removeProjection,
-    uploadBgImage,
     // Imagen actions
     pollJobs,
     startJobPolling,

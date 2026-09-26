@@ -48,10 +48,11 @@
       <div class="gallery-header">
         <h4>Images</h4>
         <div class="gallery-actions">
-          <label class="upload-btn">
-            📤 Upload
-            <input type="file" accept="image/*" @change="onUpload" hidden />
-          </label>
+          <ImageUpload
+            owner-kind="entity"
+            :owner-id="props.entityId"
+            @uploaded="loadImages"
+          />
           <button class="imagen-btn" :class="{ cancelling: imagenStatus.cancelling }" @click="onImagenClick()">
             <span class="btn-label">{{ imagenStatus.label }}</span>
             <span v-if="imagenStatus.status" class="btn-status">{{ imagenStatus.status }}</span>
@@ -72,36 +73,20 @@
           </label>
         </div>
       </div>
-      <div v-if="!entityImages.length" class="gallery-empty">No entity images yet — upload or generate one.</div>
-      <div v-else class="gallery-grid entity-gallery-drop" :class="{ 'drag-over': dropTarget === '__entity__' }" @dragover.prevent="dragOver" @dragleave="onZoneDragLeave" @drop.prevent="drop">
-        <div
-          v-for="img in entityImages"
-          :key="img.id"
-          class="gallery-item"
-          :data-img-path="img.path_animated || img.path_large"
-          draggable="true"
-          @contextmenu.prevent
-          @dragstart="dragStart($event, img.id)"
-          @dragend="dragEnd"
-          @touchstart="touchStart($event, img.id)"
-          @click="openImage(img)"
-        >
-          <MediaImage :src="img.path_animated || img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
-          <span class="gallery-label">
-            {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
-            <span v-if="img.universe_label" class="universe-badge">{{ img.universe_label }}</span>
-            <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
-            <span v-for="r in (img.renders || [])" :key="'render-' + r" class="render-badge">{{ r }}</span>
-            <!-- The XLarge tier is real detail only once the master reaches the
-                 ceiling; below it, XLarge is just a copy of the master. -->
-            <span
-              v-if="img.can_upscale === false"
-              class="xl-badge"
-              title="At the 2048px ceiling — the XLarge tier is real detail"
-            >XL</span>
-          </span>
-        </div>
-      </div>
+      <ImageGallery
+        :images="entityImages"
+        :selected-id="openedImageId"
+        zone-class="entity-gallery-drop"
+        :drop-active="dropTarget === '__entity__'"
+        empty="No entity images yet — upload or generate one."
+        @open="openImage"
+        @dragstart="dragStart"
+        @dragend="dragEnd"
+        @touchstart="touchStart"
+        @dragover.prevent="dragOver"
+        @dragleave="onZoneDragLeave"
+        @drop.prevent="drop"
+      />
     </div>
     <div v-if="isOccupant" class="projections-section">
       <div class="gallery-header">
@@ -132,34 +117,17 @@
             <Button class="proj-imagen" variant="ghost" size="sm" :class="{ cancelling: projectionGenBusy(p) }" :title="projectionGenBusy(p) ? 'Cancel generation' : 'Generate image for this body'" @click.stop="onImagenClick(p.id)">{{ projectionGenBusy(p) ? '✕' : '🖼' }}</Button>
             <Button class="proj-remove" variant="danger-ghost" size="sm" @click.stop="removeProjection(p.id)" title="Remove projection">✕</Button>
           </div>
-          <div v-if="projectionImages(p).length" class="gallery-grid projection-gallery">
-            <div
-              v-for="img in projectionImages(p)"
-              :key="img.id"
-              class="gallery-item"
-              :data-img-path="img.path_animated || img.path_large"
-              draggable="true"
-              @contextmenu.prevent
-              @dragstart="dragStart($event, img.id)"
-              @dragend="dragEnd"
-              @touchstart="touchStart($event, img.id)"
-              @click="openImage(img)"
-            >
-              <MediaImage :src="img.path_animated || img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
-              <span class="gallery-label">
-                {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
-                <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
-                <span v-for="r in (img.renders || [])" :key="'render-' + r" class="render-badge">{{ r }}</span>
-                <!-- The XLarge tier is real detail only once the master reaches the
-                     ceiling; below it, XLarge is just a copy of the master. -->
-                <span
-                  v-if="img.can_upscale === false"
-                  class="xl-badge"
-                  title="At the 2048px ceiling — the XLarge tier is real detail"
-                >XL</span>
-              </span>
-            </div>
-          </div>
+          <ImageGallery
+            v-if="projectionImages(p).length"
+            class="projection-gallery"
+            :images="projectionImages(p)"
+            :selected-id="openedImageId"
+            empty=""
+            @open="openImage"
+            @dragstart="dragStart"
+            @dragend="dragEnd"
+            @touchstart="touchStart"
+          />
         </div>
       </div>
       <div class="projection-universe">
@@ -357,6 +325,9 @@ import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import { useDragDrop } from '@/composables/useDragDrop.js'
+import { useImageGallery } from '@/composables/useImageGallery.js'
+import ImageGallery from '@/components/image/ImageGallery.vue'
+import ImageUpload from '@/components/image/ImageUpload.vue'
 import Button from '@/components/ui/Button.vue'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
@@ -378,7 +349,7 @@ const { graphql, error: apiError } = useApi()
 // would let a second open entity panel overwrite this one's form — and this one
 // would overwrite it back.
 const editor = createEntityCrud()
-const { form, selected, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity } = editor
+const { form, selected, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity } = editor
 // Genuinely global: the GM panel's entity list, and the delete that clears the
 // shared selection.
 const { deleteEntity, fetchEntities } = useEntityCrud()
@@ -509,26 +480,6 @@ function projectionThumb(p) {
     || list[0] || null
 }
 
-async function assignImage(imageId, projectionId) {
-  if (!imageId) return
-  try {
-    await fetch(`/api/v1/imagen/${imageId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projection_id: projectionId || null }),
-    })
-    await loadImages()
-  } catch (e) {
-    console.error('assignImage:', e)
-  }
-}
-
-async function onUpload(e) {
-  await uploadBgImage(e)
-  await loadImages()
-  e.target.value = ''
-}
-
 const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useDragDrop({
   resolveTarget: (el) => {
     if (!el || !el.closest) return null
@@ -540,8 +491,8 @@ const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useD
   },
   onCommit: ({ from, to }) => {
     if (!from || !to) return
-    if (to.kind === 'entity') assignImage(from, null)
-    else if (to.kind === 'projection' && to.id) assignImage(from, to.id)
+    if (to.kind === 'entity') assignTo(from, null)
+    else if (to.kind === 'projection' && to.id) assignTo(from, to.id)
   },
   makeGhost: (el, t) => {
     const path = el && el.dataset ? el.dataset.imgPath : null
@@ -576,6 +527,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['image-open', 'go-to-location'])
+
+// The owner's pictures and every action that changes them — one implementation,
+// shared with the trait editor and the viewer ([[B211]]).
+const { images, job, load: loadImages, assignTo } = useImageGallery(
+  () => ({ kind: 'entity', id: props.entityId })
+)
 
 // This panel owns its editor state (createEntityCrud): it loads its entity on
 // mount and re-loads whenever it becomes the active tab again, so it follows
@@ -932,16 +889,7 @@ function openMemberImage(m, img) {
     component: ImageViewer,
     title: img.id,
     badge: (img.renders || []).includes('animated') ? 'ANIMATED' : 'IMAGE',
-    props: {
-      src: img.path_animated || img.path_large,
-      animatedSrc: img.path_animated,
-      alt: img.image_type + ' — ' + img.width + '×' + img.height,
-      entityId: m.id,
-      imageId: img.id,
-      renders: img.renders || [],
-      roles: img.roles || [],
-      sizeBytes: img.size_bytes,
-    },
+    props: { ownerKind: 'entity', ownerId: m.id, imageId: img.id, image: img },
     listeners: {},
   })
 }
@@ -1094,22 +1042,10 @@ watch(() => [props.entityId, form.value?.type], ([id, type]) => {
 }, { immediate: true })
 
 // ── Imagen ──────────────────────────────────────────
-const localImagenJob = ref(null)
-let _jobPollTimer = null
-
-async function pollOwnJob() {
-  if (!props.entityId) return
-  try {
-    const r = await fetch('/api/v1/imagen/jobs')
-    if (r.ok) {
-      const jobs = (await r.json()).jobs || {}
-      localImagenJob.value = jobs[props.entityId] || null
-    }
-  } catch {}
-}
-
+// The job registry is polled by `useImageGallery`, keyed by this owner, so the
+// button and the gallery read the same fact ([[B211]]).
 const imagenStatus = computed(() => {
-  const j = localImagenJob.value || imagenJob.value
+  const j = job.value || imagenJob.value
   if (!j) return { label: '🖼 Imagen', status: '', cancelling: false }
   if (j.status === 'failed') return { label: '🖼 Imagen', status: '!', cancelling: false }
   return { label: 'Cancel', status: '✕', cancelling: true }
@@ -1185,9 +1121,9 @@ function projectionGenBusy(p) {
   return genTarget.value === p.id && imagenStatus.value.cancelling
 }
 
-// Refresh gallery when a job completes
-watch(localImagenJob, (now, prev) => {
-  if (prev && !now) { loadImages(); genTarget.value = null }
+// Refresh the gallery when a job completes
+watch(job, (now, prev) => {
+  if (prev && !now) genTarget.value = null
 })
 
 // ── Delete / prune (two-click confirm handled by DangerButton) ──
@@ -1203,11 +1139,6 @@ async function onPruneConfirmed() {
   panel.close()
 }
 
-function formatSize(bytes) {
-  if (!bytes || bytes === 0) return ''
-  return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`
-}
-
 // ── Image gallery (panel-specific) ──────────────────
 const openedImageId = ref(null)
 
@@ -1221,7 +1152,9 @@ function openImage(img) {
     component: ImageViewer,
     title: img.id,
     badge: (img.renders || []).includes('animated') ? 'ANIMATED' : 'IMAGE',
-    props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: props.entityId, imageId: img.id, renders: img.renders || [], roles: img.roles || [], sizeBytes: img.size_bytes },
+    // The viewer is owner-aware and reads the record itself, so the opener hands
+    // over an owner and an id rather than a cartful of copied fields ([[B211]]).
+    props: { ownerKind: 'entity', ownerId: props.entityId, imageId: img.id, image: img },
     listeners: {
       'close': () => { openedImageId.value = null },
       'refresh': () => { loadImages() },
@@ -1230,25 +1163,13 @@ function openImage(img) {
   })
 }
 
-const images = ref([])
-
-async function loadImages() {
-  if (!props.entityId) return
-  try {
-    const r = await fetch(`/api/v1/imagen/${props.entityId}`)
-    if (r.ok) { const d = await r.json(); images.value = d.images || [] }
-  } catch {}
-}
-
-watch(() => props.entityId, loadImages, { immediate: true })
-onMounted(() => { pollOwnJob(); _jobPollTimer = setInterval(pollOwnJob, 2000) })
 let offLifepathSaved = null
 onMounted(() => {
   offLifepathSaved = bus.on('lifepath-saved', () => {
     if (form.value?.type === 'UNIVERSE') fetchLifePaths(form.value.current_universe || props.entityId)
   })
 })
-onUnmounted(() => { clearInterval(_jobPollTimer); if (offLifepathSaved) offLifepathSaved() })
+onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 defineExpose({ refresh: loadImages })
 </script>
 
@@ -1280,20 +1201,7 @@ defineExpose({ refresh: loadImages })
 .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .gallery-header h4 { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin: 0; }
 .gallery-actions { display: flex; gap: 6px; align-items: center; }
-.upload-btn {
-  font-size: 11px; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center;
-  background: var(--accent-dim); color: var(--text); border-radius: 4px; border: none;
-}
 .gallery-empty { font-size: 10px; color: var(--text-dim); padding: 12px 0; text-align: center; }
-.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
-.gallery-item { display: block; border: 1px solid var(--overlay-8); border-radius: 4px; overflow: hidden; cursor: pointer; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-.gallery-item img { width: 100%; height: auto; display: block; -webkit-user-drag: none; }
-.gallery-thumb, .gallery-thumb-video { width: 100%; height: auto; display: block; }
-.gallery-label { display: block; font-size: 9px; color: var(--text-dim); text-align: center; padding: 2px 4px; background: rgba(0,0,0,0.3); }
-.universe-badge { display: inline-block; font-size: 7px; background: var(--resource-32); color: var(--violet-pale); padding: 0 3px; border-radius: 2px; margin-left: 3px; }
-.role-badge { display: inline-block; font-size: 7px; background: var(--warn-32); color: var(--gold); padding: 0 3px; border-radius: 2px; margin-left: 2px; text-transform: uppercase; }
-.xl-badge { display: inline-block; font-size: 7px; background: rgba(108,140,255,0.32); color: var(--text); padding: 0 3px; border-radius: 2px; margin-left: 2px; font-weight: 600; }
-.render-badge { display: inline-block; font-size: 7px; background: rgba(120,200,160,0.30); color: var(--text); padding: 0 3px; border-radius: 2px; margin-left: 2px; text-transform: uppercase; }
 
 .section-buttons {
   margin-top: 12px; display: flex; gap: 6px;

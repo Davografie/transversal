@@ -566,7 +566,7 @@ function onImageOpen(img) {
     component: ImageViewer,
     title: img.id,
     badge: (img.renders || []).includes('animated') ? 'ANIMATED' : 'IMAGE',
-    props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: selectedId.value, imageId: img.id, renders: img.renders || [], roles: img.roles || [], sizeBytes: img.size_bytes },
+    props: { ownerKind: 'entity', ownerId: selectedId.value, imageId: img.id, image: img },
     listeners: {},
   })
 }
