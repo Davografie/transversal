@@ -484,6 +484,18 @@ what makes the cleanup independent of the enum it is cleaning up.
 
 ## REST API
 
+- `POST /media/copy` — body is query params `image_id`, `owner_kind`, `owner_id`,
+  `variant_id`: put an existing picture on another rung by copying its files and
+  record ([[B215]]). The trait-instance editor uses it to take one of the trait's
+  own pictures as an instance's override. It **copies** rather than references —
+  a rung's URL comes from its own record's filename, so two records sharing one
+  would share a file and deleting either would remove it from under the other —
+  and the copy carries the provenance (`image_type`, `flags`, `credits`,
+  `license`, `credit_text`) and the matte ladder with it. Roles: an empty rung
+  takes all three, a rung that already has pictures hands the copy **their** roles,
+  and because assigning a role strips it from the siblings the tags *move* — a pick
+  takes over from the picture that was rendering, which stays in the gallery
+  untagged.
 - `POST /media/upload` — upload a file; convert to WebP, save variants, register
   a `MediaImage`, auto-select all three roles when it is the sole image on its
   rung. Takes `owner_kind` (`entity` | `trait`), `owner_id`, `variant_id`,
@@ -675,6 +687,35 @@ REST list and the batch endpoints all pass a role and let the record decide. The
 matte is tiered like any other render (`{base}_Cutout_Small.webp`, …), because a
 matte kept only at master size would send a 2048px transparent WebP for a 240px
 portrait.
+
+### A matte is part of making an occupant's or a trait's picture
+
+`wants_auto_matte(owner_kind, owner_type)` (`services/media_utils.py`) decides: an
+**occupant**'s picture (CHARACTER, GMC, ASSET — the same set the projection
+migration calls occupants) or a **trait**'s is a subject and gets a matte; a
+location, universe or faction is a scene and does not; a picture that already
+carries a matte is left alone. The breadth is deliberate — one BiRefNet pass per
+picture, ~4–7 s on the 4090.
+
+Both entry points use it, so the rule is about *what a picture is* rather than
+*when it arrived* ([[B214]]; before, only a projection's **first generated** image
+was cut out, and uploads never were):
+
+- **upload** queues the cutout as a `BackgroundTask` — an upload response must not
+  wait on the GPU, and the gallery already polls `/imagen/jobs` for that owner, so
+  the matte lands on its own a few seconds later;
+- **`run_imagen`** cuts out every occupant picture, entity-level generation
+  included.
+
+> [!warning] A matte with no subject is a failure, not a render
+> Some pictures have nothing the model can find — a scene sitting on an occupant,
+> for instance — and BiRefNet then returns a **fully transparent** frame. Recording
+> that makes `sheet` and `navdot` serve an invisible picture. It was reachable
+> before through the Remove BG button, but the author was looking at the result and
+> could undo it; automatically, nobody chose it and nobody is watching. So
+> `run_remove_background` **refuses** a matte with no subject: the manual path
+> reports the failure, the automatic path is best-effort and leaves the picture
+> opaque, which is how it looked before.
 
 ### Imagen (static)
 
