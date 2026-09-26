@@ -182,24 +182,30 @@ is room. `880` is deliberately the docked view's own width: at `900` the wide la
 picked up a 2% increase, and that alone was enough to put the docked view's travel dot
 out of reach — raising the scale *flat* costs map coverage everywhere.
 
-**Scale is bounded by the background art, not by taste.** Every location background in
-the database is at most 1080px wide (median 832; none reaches 1500), and the `background`
-role is served as the **`_Large`** variant — 478×700 — while an 832×1216 `_Original` sits
-beside it. A Pixel-class phone (412×915 CSS, DPR 2.625, ~817px viewer band) therefore
-draws the background at:
+**Scale is bounded by the background art, not by taste.** The `background` role is served
+through `ROLE_RENDER` (`services/media_utils.py`) as the **loop** if the picture has one,
+else the **`XLarge`** static tier — cap 2048 on the long side, and **a tier never
+upscales**, so for the common 832×1216 master `XLarge` *is* the master. The `_Large`
+478×700 variant is **no longer what the map draws** ([[B207]]). Measured live 2026-09-26:
+**395** location background images, long sides **984 → 2048** — **350 at 1216**, 23 at
+2048, 17 at 1024, and a handful between. A Pixel-class phone (412×915 CSS, DPR 2.625,
+~817px viewer band) therefore draws the background at:
 
-| scale | scene tall (CSS) | drawn (device px) | vs `_Large` 700 | vs `_Original` 1216 |
+| scale | scene tall (CSS) | drawn (device px) | vs 1216 (the majority) | vs 2048 (the largest) |
 | --- | --- | --- | --- | --- |
-| 0.42 | 378 | 991 | 1.4× | 0.8× |
-| 1.0 | 899 | 2360 | 3.4× | 1.9× |
-| 1.845 | 1659 | 4355 | 6.2× | 3.6× |
-| 2.2 (cap) | 1978 | 5193 | 7.4× | 4.3× |
+| 0.52 | 467 | 1226 | 1.0× | 0.6× |
+| 1.0 | 899 | 2360 | 1.9× | 1.15× |
+| 1.845 | 1659 | 4355 | 3.6× | 2.1× |
+| 2.2 (cap) | 1978 | 5193 | 4.3× | 2.5× |
 
-So the background is upscaled in every configuration, before any compensation is applied.
-The scale at which the image is drawn 1:1 is **0.30** against the served `_Large`, **0.43**
-against the animated webm (672×1024), and **0.52** against the `_Original` — all well below
-1. Raising the cap buys map size and spends sharpness in proportion — the real levers are
-serving the `_Original` (1.74× linear) and larger source art, both outside this role.
+So the majority master is upscaled in every configuration, but the largest **23 of 395**
+are within 15% of 1:1 at scale 1 — the old reading that the background is soft everywhere
+rested on the `_Large` variant, which the map stopped serving. The scale at which the image
+is drawn 1:1 is **0.52** against the 1216 majority and **0.87** against the 2048 masters
+(0.43 against a 672×1024 loop) — still below 1, so raising the cap still spends sharpness,
+but mostly on the majority. The remaining lever is larger source art, which is outside
+this role. **`LOCATION_SCALE_MAX` (2.2) was set from the `_Large` bound and is now the
+human's call to revisit** — the served file is ~2.4× larger than when it was chosen.
 
 ```
 <viewer (overflow:hidden)>
@@ -333,7 +339,7 @@ WEBM) uses the same path. Occupants share one size (60–88px). Location images
 are assumed never transparent, so the hole path is unaffected.
 
 **Viewed occupant** (`viewed`, from `viewingEntityId`) mirrors the rail's
-`.peer-chip.viewing` state on the map: a highlight ring (2px `--accent`) with no
+`.peer-chip.viewing` state on the map: a highlight ring (2px `--map-accent`) with no
 fill change — "you are peeking at this one". It is drawn as a `box-shadow`
 spread rather than a border so the dot's box never changes size and the
 expanded ring/portrait geometry stays exact; the expanded variant re-states the
@@ -449,7 +455,9 @@ leave a dot sized up for long.
 
 **1. Zone drag (GM edit mode)** — `onZoneDragStart` records the origin, `onDragMove`
 mutates `zones[i].x/y` live (clamped to 2–98), `onDragEnd` persists via
-`PUT /api/v1/locations/{id}/zones`.
+`PUT /api/v1/locations/{id}/zones`. **That PUT replaces the whole zone list**, so the
+drag must send every field back — a zone's `location_id` and `background_image`
+included — or a drag silently strips the zone→child link.
 
 **2. Nav dot drag (GM edit mode)** — `onNavDragStart` moves `navDotPositions[key]`
 live and persists the whole `nav_positions` object on end via the
@@ -733,8 +741,9 @@ border), and the overlay/particle system below — run continuously.
   a travel, not fetched on click. Its `destAspect` must be probed from the image
   the destination **actually shows**: `background_image` when it has one, else the
   **navdot image** (`dest.image`, taken from the source's own nav payload — the
-  destination's `/navigate` does not carry its own navdot role). Most locations
-  carry a navdot image and no background at all (283 of 410 at time of writing),
+  destination's `/navigate` does not carry its own navdot role). Plenty of
+  locations carry a navdot image and no background at all (165 of 436 at the
+  2026-09-26 count, down from 283 of 410 when this was written),
   and the arrival falls back to the navdot image for those, so probing
   `background_image` alone left every one of them with a null aspect — and a null
   aspect silently drops the hole preview back to a dot-sized thumbnail
@@ -763,14 +772,42 @@ border), and the overlay/particle system below — run continuously.
   `INVERSE_PAN_STRENGTH` sets the hole illusion's strength; they are hand-tuned
   values at the top of the file, kept there so they can be adjusted in one place.
 
+## Interaction context (governed elsewhere)
+
+The viewer is a surface inside `App.vue`'s layout, so a few things that decide whether its
+dots are even *reachable* live in other roles' surfaces. Named here so a viewer bug is not
+chased in the wrong file (audited 2026-09-26):
+
+- **The mobile stack gates interaction.** `App.vue` renders a capture layer (`.band-tap`)
+  over every non-focused band, and the location band carries it whenever
+  `mobileFocus !== 'location'` — so the map's dots, trait taps and dice drags do not work
+  until that band is focused. See [[UI-UX Design]].
+- **The landscape dock narrows the viewer.** `.stage.dock-sheet .location-viewer { left:
+  var(--dock-w) }` — 400px default, 224px short, with a `?dockw=` override — and the
+  viewer's own width feeds `locationScale`, so dock width and map scale are coupled. See
+  [[UI-UX Design]].
+- **An open GM panel hides the viewer's overlay controls** (a `body:has(.panel-viewport)`
+  rule in the shared stylesheet).
+- **The palette does not reach the map.** The map is a deliberately theme-stable surface:
+  it answers to `--map-*` / `--dot-*` / `--die-*` tokens, never to the universe palette
+  ([[UI-UX Design]] § The universe palette). The `.viewed` ring was the one exception
+  until 2026-09-26 — it used the palette-driven `--accent`, so it repainted per universe
+  (a jade ring over a hardcoded blue glow) and flipped with the light theme on an
+  always-dark canvas; it is `--map-accent` now.
+- **The viewer's three overlay `<button>`s are still un-migrated** to the shared
+  `ui/Button` primitive; [[UI-UX Design]] lists the location-viewer controls as a
+  remaining migration, which is this surface's to do.
+
 ## Related
 
 - [[System Architecture]] — where the viewer sits in the stack.
 - [[API Contract]] — the REST endpoints and GraphQL mutations it calls.
 - [[Projections and Transversal]] — the consciousness/inapposite travel model.
-- [[Projections as Occupants]] — **open discussion**: should an occupant dot show
-  the entity or the body standing there? The viewer resolves an occupant's name
-  and portrait through the entity's *active* body, so a body left behind by
-  consciousness travel currently wears the face of the body the character went to.
+- [[Projections as Occupants]] — the map draws the **body**, not the entity
+  ([[B137]]). **S1 landed** (2026-09-24): `get_navdot_images` resolves through the
+  body *present*, and the occupant payload carries `body_id`, so a left-behind body
+  no longer wears the face of the body the consciousness went to. **S2–S5 open**;
+  S4 (the viewer keys dots by `body_id` and routes actions to `entity_id`) is this
+  role's slice and waits on S3's payload.
 - [[UI-UX Design]] — interaction conventions and feel constants.
 - [[Relational Canvas]] — the GM node graph built from the same nav data.

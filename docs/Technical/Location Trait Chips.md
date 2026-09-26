@@ -61,6 +61,17 @@ must not be thirty labels. The words arrive when it opens.
 | has a `navdot` picture | the picture alone | picture + name + statement + rating |
 | no picture | the rating alone | name + statement + rating |
 
+> [!warning] A pool with an empty ledger has no resting marker (found 2026-09-26)
+> The table has no row for **neither a picture nor dice**, and that is a real state, not
+> a corner: a **challenge pool with nothing banked yet is a pool's normal resting
+> state** (Palace's inherited `doom` pool reads `dice: []`). A **placed** chip at rest
+> renders only its marker, so such a chip draws as an **invisible, near-zero-size
+> marker** on the map — a GM who drags a doom pool into the scene gets a chip they
+> cannot see or find. It is unplaced today (the stack is arrange-mode only, and stack
+> chips are always open), so nothing is visibly broken yet. **Left as a design call,
+> not patched:** an empty pool's resting form could be a die outline, the capacity, a
+> neutral glyph, or simply the trait's initials. Recorded in [[B191]]'s reconciliation.
+
 - **What opens it:** the **character's proximity** (the same radius and quadratic
   curve the nav bubbles use — `EXPAND_PROXIMITY`, 24 image-%), the **pointer**, or a
   **tap**.

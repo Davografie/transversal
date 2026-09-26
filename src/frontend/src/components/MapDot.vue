@@ -168,10 +168,10 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
    a shadow so the dot's box is untouched and the expanded ring/portrait
    geometry (`--dot-r`) stays exact. */
 .occ-dot.viewed {
-  box-shadow: 0 0 0 2px var(--accent), 0 0 12px rgba(64,136,212,0.5);
+  box-shadow: 0 0 0 2px var(--map-accent), 0 0 12px rgba(64,136,212,0.5);
 }
 .occ-dot.viewed.expanded {
-  box-shadow: 0 0 0 2px var(--accent), inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
+  box-shadow: 0 0 0 2px var(--map-accent), inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
 }
 /* Actively controlled — someone at the table is driving this entity right now
    (the map's counterpart to the "assumed" state). Grows on take, shrinks on
