@@ -76,6 +76,15 @@
           />
         </div>
       </div>
+      <!-- A challenge *container* keeps its track like any other challenge. It
+           used to fall straight through to the plain die span, so `Portents`
+           (capacity [d6,d6,d6,d8]) drew nothing and the agenda's four slots
+           were invisible. -->
+      <ChallengeTrack
+        v-else-if="trait.ratingType === 'CHALLENGE'"
+        :trait="trait"
+        :api="api"
+      />
       <span v-else-if="trait.ratingType !== 'EMPTY'" class="trait-die" :class="`die-${api.resolvedDieType(trait)}`">{{ api.resourceDisplay(trait) }}</span>
       <div v-if="api.hasContents(trait)" class="container-toggle">
         <Button
@@ -130,45 +139,11 @@
         </div>
         <span v-if="!(trait.dice || []).length && !(trait.spentDice || []).length" class="trait-die depleted">depleted</span>
       </div>
-      <div
+      <ChallengeTrack
         v-else-if="trait.ratingType === 'CHALLENGE'"
-        class="trait-die-groups challenge"
-        :title="api.challengeProgressLabel(trait) ? api.challengeProgressLabel(trait) + ' filled' : null"
-      >
-        <div
-          v-for="(group, gi) in api.resourceDiceGroups(trait)"
-          :key="'c' + gi"
-          class="trait-die-group clickable"
-          :title="`Spend ${group[0]} from challenge pool`"
-          @click.stop="api.spendChallengeGroup(trait, group[0])"
-        >
-          <DieIcon
-            v-for="(die, i) in group"
-            :key="i"
-            :die="die"
-            class="trait-die-icon"
-            :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
-          />
-        </div>
-        <!-- The unfilled tail of the track — the capacity's own dice, dimmed
-             and not clickable: there is nothing to spend until a slot fills.
-             The filled dice above stay themselves, so a d6 filling a d8 slot
-             reads as a d6 rather than being disguised as the capacity. -->
-        <div
-          v-for="(group, gi) in api.challengeRemainingGroups(trait)"
-          :key="'r' + gi"
-          class="trait-die-group"
-        >
-          <DieIcon
-            v-for="(die, i) in group"
-            :key="i"
-            :die="die"
-            class="trait-die-icon ghost"
-            :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
-          />
-        </div>
-        <span v-if="!(trait.dice || []).length && !api.challengeRemainingGroups(trait).length" class="trait-die depleted">empty</span>
-      </div>
+        :trait="trait"
+        :api="api"
+      />
       <span v-else class="trait-die" :class="`die-${api.resolvedDieType(trait)}`">{{ api.resourceDisplay(trait) }}</span>
     </div>
   </div>
@@ -195,6 +170,15 @@
     @drop.prevent="api.onTraitDrop($event)"
     @dragend="api.onTraitDragEnd()"
   >
+    <!-- The author's position in an ordered container's sequence, and it leads
+         the row. The lane renders for every child of one, including a child with
+         no `order`, so the names stay on one column — which is the whole point:
+         without it the rows are a bag again, just stacked. Leading, rather than
+         sitting after the grip, because a row's grip depends on where *that* row
+         may be dropped: a child that is itself a container can have fewer
+         destinations than its siblings, and the numbers would then step in and
+         out of line. -->
+    <span v-if="ordered" class="sub-trait-order">{{ trait.order ?? '' }}</span>
     <!-- A row inside a container carries a grip, at ANY depth, so it can be
          pulled back OUT. Dropping it on any non-container row does that (see the
          sheet's resolveTarget), which lands it at the top of the set. A sub-trait
@@ -211,6 +195,7 @@
     >⠿</span>
     <div class="sub-trait-left" :class="{ 'has-statement': !!trait.statement }">
       <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || trait.enabled === false }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
+      <span v-if="trait.enabled === false" class="trait-disabled-badge">disabled</span>
       <span v-if="trait.statement" class="sub-trait-statement">{{ trait.statement }}</span>
     </div>
     <div v-if="api.isContainer(trait)" class="sub-trait-right container-cell">
@@ -225,6 +210,12 @@
           />
         </div>
       </div>
+      <ChallengeTrack
+        v-else-if="trait.ratingType === 'CHALLENGE'"
+        :trait="trait"
+        :api="api"
+        compact
+      />
       <span v-else-if="trait.ratingType !== 'EMPTY'" class="trait-die" :class="`die-${api.resolvedDieType(trait)}`">{{ api.resourceDisplay(trait) }}</span>
       <div v-if="api.hasContents(trait)" class="container-toggle">
         <Button
@@ -252,6 +243,15 @@
           />
         </div>
       </div>
+      <!-- A nested challenge is a portent: a one-slot track waiting to be filled.
+           Without this branch it fell to the plain die span and drew nothing, so
+           the very sub-trait the ticket is about showed no state at all. -->
+      <ChallengeTrack
+        v-else-if="trait.ratingType === 'CHALLENGE'"
+        :trait="trait"
+        :api="api"
+        compact
+      />
       <span v-else-if="trait.ratingType !== 'EMPTY'" class="trait-die" :class="`die-${api.resolvedDieType(trait)}`">{{ api.resourceDisplay(trait) }}</span>
     </div>
   </div>
@@ -263,7 +263,7 @@
        children render without a fog-of-war check — by the time we are here the
        root of the chain has already passed it, which is how sub-traits have
        always behaved. -->
-  <div v-if="renderChildren" :id="childrenListId" class="sub-trait-list">
+  <div v-if="renderChildren" :id="childrenListId" class="sub-trait-list" :class="{ ordered: orderedContents }">
     <TraitRow
       v-for="child in children"
       :key="child.id"
@@ -272,6 +272,7 @@
       :phase="phase"
       :depth="depth + 1"
       :inside-container="api.isContainer(trait)"
+      :ordered="orderedContents"
     />
   </div>
   </div>
@@ -292,8 +293,9 @@ import { computed } from 'vue'
 import DieIcon from '@/components/DieIcon.vue'
 import MediaImage from '@/components/MediaImage.vue'
 import SfxCard from './SfxCard.vue'
+import ChallengeTrack from './ChallengeTrack.vue'
 import Button from '@/components/ui/Button.vue'
-import { childrenOf, showsChildren } from '@/utils/traitTree.js'
+import { isOrdered, orderedChildren, showsChildren } from '@/utils/traitTree.js'
 import { renderMarkdown } from '@/utils/markdown.js'
 
 const props = defineProps({
@@ -311,6 +313,11 @@ const props = defineProps({
   insideContainer: { type: Boolean, default: false },
   // The row above states the same relationship, so this row does not repeat it.
   hideContact: { type: Boolean, default: false },
+  // This row sits in an **ordered** container, so it carries a leading marker
+  // lane with its own `order` (see `ORDERED_TAG` in utils/traitTree.js). The
+  // lane renders for every child of such a container — including one with no
+  // `order` — so the numbers and the names line up on one column.
+  ordered: { type: Boolean, default: false },
   // Show a trait's full notes inline when it has no `statement`. The host's call,
   // because the answer differs by list: on the profile page a described trait with
   // nothing else to say would otherwise render as a bare name, while the traits
@@ -319,7 +326,11 @@ const props = defineProps({
   showNotes: { type: Boolean, default: false },
 })
 
-const children = computed(() => childrenOf(props.trait))
+const children = computed(() => orderedChildren(props.trait))
+
+// Whether this trait's contents are an authored sequence rather than a bag —
+// the author's `ordered` tag on the container, not an inference from `order`.
+const orderedContents = computed(() => isOrdered(props.trait))
 
 // Ties the toggle to the list it opens (`aria-controls`).
 const childrenListId = computed(() => `children-${props.trait.id}`)
@@ -641,6 +652,35 @@ function onRowClick() {
   padding: 4px 2px 2px 12px;
 }
 
+/* An **ordered** container's contents are a sequence, so they stack instead of
+   packing as chips. The chip layout is right-packed, which is right for a bag
+   and wrong for a list: a narrow first step then sits further right than the
+   steps after it (measured on the live portents: first entry x=361, the rest
+   x=292), and a wrapped line reads in no particular direction. */
+.sub-trait-list.ordered {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 2px;
+}
+
+/* The number lane. `tabular-nums` and a fixed min-width so `1` and `10` centre
+   on the same column, and it stays open for a child with no `order` — the lane
+   is what keeps the names aligned, not the numbers themselves.
+   Pinned to the row's first line rather than its centre: on a described trait
+   the statement is the tall line, and a number floating between the name and the
+   statement belongs to neither. */
+.sub-trait-order {
+  flex-shrink: 0;
+  min-width: 14px;
+  align-self: flex-start;
+  padding-top: 1px;
+  text-align: right;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
 .sub-trait-row {
   display: flex;
   justify-content: space-between;
@@ -688,6 +728,15 @@ function onRowClick() {
 
 .sub-trait-name.disabled {
   opacity: 0.5;
+}
+
+/* Both left columns are `flex-direction: column`, whose default `align-items:
+   stretch` would make a pill span the column instead of hugging its own word.
+   Scoped here rather than in the shared `.trait-disabled-badge`: in the detail
+   panel's header the badge sits in a *row*, where stretching is meaningless. */
+.trait-left .trait-disabled-badge,
+.sub-trait-left .trait-disabled-badge {
+  align-self: flex-start;
 }
 
 .sub-trait-statement {

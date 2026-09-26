@@ -11,8 +11,10 @@
  * It pins the semantics that are easy to get subtly wrong: the tag union that
  * marks a container, the query-depth cap, the limit recursion where a
  * sub-trait rides its parent but a container contributes its children instead
- * of itself, the unfilled tail of a challenge track, and the trait count at
- * which the sheet drops the trait-set layer for one flat list (B60).
+ * of itself, the unfilled tail of a challenge track, an `ordered` container's
+ * contents (the tag is the signal, and `order` has to sort with the unordered
+ * remainder staying put), and the trait count at which the sheet drops the
+ * trait-set layer for one flat list (B60).
  */
 
 import {
@@ -23,6 +25,8 @@ import {
   hasContents,
   isContainer,
   isOpenContainer,
+  isOrdered,
+  orderedChildren,
   canPickUp,
   findSetting,
   groupRelationRows,
@@ -55,6 +59,29 @@ ok('missing tags are tolerated', isContainer({}), false)
 ok('childrenOf reads subTraitSettings', childrenOf({ subTraitSettings: [1, 2] }).length, 2)
 ok('childrenOf tolerates no children', childrenOf({}).length, 0)
 ok('childrenOf tolerates a null setting', childrenOf(null).length, 0)
+
+// ── ordered contents: an author's tag, and a stable read of `order` ────
+// The tag is the signal, not the presence of `order`: `order` is optional and
+// almost nothing sets it (11 of 926 live sub-trait settings), so inferring the
+// shape from it would let stray data entry re-lay-out a container.
+const orderedBox = { tags: ['container', 'ordered'], subTraitSettings: [{ id: 'a' }] }
+ok('ordered requires the container tag', isOrdered({ tags: ['ordered'] }), false)
+ok('container + ordered is ordered', isOrdered(orderedBox), true)
+ok('a plain container is not ordered', isOrdered({ tags: ['container'] }), false)
+ok('ordered rides the registry tag too', isOrdered({ registryTags: ['container', 'ordered'] }), true)
+
+const numbered = { subTraitSettings: [
+  { id: 'c', order: 3 },
+  { id: 'a', order: 1 },
+  { id: 'loose' },
+  { id: 'b', order: 2 },
+  { id: 'loose2' },
+] }
+ok('orderedChildren sorts by order, unordered last, stable',
+  orderedChildren(numbered).map((k) => k.id), ['a', 'b', 'c', 'loose', 'loose2'])
+ok('with no order at all it returns the read order untouched',
+  orderedChildren({ subTraitSettings: [{ id: 'x' }, { id: 'y' }] }).map((k) => k.id), ['x', 'y'])
+ok('orderedChildren tolerates no children', orderedChildren({}).length, 0)
 
 // ── the limit rule ──────────────────────────────────────────────────────
 const pool = new Set(['rope', 'coin', 'sword', 'sharp'])

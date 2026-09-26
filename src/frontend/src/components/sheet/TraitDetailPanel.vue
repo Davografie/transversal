@@ -84,14 +84,16 @@
     <div class="detail-notes" v-html="renderMarkdown(trait.notes)"></div>
   </div>
 
-  <div v-if="(trait.subTraitSettings || []).length" class="detail-section">
+  <div v-if="subtraits.length" class="detail-section">
     <div class="detail-section-head"><span class="detail-label">Sub-traits</span></div>
     <div class="detail-subtraits">
-      <div v-for="st in trait.subTraitSettings" :key="st.id" class="detail-subtrait">
+      <div v-for="st in subtraits" :key="st.id" class="detail-subtrait">
+        <span v-if="subtraitsOrdered" class="detail-subtrait-order">{{ st.order ?? '' }}</span>
         <span class="detail-subtrait-dice">
           <DieIcon v-for="(die, i) in (st.dice || [])" :key="i" :die="String(die).toLowerCase()" class="detail-die-sm" />
         </span>
         <span class="detail-subtrait-name">{{ api.displayName(st.name) }}</span>
+        <span v-if="st.enabled === false" class="trait-disabled-badge">disabled</span>
         <Button v-if="api.canPlayTrait(st)" class="detail-subtrait-play" variant="link" @click.stop="api.playTrait(st)">▸ play</Button>
       </div>
     </div>
@@ -114,6 +116,7 @@ import { renderMarkdown } from '@/utils/markdown.js'
 import DieIcon from '@/components/DieIcon.vue'
 import SfxCard from './SfxCard.vue'
 import MediaImage from '@/components/MediaImage.vue'
+import { isOrdered, orderedChildren } from '@/utils/traitTree.js'
 
 // The read-only view of one trait: rating band (die faces as text, playable when
 // the sheet allows it), SFX cards, notes, sub-traits and the derived context
@@ -129,6 +132,13 @@ const props = defineProps({
 })
 
 defineEmits(['back', 'edit'])
+
+// The sub-traits read in the author's order and, in an *ordered* container, are
+// numbered — the same rule the row list renders (see ORDERED_TAG in
+// utils/traitTree.js). The two surfaces open on the same data, so a container
+// whose rows read 1..4 must not list them unnumbered here.
+const subtraits = computed(() => orderedChildren(props.trait))
+const subtraitsOrdered = computed(() => isOrdered(props.trait))
 
 // Tags arrive in two halves: the ones set on this trait *instance* and the ones
 // inherited from the registry trait. Matching sees both, so the panel shows
@@ -254,6 +264,16 @@ const tagRows = computed(() => {
 }
 .detail-subtraits { display: flex; flex-direction: column; gap: 5px; }
 .detail-subtrait { display: flex; align-items: center; gap: 8px; }
+/* The number lane of an *ordered* container's contents — the same column the
+   rows keep (min-width + tabular figures), so `1` and `10` line up. */
+.detail-subtrait-order {
+  flex-shrink: 0;
+  min-width: 14px;
+  text-align: right;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
 .detail-subtrait-dice { display: flex; gap: 2px; flex-shrink: 0; }
 .detail-die-sm { width: 20px; height: 21px; }
 .detail-subtrait-name { flex: 1; min-width: 0; font-size: 12px; color: var(--text); }

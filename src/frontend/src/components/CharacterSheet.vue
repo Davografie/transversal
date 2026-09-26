@@ -2591,6 +2591,11 @@ const QUERY = `
     capacity
     polarity
     enabled
+    # The author's position among siblings, read at every depth. An *ordered*
+    # container numbers its rows from it; the reads already sort children by it,
+    # so a query that omitted the field would leave the numbering blank while the
+    # rows still looked sorted — the quietest way for this to be wrong.
+    order
     traitsetOrder
     traitsetLimit
     traitsetTab

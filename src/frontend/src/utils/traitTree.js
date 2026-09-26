@@ -22,6 +22,23 @@
 export const CONTAINER_TAG = 'container'
 
 /**
+ * The tag that marks a container whose contents are an **authored sequence**.
+ *
+ * The author's mark, deliberately not an inference. `order` is optional and
+ * almost nothing uses it — 11 of 926 live sub-trait settings carry one, all of
+ * them portents — so "some child has an `order`" would make the sheet's shape a
+ * side effect of stray data entry, and a container whose children happen to be
+ * numbered would silently stop reading as the bag it is. The tag says the
+ * sequence is the point (a portent chain, where the next step is enabled by the
+ * one before it), and the sheet then has to make the sequence legible instead of
+ * packing the rows as chips.
+ *
+ * Rides the same union as `container` itself (registry ∪ instance, B116), so it
+ * can be set on the definition or on a single instance.
+ */
+export const ORDERED_TAG = 'ordered'
+
+/**
  * The depth the sheet's entity query selects, in levels. Keep in step with the
  * `TraitNodeDepth*` fragment chain in CharacterSheet.vue.
  */
@@ -30,6 +47,27 @@ export const QUERY_DEPTH = 4
 /** A setting's children, exactly as nested by the API. */
 export function childrenOf(setting) {
   return setting?.subTraitSettings || []
+}
+
+/**
+ * A setting's children in the author's order — what the sheet *renders*.
+ *
+ * The sub-trait reads already sort by `order` (`order == null, order,
+ * traitset_id, trait_id, _key`), so today this returns what `childrenOf` returns.
+ * It exists so the sheet's rendering does not *depend* on a read it does not own:
+ * the detail panel and the editor reach settings by other routes, and the
+ * container drag still has to land somewhere predictable. A partly-ordered set
+ * degrades exactly as the reads do — ordered children first, the unordered
+ * remainder after them, stable by their query position.
+ */
+export function orderedChildren(setting) {
+  const kids = childrenOf(setting)
+  if (!kids.some((k) => typeof k?.order === 'number')) return kids
+  const rank = (k) => (typeof k?.order === 'number' ? k.order : Number.MAX_SAFE_INTEGER)
+  return kids
+    .map((k, i) => ({ k, i }))
+    .sort((a, b) => (rank(a.k) - rank(b.k)) || (a.i - b.i))
+    .map((entry) => entry.k)
 }
 
 /** Every setting under this one, at any depth, depth-first. */
@@ -79,6 +117,18 @@ export function traitTags(trait) {
 /** Whether a trait is a container — i.e. holds other traits. */
 export function isContainer(trait) {
   return traitTags(trait).includes(CONTAINER_TAG)
+}
+
+/**
+ * Whether a container's contents are an **ordered list** rather than a bag.
+ *
+ * Requires the container tag as well as `ordered`: the tag describes how to
+ * render a set of children, and a trait with no children has no list to order,
+ * so `ordered` alone would be a mark with nothing to mark. See `ORDERED_TAG`
+ * for why this is a tag and not an inference from `order`.
+ */
+export function isOrdered(trait) {
+  return isContainer(trait) && traitTags(trait).includes(ORDERED_TAG)
 }
 
 /** How many traits sit under this one, at any depth (a container's contents count). */
