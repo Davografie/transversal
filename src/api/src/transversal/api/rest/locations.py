@@ -414,23 +414,35 @@ async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
     if refusal:
         raise HTTPException(status_code=400, detail=refusal)
 
-    edge_key = f"edge:{from_id}:{to_id}:{body.type}"
+    # Resolve an existing edge by its **(from, to, type) triple**, never by a
+    # derived `_key`. Keys are not uniform in live data — 591 relationship
+    # documents carry a legacy/random key (`26763921`) rather than the
+    # `edge:<from>:<to>:<type>` form — so `has(derived_key)` misses the edge that
+    # is actually there and **inserts a second one**. That is how toggling a
+    # transversal's type grew a duplicate gate beside the original (2026-09-26):
+    # the type change landed on a brand-new edge while the old one kept its mode.
+    # `get_relationship` asks the question the graph actually answers.
+    existing = repo.get_relationship(from_id, to_id, body.type)
     patch = {}
     if body.transversal_type is not None:
         patch["transversal_type"] = body.transversal_type
     if body.effects is not None:
         patch["effects"] = body.effects
 
-    if repo._relationships.has(edge_key):
-        # Upsert the provided fields on an existing edge (both directions).
+    if existing is not None:
+        # Upsert the provided fields on the edge that is there — whatever its key
+        # — and mirror them onto its reverse, so the two directions cannot
+        # disagree about the mode.
+        edge_key = existing["_key"]
         if patch:
             repo._relationships.update({"_key": edge_key, **patch})
-            rev_key = f"edge:{to_id}:{from_id}:{body.type}"
-            if repo._relationships.has(rev_key):
-                repo._relationships.update({"_key": rev_key, **patch})
+            reverse = repo.get_relationship(to_id, from_id, body.type)
+            if reverse is not None:
+                repo._relationships.update({"_key": reverse["_key"], **patch})
             return {"status": "updated", "key": edge_key}
         return {"status": "exists", "key": edge_key}
 
+    edge_key = f"edge:{from_id}:{to_id}:{body.type}"
     edge_doc = {
         "_key": edge_key,
         "_from": f"entities/{from_id}",
@@ -442,8 +454,8 @@ async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
 
     # For transversal edges, also create the reverse
     if body.type == "transversal":
-        rev_key = f"edge:{to_id}:{from_id}:{body.type}"
-        if not repo._relationships.has(rev_key):
+        if repo.get_relationship(to_id, from_id, body.type) is None:
+            rev_key = f"edge:{to_id}:{from_id}:{body.type}"
             rev_doc = {
                 "_key": rev_key,
                 "_from": f"entities/{to_id}",
@@ -464,22 +476,27 @@ async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
 
 @router.delete("/locations/{from_id}/edges/{to_id}")
 async def delete_edge(from_id: str, to_id: str, type: str = "super"):
-    """Delete a super or transversal edge between two locations."""
-    repo = _repo()
-    edge_key = f"edge:{from_id}:{to_id}:{type}"
+    """Delete a super or transversal edge between two locations.
 
-    try:
-        repo._relationships.delete(edge_key)
-        # For transversal edges, also remove the reverse
-        if type == "transversal":
-            rev_key = f"edge:{to_id}:{from_id}:{type}"
-            try:
-                repo._relationships.delete(rev_key)
-            except Exception:
-                pass
-        return {"status": "deleted", "key": edge_key}
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Edge '{edge_key}' not found")
+    Resolved by the **(from, to, type) triple**, for the same reason the upsert
+    is: a legacy-keyed edge would otherwise 404 on a link that is plainly there,
+    and — worse — a canonical *duplicate* would be deleted instead of the edge
+    the caller meant.
+    """
+    repo = _repo()
+    edge = repo.get_relationship(from_id, to_id, type)
+    if edge is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Edge '{from_id}' -> '{to_id}' ({type}) not found",
+        )
+    repo._relationships.delete(edge["_key"])
+    # For transversal edges, also remove the reverse
+    if type == "transversal":
+        reverse = repo.get_relationship(to_id, from_id, type)
+        if reverse is not None:
+            repo._relationships.delete(reverse["_key"])
+    return {"status": "deleted", "key": edge["_key"]}
 
 
 # ── Portal firing ────────────────────────────────────
