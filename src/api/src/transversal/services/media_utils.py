@@ -23,6 +23,24 @@ def has_transparency(data: bytes) -> bool:
         return False
 
 
+#: Entity types whose pictures are **subjects** — a person or a thing — rather than
+#: scenes. The same set the projection migration calls occupants ([[B214]]).
+MATTE_ENTITY_TYPES = ("character", "gmc", "asset")
+
+
+def wants_auto_matte(owner_kind: str, owner_type=None) -> bool:
+    """Whether a picture for this owner is a subject, and so gets a matte by itself.
+
+    A **trait**'s picture is a subject by definition (an object, a mark, a face),
+    and so is an **occupant**'s. A location is a room — there is nothing to cut out
+    of it — and a universe or faction is a scene too.
+    """
+    if owner_kind == "trait":
+        return True
+    value = getattr(owner_type, "value", owner_type)   # EntityType or plain string
+    return str(value or "").lower() in MATTE_ENTITY_TYPES
+
+
 #: Alpha at or below this counts as empty when finding a matte's subject. A
 #: lossy WebP's alpha plane carries compression noise well above zero across the
 #: whole canvas, so trimming on "any non-zero alpha" would find the full frame

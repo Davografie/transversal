@@ -5,12 +5,15 @@ gallery alongside generated images and can be animated.
 """
 
 import io
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+
+logger = logging.getLogger("transversal.media")
 from PIL import Image
 
 # Optional HEIC/HEIF support (iOS camera photos). Registers a PIL opener so
@@ -26,6 +29,7 @@ from transversal.domain import IMAGE_FLAGS, ImageType, MediaImage
 from transversal.db.repository import EntityRepository
 from transversal.services.media_utils import (
     has_transparency,
+    wants_auto_matte,
     save_image_variants as _save_image_variants,
 )
 
@@ -66,6 +70,22 @@ def _safe_record_id(value: str, field: str) -> str:
     return value
 
 
+def _enqueue_matte(
+    background_tasks: BackgroundTasks, owner_id: str, image_id: str, display_name: str
+) -> None:
+    """Queue the automatic matte for a freshly uploaded occupant/trait picture.
+
+    Imported inside the function on purpose: the job registry and the background
+    task live in `rest/imagen.py`, and reaching for them at module scope would tie
+    the two routers together in an import cycle.
+    """
+    from transversal.api.rest.imagen import _queue_job, _run_remove_bg_bg
+    from transversal.imagen.models import GenerationType
+
+    _queue_job(owner_id, GenerationType.REMOVE_BG.value)
+    background_tasks.add_task(_run_remove_bg_bg, owner_id, image_id, display_name)
+
+
 def _parse_flags(raw: str) -> list[str]:
     """Parse a comma-separated provenance flag list. Raises 400 on an unknown one.
 
@@ -102,6 +122,7 @@ def _convert_to_webp(data: bytes, source_ext: str) -> bytes:
 
 @router.post("/media/upload")
 async def upload_media(
+    background_tasks: BackgroundTasks,
     owner_id: str = "",
     owner_kind: str = "entity",
     variant_id: str = "",
@@ -231,8 +252,22 @@ async def upload_media(
                     owner_images = repo.get_images_for_owner(owner_id, variant_id or None)
                     if len(owner_images) == 1:
                         repo.update_image(image_id, {"roles": ["background", "sheet", "navdot"]})
+
+                    # An occupant's or a trait's picture is a subject, so it gets a
+                    # matte as part of becoming one ([[B214]]). **Queued, not
+                    # awaited**: an upload response must not wait on the GPU, and
+                    # the gallery already polls `/imagen/jobs` for this owner, so
+                    # the matte appears on its own a few seconds later.
+                    if wants_auto_matte(owner_kind, getattr(owner, "type", None)):
+                        _enqueue_matte(
+                            background_tasks, owner_id, image_id,
+                            getattr(owner, "name", ""),
+                        )
         except Exception:
-            pass  # Don't fail the upload if image registration fails
+            # Registration is best-effort: the file is already written and a
+            # missing gallery row must not fail the upload. But it is *logged* —
+            # a bare `pass` here is how a failing matte enqueue hid itself.
+            logger.exception("Image registration failed for %s (%s)", owner_kind, owner_id)
 
     return {
         "filename": flat_filename,

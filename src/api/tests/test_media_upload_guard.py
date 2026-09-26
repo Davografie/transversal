@@ -26,12 +26,26 @@ def _upload(filename="a.png", data=None) -> UploadFile:
     )
 
 
+class _Tasks:
+    """Stands in for FastAPI's BackgroundTasks."""
+
+    def __init__(self):
+        self.tasks = []
+
+    def add_task(self, fn, *args, **kwargs):
+        self.tasks.append((fn, args, kwargs))
+
+
 class _FakeRepo:
-    def __init__(self, universe: str):
+    def __init__(self, universe: str, entity_type: str = "character"):
         self._universe = universe
+        self._entity_type = entity_type
 
     def get_entity(self, entity_id):
-        return SimpleNamespace(current_universe=self._universe)
+        return SimpleNamespace(
+            current_universe=self._universe, universes=[self._universe],
+            type=self._entity_type, name="Probe",
+        )
 
 
 @pytest.mark.parametrize(
@@ -39,21 +53,21 @@ class _FakeRepo:
 )
 async def test_traversal_entity_id_is_rejected(bad):
     with pytest.raises(HTTPException) as exc:
-        await media_mod.upload_media(entity_id=bad, universe="", file=_upload())
+        await media_mod.upload_media(_Tasks(), entity_id=bad, universe="", file=_upload())
     assert exc.value.status_code == 400
 
 
 @pytest.mark.parametrize("bad", ["../../etc", "..", "a/b", ".hidden"])
 async def test_traversal_universe_is_rejected(bad):
     with pytest.raises(HTTPException) as exc:
-        await media_mod.upload_media(entity_id="", universe=bad, file=_upload())
+        await media_mod.upload_media(_Tasks(), entity_id="", universe=bad, file=_upload())
     assert exc.value.status_code == 400
 
 
 async def test_svg_upload_is_refused():
     """SVG is stored verbatim and served same-origin — stored XSS."""
     with pytest.raises(HTTPException) as exc:
-        await media_mod.upload_media(
+        await media_mod.upload_media(_Tasks(), 
             entity_id="", universe="", file=_upload("x.svg", b"<svg xmlns='http://www.w3.org/2000/svg'/>")
         )
     assert exc.value.status_code == 400
@@ -67,7 +81,7 @@ async def test_valid_upload_lands_inside_the_media_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
     monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
 
-    res = await media_mod.upload_media(entity_id="", universe="", file=_upload())
+    res = await media_mod.upload_media(_Tasks(), entity_id="", universe="", file=_upload())
 
     written = tmp_path / res["filename"]
     assert written.exists()
@@ -81,7 +95,7 @@ async def test_bad_stored_universe_cannot_traverse(tmp_path, monkeypatch):
     monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: _FakeRepo("../../evil"))
 
-    res = await media_mod.upload_media(entity_id="loc-1", universe="", file=_upload())
+    res = await media_mod.upload_media(_Tasks(), entity_id="loc-1", universe="", file=_upload())
 
     assert res["image_id"] is None  # registration skipped, not written
     assert not (tmp_path.parent / "evil").exists()
@@ -96,7 +110,10 @@ class _RecordingRepo:
         self.updated = {}
 
     def get_entity(self, entity_id):
-        return SimpleNamespace(current_universe=self._universe, universes=[self._universe])
+        return SimpleNamespace(
+            current_universe=self._universe, universes=[self._universe],
+            type="character", name="Probe",
+        )
 
     def get_trait(self, trait_id):
         return SimpleNamespace(universes=[self._universe])
@@ -126,7 +143,7 @@ async def test_a_colon_bearing_variant_id_is_accepted(tmp_path, monkeypatch):
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: repo)
 
     setting = "faction-44351398:trait-description"
-    res = await media_mod.upload_media(
+    res = await media_mod.upload_media(_Tasks(), 
         owner_kind="trait", owner_id="trait-probe", variant_id=setting,
         universe="", file=_upload(),
     )
@@ -147,7 +164,7 @@ async def test_a_variant_id_cannot_reach_the_filesystem(tmp_path, monkeypatch):
     monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
 
-    res = await media_mod.upload_media(
+    res = await media_mod.upload_media(_Tasks(), 
         owner_kind="trait", owner_id="trait-probe", variant_id="../../evil",
         universe="", file=_upload(),
     )
@@ -163,8 +180,61 @@ async def test_a_control_character_in_a_variant_id_is_refused(tmp_path, monkeypa
     monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
     monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     with pytest.raises(HTTPException) as exc:
-        await media_mod.upload_media(
+        await media_mod.upload_media(_Tasks(), 
             owner_kind="trait", owner_id="trait-probe", variant_id="a\nb",
             universe="", file=_upload(),
         )
     assert exc.value.status_code == 400
+
+
+# ── An occupant's or a trait's picture gets a matte on its own ([[B214]]) ──
+
+
+async def test_an_occupant_upload_queues_a_matte(tmp_path, monkeypatch):
+    """A character's picture is a subject, so the matte is part of the upload —
+    queued, because the response must not wait on the GPU."""
+    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
+    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
+    monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
+    tasks = _Tasks()
+
+    res = await media_mod.upload_media(
+        tasks, owner_kind="entity", owner_id="char-1", universe="", file=_upload(),
+    )
+
+    assert res["image_id"]
+    assert len(tasks.tasks) == 1, "exactly one job queued"
+    fn, args, _ = tasks.tasks[0]
+    assert fn.__name__ == "_run_remove_bg_bg"
+    assert args[:2] == ("char-1", res["image_id"])
+
+
+async def test_a_trait_upload_queues_a_matte(tmp_path, monkeypatch):
+    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
+    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
+    monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
+    tasks = _Tasks()
+
+    await media_mod.upload_media(
+        tasks, owner_kind="trait", owner_id="trait-1", universe="", file=_upload(),
+    )
+
+    assert len(tasks.tasks) == 1
+
+
+async def test_a_location_upload_queues_nothing(tmp_path, monkeypatch):
+    """A room is a scene: there is nothing to cut out of it, and the GPU pass
+    would be wasted."""
+    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
+    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
+    monkeypatch.setattr(
+        media_mod, "EntityRepository", lambda: _FakeRepo("earth", entity_type="location")
+    )
+    tasks = _Tasks()
+
+    res = await media_mod.upload_media(
+        tasks, owner_kind="entity", owner_id="loc-1", universe="", file=_upload(),
+    )
+
+    assert res["image_id"], "it still uploads"
+    assert tasks.tasks == [], "but nothing is cut out"

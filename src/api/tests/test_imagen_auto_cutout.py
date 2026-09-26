@@ -116,6 +116,10 @@ def _entity():
     return Entity(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
 
 
+def _location():
+    return Entity(id="loc-1", type=EntityType.LOCATION, name="Hall", current_universe="earth")
+
+
 def _image(image_id, projection_id):
     return MediaImage(
         id=image_id,
@@ -127,18 +131,19 @@ def _image(image_id, projection_id):
     )
 
 
-def _generate(repo, monkeypatch, projection=PROJECTION, cutout=None, real_cutout=False):
+def _generate(repo, monkeypatch, projection=PROJECTION, cutout=None, real_cutout=False, entity=None):
     """Run one generation; return (image, cutout_calls).
 
     The cutout is stubbed unless ``real_cutout`` — those tests are about the trigger
     and the failure policy, and the real cutter is exercised on its own below.
     """
     calls = []
+    ent = entity or _entity()
 
     async def fake_cutout(owner_id, image_id, display_name="", report_gen_type=None):
         # The orchestrator takes the owner id, not an Entity: nothing below the
         # call needs the object, and a trait owner has no Entity at all (B200).
-        assert owner_id == _entity().id, "the cutout must report under its owner"
+        assert owner_id == ent.id, "the cutout must report under its owner"
         calls.append(image_id)
         if isinstance(cutout, Exception):
             raise cutout
@@ -147,7 +152,7 @@ def _generate(repo, monkeypatch, projection=PROJECTION, cutout=None, real_cutout
     orchestrator = orch.ImagenOrchestrator(repository=repo, comfyui=_FakeComfyUI())
     if not real_cutout:
         monkeypatch.setattr(orchestrator, "run_remove_background", fake_cutout)
-    image = asyncio.run(orchestrator.run_imagen(_entity(), "earth", projection_id=projection))
+    image = asyncio.run(orchestrator.run_imagen(ent, "earth", projection_id=projection))
     return image, calls
 
 
@@ -164,23 +169,36 @@ def test_first_image_for_a_projection_gains_a_matte_without_a_second_record(stub
     assert image.roles == ["background", "sheet", "navdot"], "roles are untouched"
 
 
-def test_second_image_for_the_same_projection_is_not_cut_out(stub_gpu, monkeypatch):
+def test_a_later_image_for_the_same_projection_is_also_cut_out(stub_gpu, monkeypatch):
+    """The matte is a rule about the picture, not about being first ([[B214]]).
+    Before this, only the projection's first image was cut out."""
     repo = _FakeRepo(existing=[_image("earlier", PROJECTION)])
 
     image, calls = _generate(repo, monkeypatch)
 
-    assert calls == [], "only the projection's FIRST image is cut out"
+    assert calls == [image.id], "every generated occupant picture is a subject"
     assert image.roles == [], "a later image is not the owner's first, so no auto-select"
 
 
-def test_entity_level_generation_is_left_alone(stub_gpu, monkeypatch):
-    """The rule is about a projection; entity-level is the soul default."""
+def test_entity_level_generation_is_cut_out_too(stub_gpu, monkeypatch):
+    """Entity-level is the soul default, and still an occupant's picture — the old
+    rule excluded it because it hung off a *projection* ([[B214]])."""
     repo = _FakeRepo()
 
     image, calls = _generate(repo, monkeypatch, projection="")
 
-    assert calls == []
+    assert calls == [image.id]
     assert image.roles == ["background", "sheet", "navdot"], "auto-select is unchanged"
+
+
+def test_a_location_generation_is_not_cut_out(stub_gpu, monkeypatch):
+    """A room is a scene: there is nothing to cut out of it."""
+    repo = _FakeRepo()
+
+    image, calls = _generate(repo, monkeypatch, entity=_location(), projection="")
+
+    assert calls == [], "locations never get a matte"
+    assert image.renders == []
 
 
 def test_a_failing_cutout_does_not_fail_the_generation(stub_gpu, monkeypatch):

@@ -256,3 +256,30 @@ def test_trimming_is_idempotent():
 
     assert changed is False, "a trimmed matte is tight"
     assert twice == once
+
+
+# ── Which owners get a matte by themselves ([[B214]]) ──
+
+
+def test_occupants_and_traits_want_a_matte():
+    from transversal.domain import EntityType
+    from transversal.services.media_utils import wants_auto_matte
+
+    for kind in (EntityType.CHARACTER, EntityType.GMC, EntityType.ASSET):
+        assert wants_auto_matte("entity", kind) is True, kind
+        assert wants_auto_matte("entity", kind.value) is True, "plain strings too"
+
+
+def test_scenes_do_not_want_a_matte():
+    from transversal.domain import EntityType
+    from transversal.services.media_utils import wants_auto_matte
+
+    for kind in (EntityType.LOCATION, EntityType.UNIVERSE, EntityType.FACTION):
+        assert wants_auto_matte("entity", kind) is False, kind
+    assert wants_auto_matte("entity", None) is False, "an unknown owner is not a subject"
+
+
+def test_a_trait_always_wants_a_matte():
+    from transversal.services.media_utils import wants_auto_matte
+
+    assert wants_auto_matte("trait", None) is True

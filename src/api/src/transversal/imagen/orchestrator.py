@@ -46,6 +46,7 @@ from transversal.services.media_utils import (
     VARIANT_LONG_SIDES,
     has_transparency,
     trim_transparent_margins,
+    wants_auto_matte,
     save_image_variants as _save_image_variants,
 )
 
@@ -265,19 +266,20 @@ class ImagenOrchestrator:
         )
         self.repo.create_image(entity_image)
 
-        # 5. First image for a projection → also cut it out (B129). A cutout
-        # needs a source, so this hangs off the first *generated image* rather
-        # than off entity creation, which has no image yet.
-        if owner and not existing:
-            await self._auto_cutout_for_projection(entity, entity_image)
+        # 5. An occupant's picture gets a matte as part of being made ([[B214]]).
+        # This is a rule about the picture, not about being *first*: every
+        # generated occupant image is a subject, wherever it sits on the ladder,
+        # and one that already carries a matte is left alone.
+        if wants_auto_matte("entity", entity.type) and "cutout" not in entity_image.renders:
+            await self._auto_cutout(entity, entity_image)
 
         await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
                            f"/media/imagen/{output_subpath}/{variants['large']}", 100)
 
         return entity_image
 
-    async def _auto_cutout_for_projection(self, entity: Entity, source: MediaImage) -> None:
-        """Give a projection's first image a matte, so its small roles float.
+    async def _auto_cutout(self, entity: Entity, source: MediaImage) -> None:
+        """Give a freshly made occupant picture a matte, so its small roles float.
 
         The generated image keeps every role auto-select gave it; the matte is a
         **render of that picture**, so ``sheet`` and ``navdot`` begin serving it the
@@ -305,7 +307,7 @@ class ImagenOrchestrator:
             return
 
         logger.info(
-            f"Auto-cutout for projection {source.projection_id}: "
+            f"Auto-cutout for {source.projection_id or 'entity'}: "
             f"{source.id} gained a cutout render"
         )
 
