@@ -1557,19 +1557,35 @@ function onSlotDrop(type, slotIndex, e) {
   placeDraggedDie(source, type, slotIndex)
 }
 
-// Move the dragged die into the target slot. If the target is occupied, the
-// displaced die swaps into the source slot (or returns to the pool when the
-// drag started from the pool).
-function placeDraggedDie(source, type, slotIndex) {
-  const { dieIdx, type: srcType, index: srcIndex } = source
+/** The slot a die currently occupies, or null. A die is unassigned, a result, or
+ *  an effect — never more than one of them. */
+function slotOf(dieIdx) {
+  const t = selection.total.indexOf(dieIdx)
+  if (t !== -1) return { type: 'total', index: t }
+  const e = selection.effect.indexOf(dieIdx)
+  if (e !== -1) return { type: 'effect', index: e }
+  return null
+}
 
-  // Remove the dragged die from its source slot (if any).
-  if (srcType) selection[srcType][srcIndex] = null
+// Move the dragged die into the target slot. If the target is occupied, the
+// displaced die swaps into the slot the dragged die came from (or returns to the
+// pool when the drag started on an unassigned pool die).
+function placeDraggedDie(source, type, slotIndex) {
+  const { dieIdx } = source
+
+  // A drag from a slot names where it started; a drag from the *pool* does not,
+  // because the pool tile stays draggable after the die has been picked. Resolve
+  // the die's actual slot, or a second drag from the pool leaves it in both.
+  const from = source.type ? { type: source.type, index: source.index } : slotOf(dieIdx)
+
+  // Lift the dragged die out of the slot it was in, if any.
+  if (from) selection[from.type][from.index] = null
 
   const existing = selection[type][slotIndex]
-  // Swap: the displaced die takes the source slot (pool sources leave it unpicked).
-  if (existing !== null && srcType) {
-    selection[srcType][srcIndex] = existing
+  // Swap: the displaced die takes the slot the dragged die came from (a pool
+  // source leaves it unpicked, so the displaced die just returns to the pool).
+  if (existing !== null && from) {
+    selection[from.type][from.index] = existing
   }
 
   selection[type][slotIndex] = dieIdx
