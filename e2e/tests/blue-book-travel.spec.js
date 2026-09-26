@@ -12,8 +12,13 @@
 // *discovered* rather than pinned — that identity has already been renamed once.
 // Clicking it is deliberate: a seek moves Kael, and a run leaves it with a leg to
 // have clicked.
+//
+// The role is pinned to `player` in the browser (`asPlayer`): the shared test identity
+// has been flipped to `architect`, and an architect's own sheet runs in GM free-roam
+// with no `entityId`, so the book renders empty and every assertion below is moot.
 
 import { test, expect } from '@playwright/test'
+import { asPlayer } from '../helpers/role.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 
@@ -46,13 +51,16 @@ async function openKaelBlueBook(page, owner) {
   const tab = page.locator('button.pill', { hasText: '📘' }).first()
   await tab.waitFor({ state: 'visible', timeout: 20_000 })
   await tab.click()
-  await page.locator('.bb-entry').first().waitFor({ state: 'visible', timeout: 20_000 })
+  // Wait for the *panel*, not for an entry: a data-dependent spec has to be able to see
+  // an empty book and skip on it, which a hard wait for `.bb-entry` makes impossible.
+  await page.locator('.bb-embedded').first().waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(1_500)
   return page.locator('.bb-location-img, .bb-location-missing')
 }
 
 test('clicking a location really requests a travel, and reports why if refused', async ({ page, request }) => {
   test.setTimeout(120_000)
+  await asPlayer(page)
 
   const responses = []
   page.on('response', (r) => {
@@ -72,6 +80,7 @@ test('clicking a location really requests a travel, and reports why if refused',
 
 test('a refusal is shown with its reason', async ({ page, request }) => {
   test.setTimeout(120_000)
+  await asPlayer(page)
 
   // Stubbed so nothing travels: this pins the message, not the mechanism.
   await page.route('**/consciousness-travel', (route) => route.fulfill({

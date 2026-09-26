@@ -9,8 +9,11 @@
 //
 // Data-dependent: it needs a roll-shaped entry in the book, and skips without one.
 // Kael Drift is the testing character; the owning player is discovered, not pinned.
+// The role is pinned to `player` in the browser (`asPlayer`) — an architect runs in GM
+// free-roam with no `entityId`, which empties the book and makes the skip unreachable.
 
 import { test, expect } from '@playwright/test'
+import { asPlayer } from '../helpers/role.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 
@@ -19,6 +22,7 @@ const gql = (request, query) => request.post('/api/v1/graphql', { data: { query 
 
 test('a test/contest entry reads own left, opposition right, rounds stacked', async ({ page, request }) => {
   test.setTimeout(120_000)
+  await asPlayer(page)
 
   const { players } = await gql(request, '{ players { id name agency { entityId main } } }')
   const owner = players.find((p) => (p.agency || []).some((e) => e.entityId === KAEL))
@@ -36,7 +40,9 @@ test('a test/contest entry reads own left, opposition right, rounds stacked', as
   await page.locator('button.map-dot.self').first().click()
   await page.locator('.sheet-embedded').first().waitFor({ state: 'visible', timeout: 30_000 })
   await page.locator('button.pill', { hasText: '📘' }).first().click()
-  await page.locator('.bb-entry').first().waitFor({ state: 'visible', timeout: 20_000 })
+  // The panel, not an entry: the data guard two lines down must be reachable when the
+  // book is empty, instead of timing out on the entry it is about to skip for.
+  await page.locator('.bb-embedded').first().waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(2_500)
 
   const rolls = page.locator('.bb-roll')

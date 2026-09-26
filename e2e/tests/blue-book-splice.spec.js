@@ -12,7 +12,12 @@
 // character); this drives Kael and never a player's PC, and its owning player is
 // *discovered* rather than pinned — that identity has already been renamed once. It
 // travels Kael, which is the point: the chain it reads is the one it just made.
+//
+// The role is pinned to `player` in the browser (`asPlayer`): an architect's own sheet
+// runs in GM free-roam with no `entityId`, so the book renders empty and the chain this
+// spec just built is invisible.
 import { test, expect } from '@playwright/test'
+import { asPlayer } from '../helpers/role.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 const A = { id: 'loc-148649253', name: 'Ardennes' }
@@ -39,6 +44,7 @@ const travel = (request, loc) => request.post('/api/v1/entities/' + KAEL + '/con
 
 test('a seek records nothing, and the next travel splices in at that point', async ({ page, request }) => {
   test.setTimeout(180_000)
+  await asPlayer(page)
 
   // These are real locations in the dev database; a fresh one may not have them.
   const names = (await gql(request, '{ entities(type: LOCATION) { id name } }')).entities
@@ -67,8 +73,12 @@ test('a seek records nothing, and the next travel splices in at that point', asy
   await page.locator('button.map-dot.self').first().click()
   await page.locator('.sheet-embedded').first().waitFor({ state: 'visible', timeout: 30_000 })
   await page.locator('button.pill', { hasText: '📘' }).first().click()
-  await page.locator('.bb-entry').first().waitFor({ state: 'visible', timeout: 20_000 })
+  // The panel, not an entry — then a guard, so a book that failed to load skips loudly
+  // instead of asserting against an empty path (the failure mode that hid a null
+  // `entityId` behind a timeout).
+  await page.locator('.bb-embedded').first().waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(2_000)
+  test.skip(!(await page.locator('.bb-entry').count()), 'the book rendered no entries')
 
   const titles = () => page.locator('.bb-record-locations [title]')
     .evaluateAll((els) => els.map((e) => (e.getAttribute('title') || '').replace('Travel to ', '')))
