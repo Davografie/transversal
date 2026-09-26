@@ -74,8 +74,15 @@ must not be thirty labels. The words arrive when it opens.
 - **A tap on a closed chip opens it; the tap after that plays it.** Resting there are
   no words to read, so one tap must not spend a die. The stack's chips are always
   open, so they still play on the first click.
-- **The stack never collapses.** It has no position to approach, and it is the legend
-  you read the map against (the human's call).
+- **The stack is arrange-mode only** (the human, 2026-09-25). Unplaced traits are **not on
+  the map by default**; the stack appears while the GM is arranging, which is the only
+  time it is needed. It was crowding the map badly — on a phone Everbloom's twelve
+  unplaced chips ran **526px down an 844px screen**, which is what made the room feel
+  overwhelming, and no scene scale can help, because the stack is fixed UI rather than
+  part of the scene. A chip dragged out of it becomes a scene element and never returns,
+  so "hidden by default" costs nothing once a location has been arranged; placed chips are
+  still always on the map, resting as their markers. The stack's own chips are open and
+  cannot be approached, so they do not collapse.
 - **Arrange mode opens every chip.** The GM is placing these, and you cannot place what
   you cannot read — otherwise dragging means chasing an unlabelled marker around the
   map. The zone and nav dots already follow this rule (`:expanded="editZones || …"`).
@@ -108,9 +115,10 @@ coordinates inside the scene layer, so they pan and zoom with the map.
   and in the cellar, because nothing is copied onto the owner.
 - **Who may move them:** **GM only, in arrange mode** (`editZones`) — the same gate
   as zone and nav dots, so placement behaves like everything else on the map.
-- **Before placement:** an **auto-stack** (roughly today's block). A chip that has
-  never been dragged stays in the stack; once placed it locks to its scene
-  position and leaves the stack. Nothing has to be hand-placed to be readable.
+- **Before placement:** an **auto-stack** (roughly today's block), shown **only in arrange
+  mode**. A chip that has never been dragged stays in the stack; once placed it locks to
+  its scene position and leaves the stack. Nothing has to be hand-placed to be readable —
+  but nothing unplaced is on the map either, which is the point (see *Resting and open*).
 - **A stacked chip is as wide as its own content** — the width it has when placed. The
   stack is a column flex container, and a column flex container stretches its items
   across the cross axis by default, so every chip used to take the width of the
