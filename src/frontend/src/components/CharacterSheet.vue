@@ -3094,14 +3094,14 @@ watch(() => props.externalPoolSources, (sources) => {
   max-width: min(92vw, 900px); max-height: 90vh; padding: 8px;
   background: var(--bg-panel-solid);
   border: 1px solid var(--overlay-10);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 .portrait-viewer-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   font-size: 10px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
   color: var(--accent);
 }
-.portrait-viewer-media { display: block; max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 4px; }
+.portrait-viewer-media { display: block; max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: var(--radius-xs); }
 
 .sheet-scroll {
   flex: 1;
@@ -3180,7 +3180,7 @@ watch(() => props.externalPoolSources, (sources) => {
   height: 22px;
   padding: 0;
   line-height: 1;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--overlay-10);
   background: var(--overlay-4);
   color: var(--text-dim);
@@ -3278,7 +3278,7 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 13px;
   background: var(--overlay-4);
   border: 1px solid var(--overlay-6);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text);
   cursor: pointer;
   margin-bottom: 4px;
@@ -3298,7 +3298,7 @@ watch(() => props.externalPoolSources, (sources) => {
   margin-bottom: 6px;
   padding: 6px 10px;
   font-size: 13px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--overlay-10);
   background: var(--overlay-4);
   color: var(--text);
@@ -3369,7 +3369,7 @@ watch(() => props.externalPoolSources, (sources) => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.name-primary { font-size: 20px; font-weight: 700; }
+.name-primary { font-size: 20px; font-weight: 700; font-family: var(--font-display); }
 .name-secondary { display: flex; align-items: center; min-height: 17px; }
 /* These overrides must beat the primitive's .btn-md/.btn-link rules from the
    child stylesheet, hence the .header-title descendant prefix. */
@@ -3377,6 +3377,7 @@ watch(() => props.externalPoolSources, (sources) => {
   padding: 0;
   font-size: 20px;
   font-weight: 700;
+  font-family: var(--font-display);
   line-height: 1.2;
   text-align: left;
   color: var(--text);
@@ -3390,7 +3391,7 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--text);
   background: var(--overlay-8);
   border: 1px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 1px 6px;
   width: 100%;
   max-width: 220px;
@@ -3423,7 +3424,7 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--accent);
   background: transparent;
   border: 1px solid var(--overlay-12);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 5px 10px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
@@ -3444,7 +3445,7 @@ watch(() => props.externalPoolSources, (sources) => {
   padding: 8px 12px;
   background: var(--bg-panel);
   border: 1px solid var(--overlay-12);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: 0 6px 20px rgba(0,0,0,0.4);
   white-space: nowrap;
 }
@@ -3463,7 +3464,7 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--accent);
   background: var(--overlay-4);
   border: 1px solid var(--accent-dim);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 2px 4px;
   text-align: center;
 }
@@ -3508,7 +3509,7 @@ watch(() => props.externalPoolSources, (sources) => {
   padding: 6px 8px;
   background: var(--overlay-4);
   border: 1px solid var(--overlay-6);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
@@ -3525,7 +3526,7 @@ watch(() => props.externalPoolSources, (sources) => {
   letter-spacing: 1px;
   color: var(--text-dim);
   border: 1px solid var(--overlay-10);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 1px 4px;
 }
 .roster-role {
@@ -3565,7 +3566,7 @@ watch(() => props.externalPoolSources, (sources) => {
   align-items: baseline;
   gap: 8px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   transition: color 0.15s;
 }
 .tie-holder:hover .tie-name { color: var(--accent); }
@@ -3613,7 +3614,7 @@ watch(() => props.externalPoolSources, (sources) => {
   align-self: flex-start;
   max-width: 100%;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--overlay-8);
   background: var(--overlay-2);
   cursor: pointer;
@@ -3691,7 +3692,7 @@ watch(() => props.externalPoolSources, (sources) => {
   font-style: italic;
   cursor: pointer;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   transition: color 0.15s, background 0.15s;
 }
 .rel-desc:hover {
@@ -3707,7 +3708,7 @@ watch(() => props.externalPoolSources, (sources) => {
   gap: 4px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
@@ -3715,7 +3716,7 @@ watch(() => props.externalPoolSources, (sources) => {
   width: 180px;
   padding: 4px 8px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--bg-input);
   color: var(--text);
   font-size: 12px;
@@ -3725,7 +3726,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .rel-editor input:focus {
   border-color: var(--accent);
 }
-.sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: 20px; overflow: hidden; border: 1px solid var(--overlay-8); }
+.sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: var(--radius-chip); overflow: hidden; border: 1px solid var(--overlay-8); }
 /* The tabs are a *row*, and the group is drawn as one rounded control. Below
    roughly 200px — which the phone-landscape dock reaches, at 179px of sheet —
    the tab buttons used to wrap onto a second line *inside* that rounded border,

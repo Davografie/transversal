@@ -73,7 +73,7 @@ function onClick(e) {
 .btn.is-block { width: 100%; }
 
 /* ── Sizes ─────────────────────────────────────────── */
-.btn-sm { font-size: 11px; padding: 3px 8px; gap: 4px; border-radius: 5px; }
+.btn-sm { font-size: 11px; padding: 3px 8px; gap: 4px; border-radius: var(--radius-xs); }
 .btn-md { font-size: 12px; padding: 6px 12px; }
 .btn-lg { font-size: 14px; padding: 9px 18px; }
 .btn-icon {

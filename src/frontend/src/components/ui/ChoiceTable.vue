@@ -314,7 +314,7 @@ function pickRandom() {
   align-items: start;
   width: 100%;
   padding: 7px 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--overlay-10);
   background: var(--overlay-4);
   color: var(--text);
@@ -371,7 +371,7 @@ function pickRandom() {
   justify-content: center;
   min-width: 34px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--overlay-20);
   background: var(--overlay-6);
   color: var(--text-dim);
@@ -393,7 +393,7 @@ function pickRandom() {
   font-size: 10px;
   line-height: 1.35;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--overlay-6);
   border: 1px solid var(--overlay-10);
   word-break: break-word;
@@ -410,7 +410,7 @@ function pickRandom() {
   color: var(--warn);
   background: var(--warn-12);
   border: 1px solid var(--warn-20);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   white-space: nowrap;
 }

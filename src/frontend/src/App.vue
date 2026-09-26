@@ -236,6 +236,7 @@ import { useCharacterFinder } from '@/composables/useCharacterFinder.js'
 import { useCharacterSwitch } from '@/composables/useCharacterSwitch.js'
 import { useMobileBands } from '@/composables/useMobileBands.js'
 import { useThemeMode } from '@/composables/useThemeMode.js'
+import { useUniverseTheme } from '@/composables/useUniverseTheme.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
 import LoginPrompt from '@/components/app/LoginPrompt.vue'
 import UnauthorizedNotice from '@/components/app/UnauthorizedNotice.vue'
@@ -1620,7 +1621,12 @@ function onPanelDragEnd({ dy, velocity }) {
 // teaser band expands it (the .band-tap capture layers above). Breakpoint
 // mirrors the @media block in styles.css.
 // ── Theme (light/dark) — see composables/useThemeMode.js
-const { colorMode } = useThemeMode()
+const { colorMode, isLight } = useThemeMode()
+
+// ── Per-universe styling — the universe in play repaints the tokens. It loads
+// its own palettes, so nothing here can forget to fetch them, and it re-applies
+// on a theme flip because an inline :root override outranks `html.light`.
+useUniverseTheme({ graphql, universe, isLight, diag: (msg) => DIAG.mark(msg) })
 
 const { isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobileFocus, shortViewport, rollerContentH, onBandDragStart, tapBand } = useMobileBands({
   wrapperEl, gmMode, entityId, viewingEntityId,
