@@ -185,6 +185,21 @@ async def navigate(location_id: str, entity_id: str | None = None):
     if result["location"] is None:
         raise HTTPException(status_code=404, detail=f"Location '{location_id}' not found")
 
+    # Serve the background the way the **renderer** resolves it, not the way the
+    # entity document happens to remember it. The stored `background_image` is
+    # denormalized and goes stale when the media pipeline renames a file: 9 of 127
+    # locations pointed at an `_anim_<hash>` path that no longer exists
+    # (2026-09-26), while `/media/animated/{owner}/{universe}/{filename}.{ext}`
+    # from the image record served fine. The arrival paints the GraphQL
+    # `image(role:)` answer — `resolve_role_image` — so serving anything else here
+    # put the two out of step: the hole preview probed the dead URL, got a null
+    # aspect, and silently degraded to a plain cover thumbnail over a destination
+    # whose arrival looked nothing like it. Falls back to the stored field when the
+    # location has no image record at all (the legacy flat `/media/{id}.webp` case).
+    resolved_bg = repo.resolve_role_image(location_id, "background")
+    if resolved_bg:
+        result["location"]["background_image"] = resolved_bg
+
     # Resolve navdot images from entity_images (role="navdot") in one query.
     def _eid(entity: dict) -> str | None:
         return (entity or {}).get("_key") or (entity or {}).get("id")

@@ -1989,7 +1989,17 @@ async function preloadDestNavCache() {
       // falls back to the navdot image there (the dot's own `childImage`). Probing
       // `background_image` alone left every one of those with a null aspect, which
       // drops the hole preview back to a plain dot-sized thumbnail.
-      const destAspect = await probeAspect(loc?.background_image || dest.image)
+      //
+      // Take the first candidate that actually **decodes**, not the first that is
+      // merely truthy. A dead URL used to win over a working one: a stale
+      // `background_image` naming an `_anim_` file the media pipeline had renamed
+      // probed to null, and the navdot — fine all along — was never tried, so the
+      // hole silently fell back to a plain thumbnail while the arrival painted the
+      // real background (Beast Pools, 2026-09-26). The payload now resolves the
+      // background server-side, so this is the belt to that braces: no single 404
+      // may take the hole preview down again.
+      const destAspect =
+        (await probeAspect(loc?.background_image)) ?? (await probeAspect(dest.image))
 
       destNavCache.value = { ...destNavCache.value, [dest.id]: { arriveX: arrive.x, arriveY: arrive.y, destAspect } }
     } catch { /* skip failed pre-fetches */ }
