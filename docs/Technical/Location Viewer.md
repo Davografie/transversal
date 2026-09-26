@@ -749,6 +749,14 @@ border), and the overlay/particle system below — run continuously.
   aspect silently drops the hole preview back to a dot-sized thumbnail
   (`holeStyleFor` returns null). The cache also counts only a *non-null* aspect as
   cached, so a destination that gains an image can pick it up without a reload.
+  **Take the first candidate that actually decodes, not the first that is merely
+  truthy.** A stale-but-set `background_image` used to win over a perfectly good
+  navdot image, probe to null, and take the hole down with it — which is how the
+  Beast Pools dot kept showing a plain thumbnail while the arrival painted the
+  real background (2026-09-26). The other half of that fix is server-side: the
+  `/navigate` payload now serves `resolve_role_image(id, "background")` — the same
+  answer the GraphQL `image(role:)` the arrival uses — instead of the entity's
+  denormalized, rename-fragile `background_image` field.
 - **The cache is invalidated when this location's dots move.** An entry describes
   how to arrive *here*, so it is derived from this location's own `nav_positions`
   and zones; editing either (dragging a nav dot, dragging a zone — `onEnd` and the
