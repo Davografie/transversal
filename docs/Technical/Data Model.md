@@ -253,13 +253,24 @@ Registry of trait groupings. Defines named sets of traits available to entity ty
 | `entity_types` | EntityType[] | | Which entity types can use this set |
 | `order` | int | | Display sort order (default `0`) |
 | `limit` | int | | Max traits an entity can select from this set (default `1`) |
-| `allow_duplicates` | bool | | Allow multiple instances of the same trait definition, distinguished by `statement` (default `false`) |
+| `allow_duplicates` | bool | | Allow multiple instances of the same trait definition. The **set** decides, not the text: a duplicate needs no `statement`, and each instance gets a key of its own (default `false`) |
 | `sheet_tab` | SheetTab | | Which character-sheet tab this set's traits render on: `traits` (default) or `profile`. A deliberate authoring choice — the sheet does not infer it from the rating type, because a container trait carries no rating either |
 | `polarity` | Polarity? | | Default polarity override for traits in this set (null = global positive) |
 | `default_rating_type` | RatingType | | Default rating behaviour for new traits in this set (default `static`) |
 | `default_die_type` | DieType | | Default die for new traits in this set (default `d4`) |
 
 **ID convention:** `ts-{slug}-{hash4}` — slug is a human-readable name variant (e.g. `attributes`, `cultivation`). The 4-char hex hash is `md5(slug + ":" + joined_universes)[:4]`, ensuring keys are unique even when the same name appears in different universes. Examples: `ts-attributes-8f3a` (Earth), `ts-attributes-9d4e` (Three Realms).
+
+> [!important] Two questions, one flag (B216)
+> `allow_duplicates` is the **set's** rule — *may this set hold more than one instance of a definition?* —
+> and it is **not** the same question as *is this specific instance already here?*, which keys on the
+> instance's `statement`. They were conflated while a statement was also what made a duplicate's `_key`
+> unique, so a duplicate-allowing set still refused a second instance whose statement happened to match.
+> As of [[B216]]: the create path (`add_trait_setting`) and the repoint path
+> (`trait_change._refuse_collision`) ask `may_hold_another` — the set's rule, and a duplicate needs **no**
+> statement — while the effects **gain** path keeps asking `find_traitsetting_collision` (the instance's
+> rule), because a repeated grant there is a no-op rather than a second copy. Read the caller before
+> changing either.
 
 ### `traits`
 
@@ -299,7 +310,6 @@ Per-entity trait configuration. The edge connects an anchor (entity, projection,
 | `from_type` | string | ✅ | Anchor kind: `entity` (ego) \| `projection` (morph) \| `relationship` (relation trait) \| `traitsetting` (sub-trait) |
 | `entity_id` | string | ✅ | Denormalized owning entity |
 | `trait_id` | string | ✅ | Denormalized |
-| `traitset_id` | string | ✅ | Denormalized |
 | `projection_id` | string? | | Projection anchor id when `from_type == "projection"` |
 | `parent_traitsetting_id` | string? | | Parent TraitSetting id when `from_type == "traitsetting"` (sub-trait) |
 | `rating_type` | RatingType | | `static`, `resource`, `challenge`, `empty` (default `static`) |
@@ -323,7 +333,13 @@ Per-entity trait configuration. The edge connects an anchor (entity, projection,
 | `source_term_number` | int? | | Which term in that path (life_path_term) |
 | `scheduled_events` | ScheduledEvent[] | | Pending timed reverts |
 
-**ID convention:** `{entity_id}:{trait_id}` for entity/projection anchors; `{anchor_id}:{trait_id}` for relationship anchors; parent + suffix for sub-traits.
+**ID convention:** `{entity_id}:{trait_id}` for entity/projection anchors; `{anchor_id}:{trait_id}` for relationship anchors; parent + suffix for sub-traits. A duplicate-allowing set seeds the suffix from the instance's `statement` when it has one and adds a taken-key suffix when it doesn't — see [[#ID Conventions Summary]].
+
+> [!note] The set is not recorded here (B209)
+> A setting carries **no** `traitset_id`: which set it belongs to is a fact about its registry trait (`_to`),
+> reached through `trait_id`. The field used to be stored and could only ever drift, since a trait moving
+> between sets had nothing to propagate the copy. 10,752 live documents still carry the dead key; nothing
+> reads it. Detail: [[B209]].
 
 > [!note] Sub-trait chains
 > A sub-trait (`from_type: "traitsetting"`) has no anchor of its own — it is anchored to its parent,
@@ -751,7 +767,7 @@ Built by the repository, not stored. Assembles entity + projections + trait sett
 | Universe | `universe-{key}` | `universe-earth` |
 | TraitSet | `ts-{slug}-{hash4}` | `ts-attributes-8f3a` |
 | Trait | `trait-{slug}-{hash4}` | `trait-hacking-7f2a` |
-| TraitSetting | `{entity}:{trait}` (default) / `{entity}:{trait}:{hash8}` when `allow_duplicates` + statement / `{parent}:{trait}:{hash8}` for a **nested** setting (keyed to its parent, so many settings of one generic trait can share a container) | `kael-1:trait-hacking-7f2a` |
+| TraitSetting | `{entity}:{trait}` (default) / `{entity}:{trait}:{hash8}` when `allow_duplicates` and the instance has a statement (the statement only *seeds* the key; the first instance under it keeps it) / `…-{hex6}` when a key is already taken — two instances are two instances however alike their text / `{parent}:{trait}[:{hash8}]` for a **nested** setting (keyed to its parent, so many settings of one generic trait can share a container, with the same taken-key suffix) | `kael-1:trait-hacking-7f2a` |
 | SFX | `sfx-{slug}` | `sfx-hinder` |
 | Relationship | `edge:{from}:{to}:{type}` | `edge:loc-platform:loc-valley:super` |
 | Projection | `{entity}:{origin_universe}` | `kael-1:three_realms` |
