@@ -1,6 +1,20 @@
 <template>
   <div class="ce-root">
-    <div v-for="(c, i) in conditions" :key="i" class="ce-row" :class="{ 'ce-row-spec': usesSpec(c.type) }">
+    <!-- Conditions are an ordered list: a later one may read a name an earlier
+         one published, and the path builder offers variables in that order — so
+         the rows are reorderable rather than fixed. `drag-handle` because every
+         row is full of form controls and whole-row drag would eat text
+         selection. -->
+    <GmList
+      v-if="conditions.length"
+      :items="conditions"
+      item-key=""
+      reorderable
+      drag-handle
+      @reorder="onReorder"
+    >
+      <template #item="{ item: c, index: i }">
+      <div class="ce-row" :class="{ 'ce-row-spec': usesSpec(c.type) }">
       <select v-model="c.type">
         <!-- The backend returns the vocabulary already banded and ordered, so the
              picker renders the grouping by grouping runs of the same band: no
@@ -11,7 +25,10 @@
       </select>
       <span v-if="selectedProblem(c.type)" class="ce-warn">{{ selectedProblem(c.type) }}</span>
       <template v-if="usesSpec(c.type)">
-        <TargetSpecBuilder v-model="c.spec" :source-element="sourceElement" :variables="variables" title="Condition path" boolean-terminal class="ce-spec" />
+        <!-- One line here; the builder opens in a child panel (`PathField`) — a
+             path is a row of controls per step, and inlining it made a condition
+             taller than every other field on the panel combined. -->
+        <PathField v-model="c.spec" :source-element="sourceElement" :variables="variables" title="Condition path" boolean-terminal class="ce-spec" />
       </template>
       <template v-else>
         <input v-if="needsSubject(c.type)" v-model="c.subject" placeholder="entity (blank = current)" class="ce-subject" />
@@ -73,7 +90,9 @@
         <input v-if="c.type === 'NARRATIVE'" v-model="c.narrative" placeholder="narrative text" class="ce-target" />
       </template>
       <Button class="ce-del" variant="danger-ghost" size="sm" @click="remove(i)">✕</Button>
-    </div>
+      </div>
+      </template>
+    </GmList>
     <Button class="ce-add" variant="secondary" block @click="add">＋ Add condition</Button>
   </div>
 </template>
@@ -83,8 +102,9 @@ import { computed } from 'vue'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import UniversePicker from './UniversePicker.vue'
-import TargetSpecBuilder from './TargetSpecBuilder.vue'
+import PathField from './PathField.vue'
 import TagInput from '@/components/ui/TagInput.vue'
+import GmList from '@/components/ui/GmList.vue'
 import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
@@ -254,11 +274,24 @@ function remove(i) {
   next.splice(i, 1)
   emit('update:modelValue', next)
 }
+
+// Order is meaning here (a later condition may read an earlier one's name), so a
+// move rewrites the list rather than only the display.
+function onReorder(from, to) {
+  if (from === to || from < 0 || to < 0) return
+  const next = [...props.modelValue]
+  if (from >= next.length || to >= next.length) return
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  emit('update:modelValue', next)
+}
 </script>
 
 <style scoped>
 .ce-root { display: flex; flex-direction: column; gap: 4px; }
-.ce-row { display: flex; gap: 4px; align-items: center; }
+/* `flex: 1` because the row is now a GmList row's child (the row owns the
+   shell); the drag handle sits after it. */
+.ce-row { display: flex; gap: 4px; align-items: center; flex: 1; min-width: 0; }
 .ce-row select, .ce-row input {
   font-size: 11px; padding: 4px 6px;
   background: var(--overlay-6); color: var(--text);
@@ -281,7 +314,13 @@ function remove(i) {
 /* "＋ Add condition" keeps its deliberate dashed accent (full width via the
    column flex parent); fill/radius/padding/hover come from ui/Button. */
 .ce-root > .ce-add { border-style: dashed; border-color: var(--overlay-15); }
+/* Each row is a GmList row now, so the primitive owns the shell. Its defaults are
+   for *clickable* list rows — a pointer cursor and centred content — which a row
+   of form controls does not want. */
+.ce-root :deep(.gml-item) { cursor: default; align-items: flex-start; }
 .ce-row-spec { flex-wrap: wrap; align-items: flex-start; }
 .ce-row-spec > select { flex: none; width: 140px; }
+/* The path is one summary line spanning the row (it replaces the inline builder,
+   which was the reason the row wrapped at all). */
 .ce-spec { flex: 1 1 100%; min-width: 0; }
 </style>

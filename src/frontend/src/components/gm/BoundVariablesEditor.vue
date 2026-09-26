@@ -16,10 +16,11 @@
         <span v-if="typeAt(i)" class="bv-type">{{ typeAt(i) }}</span>
         <Button class="bv-remove" variant="danger-ghost" size="sm" title="Remove" @click="remove(i)">✕</Button>
       </div>
-      <TargetSpecBuilder
+      <PathField
         :model-value="row.spec"
         :source-element="sourceElement"
         :variables="scopeFor(i)"
+        title="Value path"
         @update:model-value="onSpec(i, $event)"
       />
       <p v-if="row.name && typeAt(i)" class="bv-reads">
@@ -42,7 +43,7 @@
 <script setup>
 import { computed } from 'vue'
 import Button from '@/components/ui/Button.vue'
-import TargetSpecBuilder from './TargetSpecBuilder.vue'
+import PathField from './PathField.vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 
 const props = defineProps({

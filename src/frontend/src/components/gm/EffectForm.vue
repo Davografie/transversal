@@ -57,11 +57,12 @@
       <div v-else-if="item.kind === 'owner'" class="ee-field">
         <label>{{ item.f.label }}</label>
         <p class="ee-field-help">{{ ownerHelp }}</p>
-        <TargetSpecBuilder
+        <PathField
           v-model="newEffect.ownerSpec"
           :destination="ownerPathDestination"
           :source-element="sourceElement"
           :variables="scopedVariables"
+          title="Anchored to"
         />
       </div>
       <!-- The in-line trait editor (die/polarity/statement/notes) describes the
@@ -124,12 +125,13 @@
             <label>Exit name</label>
             <input v-model="newEffect.returnExit" type="text" placeholder="e.g. survived" />
           </div>
-          <TargetSpecBuilder
+          <PathField
             v-else-if="newEffect.targetMode === 'spec'"
             v-model="newEffect.targetSpec"
             :destination="specDestination"
             :source-element="sourceElement"
             :variables="outputVariables"
+            title="Targeting path"
             @resolve="targetLocus = $event"
           />
         </div>
@@ -142,12 +144,13 @@
             </select>
           </div>
           <input v-if="newEffect.entityMode === 'literal'" v-model="newEffect.fields[item.f.name]" type="text" placeholder="self" />
-          <TargetSpecBuilder
+          <PathField
             v-else
             v-model="newEffect.entitySpec"
             :destination="{ elements: ['entity'] }"
             :source-element="sourceElement"
             :variables="scopedVariables"
+            title="Who it applies to"
           />
         </template>
 
@@ -164,12 +167,13 @@
               <option v-for="(o, i) in (item.f.options || [])" :key="o" :value="o">{{ (item.f.optionLabels || [])[i] || o }}</option>
             </select>
             <input v-else-if="resultMode === 'variable'" v-model="valueStore(item.f)[item.f.name]" type="text" placeholder="{effect_die}" />
-            <TargetSpecBuilder
+            <PathField
               v-else
               v-model="newEffect.resultSpec"
               :destination="resultSpecDestination"
               :source-element="sourceElement"
               :variables="outputVariables"
+              title="Die from a path"
             />
           </template>
           <!-- A context field with its own editor: the dice array, the effect-die
@@ -272,7 +276,7 @@ import { useEffectActions } from '@/composables/useEffectActions.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
-import TargetSpecBuilder from './TargetSpecBuilder.vue'
+import PathField from './PathField.vue'
 import EffectRefField from './EffectRefField.vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import ConditionEditor from './ConditionEditor.vue'

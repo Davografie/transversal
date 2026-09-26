@@ -72,7 +72,7 @@
         </select>
         <p class="hint">Whose rolls feed the part of this rule that waits.</p>
         <div v-if="draft.arming_scope === 'listener_spec'" class="sfx-listener">
-          <TargetSpecBuilder v-model="draft.listener_spec" :destination="{ elements: ['entity'] }" :source-element="sourceElement" />
+          <PathField v-model="draft.listener_spec" :destination="{ elements: ['entity'] }" :source-element="sourceElement" title="Listener path" />
           <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>). Resolved once, when the rule arms.</p>
         </div>
 
@@ -136,7 +136,7 @@
       <label>Acquire path <span class="hint-inline">(optional)</span></label>
       <!-- No destination hint: "who may take this" is not a fixed type — it ends
            wherever the author means (an entity, a trait instance, …). -->
-      <TargetSpecBuilder v-model="draft.acquire_spec" :source-element="sourceElement" />
+      <PathField v-model="draft.acquire_spec" :source-element="sourceElement" title="Acquire path" />
       <p class="hint">Where this rule may be <em>learned</em> — leaving the place afterwards does not take it away (a condition would). E.g. <em>select source → navigate entity → filter current_location == Azure Dawn</em>.</p>
 
       <!-- The acquisition path's other half ([[B131]]): a rule a trait offers
@@ -197,7 +197,7 @@ import EffectList from './EffectList.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import BoundVariablesEditor from './BoundVariablesEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
-import TargetSpecBuilder from './TargetSpecBuilder.vue'
+import PathField from './PathField.vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import Button from '@/components/ui/Button.vue'
 

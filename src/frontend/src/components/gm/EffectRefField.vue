@@ -1,11 +1,12 @@
 <template>
   <div class="ee-field ee-ref">
     <label>{{ refDef.label }} <em class="ee-ref-element">{{ refDef.element }}</em></label>
-    <TargetSpecBuilder
+    <PathField
       :model-value="modelValue"
       :destination="{ elements: [refDef.element] }"
       :source-element="sourceElement"
       :variables="variables"
+      :title="refDef.label"
       @update:model-value="emit('update:modelValue', $event)"
     />
   </div>
@@ -14,8 +15,9 @@
 <script setup>
 // One named reference of an effect action, as its own component so the effect form
 // can place it anywhere in the field order (`EffectActionMeta.field_order`) rather
-// than only before or after the field block.
-import TargetSpecBuilder from './TargetSpecBuilder.vue'
+// than only before or after the field block. The path itself is edited in a child
+// panel (`PathField`), so a reference contributes one line to the form.
+import PathField from './PathField.vue'
 
 defineProps({
   refDef: { type: Object, required: true },
