@@ -69,6 +69,28 @@ this is dynamic.
   and it is intended: such membership is **evaluated**, so a place that fills up
   gains the rule and stops qualifying again — it is live, not a one-time grant.
 
+## Where a granted rule is seen
+
+A **granted** declaration makes a rule *available* to an owner without attaching
+anything, so it lands in no list by itself: not `TraitSetting.sfx_ids` (that is what is
+attached), not a chip (granted is never a chip), and not a place rule. Left there it is
+usable and **invisible** — the same dead end the place-owned rules hit before they got
+their own strip.
+
+**Landed 2026-09-26.** `TraitSetting.grantedSfxIds`, a read-time field resolved from a
+new inverse of the granted reach index (`sfx_owner.granted_sfx_by_owner` — one
+aggregate per cache fill, so a per-row read on a sheet is a dict lookup).
+`TraitRow` and `TraitDetailPanel` render it beside the attached cards, fully readable
+and activatable (never dimmed — that is the B189 mistake) and marked with a dashed edge
+plus a title saying it is granted rather than attached.
+
+**Why a separate field rather than merged into `sfxIds`.** That list is what is
+*attached*, and the trait editor writes it back **wholesale**
+(`updateTraitSetting(sfxIds: editSfxIds)`). Folding reach into it would **materialise**
+the rule onto the instance the first time anything saved a trait — turning a live read
+into a one-time grant, which is the exact objection that retired `implicit` — and it
+would have made the rule look removable in the edit panel while removing it did nothing.
+
 ## What is missing to build it
 
 1. ~~**`trait → traitsettings`**~~ **Landed 2026-09-26.** One catalog edge
