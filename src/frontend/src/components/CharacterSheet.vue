@@ -2586,7 +2586,7 @@ const QUERY = `
     notes
     sfxIds
     # Rules this instance *has* without carrying them, from a rule's granted reach
-    # ([[Dynamic SFX Reach]]). Read-time, and separate from `sfxIds` on purpose:
+    # ([[Dynamic SFX Reach]]). Read-time, and separate from sfxIds on purpose:
     # that list is what is attached and the trait editor writes it back whole.
     grantedSfxIds
     universe
