@@ -3066,8 +3066,14 @@ watch(() => props.externalPoolSources, (sources) => {
 </script>
 
 <style scoped>
-/* The sheet's own choice table: anchored to the sheet rather than the roller, and
-   deliberately *not* full-screen — the rules it is about stay visible behind it. */
+/* The sheet's own choice table: **layout only**. `EffectTargetWizard` draws the card
+   itself (`.etw-root` carries its own background, border and radius), which is why
+   every other host wraps it in nothing — the roller's wrapper is a lone `margin-top`.
+   A second card here, with its own colours and shadow, is what made this one look
+   unlike the same table everywhere else. So: position it, size it, otherwise keep out
+   of the way. Anchored to the sheet rather than the roller, and not full-screen — the
+   trait that raised the question stays readable behind it, because it is the context
+   for answering it. */
 .sheet-sfx-choice {
   position: absolute;
   right: 12px;
@@ -3076,10 +3082,6 @@ watch(() => props.externalPoolSources, (sources) => {
   width: min(420px, calc(100% - 24px));
   max-height: 70%;
   overflow: auto;
-  background: var(--surface-1, var(--bg, #1a1a1a));
-  border: 1px solid var(--accent-dim);
-  border-radius: 8px;
-  box-shadow: 0 8px 28px var(--shadow-40, rgba(0, 0, 0, 0.45));
 }
 
 .sheet-embedded {
