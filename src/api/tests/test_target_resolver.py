@@ -126,9 +126,12 @@ def test_roots_are_reachable_only_through_their_parent():
 def test_a_trait_definition_reaches_all_of_its_instances():
     """`trait → traitsettings`: the definition → instances hop a registry-seeded
     reach selector needs, because a definition has no surface to own a rule on.
-    Sub-trait instances are included — an elemental root is an instance of its
-    definition like any other, and it is its own source. That is the meaning
-    `propagate_trait_default_sfx` already gives "every instance of this trait"."""
+
+    A nested instance is included **iff its own definition is the selected one**
+    (the author's rule): the filter runs on definitions *before* the hop, so
+    "all traits of the assets set" reaches an item nested under a container when
+    that item's trait is in the set — and never reaches a nested instance whose
+    trait is in some other set. Inclusion is not inherited from the parent."""
     kael = NS(id="kael", type="character", current_location="loc-1", current_universe="earth",
               current_projection=None, razmerit=0)
     ox = NS(id="gmc-1", type="gmc", current_location="loc-1", current_universe="earth",
@@ -142,11 +145,16 @@ def test_a_trait_definition_reaches_all_of_its_instances():
     nested = NS(id="kael:trait-resource:root", trait_id="trait-resource", traitset_id="ts-3",
                 entity_id="kael", projection_id=None, rating="d6",
                 from_type="traitsetting", parent_traitsetting_id="kael:trait-resource")
+    # Nested under a *selected* container, but its own trait is in another set —
+    # the case that tells "part of the selection" apart from "inherits reach".
+    nested_unselected = NS(id="kael:trait-resource:other", trait_id="trait-other", traitset_id="ts-9",
+                           entity_id="kael", projection_id=None, rating="d6",
+                           from_type="traitsetting", parent_traitsetting_id="kael:trait-resource")
     unrelated = NS(id="kael:trait-other", trait_id="trait-other", traitset_id="ts-9",
                    entity_id="kael", projection_id=None, rating="d6")
     repo = FakeRepo(
         entities={"kael": kael, "gmc-1": ox},
-        traitsettings={t.id: t for t in (held, held_elsewhere, nested, unrelated)},
+        traitsettings={t.id: t for t in (held, held_elsewhere, nested, nested_unselected, unrelated)},
         traits={resource.id: resource, other.id: other},
     )
 

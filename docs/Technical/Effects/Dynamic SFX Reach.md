@@ -86,17 +86,10 @@ this is dynamic.
      instances across **261** owners — **not** the **881** the reverted offer
      reached. The difference is exactly the **8 sub-trait instances** of assets
      traits: items nested under a container trait (a jade slip, a manual, a melee
-     weapon, a set of clothes, a tool), on one GMC and one CHARACTER. The edge
-     includes them deliberately — they are instances of the definition like any
-     other, a rule on one is its own source, and the production read this reuses
-     has always meant "every instance of this trait". **The reach step decides
-     which set it wants** (open question 4).
-   - **A gap this exposed:** the wizard cannot currently say "top-level instances
-     only". `traitsetting.from_type` offers the options `("entity", "projection")`,
-     and a nested instance's value is `traitsetting`; `from_type == entity` is
-     authorable but also drops projection-held instances. Adding `"traitsetting"`
-     to that options tuple makes `from_type != traitsetting` expressible — a
-     one-line catalog change, if the answer is "top-level only".
+     weapon, a set of clothes, a tool), on one GMC and one CHARACTER. **The author
+     has confirmed this is right** — a nested instance is reached iff its *own*
+     trait is in the selection (decision 4), which is what the edge does, since the
+     filter runs on definitions before the hop.
    - **Tags go through the same hop:** "all traits tagged `utility`" (14
      definitions) resolves to **164** instances.
 2. **The reach declarations on `SFX`** — a list of `{spec, flavour}`, replacing
@@ -119,9 +112,14 @@ A reach declaration is a **set-producing** query where the old offer was a looku
 The read must not become "walk every owner and run a path". Proposal: resolve each
 declaration **once** into a set of owner ids, cached with the SFX records (same
 invalidation, already wired), and membership-test against it. Sizes are modest —
-`ts-3` is 65 definitions → **881** trait-setting instances — and conditions layer
-on top exactly as they do now. Revisit if a declaration is authored against a much
-larger collection.
+`ts-3` is 65 definitions → **889** trait-setting instances, `utility` is 14
+definitions → **164** — and conditions layer on top exactly as they do now.
+
+**Decision 3 makes this a measurement, not an assumption:** the author does not know
+how intensive it will be, so the implementation measures the ownership read against
+the live data (a rule with the assets declaration, resolving for an actor) **before**
+the shape is trusted, and records the number here. Revisit if a declaration is
+authored against a much larger collection — the whole registry is only 808 traits.
 
 ## Migration and revert plan
 
@@ -147,30 +145,48 @@ What came out of `92babf6c` and its follow-ups, and what deliberately survived:
   keep its `source_kind` fixed at `trait_setting` (it had drifted to `table`, under
   which the rule could not be taken at all — see [[B228]]).
 
-**`implicit` retirement — one open wrinkle.** The flag is only meaningful for a rule
-declared in a trait's `possibleSfxIds`. `defaultSfxIds` *provisions* onto the
-instance at create time (write-time), while `implicit` was **read-time** reach, so
-moving a live implicit rule into `defaultSfxIds` would change its nature. Preferred:
-**generate a granted path** for it (`select traits → filter id in [...] → navigate
-traitsettings`, flavour granted), which preserves read-time semantics. Decide with
-the author before migrating.
+**`implicit` retirement — decided (see §Decisions 1).** The flag is only meaningful
+for a rule declared in a trait's `possibleSfxIds`. `defaultSfxIds` *provisions* onto
+the instance at create time (write-time), while `implicit` was **read-time** reach,
+so moving a live implicit rule into `defaultSfxIds` would change its nature — the
+author's call is the **generated granted path**
+(`select traits → filter id in [...] → navigate traitsettings`), which preserves
+read-time semantics.
 
 **Content to re-author (the author's):** `sfx-sect-cultivation` as an Entity-sourced
 selector (above), and `sfx-gift`'s path with the extra `traitsettings` step.
 
-## Open questions
+## Decisions (author, 2026-09-26)
 
-1. The `implicit` retirement migration — generated granted path vs `defaultSfxIds`
-   (above).
-2. Is one path per declaration enough, or should a declaration carry several
-   criteria paths (an AND/OR between them)?
-3. Performance shape once a declaration selects thousands of owners (§Cost).
-4. **Does a definition's reach include its sub-trait instances?** Measured either
-   way: sub-traits in → **889** owners for the assets sentence; out → **881**, the
-   number the reverted offer reached. The edge says yes (they are instances, and
-   the reused production read has always meant "every instance"); expressing "no"
-   needs `"traitsetting"` added to `from_type`'s options so
-   `from_type != traitsetting` is authorable (item 1). Author's call.
+1. **`implicit` retires into a generated *granted* path** — not into
+   `defaultSfxIds`. `defaultSfxIds` *provisions* onto the instance at create time
+   (write-time), while `implicit` was **read-time** reach, so moving a live
+   implicit rule there would change its nature. The migration generates, for each
+   rule a trait declares implicit, a granted reach declaration
+   `select traits → filter id in [<those traits>] → navigate traitsettings`,
+   which preserves the read-time semantics.
+2. **Reach declarations combine with OR.** The union *is* the reach, and
+   **granted wins over offered** for an owner both reach (they simply have it — no
+   chip). Because OR is a union, "several paths in one declaration" and "several
+   declarations" are the same thing — so a declaration carries **one path**, and a
+   second criterion is a second declaration. (Flavour is per declaration; grouping
+   several same-flavour paths under one row would change presentation only.)
+3. **Performance is the implementation's call, to be measured rather than
+   assumed** — the author does not know how intensive it will be. The proposal
+   stands (resolve a declaration once into a set of owner ids, cached with the SFX
+   records, then membership-test it), but the measurement goes in this doc before
+   the shape is trusted (§Cost).
+4. **A definition's reach includes its sub-trait instances iff they are part of the
+   selection.** The author: *"no, unless the sub-traits are part of the selection
+   (if I have a sub-trait that sits in the asset traitset, then Gift acquire path
+   should still target it)"*. **The edge already does exactly this**, because the
+   filter runs on definitions *before* the hop: a nested instance is reached iff
+   *its own* trait is selected, never because its parent's is. Measured live: 926
+   nested instances exist, **8** have a trait in the assets set and **918** do not;
+   the assets sentence returns those 8 and **0** results whose trait is outside the
+   set. So "all assets traits" is **889**, and 881 was the top-level-only reading
+   the author has now declined. **No catalog change is needed** — `from_type`'s
+   options stay as they are.
 
 ## See also
 
