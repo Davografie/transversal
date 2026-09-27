@@ -103,9 +103,16 @@ this is dynamic.
    membership check (item 3, in progress); what replaced its *warning* is
    `validateSfx`'s **"reaches nobody"**, which fires only when no trait declares
    the rule, it declares no reach, **and** nothing owns it.
-3. **Availability and the chip** read both the hand-picked lists and the
-   declarations. Granted reach means "available from them"; offered reach means
-   "a learn-chip for them".
+3. ~~**Availability and the chip** read both the hand-picked lists and the
+   declarations.~~ **Landed 2026-09-26.** **Granted** reach is read by
+   `get_available_sfx_ids` (`sfx_owner.reach_index(repo, "granted")`, membership-tested
+   against the entity's own id, its projection's, its trait instances' and its trait-set
+   settings'); it sets `sfx_sources` when the matched owner is a trait instance, so a
+   source-aware condition still reads the right trait. **Offered** reach is read by
+   `acquirableSfxIds`, alongside the trait's `possibleSfxIds`. And the gate's
+   *enforcement* is back as `sfx_owner.reach_refusal` — a rule that declares reach is
+   not attached outside the set it selects (`add_sfx_to_owner` and `attach_refusal`
+   both consult it); a rule with no declaration is unrestricted, as before.
 4. **Editor** — a list of reach declarations: each a path (`PathField`, so it opens
    in a child panel) plus a granted/offered control. Replaces the "Offered by"
    trait-set picker and the single "Acquire path" field.
@@ -126,20 +133,34 @@ this is dynamic.
      `sfx-sect-cultivation` (the one real gate). Only the last changes behaviour by
      the gate's removal, and its v2 is already on the author's list.
 
-## Cost (the one engineering risk)
+## Cost — measured, not assumed (decision 3)
 
-A reach declaration is a **set-producing** query where the old offer was a lookup.
-The read must not become "walk every owner and run a path". Proposal: resolve each
-declaration **once** into a set of owner ids, cached with the SFX records (same
-invalidation, already wired), and membership-test against it. Sizes are modest —
-`ts-3` is 65 definitions → **889** trait-setting instances, `utility` is 14
-definitions → **164** — and conditions layer on top exactly as they do now.
+A reach declaration is a **set-producing** query where the old offer was a lookup, so
+the read must not become "walk every owner and run a path". The shape that avoids it,
+and what is implemented: resolve each declaration **once** into a set of owner ids,
+cache it beside the SFX records (`sfx_owner._REACH_INDEX_CACHE`, cleared by
+`invalidate_sfx_cache` exactly like the other caches), and **membership-test** it
+against the owner ids an entity already has in hand.
 
-**Decision 3 makes this a measurement, not an assumption:** the author does not know
-how intensive it will be, so the implementation measures the ownership read against
-the live data (a rule with the assets declaration, resolving for an actor) **before**
-the shape is trusted, and records the number here. Revisit if a declaration is
-authored against a much larger collection — the whole registry is only 808 traits.
+**Measured on the live DB** — 46 rules, an actor holding an assets-trait instance, a
+synthetic *granted* declaration over the assets set, nothing written to content:
+
+| | time |
+|---|---|
+| index fill, **no** declaration (one registry pass) | **1.6 ms** |
+| index fill, **one** declaration over the assets set (resolves **889** owners) | **47.6 ms** |
+| index read, warm (cached) | **0.0 ms** |
+| availability read, warm index, **with** the declaration | **53.9 ms** |
+| availability read, warm index, **without** any reach (baseline) | **52.3 ms** |
+| an actor the declaration does **not** reach | correctly excluded |
+
+So the per-event cost of a rule reaching 889 owners is **≈ +1.6 ms** — the membership
+test — and the set-producing half is paid **once per cache fill**: at most once per
+`_SFX_CACHE_TTL` (30 s) or per rule write, and never per entity. The fill scales with
+what a declaration *selects*, not with how many entities are read. Revisit if a
+declaration is authored against something much larger: the whole trait-definition
+registry is 808 rows and the widest collection the catalog offers is `entities`
+(~1000), so 889 owners is close to the worst case available today.
 
 ## Migration and revert plan
 
