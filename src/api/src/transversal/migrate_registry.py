@@ -204,7 +204,7 @@ def migrate(apply: bool = False) -> int:
             "_key": traitset_key(key),
             "name": name,
             "universes": sorted(unis),
-            "description": (ts.get("explainer") or "").strip(),
+            "explanation": (ts.get("explainer") or "").strip(),
             "entity_types": _map_entity_types(ts.get("entity_types")),
             "order": ts.get("order") or 0,
             "limit": ts.get("dicepool_limit") or 1,

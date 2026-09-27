@@ -165,6 +165,7 @@ def _trait_to_gql(t) -> TraitRef:
         default_ego=t.default_ego,
         tags=list(t.tags or []),
         polarity=t.polarity,
+        explanation=t.explanation,
         display_names=[
             GqlTraitDisplayName(name=dn.name, universe=dn.universe, ratings=dn.ratings)
             for dn in t.display_names

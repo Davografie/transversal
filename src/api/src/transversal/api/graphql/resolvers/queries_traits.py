@@ -19,7 +19,8 @@ class QueriesTraits:
         tss = _em(info).repo.get_all_traitsets()
         return [
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
-                        entity_types=ts.entity_types, order=ts.order, limit=ts.limit,
+                        entity_types=ts.entity_types, explanation=ts.explanation,
+                        order=ts.order, limit=ts.limit,
                         allow_duplicates=ts.allow_duplicates, polarity=ts.polarity,
                         sheet_tab=ts.sheet_tab)
             for ts in tss
@@ -73,7 +74,8 @@ class QueriesTraits:
         tss = _em(info).repo.get_traitsets_by_universe(universe)
         return [
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
-                        entity_types=ts.entity_types, order=ts.order, limit=ts.limit,
+                        entity_types=ts.entity_types, explanation=ts.explanation,
+                        order=ts.order, limit=ts.limit,
                         allow_duplicates=ts.allow_duplicates, polarity=ts.polarity,
                         sheet_tab=ts.sheet_tab)
             for ts in tss

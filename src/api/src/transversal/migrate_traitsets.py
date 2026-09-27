@@ -127,7 +127,7 @@ def migrate() -> int:
         doc = {
             "_key": new_key, "name": name,
             "universes": sorted(universes),
-            "description": (ts.get("explainer") or "").strip(),
+            "explanation": (ts.get("explainer") or "").strip(),
             "entity_types": new_types,
             "order": ts.get("order") or 0,
             "limit": limit,

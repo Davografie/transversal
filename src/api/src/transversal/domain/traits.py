@@ -79,7 +79,11 @@ class TraitSet(BaseModel):
     id: str
     name: str
     universes: list[str] = Field(default_factory=list)
-    description: str = ""
+    #: What this set is for, in the author's words — the old app's ``explainer``.
+    #: The migration stored that text under ``description``; the field is now named
+    #: after what it is, and ``_fold_legacy_description`` reads the old key so no
+    #: document needs migrating.
+    explanation: str = ""
     entity_types: list[EntityType] = Field(default_factory=list)
     order: int = 0
     limit: int = 1
@@ -88,6 +92,24 @@ class TraitSet(BaseModel):
     sheet_tab: SheetTab = SheetTab.TRAITS  # which sheet tab this set's traits render on ("traits" | "profile")
     default_rating_type: RatingType = RatingType.STATIC
     default_die_type: DieType = DieType.D4
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fold_legacy_description(cls, data):
+        """Read the old ``description`` key as ``explanation``.
+
+        The migration wrote the old app's ``explainer`` into ``description``, and
+        that name is gone. Folding at load keeps every existing document readable
+        without a migration — the same treatment ``TraitSetting`` gives its legacy
+        ``negative`` flag — and the stale key is dropped here, so the next write of
+        any kind (``update_traitset`` replaces the whole document) leaves it behind.
+        """
+        if isinstance(data, dict):
+            data = {**data}
+            if not data.get("explanation") and data.get("description"):
+                data["explanation"] = data["description"]
+            data.pop("description", None)
+        return data
 
 def resolve_trait_display_name(
     trait: "Trait", dice: list[DieType], universe: str

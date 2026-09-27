@@ -90,6 +90,9 @@ class TraitRef:
     default_ego: bool = False
     tags: list[str] = strawberry.field(default_factory=list)
     polarity: Optional[Polarity] = None
+    #: What this trait is, in the author's words — the old app's ``explanation``,
+    #: which the migration has carried since the registry landed and nothing read.
+    explanation: str = ""
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
     @strawberry.field
@@ -142,6 +145,9 @@ class TraitSetRef:
     name: str
     universes: list[str]
     entity_types: list[EntityType]
+    #: What this set is for, in the author's words (see the traitset's
+    #: ``explanation`` in the domain model — the old app's ``explainer``).
+    explanation: str = ""
     order: int = 0
     limit: int = 1
     allow_duplicates: bool = False
@@ -165,6 +171,7 @@ class TraitSetRef:
                 default_ego=t.default_ego,
                 tags=t.tags,
                 polarity=t.polarity,
+                explanation=t.explanation,
                 display_names=[
                     TraitDisplayName(name=dn.name, universe=dn.universe,
                                      ratings=dn.ratings)
@@ -189,6 +196,7 @@ class TraitInput:
     default_ego: bool = False
     tags: list[str] = strawberry.field(default_factory=list)
     polarity: Optional[Polarity] = None
+    explanation: str = ""
     display_names: list[TraitDisplayNameInput] = strawberry.field(default_factory=list)
 
 @strawberry.input
@@ -206,6 +214,7 @@ class TraitUpdateInput:
     tags: Optional[list[str]] = None
     polarity: Optional[Polarity] = None
     clear_polarity: bool = False
+    explanation: Optional[str] = None
     display_names: Optional[list[TraitDisplayNameInput]] = None
 
 def rating_dice(s) -> list:

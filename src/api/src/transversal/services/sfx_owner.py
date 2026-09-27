@@ -1721,7 +1721,7 @@ def ensure_gmc_base_difficulty(repo) -> None:
         repo.create_traitset(TraitSet(
             id=TRAITSET_ID,
             name="GMC base",
-            description="Baseline opposition for GMCs with no authored traits.",
+            explanation="Baseline opposition for GMCs with no authored traits.",
             universes=[],  # universe-agnostic (applies everywhere)
             entity_types=[EntityType.GMC],
             order=0,

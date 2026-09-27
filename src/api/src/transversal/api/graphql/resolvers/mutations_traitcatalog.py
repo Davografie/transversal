@@ -23,26 +23,35 @@ class MutationsTraitCatalog:
 
     @strawberry.mutation
     def create_traitset(self, info: strawberry.Info, id: str, name: str, universes: list[str],
-                        entity_types: Optional[list[EntityType]] = None, description: str = "",
+                        entity_types: Optional[list[EntityType]] = None, explanation: str = "",
+                        description: Optional[str] = None,
                         order: int = 0, limit: int = 1,
                         allow_duplicates: bool = False,
                         polarity: Optional[Polarity] = None,
                         sheet_tab: SheetTab = SheetTab.TRAITS) -> TraitSetRef:
         from transversal.domain import TraitSet as DomainTraitSet
+        # `description` is the name this field carried before it was renamed to
+        # `explanation`. It stays a write alias so the MCP tool's mutation document
+        # — which declares `$description` and always sends it — keeps working until
+        # [[mcp-architect]] flips its tool property. `explanation` wins if both.
+        if not explanation and description:
+            explanation = description
         ts = DomainTraitSet(id=id, name=name, universes=universes,
-                            entity_types=entity_types or [], description=description,
+                            entity_types=entity_types or [], explanation=explanation,
                             order=order, limit=limit, allow_duplicates=allow_duplicates, polarity=polarity,
                             sheet_tab=sheet_tab)
         created = _em(info).repo.create_traitset(ts)
         return TraitSetRef(id=created.id, name=created.name, universes=created.universes,
-                           entity_types=created.entity_types, order=created.order, limit=created.limit,
+                           entity_types=created.entity_types, explanation=created.explanation,
+                           order=created.order, limit=created.limit,
                            allow_duplicates=created.allow_duplicates, polarity=created.polarity,
                            sheet_tab=created.sheet_tab)
 
     @strawberry.mutation
     def update_traitset(self, info: strawberry.Info, id: strawberry.ID, name: Optional[str] = None,
                         universes: Optional[list[str]] = None, entity_types: Optional[list[EntityType]] = None,
-                        description: Optional[str] = None, order: Optional[int] = None,
+                        explanation: Optional[str] = None, description: Optional[str] = None,
+                        order: Optional[int] = None,
                         limit: Optional[int] = None, allow_duplicates: Optional[bool] = None,
                         polarity: Optional[Polarity] = None,
                         sheet_tab: Optional[SheetTab] = None,
@@ -53,7 +62,8 @@ class MutationsTraitCatalog:
         if name is not None: existing.name = name
         if universes is not None: existing.universes = universes
         if entity_types is not None: existing.entity_types = entity_types
-        if description is not None: existing.description = description
+        if explanation is None: explanation = description  # deprecated alias, see create_traitset
+        if explanation is not None: existing.explanation = explanation
         if order is not None: existing.order = order
         if limit is not None: existing.limit = limit
         if allow_duplicates is not None: existing.allow_duplicates = allow_duplicates
@@ -66,7 +76,8 @@ class MutationsTraitCatalog:
         from transversal.services.polarity import propagate_traitset_polarity
         propagate_traitset_polarity(_em(info).repo, str(id), old_polarity, existing.polarity)
         return TraitSetRef(id=updated.id, name=updated.name, universes=updated.universes,
-                           entity_types=updated.entity_types, order=updated.order, limit=updated.limit,
+                           entity_types=updated.entity_types, explanation=updated.explanation,
+                           order=updated.order, limit=updated.limit,
                            allow_duplicates=updated.allow_duplicates, polarity=updated.polarity,
                            sheet_tab=updated.sheet_tab)
 
@@ -95,6 +106,7 @@ class MutationsTraitCatalog:
             default_ego=input.default_ego,
             tags=[str(s) for s in (input.tags or [])],
             polarity=input.polarity,
+            explanation=input.explanation,
             display_names=[
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
                                        ratings=dn.ratings)
@@ -114,6 +126,7 @@ class MutationsTraitCatalog:
             default_ego=created.default_ego,
             tags=list(created.tags or []),
             polarity=created.polarity,
+            explanation=created.explanation,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                     ratings=dn.ratings)
@@ -150,6 +163,8 @@ class MutationsTraitCatalog:
             existing.default_ego = input.default_ego
         if input.tags is not None:
             existing.tags = [str(s) for s in input.tags]
+        if input.explanation is not None:
+            existing.explanation = input.explanation
         if input.clear_polarity:
             existing.polarity = None
         elif input.polarity is not None:
@@ -188,6 +203,7 @@ class MutationsTraitCatalog:
             default_ego=updated.default_ego,
             tags=list(updated.tags or []),
             polarity=updated.polarity,
+            explanation=updated.explanation,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                     ratings=dn.ratings)

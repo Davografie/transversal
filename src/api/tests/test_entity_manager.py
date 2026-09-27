@@ -186,6 +186,12 @@ class InMemoryRepository(EntityRepository):
     def get_traits_by_universe(self, universe: str) -> list[Trait]:
         return [Trait.model_validate(d) for d in self._traits.values() if universe in d["universes"]]
 
+    def get_traits_by_traitset(self, traitset_id: str) -> list[Trait]:
+        """Without this, `TraitSetRef.traits` falls through to the Arango
+        implementation and raises on the double's `db`, which is None."""
+        return [Trait.model_validate(d) for d in self._traits.values()
+                if d["traitset_id"] == traitset_id]
+
     def get_traitsets_by_universe(self, universe: str) -> list[TraitSet]:
         return [TraitSet.model_validate(d) for d in self._traitsets.values() if universe in d["universes"]]
 
