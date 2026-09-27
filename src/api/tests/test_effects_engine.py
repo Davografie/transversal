@@ -761,3 +761,42 @@ def test_a_rule_authors_no_duration_by_default():
 
     authored = EffectDuration(timers=[Timer(event="rolls", remaining=2)])
     assert _split_duration(authored) == (2, [])
+
+
+def test_a_choice_event_says_where_the_question_came_from(monkeypatch):
+    """The client puts a choice table where it was **raised**, so the event must say.
+
+    The author's rule: a manual press on a sheet asks on the sheet, a roll asks in the
+    roller, and an automatic rule (a state change or a timer nobody pressed) asks in a
+    floating panel because there is no obvious place its reader is looking. `origin` is
+    set per emission site, so nothing has to be inferred at the far end.
+
+    A follow-up inherits it client-side rather than server-side: the client is the one
+    that knows where it is still rendering, and `resolveEffectTargets` / `resolveSfxLoop`
+    accept the origin back for exactly that reason.
+    """
+    from types import SimpleNamespace
+
+    from transversal.api.sse import bus as bus_mod
+    from transversal.domain import Effect
+    from transversal.services import roll_orchestrator as ro
+    from transversal.services import session_manager as sm_mod
+    from transversal.services.effects_engine.events import StructuredChoice
+
+    captured = []
+    monkeypatch.setattr(bus_mod, "event_bus", SimpleNamespace(publish=captured.append), raising=False)
+    monkeypatch.setattr(sm_mod, "session_manager",
+                        SimpleNamespace(list_active=lambda: [SimpleNamespace(id="s1")]), raising=False)
+
+    choice = StructuredChoice(element="entity", candidates=[], count=1, field="entity",
+                              effect=Effect(type="modify_trait", action="move"))
+
+    ro._emit_pending_choices("e1", "earth", [], [choice])
+    assert captured, "an event must be published"
+    assert captured[0].event == "sfx_choice_required"
+    assert captured[0].data["choices"][0]["origin"] == "roll", "the default is a roll"
+
+    for origin in ("sheet", "auto"):
+        captured.clear()
+        ro._emit_pending_choices("e1", "earth", [], [choice], origin=origin)
+        assert captured[0].data["choices"][0]["origin"] == origin

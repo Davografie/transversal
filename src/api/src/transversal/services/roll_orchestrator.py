@@ -53,7 +53,8 @@ def loop_choice_to_dict(loop) -> dict:
 
 def _emit_pending_choices(entity_id: str, universe: str, effects: list,
                           structured: list | None = None,
-                          loops: list | None = None) -> None:
+                          loops: list | None = None,
+                          origin: str = "roll") -> None:
     """Broadcast a ``sfx_choice_required`` SSE event for unresolved effects.
 
     ``effects`` are deferred **context-policy** choices (``{choose_projection}``);
@@ -61,6 +62,15 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list,
     reference, which carry their own pre-resolved candidates; ``loops`` are rules
     that would re-enter the change they are already handling, offered a round at
     a time rather than recursed.
+
+    ``origin`` says **where the question came from**, so the client can put it where
+    the author of the question is looking (the author's rule, 2026-09-26): ``sheet``
+    is a manual press on a character sheet, ``roll`` is a roll or a roll-timed effect
+    firing, and ``auto`` is a state change or a timer nobody pressed — a question with
+    no obvious place, which therefore wants a floating panel rather than the roller.
+    Every choice in the event carries it, so a client that renders one copy of the
+    table can decide where that copy goes. Follow-ups inherit it client-side, because
+    the client is the one that knows where it is still rendering.
     """
     if not effects and not structured and not loops:
         return
@@ -72,6 +82,7 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list,
     choices = []
     for p in effects:
         choices.append({
+            "origin": origin,
             "kind": p.kind,
             "field": p.field_name,
             "sfx_name": p.sfx_name,
@@ -81,6 +92,7 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list,
         })
     for c in (structured or []):
         choices.append({
+            "origin": origin,
             "structured": True,
             "element": c.element,
             "candidates": c.candidates,

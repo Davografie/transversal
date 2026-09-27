@@ -62,7 +62,8 @@ class MutationsEffects:
 
     @strawberry.mutation
     def resolve_effect_targets(self, info: strawberry.Info, entity_id: strawberry.ID,
-                               resolutions: list[EffectTargetResolutionInput]) -> EffectApplicationResult:
+                               resolutions: list[EffectTargetResolutionInput],
+                               origin: Optional[str] = None) -> EffectApplicationResult:
         """Re-apply previously-pending effects with their resolved targets.
 
         Supports both legacy single-target resolutions (``target`` + ``field``)
@@ -136,7 +137,8 @@ class MutationsEffects:
         result = commit_effects(entity, resolved, repo)
         if structured:
             from transversal.services.roll_orchestrator import _emit_pending_choices
-            _emit_pending_choices(str(entity_id), entity.current_universe or "", [], structured)
+            _emit_pending_choices(str(entity_id), entity.current_universe or "", [], structured,
+                                  origin=origin or "roll")
         return _effects_result_to_gql(result, structured)
 
     @strawberry.mutation
@@ -159,7 +161,8 @@ class MutationsEffects:
     def resolve_sfx_loop(self, info: strawberry.Info, entity_id: strawberry.ID,
                          sfx_id: strawberry.ID, event_type: str,
                          universe: str = "",
-                         context: Optional[strawberry.scalars.JSON] = None) -> EffectApplicationResult:
+                         context: Optional[strawberry.scalars.JSON] = None,
+                         origin: Optional[str] = None) -> EffectApplicationResult:
         """Run **one more round** of a rule that re-entered the change it handled.
 
         The loop guard offers each round rather than recursing (see
@@ -195,7 +198,7 @@ class MutationsEffects:
             [str(sfx_id)], entity.razmerit, repo=repo,
         )
         _emit_pending_choices(str(entity_id), resolved_universe, outcome.pending,
-                              outcome.structured, outcome.loops)
+                              outcome.structured, outcome.loops, origin=origin or "roll")
         return EffectApplicationResult(
             applied=[],
             pending_choices=[],

@@ -568,6 +568,7 @@ def _park_branch(repo, event: ScheduledEvent) -> None:
                           sfx_name=getattr(sfx, "name", "") or "",
                           sfx_description=getattr(sfx, "description", "") or "",
                           kind="branch", field_name="branch")],
+        origin="auto",
     )
 
 

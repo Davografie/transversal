@@ -72,7 +72,7 @@ def fire_state_sfx(
         context=context or {},
     )
     outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
-    _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured, outcome.loops)
+    _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured, outcome.loops, origin="auto")
 
 
 def _opponent_in_contest(location_id: str, entity_id: str) -> str | None:
@@ -285,7 +285,7 @@ def fire_global_state_sfx(
         outcome = engine.process_event_outcome(
             event, sfx_ids, entity.razmerit, repo=repo, arm_deferred=arm_deferred,
         )
-        _emit_pending_choices(entity.id, entity.current_universe, outcome.pending, outcome.structured, outcome.loops)
+        _emit_pending_choices(entity.id, entity.current_universe, outcome.pending, outcome.structured, outcome.loops, origin="auto")
 
 
 def fire_projection_created(entity_id: str, universe: str, projection_id: str) -> None:
@@ -421,7 +421,7 @@ def fire_contest_outcome_sfx(
             },
         )
         outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
-        _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured, outcome.loops)
+        _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured, outcome.loops, origin="auto")
 
         # Fire effects deferred to the contest outcome (``on_contest_win`` /
         # ``on_contest_loss``) armed at trigger time (e.g. sfx-heal's step_down).

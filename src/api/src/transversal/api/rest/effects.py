@@ -96,7 +96,10 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
         repo=_get_repo(),
     )
     from transversal.services.roll_orchestrator import _emit_pending_choices
-    _emit_pending_choices(req.entity_id, req.universe, outcome.pending, outcome.structured, outcome.loops)
+    # A manual press on a character sheet: the question belongs with the sheet it was
+    # pressed on, not in the roller (the author's call, 2026-09-26).
+    _emit_pending_choices(req.entity_id, req.universe, outcome.pending,
+                          outcome.structured, outcome.loops, origin="sheet")
     applied = outcome.applied
 
     # Effects are already applied by process_event internally.
