@@ -71,10 +71,34 @@ this is dynamic.
 
 ## What is missing to build it
 
-1. **`trait → traitsettings`** — confirmed absent (`no edge trait.traitsettings`).
-   There is also no global `traitsettings` collection (only `self_traitsettings`),
-   so this edge is the only route. One catalog edge + one repo read (all instances
-   of a trait).
+1. ~~**`trait → traitsettings`**~~ **Landed 2026-09-26.** One catalog edge
+   (`target_catalog.EDGES`, `("traitsettings", "trait", …)` — the mirror of the
+   existing `traitsetting → trait` hop) plus its registration in
+   `target_resolver.register_default_edges`. The repo read it needs **already
+   existed**: `get_traitsettings_by_trait`, the same read
+   `propagate_trait_default_sfx` uses to provision a trait's defaults onto its
+   instances. There is no global `traitsettings` collection (only
+   `self_traitsettings`), so this edge is the only route from a definition to its
+   instances.
+   - **What it measures live (the number step 3 turns on):** the author's "all
+     traits of the assets set" sentence traces clean
+     (`trait/many → trait/many → traitsetting/many`) and resolves to **889**
+     instances across **261** owners — **not** the **881** the reverted offer
+     reached. The difference is exactly the **8 sub-trait instances** of assets
+     traits: items nested under a container trait (a jade slip, a manual, a melee
+     weapon, a set of clothes, a tool), on one GMC and one CHARACTER. The edge
+     includes them deliberately — they are instances of the definition like any
+     other, a rule on one is its own source, and the production read this reuses
+     has always meant "every instance of this trait". **The reach step decides
+     which set it wants** (open question 4).
+   - **A gap this exposed:** the wizard cannot currently say "top-level instances
+     only". `traitsetting.from_type` offers the options `("entity", "projection")`,
+     and a nested instance's value is `traitsetting`; `from_type == entity` is
+     authorable but also drops projection-held instances. Adding `"traitsetting"`
+     to that options tuple makes `from_type != traitsetting` expressible — a
+     one-line catalog change, if the answer is "top-level only".
+   - **Tags go through the same hop:** "all traits tagged `utility`" (14
+     definitions) resolves to **164** instances.
 2. **The reach declarations on `SFX`** — a list of `{spec, flavour}`, replacing
    `acquire_spec`/`acquireSpec` (one field) and `offer_traitsets` (the wrong
    attempt). Domain → schema → resolvers → converter → MCP document.
@@ -103,7 +127,8 @@ larger collection.
 
 **The revert is DONE** (`3af9873f`, 2026-09-26) — 2065 pass, 0 failures, frontend
 builds. `sfx-gift` has no reach until the selectors land; the author accepted that.
-**Next task: the `trait → traitsettings` edge, then the reach declarations.**
+**The `trait → traitsettings` edge is DONE too** (same day — see §What is missing,
+item 1); **next is the reach declarations on `SFX` itself (item 2).**
 
 What came out of `92babf6c` and its follow-ups, and what deliberately survived:
 
@@ -140,6 +165,12 @@ selector (above), and `sfx-gift`'s path with the extra `traitsettings` step.
 2. Is one path per declaration enough, or should a declaration carry several
    criteria paths (an AND/OR between them)?
 3. Performance shape once a declaration selects thousands of owners (§Cost).
+4. **Does a definition's reach include its sub-trait instances?** Measured either
+   way: sub-traits in → **889** owners for the assets sentence; out → **881**, the
+   number the reverted offer reached. The edge says yes (they are instances, and
+   the reused production read has always meant "every instance"); expressing "no"
+   needs `"traitsetting"` added to `from_type`'s options so
+   `from_type != traitsetting` is authorable (item 1). Author's call.
 
 ## See also
 
