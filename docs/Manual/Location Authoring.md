@@ -51,19 +51,36 @@ still tier 1.
 | **2** | Rich | *reward* being explored: people to meet, things to do, danger, ways out | + cast, occupations, challenges, portals |
 | **3** | Deep | *change over a campaign*: it has an owner, a mood that shifts, secrets, a history of what happened here | + faction ties, SFX, blue book |
 
-**Tier 1 is the minimum for play, and earth has no location that reaches it:** 85 of its
-100 locations carry no trait setting at all, and **not one has a background image**. In
-three_realms the sect grounds do reach tier 2, so the target is proven rather than
-hypothetical: ***Azure Dawn* reads 16 settings — of which 7 are `laws`, the block this
-guide recommends for tier 1 — two challenges (one a negative event, "Sweeping the Path of
-Petals"), a background image, four zones, and twelve occupants.** That is the model to
-copy. This guide is the recipe for bringing earth up to it.
+**Tier 1 is the minimum for play, and earth is further along than it looks:** measured
+through the API, **46 of earth's 100 locations carry content, and 41 carry at least one
+`location`-set trait** (125 such traits across the universe — 25 distinct traits of the
+set in use). Three Realms: **204 of 258 carry content, 147 with a location-set trait.**
+The model to copy is ***Azure Dawn*** — 7 `laws`, two challenges (one a negative event,
+"Sweeping the Path of Petals"), a background image, four zones and twelve occupants —
+sitting among 19 locations that carry 346 traits between them.
 
-**One counting trap, before you measure anything:** the setting *count* is a bad proxy
-for readiness, because `imagen` prompt text and a `secrets` description both count, and
-so do duplicate traits. § 2's worked example shows earth's best-developed place at 28
-settings with **almost no location mechanics** among them. Count by *what the settings
-do*, not how many there are.
+**What is still universally missing in earth is the image layer: not one earth location
+has a background image.** That is the gap, not the traits.
+
+> [!danger] Before you measure anything: locations keep traits in TWO places
+> A location's traits can be **entity-anchored** (`_from → entities/{id}`) or
+> **projection-anchored** (`_from → projections/{id}:{universe}`, the same morph model
+> characters use). **Both are live, and which one a location uses is an accident of when
+> it was authored.** In this corpus **5,438 of 10,732 trait settings are
+> projection-anchored** — more than half.
+>
+> A count that reads only `_from == entities/{id}` is therefore **wrong by roughly half**,
+> and silently: it returns a smaller number rather than an error. I made exactly that
+> mistake, in AQL, and it produced the false claims this note originally carried —
+> `Krasnoyarsk-45` "5 settings" (really **20**), `São Bento do Vale` "0 settings" (really
+> **16**). **A place I called empty had been authored.**
+>
+> **Never count location traits by joining on `_from`.** Use
+> **`GET /api/v1/locations/{id}/traits?viewer=gm`**, which resolves both anchors — or
+> filter AQL on the setting's **`entity_id`** field, which is set for every anchor
+> (`entity_id == "loc-…"`). Both give the same answer; only the `/traits` read also
+> resolves inherited pools. A worked comparison is in § 8.
+
 
 
 
@@ -89,43 +106,48 @@ derived from it.
 > locations are unreachable from the authored control point** (B174).
 
 > [!example] What "developed" actually looks like, on live earth data
-> Three places, counted through the `super` edges — which is where the hierarchy
-> really lives, **not** in the denormalised `current_location` field:
+> Counted with `location_tree` for the subtree and `/locations/{id}/traits?viewer=gm`
+> for the content — **resolving both anchors**, which is the whole point below:
 >
-> | Place | Locations | Trait settings | Published |
-> |---|---:|---:|---|
-> | **Турышка** | **9** | **28** | all live |
-> | Krasnoyarsk-45 | 4 | 5 | **every one `unpublished`** |
-> | São Bento do Vale | 5 | 0 | unpublished |
+> | Place | Locations | Traits | Of which `location`-set | Background |
+> |---|---:|---:|---:|---|
+> | **Krasnoyarsk-45** | 4 | **20** | **16** | none |
+> | São Bento do Vale | 5 | **16** | **13** | none |
+> | Турышка | 9 | 28 | **4** | none |
+> | Siberia | 12 | 35 | 11 | none |
 >
-> **Турышка is the best-developed place in the earth universe** — it is the model to
-> copy, and it is also the honest measure of how far the corpus still is from tier 2.
-> Of its 28 settings, **what the rooms actually contain is:**
+> **Krasnoyarsk-45 is earth's best-developed place, and it is genuinely well built.**
+> Its whole corridor is authored: the ARD Facility reads `function` *"the state's
+> anomalous-artifact programme"*, `surveillance` *"every corridor, and one agent"*,
+> `operations` *"measure it, then find out what it is for"*, `resources` *"a budget that
+> appears from nowhere"*, and a `regime alert` doom pool — and Krasnoyarsk-45 itself has
+> `climate` *"frozen from October to May"*, `function` *"a town that exists to support a
+> thing above it"*, `population` *"a closed town the maps leave out"*, and its own doom
+> pool. Barragem Norte, in the Brazil corridor, is the same standard: `function`
+> *"tailings dam and beneficiation plant"*, `production` *"iron ore, and a great deal of
+> mud"*, `surveillance` *"company cameras on every gate"*.
 >
-> | Set | Count | What it is |
-> |---|---:|---|
-> | `imagen` | 10 | prompt text (`appearance`, `positive imagen`) — **not mechanics** |
-> | `location` | 9 | and of those, **only two traits**: `genre` ×5, `appearance` ×4 |
-> | `secrets` | 7 | a `description` note per room — the one-line "what this is" |
-> | `assets` | 1 | the jian, `melee weapon` d8, sitting in the basement |
-> | `challenges` | 1 | `event` — "extract blade", in the basement |
+> **Турышка, by contrast, is large but thin** — nine rooms and 28 traits, of which only
+> **four** are `location`-set (all `appearance`); the other 24 are `imagen` prompt text
+> (10) and a one-line `secrets` description per room (7) plus a few assets. It has the
+> most *entities* and among the least *content*.
 >
-> So: **no `atmosphere`, no `function`, no `mood`, no `surveillance`, no `population`,
-> no `laws`, and not one background image** anywhere in earth's best place. Nine rooms
-> described in a sentence each, five of which share the same `genre` tag. The richest
-> *single* location is the `basement` (6 settings) — of which one is a location trait.
+> **So the two failure modes are real and they are opposites:** Krasnoyarsk-45 is
+> well-authored **but invisible** — every entity in its subtree is `unpublished` and it
+> has no background, so none of that work reaches a player. Турышка is **visible but
+> thin** — fully published, nine rooms, almost nothing to roll against.
 >
-> **The lesson this guide exists to teach:** a setting count is a bad proxy for
-> readiness. Twenty-eight settings of prompt text read as "developed" in an inventory
-> and leave a scene with nothing to roll against. Krasnoyarsk-45 shows the other
-> failure mode — three **named** children (ARD Facility, The Mountain Road, The
-> Resonance Chamber) with **zero content on any of them**, and its two zones at the
-> default (50, 50). **Names without mechanics are tier 0 with better branding.**
+> And the correction that matters: **the Brazil corridor is not empty.** São Bento do
+> Vale carries `population` *"nine thousand, and shrinking"*, `economy` *"one company,
+> one dam, and what it pays"* and `mood` *"a town that already knows how this ends"`.
+> I originally reported it at zero because of the anchor mistake flagged above.
 >
-> On `unpublished`: it is **not** a travel gate. The backend stores and returns it;
-> the client keeps unpublished **occupants** off a player's dot set
-> (`LocationViewer.vue:315`) and badges drafts in the GM tree. An unpublished
-> *location* is still reachable — a GM-only marker, not a lock.
+> On `unpublished`: it is **not** a travel gate. The backend stores and returns it; the
+> client keeps unpublished **occupants** off a player's dot set
+> (`LocationViewer.vue:315`) and badges drafts in the GM tree. An unpublished *location*
+> is still reachable — a GM-only marker, not a lock. But it does mean authored content
+> nobody sees, which is a decision worth making deliberately rather than by default.
+
 
 
 
@@ -197,20 +219,31 @@ because it is what makes a place feel governed.
 
 ### 3.3 The scene as a *place* — worked example
 
-For Barragem Norte, tier 1 is roughly five settings:
+**This one is not invented — it is what the Brazil corridor already carries, verbatim:**
 
 ```
-function      d8  "hydroelectric generation for three provinces"
-atmosphere    d6  "a town that already knows how this ends"
-surveillance  d8  "camera masts on every gantry, one blind spot"
-defenses      d6  "private security, unarmed by contract"
-regime alert  d6  NEGATIVE challenge — the dam's doom pool
+São Bento do Vale
+  population  d8   "nine thousand, and shrinking"
+  economy     d10  "one company, one dam, and what it pays"
+  mood        d8   "a town that already knows how this ends"
+  appearance  d4   "a company town that knows"
+
+Barragem Norte
+  function     d10 "tailings dam and beneficiation plant"
+  production   d10 "iron ore, and a great deal of mud"
+  surveillance d8  "company cameras on every gate"
+  appearance   d4  "a wall holding mud"
 ```
 
-plus one `laws` setting — `unwritten rule`: *"the company's paperwork is always in
-order"* — and a background image.
+That is a playable place: four traits a player can look at, press on, or be opposed by,
+each with a sentence the GM can read aloud. **Tier 1 is roughly four to six of these**,
+one from each of the four jobs in § 3.2 — and the pattern to notice is that good
+statements are **specific and loaded**: *"one company, one dam, and what it pays"* is a
+scenario hook wearing a stat block's clothes.
 
-That is the whole difference between a name on a map and a place you can run a scene in.
+What neither of these has yet is a **background image** and a **`laws` setting** — the
+two things every earth location lacks, and the first two things to add.
+
 
 ## 4. Layer 2 — the place is rich
 
@@ -388,6 +421,45 @@ actually match the location's arrival framing? The arrival-point rule is single 
 preview and the travel use the same function — but it depends on the zone existing. A
 missing zone is invisible until someone walks through the door.
 
+### 8.1 Counting content correctly — a worked comparison
+
+Two locations, both live, both earth, counted three ways:
+
+| Location | AQL on `_from == entities/{id}` | AQL on `entity_id == "{id}"` | `GET /locations/{id}/traits` |
+|---|---:|---:|---:|
+| `loc-krasnoyarsk` | 5 | **5** | **5** |
+| `location-ard-facility-de4078f2` | **0** ❌ | **5** ✅ | **6** |
+
+Two things to take from that table:
+
+1. **The `_from` join is wrong**, and wrong *silently* — it reported 0 for a location
+   that has five authored traits. It only finds entity-anchored settings; the ARD
+   Facility's five hang off `projections/location-ard-facility-de4078f2:earth`.
+2. **The `/traits` read returns one more than `entity_id`** (6 vs 5) — that sixth is the
+   `regime alert` **challenge pool**, which `/traits` includes and a plain setting count
+   does not need. Use `/challenge-traits` when you want pools alone.
+
+`entity_id` is set correctly on **all 10 732** settings, so it is the reliable AQL join
+if you are not using the API. **Prefer the API read anyway** — it also resolves inherited
+pools, which no single-collection query will.
+
+### 8.2 The two anchors, and why a location's identity is one of them
+
+A location with a **projection** has two places its traits can live, and the reader
+resolves both. This matters when you *edit*: a trait written against the entity is an
+**ego** trait and applies wherever the entity is; a trait written against a projection is
+a **morph** trait and belongs to that body only. For a location that exists in one
+universe the distinction is invisible in play — which is exactly why the corpus has both
+without anyone noticing.
+
+**Which you get depends on `projection_id`.** `add_trait_to_entity` omits it unless you
+pass it, so the setting is **entity-anchored by default** — which is the right default
+for a location, and it means the mixed anchoring in this corpus came from elsewhere (the
+migration, or the frontend editor). When a location *has* a projection and you want the
+trait on the place rather than the body, **leave `projection_id` unset** and say so in
+your notes, because the two are indistinguishable in a read.
+
+
 ## 9. Gotchas
 
 - **A location without a parent is unreachable.** The tree, not the entity, is what
@@ -420,15 +492,29 @@ schemas (`mcp/server.py` — `create_location`, `set_zones`, `update_entity`), a
 domain models. **The completeness figures are from [[Content Gap Analysis]]'s live
 census**, not from this guide's own measurement.
 
-**A correction this note carries, because I made the mistake first:** I originally
-described `Krasnoyarsk-45` as earth's best-developed location. It is not — **Турышка**
-is, by a wide margin. Two errors compounded: I read the per-entity setting count for a
-single location as its subtree's total, and I walked the hierarchy through
-`current_location` when **the parent link is the `super` edge** (`super` is child →
-parent), so descendants were invisible. § 2's tables are re-measured through the edges.
-**The figures above are counted that way: a location's subtree is found by walking
-`super` inbound, not by reading any stored field.**
+**Two corrections this note carries, both mine, both from measuring with raw AQL instead
+of the API's own reads.** The human caught the first; the second I found while answering
+*"how are you checking locations?"*
 
+1. **The hierarchy.** I walked it through the denormalised `current_location` field when
+   **the parent link is the `super` edge** (child → parent), so descendants were
+   invisible and a 9-location subtree read as 1. *Fix:* walk `super` inbound, or just
+   take `location_tree`, which is the app's own nesting.
+2. **The anchoring — the larger error.** I counted a location's traits with
+   `_from == entities/{id}`, which sees only **entity-anchored** settings. **5,438 of the
+   corpus's 10,732 settings are projection-anchored**, and this guide's original figures
+   were wrong by roughly half as a result: `Krasnoyarsk-45` at "5" (really 20), and
+   **`São Bento do Vale` at "0" — a place I called empty that had 16 traits authored,
+   including `mood` *"a town that already knows how this ends"*.** *Fix:* read
+   `GET /api/v1/locations/{id}/traits?viewer=gm`, or filter on the setting's `entity_id`
+   field. § 8.1 shows both side by side.
+
+**Both errors had the same root cause and the same tell:** the count came back *smaller*
+rather than *wrong*, and I reported the number without a second read to corroborate it.
+The standing rule this role already had — **API first; AQL only where no API surface
+exists** — would have prevented both. The corollary now written into the guide and my
+session doc: **when a census produces a zero, corroborate it against the API's own read
+before it becomes a claim.**
 
 **Scope note:** this authoring surface covers places and the things attached to them. It
 does **not** cover a player character — a PC's sheet is the player's, always. When a
