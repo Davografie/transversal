@@ -164,6 +164,20 @@ def test_pool_element_and_edges_exist():
     assert pairs[("location", "difficulty_pool")].target == ("pool",)
 
 
+def test_a_trait_definition_reaches_its_instances():
+    """A definition has no exposed surface, so nothing can own a rule on one.
+    The hop down to the settings is what makes a registry-seeded reach selector
+    writable ("all traits of the assets set", "all traits tagged utility") —
+    [[Dynamic SFX Reach]]. Its card noun mirrors `entity → traitsettings`."""
+    from transversal.services import target_catalog as tc
+
+    pairs = {(e.source, e.name): e for e in tc.EDGES}
+    edge = pairs[("trait", "traitsettings")]
+    assert edge.target == ("traitsetting",)
+    assert edge.cardinality == "many"
+    assert tc.edge_noun(edge) == ("trait instance", "trait instances")
+
+
 def test_bind_source_maps_kind_to_variable():
     from transversal.services import target_catalog as tc
 

@@ -219,6 +219,28 @@ def test_example_path_correct_shape():
     assert ok, errors
 
 
+def test_a_definition_reaches_its_instances():
+    """`trait → traitsettings` is the definition → instances step a reach
+    selector needs: a definition has no surface to own a rule on, so the path
+    steps down to the settings. Both of the author's registry-seeded sentences
+    type-check through it — [[Dynamic SFX Reach]]."""
+    assets = spec(
+        SelectStep(collection="traits"),
+        FilterStep(field="traitset_id", value="ts-3"),
+        NavigateStep(edge="traitsettings"),
+    )
+    assert final_type(assets) == ValueType("traitsetting", "many")
+    ok, errors = check(assets, ValueType("traitsetting", "many"))
+    assert ok, errors
+
+    utility = spec(
+        SelectStep(collection="traits"),
+        FilterStep(field="tags", operator="contains", value="utility"),
+        NavigateStep(edge="traitsettings"),
+    )
+    assert final_type(utility) == ValueType("traitsetting", "many")
+
+
 def test_unknown_edge_is_an_error():
     types, errors = trace(spec(SelectStep(collection="rolled_dice"), NavigateStep(edge="nope")))
     assert any("no edge die.nope" in e.message for e in errors)

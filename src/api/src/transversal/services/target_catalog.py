@@ -589,6 +589,18 @@ EDGES: tuple[Edge, ...] = (
     Edge("traitset", "trait", ("traitset",), "one", "Trait set"),
     Edge("universes", "trait", ("universe",), "many", "Universes", noun="universe"),
 
+    # trait → its **instances**. A trait definition has no exposed surface, so
+    # nothing can own a rule on one; a reach selector that starts from the
+    # registry ("all traits of the assets set", "all traits tagged utility")
+    # must step down to the settings before it can name an owner. Sub-trait
+    # instances are included — an elemental root under Spiritual Power, an item
+    # nested under a container trait — which is the meaning
+    # `propagate_trait_default_sfx` already gives "every instance of this trait":
+    # a nested setting is an instance of its definition like any other, and a
+    # rule on one is its own source. See [[Dynamic SFX Reach]].
+    Edge("traitsettings", "trait", ("traitsetting",), "many", "Trait instances",
+         noun="trait instance", plural="trait instances"),
+
     # location → its sub-locations, itself included: one zone and everything
     # under it. This is what "everyone in Iron Roots" has to mean when the sect
     # spans several maps — one repo read (`list_location_descendants`), the same

@@ -1688,6 +1688,13 @@ def register_default_edges() -> None:
     register_edge("trait", "traitset", lambda t, ctx: _maybe(ctx.repo.get_traitset_by_id(t.traitset_id)))
     register_edge("trait", "universes",
                   lambda t, ctx: [ctx.repo.get_entity(u) for u in (t.universes or []) if ctx.repo.get_entity(u)])
+    # Definition → instances, one read. Every definition-based reach selector
+    # needs this hop: a `trait`/`traitset` definition has no surface to own a
+    # rule, so the path steps down to the settings that do. The read is the
+    # existing `get_traitsettings_by_trait` (all instances, sub-traits included)
+    # — the same one that provisions a trait's default SFX onto its instances.
+    register_edge("trait", "traitsettings",
+                  lambda t, ctx: list(ctx.repo.get_traitsettings_by_trait(t.id)))
 
     # The hierarchy and the roster hops: a place's whole subtree, a faction's
     # members and the inverse, and the registry things a faction owns — the reach

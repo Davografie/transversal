@@ -63,6 +63,13 @@ class FakeRepo:
     def get_traits_by_traitset(self, tsid):
         return [t for t in self.traits.values() if t.traitset_id == tsid]
 
+    def get_traitsettings_by_trait(self, tid):
+        # Mirrors production: every instance of the definition, sub-trait
+        # instances included (they are anchored to a parent, but still
+        # instances of the trait).
+        return [ts for ts in self.traitsettings.values()
+                if getattr(ts, "trait_id", None) == tid]
+
     def list_entities_by_location(self, lid):
         return [e for e in self.entities.values() if e.current_location == lid]
 
@@ -114,6 +121,45 @@ def test_roots_are_reachable_only_through_their_parent():
     )
     assert roots.errors == []
     assert [v.id for v in roots.values] == ["kael:root-fire"]
+
+
+def test_a_trait_definition_reaches_all_of_its_instances():
+    """`trait → traitsettings`: the definition → instances hop a registry-seeded
+    reach selector needs, because a definition has no surface to own a rule on.
+    Sub-trait instances are included — an elemental root is an instance of its
+    definition like any other, and it is its own source. That is the meaning
+    `propagate_trait_default_sfx` already gives "every instance of this trait"."""
+    kael = NS(id="kael", type="character", current_location="loc-1", current_universe="earth",
+              current_projection=None, razmerit=0)
+    ox = NS(id="gmc-1", type="gmc", current_location="loc-1", current_universe="earth",
+            current_projection=None, razmerit=0)
+    resource = NS(id="trait-resource", traitset_id="ts-3", tags=["utility"])
+    other = NS(id="trait-other", traitset_id="ts-9", tags=[])
+    held = NS(id="kael:trait-resource", trait_id="trait-resource", traitset_id="ts-3",
+              entity_id="kael", projection_id=None, rating="d6")
+    held_elsewhere = NS(id="gmc-1:trait-resource", trait_id="trait-resource", traitset_id="ts-3",
+                        entity_id="gmc-1", projection_id=None, rating="d8")
+    nested = NS(id="kael:trait-resource:root", trait_id="trait-resource", traitset_id="ts-3",
+                entity_id="kael", projection_id=None, rating="d6",
+                from_type="traitsetting", parent_traitsetting_id="kael:trait-resource")
+    unrelated = NS(id="kael:trait-other", trait_id="trait-other", traitset_id="ts-9",
+                   entity_id="kael", projection_id=None, rating="d6")
+    repo = FakeRepo(
+        entities={"kael": kael, "gmc-1": ox},
+        traitsettings={t.id: t for t in (held, held_elsewhere, nested, unrelated)},
+        traits={resource.id: resource, other.id: other},
+    )
+
+    res = resolve(
+        spec(SelectStep(collection="traits"),
+             FilterStep(field="traitset_id", value="ts-3"),
+             NavigateStep(edge="traitsettings")),
+        TargetContext(subject=kael, repo=repo, collections={"traits": [resource, other]}),
+    )
+    assert res.errors == []
+    assert sorted(v.id for v in res.values) == [
+        "gmc-1:trait-resource", "kael:trait-resource", "kael:trait-resource:root",
+    ]
 
 
 def test_one_trick_resolves_to_traitsettings():
