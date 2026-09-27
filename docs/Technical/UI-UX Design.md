@@ -249,24 +249,53 @@ of its own row (a 314px chip inside a 291px row, clipped rather than wrapped).
 top matches the label's, and its right edge matches the content's.
 
 **Where a prompt lives** (settled 2026-09-25, answering [[Effects]]' open question
-2 — it was blocking [[B5]]'s client half). A choice is a **flow step, not a roll's
-panel**:
+2 — it was blocking [[B5]]'s client half; the third host landed 2026-09-26,
+[[B230]]). A choice is a **flow step, not a roll's panel**, and it is asked
+**where the question was raised** — the server tags every choice with an `origin`
+and the shell routes by it, so no host has to guess:
 
-- **A choice attached to a roll** renders in the roller's panel, as it does today
-  (`ConsequenceMenu` is the live example: compact density, under the result).
-- **A choice that outlives the roll** renders at the **sheet's** level, in a
-  persistent prompt slot. The roller cannot host it: it is transient, a GM in
-  free-roam has none at all, and the next roll clears it — so a parked branch put
-  there would be lost by the act of playing on.
-- **The prompt is non-modal and never auto-dismisses.** A parked choice waits
-  ([[B5]]), and *answering nothing is a legitimate default* — so the only way to
-  leave it is an explicit "leave it" that writes nothing, and something on the
-  sheet's pill row has to say one is waiting, or "waiting" means "invisible".
-- **Both are the same surface**, driven by different things: the roller's copy is
-  fed by the roll's result, the sheet's by the parked prompt. The rows carry their
-  choice `kind`, and the kind decides whether a pick resolves immediately (a
-  branch) or opens the target wizard — which is a property of the *driver*, not of
-  the row, so the surface is already sufficient for both.
+| where it was raised | `origin` | host |
+|---|---|---|
+| a manual press on a character sheet | `sheet` | the sheet's own prompt slot |
+| a roll — or an effect that fired with the roll | `roll` | the roller's panel (compact density, under the result) |
+| an **automatic** rule: a state change or a timer nobody pressed | `auto` | the floating panel (`app/FloatingChoicePanel.vue`) |
+
+- **A choice that outlives the roll cannot live in the roller.** It is transient, a
+  GM in free-roam has none at all, and the next roll clears it — so a parked branch
+  put there would be lost by the act of playing on. That is what the sheet's slot
+  is for, and what the floating host is for when nobody is looking at the sheet.
+- **The floating host asks without taking over.** It is **non-modal and there is no
+  scrim**: the change that raised the question is the context for answering it, so
+  dimming the table would hide the thing being asked about, and a parked question
+  must not block play. It **never dismisses itself** — no timer, no auto-close; the
+  only ways out are answering it or the wizard's own Cancel, which writes nothing
+  (the branch stays parked server-side and is recoverable). It is **fixed, not
+  draggable**: a question should be where you last saw it, and on touch the bands
+  already own the drag gestures. Desktop takes the free corner (bottom-right — the
+  sheet docks left, the roller sits bottom-centre, the ✨ rail owns the left edge);
+  a phone takes the top as a full-width banner, because the band stack owns the
+  bottom.
+- **Only one copy, in one host.** `App.vue` splits the pending list three ways
+  (`rollerChoices` / `sheetChoices` / `autoChoices`), and `auto` is filtered *out*
+  of the roller rather than falling through to it — a question whose answer is
+  somewhere in the world is not something a reader looking at a dice pool will
+  find. The answer travels back through one pair of handlers that carry the origin,
+  so the *next* question in a chain lands where this one was (`retagChoices`).
+- **A host positions the wizard; it does not draw a second card.**
+  `EffectTargetWizard` renders its own surface (`.etw-root`), and a host that adds
+  another with a different token set is why the same table once looked different
+  depending on where it appeared. The one exception is the floating host, which is
+  the *only* surface there is and so supplies a readable one
+  (`--bg-panel-solid` — a 2%-overlay inset is invisible over a location photo).
+- **The prompt is non-modal and never auto-dismisses** in every host. A parked
+  choice waits ([[B5]]), and *answering nothing is a legitimate default* — so the
+  only way to leave it is an explicit "leave it" that writes nothing.
+- **Every host drives the same surface**, fed by different things: the roller's copy
+  by the roll's result, the sheet's by the parked prompt, the floating one by a
+  server-raised choice. The rows carry their choice `kind`, and the kind decides
+  whether a pick resolves immediately (a branch) or opens the target wizard — a
+  property of the *driver*, not of the row, so one surface is sufficient for all
+  three.
 
 **Flashy, and restrained.** A die-pip key at the content's top-right, tabular so it
 reads as a number rather than as text, a short

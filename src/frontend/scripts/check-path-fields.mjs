@@ -176,6 +176,29 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   ok('…answered through one pair of handlers',
     /async function answerSfxChoices\(/.test(app) && /function clearSfxChoicesAll\(/.test(app), true)
 
+  // The third host ([[B230]]). Its two silent failure modes: `auto` falling
+  // through to the roller (a question with no reader), and a second card — the
+  // wizard draws its own surface, so a host that adds another makes the same
+  // table look different depending on where it was raised.
+  const host = read(find('components/app/FloatingChoicePanel.vue'))
+  ok('the shell has a third routing bucket for automatic rules',
+    /const autoChoices = computed/.test(app), true)
+  ok('…and the roller excludes it rather than showing it by default',
+    /filter\(\(c\) => !\['sheet', 'auto'\]\.includes\(c\.origin \|\| 'roll'\)\)/.test(app), true)
+  ok('…the floating host is mounted with the origin-carrying handlers',
+    /<FloatingChoicePanel/.test(app)
+      && /answerSfxChoices\(r, 'auto'\)/.test(app)
+      && /loopSfxChoice\(c, 'auto'\)/.test(app), true)
+  ok('…the question goes to its own entity, which is not always the acting one',
+    /:entity-id="autoChoices\[0\]\?\.entity_id \|\| entityId"/.test(app), true)
+  ok('the floating host positions the wizard rather than re-drawing it',
+    /<EffectTargetWizard/.test(host) && /position: fixed/.test(host), true)
+  ok('…with one surface, not a second card of its own token set',
+    /background: var\(--bg-panel-solid\)/.test(host), true)
+  ok('…and no timer or auto-close: the only exit is the wizard\'s own Cancel',
+    /aria-label="A rule is asking for a choice"/.test(host)
+      && !/setTimeout|setInterval|autoDismiss/.test(host), true)
+
   const roller = read(find('components/DiceRoller.vue'))
   ok('the roller hands the answer up rather than resolving it',
     /emit\('sfx-choice-answer', resolutions\)/.test(roller), true)
