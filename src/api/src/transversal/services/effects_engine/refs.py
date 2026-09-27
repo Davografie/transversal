@@ -284,4 +284,22 @@ def resolve_effect_spec_choices(
             out.append(effect.model_copy(update={"target": rid, "target_spec": None}))
         else:
             out.append(effect.model_copy(update={"entity": rid, "entity_spec": None}))
+
+    # …and walk the effect's named **references** on the way out. A choice raised for
+    # the subject is answered before the refs are resolved — the effect has to stay
+    # whole for the answer to re-resolve it — so the effect handed back here still
+    # carries them as *paths*, and every handler reads `refs.<name>.value`. Without
+    # this, Gift moved the trait to nobody: the recipient arrived, the trait did not.
+    if out and effect.refs:
+        ref_choices: list = []
+        fanned: list[Effect] = []
+        for concrete in out:
+            fanned.extend(resolve_refs(
+                concrete, ctx, ref_choices, answers=answers,
+                source_kind=source_kind, source_id=source_id,
+                source_sfx_id=source_sfx_id,
+            ))
+        if ref_choices:
+            return [], ref_choices
+        return fanned, []
     return out, []

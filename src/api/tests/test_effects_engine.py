@@ -637,3 +637,58 @@ class TestListenerSpec:
             assert entry.source_sfx_id == "sfx-curse"
         finally:
             roll_deferral.reset()
+
+
+def test_resuming_a_subject_choice_also_resolves_the_effects_refs():
+    """Gift's shape: `entitySpec = select occupants → choose 1` **and**
+    `refs.trait = select source`.
+
+    The choice is raised for the subject before the refs are walked — the effect has
+    to stay whole for the answer to re-resolve it — so the resume path must finish
+    the job. It resolved the subject and left the ref as a *path*, and the handler
+    reads `refs.trait.value`: the recipient arrived, the trait did not, and the move
+    silently did nothing.
+    """
+    from types import SimpleNamespace as NS
+
+    from transversal.domain import Effect, TargetRef
+    from transversal.services.effects_engine.refs import resolve_effect_spec_choices
+    from transversal.services.target_spec import (
+        ChooseStep, SelectStep, TargetSpec,
+    )
+
+    class _Repo:
+        def __init__(self):
+            self.here = NS(id="e1", current_location="loc-1")
+            self.target = NS(id="e2", current_location="loc-1")
+            self.ts = NS(id="ts-1", trait_id="trait-1", entity_id="e1")
+
+        def get_entity(self, eid):
+            return {"e1": self.here, "e2": self.target}.get(eid)
+
+        def get_traitsetting(self, tid):
+            return self.ts if tid == "ts-1" else None
+
+        def list_entities_by_location(self, _loc):
+            return [self.here, self.target]
+
+    repo = _Repo()
+    effect = Effect(
+        type="modify_trait", action="move",
+        entity_spec=TargetSpec(steps=[
+            SelectStep(collection="occupants"), ChooseStep(count=1)]),
+        refs={"trait": TargetRef(value="", spec=TargetSpec(steps=[
+            SelectStep(collection="source")]))},
+    )
+
+    applied, pending = resolve_effect_spec_choices(
+        effect, "entity", {1: ["e2"]}, repo.here, repo,
+        source_kind="trait_setting", source_id="ts-1", source_sfx_id="sfx-x")
+
+    assert pending == []
+    assert len(applied) == 1
+    resolved = applied[0]
+    assert resolved.entity == "e2", "the chosen recipient"
+    assert resolved.entity_spec is None
+    assert resolved.refs["trait"].value == "ts-1", "…and the trait to move, not a path"
+    assert resolved.refs["trait"].spec is None
