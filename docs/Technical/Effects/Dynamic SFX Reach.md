@@ -92,9 +92,17 @@ this is dynamic.
      filter runs on definitions before the hop.
    - **Tags go through the same hop:** "all traits tagged `utility`" (14
      definitions) resolves to **164** instances.
-2. **The reach declarations on `SFX`** — a list of `{spec, flavour}`, replacing
-   `acquire_spec`/`acquireSpec` (one field) and `offer_traitsets` (the wrong
-   attempt). Domain → schema → resolvers → converter → MCP document.
+2. ~~**The reach declarations on `SFX`**~~ **Landed 2026-09-26 (model + surface).**
+   `SFX.reach` is a list of `{spec, flavour}` (`ReachDeclaration` /
+   `ReachFlavour` in `domain/sfx.py`), threaded through the GraphQL types
+   (`SfxRef` / `SfxInput` / `SfxUpdateInput` as JSON, the same wire shape
+   `listenerSpec` uses), the converter (`_reach_from_input` / `_reach_to_json`),
+   the create/update resolvers, and the MCP document. **`acquire_spec` and
+   `implicit` are gone** — from the domain, the SDL, the resolver, the attach and
+   the editor. What replaced the gate's *enforcement* is the offered-set
+   membership check (item 3, in progress); what replaced its *warning* is
+   `validateSfx`'s **"reaches nobody"**, which fires only when no trait declares
+   the rule, it declares no reach, **and** nothing owns it.
 3. **Availability and the chip** read both the hand-picked lists and the
    declarations. Granted reach means "available from them"; offered reach means
    "a learn-chip for them".
@@ -105,6 +113,18 @@ this is dynamic.
    field, and validating/filtering on trait-definition and trait-instance tags.
    (Definition and instance `tags` *do* exist as fields; `traitset` exposes only
    `id`, `name`, `universes`, so `limit` is a one-line catalog addition.)
+6. ~~**Retire `implicit`.**~~ **Landed with item 2 — and it needed no migration.**
+   Measured on the live DB before writing anything: **0 of 46 rules** set
+   `implicit`, so the flag was retired outright and the "generated granted path"
+   of decision 1 is a *rule for how the relationship is expressed*, not a backfill
+   anyone has to run. (Had any rule used it, the generated declaration would be
+   `select traits → filter id in [<declaring traits>] → navigate traitsettings`,
+   flavour granted.)
+   - **The same measurement put the acquire path's blast radius at 3 rules:**
+     `sfx-gift` (a dead, constant-true path — being re-authored anyway),
+     `sfx-expose-trait` (dead twice over: a bad `select` seed and no offer), and
+     `sfx-sect-cultivation` (the one real gate). Only the last changes behaviour by
+     the gate's removal, and its v2 is already on the author's list.
 
 ## Cost (the one engineering risk)
 
@@ -161,10 +181,10 @@ selector (above), and `sfx-gift`'s path with the extra `traitsettings` step.
 1. **`implicit` retires into a generated *granted* path** — not into
    `defaultSfxIds`. `defaultSfxIds` *provisions* onto the instance at create time
    (write-time), while `implicit` was **read-time** reach, so moving a live
-   implicit rule there would change its nature. The migration generates, for each
-   rule a trait declares implicit, a granted reach declaration
+   implicit rule there would change its nature. The generated declaration is
    `select traits → filter id in [<those traits>] → navigate traitsettings`,
-   which preserves the read-time semantics.
+   flavour granted, which preserves the read-time semantics. **No live rule used
+   `implicit` (0 of 46), so nothing had to be migrated** — see item 6.
 2. **Reach declarations combine with OR.** The union *is* the reach, and
    **granted wins over offered** for an owner both reach (they simply have it — no
    chip). Because OR is a union, "several paths in one declaration" and "several
