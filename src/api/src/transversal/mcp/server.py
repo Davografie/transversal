@@ -267,12 +267,14 @@ query {
 _MUT_UPDATE_TRAITSET = """
 mutation(
   $id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!],
-  $description: String, $order: Int, $limit: Int, $sheetTab: SheetTab
+  $description: String, $explanation: String, $order: Int, $limit: Int,
+  $sheetTab: SheetTab
 ) {
   updateTraitset(
     id: $id, name: $name, universes: $universes, entityTypes: $entityTypes,
-    description: $description, order: $order, limit: $limit, sheetTab: $sheetTab
-  ) { id name universes entityTypes order limit sheetTab }
+    description: $description, explanation: $explanation, order: $order, limit: $limit,
+    sheetTab: $sheetTab
+  ) { id name universes entityTypes order limit sheetTab explanation }
 }
 """
 
@@ -395,13 +397,14 @@ mutation($id: ID!, $input: TraitUpdateInput!) {
 _MUT_CREATE_TRAITSET = """
 mutation(
   $id: String!, $name: String!, $universes: [String!]!,
-  $entityTypes: [EntityType!], $description: String, $order: Int, $limit: Int,
-  $sheetTab: SheetTab
+  $entityTypes: [EntityType!], $description: String, $explanation: String,
+  $order: Int, $limit: Int, $sheetTab: SheetTab
 ) {
   createTraitset(
     id: $id, name: $name, universes: $universes, entityTypes: $entityTypes,
-    description: $description, order: $order, limit: $limit, sheetTab: $sheetTab
-  ) { id name universes sheetTab }
+    description: $description, explanation: $explanation, order: $order, limit: $limit,
+    sheetTab: $sheetTab
+  ) { id name universes sheetTab explanation }
 }
 """
 
@@ -1094,12 +1097,19 @@ def remove_trait_setting(args: dict) -> dict:
 
 
 def create_trait(args: dict) -> dict:
-    """Create a new trait registry entry (a type of trait, not an instance)."""
+    """Create a new trait registry entry (a type of trait, not an instance).
+
+    Pass ``explanation`` — the trait's definition. It is what makes a trait
+    auditable: a setting whose trait is defined can be checked against it, and a
+    trait with no explanation is how the generic placeholder gets used instead of
+    a real definition.
+    """
     input_ = {
         "id": args["id"],
         "name": args["name"],
         "universes": args.get("universes", []),
         "traitsetId": args["traitset_id"],
+        "explanation": args.get("explanation", ""),
         "defaultDieType": args.get("default_die_type", "D6"),
         "defaultRatingType": args.get("default_rating_type", "STATIC"),
         "possibleSfxIds": args.get("possible_sfx_ids", []),
@@ -1115,7 +1125,12 @@ def create_trait(args: dict) -> dict:
 
 
 def create_traitset(args: dict) -> dict:
-    """Create a new trait set (a grouping of traits)."""
+    """Create a new trait set (a grouping of traits).
+
+    ``explanation`` is the set's definition — what the set is *for*. It is the
+    preferred field; ``description`` is a deprecated alias the resolver still
+    honours, and ``explanation`` wins if both are given.
+    """
     variables = {
         "id": args["id"],
         "name": args["name"],
@@ -1125,6 +1140,8 @@ def create_traitset(args: dict) -> dict:
         "order": args.get("order", 0),
         "limit": args.get("limit", 1),
     }
+    if args.get("explanation") is not None:
+        variables["explanation"] = args["explanation"]
     if args.get("sheet_tab") is not None:
         variables["sheetTab"] = args["sheet_tab"]
     return _call_mutation("createTraitset", _MUT_CREATE_TRAITSET, variables,
@@ -2153,9 +2170,9 @@ def set_faction_life_paths(args: dict) -> dict:
 
 
 def update_traitset(args: dict) -> dict:
-    """Update a trait set (most useful: adjust its universe scoping)."""
+    """Update a trait set (most useful: its explanation, universe scoping)."""
     variables = {"id": args["id"]}
-    for key in ("name", "universes", "description", "order", "limit"):
+    for key in ("name", "universes", "description", "explanation", "order", "limit"):
         if args.get(key) is not None:
             variables[key] = args[key]
     if args.get("entity_types") is not None:
@@ -2167,11 +2184,17 @@ def update_traitset(args: dict) -> dict:
 
 
 def update_trait(args: dict) -> dict:
-    """Update a registry trait (most useful: universe scoping, default dice)."""
+    """Update a registry trait (most useful: its explanation, universe scoping, default dice).
+
+    ``explanation`` is the trait's definition and the reason this tool matters:
+    with it set, every setting of this trait can be audited against it, and the
+    answer to "is this the right trait here?" stops being a matter of taste.
+    """
     inp = {}
     for key, gql_key in (
         ("name", "name"),
         ("universes", "universes"),
+        ("explanation", "explanation"),
         ("default_die_type", "defaultDieType"),
         ("default_rating_type", "defaultRatingType"),
         ("polarity", "polarity"),
@@ -3259,7 +3282,7 @@ TOOL_SCHEMAS = {
     },
     "update_traitset": {
         "name": "update_traitset",
-        "description": "Update a trait set (most useful: adjust its universe scoping).",
+        "description": "Update a trait set (most useful: its explanation, universe scoping).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -3268,7 +3291,9 @@ TOOL_SCHEMAS = {
                 "universes": {"type": "array", "items": {"type": "string"}},
                 "entity_types": {"type": "array", "items": {"type": "string"},
                                   "description": "UPPERCASE enum names (e.g. GMC, FACTION)"},
-                "description": {"type": "string"},
+                "description": {"type": "string", "description": "Deprecated alias for explanation"},
+                "explanation": {"type": "string",
+                    "description": "What the set is FOR — its definition. Preferred over description."},
                 "order": {"type": "integer"},
                 "limit": {"type": "integer"},
                 "sheet_tab": {"type": "string", "description": "TRAITS|PROFILE — designate the set as a profile set"},
@@ -3279,13 +3304,15 @@ TOOL_SCHEMAS = {
     },
     "update_trait": {
         "name": "update_trait",
-        "description": "Update a registry trait (universe scoping, default dice, polarity).",
+        "description": "Update a registry trait (its explanation, universe scoping, default dice, polarity).",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "id": {"type": "string"},
                 "name": {"type": "string"},
                 "universes": {"type": "array", "items": {"type": "string"}},
+                "explanation": {"type": "string",
+                    "description": "What this trait means — its definition. Setting it makes every setting of the trait auditable against it."},
                 "default_die_type": {"type": "string"},
                 "default_rating_type": {"type": "string"},
                 "polarity": {"type": "string", "description": "POSITIVE|NEGATIVE"},
@@ -3447,7 +3474,7 @@ TOOL_SCHEMAS = {
     },
     "create_trait": {
         "name": "create_trait",
-        "description": "Create a new trait registry entry (a type of trait).",
+        "description": "Create a new trait registry entry (a type of trait). Pass explanation — the trait's definition; a trait without one cannot be audited and is how the generic placeholder gets reached for instead.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -3455,6 +3482,8 @@ TOOL_SCHEMAS = {
                 "name": {"type": "string"},
                 "universes": {"type": "array", "items": {"type": "string"}},
                 "traitset_id": {"type": "string"},
+                "explanation": {"type": "string",
+                    "description": "What this trait means — its definition. Read back by list_traits."},
                 "default_die_type": {"type": "string"},
                 "default_rating_type": {"type": "string"},
                 "polarity": {"type": "string"},
@@ -3477,7 +3506,9 @@ TOOL_SCHEMAS = {
                 "universes": {"type": "array", "items": {"type": "string"}},
                 "entity_types": {"type": "array", "items": {"type": "string"},
                                   "description": "CHARACTER|GMC|ASSET|LOCATION|FACTION"},
-                "description": {"type": "string"},
+                "description": {"type": "string", "description": "Deprecated alias for explanation"},
+                "explanation": {"type": "string",
+                    "description": "What the set is FOR — its definition. Preferred over description."},
                 "order": {"type": "integer"},
                 "limit": {"type": "integer"},
                 "sheet_tab": {"type": "string", "description": "TRAITS|PROFILE — which sheet tab the set's traits render on (default TRAITS)"},
