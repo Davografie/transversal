@@ -1,6 +1,19 @@
 <template>
   <!-- Embedded: single root for attribute inheritance -->
   <div v-if="embedded" class="sheet-embedded" :class="{ 'transparent-portrait': sheetPortraitTransparent }">
+    <!-- A choice asked *from this sheet* is answered on this sheet. Not a blocking
+         modal: the sheet stays readable behind it, because the trait that raised the
+         question is the context for answering it. -->
+    <div v-if="sfxChoiceRequest && sfxChoiceRequest.length" class="sheet-sfx-choice">
+      <EffectTargetWizard
+        :entity-id="entityId"
+        :pending-choices="sfxChoiceRequest"
+        title="Choose a target"
+        @resolve="(r) => emit('sfx-choice-answer', r)"
+        @cancel="emit('sfx-choice-cancel')"
+        @run-loop="(c) => emit('sfx-choice-loop', c)"
+      />
+    </div>
     <!-- The loading/error placeholders are gated on `!hasEntity`, not on
          `loading` alone. `useApi()`'s `loading` ref is set by *every* call, so a
          plain `v-if="loading"` swaps this branch out during each background
@@ -537,6 +550,7 @@ import { useTraitPlay } from '../composables/useTraitPlay.js'
 import ImageProvenance from './ImageProvenance.vue'
 import TraitEditPanel from './sheet/TraitEditPanel.vue'
 import SfxCard from './sheet/SfxCard.vue'
+import EffectTargetWizard from './gm/EffectTargetWizard.vue'
 import TraitDetailPanel from './sheet/TraitDetailPanel.vue'
 import TraitRow from './sheet/TraitRow.vue'
 import DiePicker from './DiePicker.vue'
@@ -556,6 +570,11 @@ const props = defineProps({
   universe: { type: String, default: 'earth' },
   phase: { type: String, default: 'adding' },
   embedded: { type: Boolean, default: false },
+  // A pending SFX choice **raised from this sheet** (the app shell routes by origin).
+  // It renders here rather than in the roller because this is where it was asked: the
+  // trait you pressed stays visible behind it, so the question has its context. A
+  // roll-time question goes to the roller; an automatic one to a floating panel.
+  sfxChoiceRequest: { type: Array, default: () => [] },
   // Whether the traits tab draws the sets as an accordion (B178) or as a drill-in
   // (the shape B178 replaced). The host owns the layout, so it owns this; the
   // rule is the human's — accordion only for landscape views with a large height,
@@ -572,7 +591,7 @@ const props = defineProps({
   mainEntityId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'retractNegative', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange', 'viewEntity'])
+const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'retractNegative', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange', 'viewEntity', 'sfx-choice-answer', 'sfx-choice-cancel', 'sfx-choice-loop'])
 
 function displayName(name) {
   return name
@@ -3047,6 +3066,22 @@ watch(() => props.externalPoolSources, (sources) => {
 </script>
 
 <style scoped>
+/* The sheet's own choice table: anchored to the sheet rather than the roller, and
+   deliberately *not* full-screen — the rules it is about stay visible behind it. */
+.sheet-sfx-choice {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 40;
+  width: min(420px, calc(100% - 24px));
+  max-height: 70%;
+  overflow: auto;
+  background: var(--surface-1, var(--bg, #1a1a1a));
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px var(--shadow-40, rgba(0, 0, 0, 0.45));
+}
+
 .sheet-embedded {
   background: var(--bg-panel);
   backdrop-filter: blur(12px);

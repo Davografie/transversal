@@ -25,16 +25,19 @@ export function useEffectApplication() {
     }
   }
 
-  async function resolveEffectTargets(entityId, resolutions) {
+  // `origin` says which host is answering, and the server echoes it on any *next*
+  // question so the follow-up renders where this one is. Without it a sheet-triggered
+  // follow-up would arrive tagged `roll` and open a second copy in the roller.
+  async function resolveEffectTargets(entityId, resolutions, origin = null) {
     applying.value = true
     try {
       const data = await graphql(
-        `mutation($entityId: ID!, $resolutions: [EffectTargetResolutionInput!]!) {
-          resolveEffectTargets(entityId: $entityId, resolutions: $resolutions) {
+        `mutation($entityId: ID!, $resolutions: [EffectTargetResolutionInput!]!, $origin: String) {
+          resolveEffectTargets(entityId: $entityId, resolutions: $resolutions, origin: $origin) {
             applied pendingChoices { index kind scope field effect { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs conditions { type subject target targets value operator narrative spec } } } structured
           }
         }`,
-        { entityId, resolutions }
+        { entityId, resolutions, origin }
       )
       return data?.resolveEffectTargets || { applied: [], pendingChoices: [], structured: [] }
     } finally {
@@ -45,12 +48,12 @@ export function useEffectApplication() {
   // Answer a loop prompt: run one more round of a rule whose own effect caused
   // the change it was handling. `structured` comes back carrying whatever the
   // round produced — including the *next* prompt, if it recursed again.
-  async function resolveSfxLoop(choice) {
+  async function resolveSfxLoop(choice, origin = null) {
     applying.value = true
     try {
       const data = await graphql(
-        `mutation($entityId: ID!, $sfxId: ID!, $eventType: String!, $universe: String, $context: JSON) {
-          resolveSfxLoop(entityId: $entityId, sfxId: $sfxId, eventType: $eventType, universe: $universe, context: $context) {
+        `mutation($entityId: ID!, $sfxId: ID!, $eventType: String!, $universe: String, $context: JSON, $origin: String) {
+          resolveSfxLoop(entityId: $entityId, sfxId: $sfxId, eventType: $eventType, universe: $universe, context: $context, origin: $origin) {
             applied structured
           }
         }`,
@@ -60,6 +63,7 @@ export function useEffectApplication() {
           eventType: choice.event_type,
           universe: choice.universe || '',
           context: choice.context || {},
+          origin,
         }
       )
       return data?.resolveSfxLoop || { applied: [], structured: [] }

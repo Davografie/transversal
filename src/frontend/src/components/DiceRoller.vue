@@ -424,10 +424,10 @@ const props = defineProps({
   remoteResults: { type: Object, default: () => ({}) }, // entity_id → { rolls, committed, ... } from SSE
 })
 
-const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange', 'offered-change', 'poolSaved'])
+const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-answer', 'sfx-choice-cancel', 'sfx-choice-loop', 'actingEntityChange', 'offered-change', 'poolSaved'])
 
 const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest, cancelContest: apiCancelContest, getPendingContestEffects: apiPendingEffects, manualRoll: apiManualRoll } = useApi()
-const { resolveEffectTargets, resolveSfxLoop } = useEffectApplication()
+const { resolveEffectTargets } = useEffectApplication()  // buy-a-hitch resolves locally
 const { applyOption: applyHitchEffect } = useHitchMenu()
 const pool = reactive([])
 const result = ref(null)
@@ -1051,26 +1051,23 @@ async function doPush() {
   }
 }
 
-async function resolveSfxChoices(resolutions) {
-  const targetEntity = resolutions?.[0]?.entity_id || props.entityId
-  const clean = (resolutions || []).map(({ entity_id, ...rest }) => rest)
-  const result = await resolveEffectTargets(targetEntity, clean)
-  const structured = (result?.structured || []).map((c, i) => ({ ...c, index: i, entity_id: targetEntity }))
-  const legacy = (result?.pendingChoices || []).map((c, i) => ({ ...c, index: i, entity_id: targetEntity }))
-  emit('sfx-choice-resolved', [...structured, ...legacy])
+// The SFX choice table is one of **three hosts** now, and the app shell owns the
+// answer: it knows where the table was raised and carries the origin across
+// follow-ups, so a question asked on a sheet does not reopen in the roller. This
+// panel renders the `roll` (and, until [[ui-ux]]'s floating host exists, `auto`)
+// questions and hands the answer up.
+function resolveSfxChoices(resolutions) {
+  emit('sfx-choice-answer', resolutions)
 }
 function clearSfxChoices() {
-  emit('sfx-choice-resolved')
+  emit('sfx-choice-cancel')
 }
 
 // "Run it again" on a loop prompt. The round's own consequences come back as
 // `structured` — including the next loop prompt when the rule recursed — so the
 // panel keeps showing whatever still needs an answer.
-async function runSfxLoop(choice) {
-  const targetEntity = choice?.entity_id || props.entityId
-  const result = await resolveSfxLoop(choice)
-  const structured = (result?.structured || []).map((c, i) => ({ ...c, index: i, entity_id: targetEntity }))
-  emit('sfx-choice-resolved', structured)
+function runSfxLoop(choice) {
+  emit('sfx-choice-loop', choice)
 }
 
 // ── Buy-hitch / opportunity (hitch menu) ────────────

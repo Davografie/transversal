@@ -159,5 +159,40 @@ const find = (name) => VUE.find((p) => rel(p) === name)
     /<label>Duration<\/label>/.test(panel), true)
 }
 
+// ── A choice table appears where the question was raised ──────────
+//
+// The author's rule (2026-09-26): a manual press on a sheet asks on the sheet, a roll
+// asks in the roller, and an automatic rule asks in a floating panel. The server tags
+// every choice with its `origin`, the app shell routes by it, and the roller no longer
+// resolves answers itself — it hands them up, so one owner carries the origin across a
+// follow-up instead of three hosts each guessing.
+{
+  const app = read(find('App.vue'))
+  ok('the shell routes choices by origin',
+    /const rollerChoices = computed/.test(app) && /const sheetChoices = computed/.test(app), true)
+  ok('…the roller gets everything that is not a sheet question',
+    /:sfx-choice-request="rollerChoices"/.test(app), true)
+  ok('…and the sheet gets its own', /:sfx-choice-request="sheetChoices"/.test(app), true)
+  ok('…answered through one pair of handlers',
+    /async function answerSfxChoices\(/.test(app) && /function clearSfxChoicesAll\(/.test(app), true)
+
+  const roller = read(find('components/DiceRoller.vue'))
+  ok('the roller hands the answer up rather than resolving it',
+    /emit\('sfx-choice-answer', resolutions\)/.test(roller), true)
+  ok('…and no longer owns the answer event',
+    /sfx-choice-resolved/.test(roller), false)
+
+  const sheet = read(find('components/CharacterSheet.vue'))
+  ok('the sheet renders a choice table when one is routed to it',
+    /v-if="sfxChoiceRequest && sfxChoiceRequest\.length"/.test(sheet)
+      && /<EffectTargetWizard/.test(sheet), true)
+  ok('…and emits the same three events the roller does',
+    /'sfx-choice-answer', 'sfx-choice-cancel', 'sfx-choice-loop'/.test(sheet), true)
+
+  const apply = readFileSync(join(SRC, 'composables', 'useEffectApplication.js'), 'utf8')
+  ok('the resolve call carries the origin back for the follow-up',
+    /resolveEffectTargets\(entityId: \$entityId, resolutions: \$resolutions, origin: \$origin\)/.test(apply), true)
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)

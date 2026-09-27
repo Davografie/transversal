@@ -175,6 +175,10 @@
           :class="{ 'sheet-hidden': !sheetVisible && !mobileStackActive && !sheetDock }"
           :entity-id="entityId"
           :override-entity-id="viewingEntityId"
+          :sfx-choice-request="sheetChoices"
+          @sfx-choice-answer="(r) => answerSfxChoices(r, 'sheet')"
+          @sfx-choice-cancel="clearSfxChoicesAll"
+          @sfx-choice-loop="(c) => loopSfxChoice(c, 'sheet')"
           :viewer-entity-id="entityId"
           :player-owned-entity-ids="ownedEntityIds"
           :player-id="playerId"
@@ -199,7 +203,9 @@
         <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @touchstart="onBandDragStart($event, 'sheet')" @click="tapBand('sheet')"></div>
       </div>
       <div ref="rollerBandEl" class="roller-band" :class="{ open: sheetDock && rollerOpen(), dragging: sheetDock && occupantDragging && !isMobile }">
-        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => { mirrorOwnResult({ result: r }); shareRoll(r) }" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
+        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="rollerChoices" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => { mirrorOwnResult({ result: r }); shareRoll(r) }" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-answer="(r) => answerSfxChoices(r, r?.[0]?.origin || 'roll')"
+          @sfx-choice-cancel="clearSfxChoicesAll"
+          @sfx-choice-loop="(c) => loopSfxChoice(c, c?.origin || 'roll')" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
         <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @touchstart="onBandDragStart($event, 'dice')" @click="tapBand('dice')"></div>
       </div>
     </div>
@@ -235,6 +241,7 @@ import { usePlayerIdentity } from '@/composables/usePlayerIdentity.js'
 import { useCharacterFinder } from '@/composables/useCharacterFinder.js'
 import { useCharacterSwitch } from '@/composables/useCharacterSwitch.js'
 import { useMobileBands } from '@/composables/useMobileBands.js'
+import { useEffectApplication } from '@/composables/useEffectApplication.js'
 import { useThemeMode } from '@/composables/useThemeMode.js'
 import { useUniverseTheme } from '@/composables/useUniverseTheme.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
@@ -485,7 +492,46 @@ const phase = ref('adding')
 const armedSfxRefresh = ref(0)  // bump to re-query armed SFX (trigger/roll lifecycle)
 const rollerMode = ref('cortex') // 'cortex' | 'roll_table' (driven by CharacterSheet tab)
 const currentDifficulty = ref(null) // GM-set test difficulty (ephemeral, session-scoped)
-const sfxChoiceRequest = ref(null) // pending {choose_*} auto-fired SFX choices for this player
+const sfxChoiceRequest = ref(null) // pending {choose_*} SFX choices, each tagged with its origin
+
+// **Where a choice belongs is decided by where it was raised**, not by which surface
+// happens to be open (the author, 2026-09-26): a manual press on a sheet asks on the
+// sheet, a roll (or a roll-timed effect firing) asks in the roller, and an automatic
+// rule — a state change or a timer nobody pressed — asks in a floating panel, because
+// there is no obvious place its reader is looking. The `origin` rides on the SSE
+// payload, set per emission site server-side, and is carried across follow-ups *here*,
+// because this is the one place that knows where a table is still being rendered.
+//
+// `auto` still renders in the roller until [[ui-ux]]'s floating host exists, so nothing
+// is dropped in the meantime; that host filters `auto` out of the roller when it lands.
+const { resolveEffectTargets, resolveSfxLoop } = useEffectApplication()
+
+const rollerChoices = computed(() =>
+  (sfxChoiceRequest.value || []).filter((c) => (c.origin || 'roll') !== 'sheet'))
+const sheetChoices = computed(() =>
+  (sfxChoiceRequest.value || []).filter((c) => (c.origin || 'roll') === 'sheet'))
+
+/** Answer a table: resolve, then put any *next* question back where this one was. */
+async function answerSfxChoices(resolutions, origin = 'roll') {
+  const list = resolutions || []
+  const entity = list[0]?.entity_id || entityId.value
+  const clean = list.map(({ entity_id: _e, origin: _o, ...rest }) => rest)
+  const result = await resolveEffectTargets(entity, clean, origin)
+  return retagChoices(result, entity, origin)
+}
+
+/** "Again" on a loop prompt — the round's own questions follow the same route. */
+async function loopSfxChoice(choice, origin = 'roll') {
+  const result = await resolveSfxLoop(choice, origin)
+  return retagChoices(result, choice.entity_id || entityId.value, origin)
+}
+
+function retagChoices(result, entity, origin) {
+  const next = [...(result?.structured || []), ...(result?.pendingChoices || [])]
+  const tagged = next.map((c, i) => ({ ...c, index: i, entity_id: entity, origin }))
+  onSfxChoiceResolved(tagged)
+  return tagged
+}
 
 // Player identity
 const showLab = ref(false)
@@ -1461,6 +1507,10 @@ function handleSseEvent(evt) {
       }
       break
   }
+}
+
+function clearSfxChoicesAll() {
+  sfxChoiceRequest.value = null
 }
 
 function onSfxChoiceResolved(pendingChoices) {
