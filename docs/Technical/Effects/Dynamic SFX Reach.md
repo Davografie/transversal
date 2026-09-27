@@ -113,9 +113,24 @@ this is dynamic.
    *enforcement* is back as `sfx_owner.reach_refusal` — a rule that declares reach is
    not attached outside the set it selects (`add_sfx_to_owner` and `attach_refusal`
    both consult it); a rule with no declaration is unrestricted, as before.
-4. **Editor** — a list of reach declarations: each a path (`PathField`, so it opens
-   in a child panel) plus a granted/offered control. Replaces the "Offered by"
-   trait-set picker and the single "Acquire path" field.
+4. ~~**Editor**~~ **Landed 2026-09-26.** `ReachEditor.vue` — a list of declarations,
+   each a row with a `SegmentedControl` (**Has it** = granted / **Offered**) and a
+   `PathField`, which keeps the child-panel convention (B72) so a deep path cannot
+   make the SFX panel tall again. It replaces both the "Offered by" trait-set picker
+   and the single "Acquire path" field, and sits in the SFX panel under **Who it
+   reaches** (`<ReachEditor v-model="draft.reach" :source-element="sourceElement" />`).
+   - **The typed destination reaches the wizard**, which is the part the acquire
+     field could not do: the row passes `destination = { elements: [sourceElement] }`,
+     so the builder highlights a path landing on the source and refuses one that ends
+     elsewhere. **No cardinality** — `literal` selects one owner and `select locations`
+     selects many, and both are legitimate declarations.
+   - **The panel says which element the path must land on**, in the catalog's own
+     words, and warns instead when no `Source` is set (nothing to type the path
+     against) or when nothing reaches the rule yet.
+   - **Verified by rendering**, not by the build: a throwaway probe mounted the real
+     component and drove it through the DOM (22 assertions) and then ran the whole
+     chain — `draft.reach` → `save()` → server → read back, on a temporary rule
+     selecting one GMC's instance, deleted again (6 more, **28/28**).
 5. **Later, and explicitly deferred by the author:** `traitset.limit` as a catalog
    field, and validating/filtering on trait-definition and trait-instance tags.
    (Definition and instance `tags` *do* exist as fields; `traitset` exposes only
@@ -165,9 +180,10 @@ registry is 808 rows and the widest collection the catalog offers is `entities`
 ## Migration and revert plan
 
 **The revert is DONE** (`3af9873f`, 2026-09-26) — 2065 pass, 0 failures, frontend
-builds. `sfx-gift` has no reach until the selectors land; the author accepted that.
-**The `trait → traitsettings` edge is DONE too** (same day — see §What is missing,
-item 1); **next is the reach declarations on `SFX` itself (item 2).**
+builds. **All of items 1–4 and 6 are landed and merged** (same day); item 5 is the
+author's explicit deferral. `sfx-gift` still has no reach — see
+§Content to re-author below, which is now the only thing between the model and the
+author's original sentence working.
 
 What came out of `92babf6c` and its follow-ups, and what deliberately survived:
 
@@ -194,8 +210,15 @@ author's call is the **generated granted path**
 (`select traits → filter id in [...] → navigate traitsettings`), which preserves
 read-time semantics.
 
-**Content to re-author (the author's):** `sfx-sect-cultivation` as an Entity-sourced
-selector (above), and `sfx-gift`'s path with the extra `traitsettings` step.
+**Content to re-author (the author's, and now authorable in the panel):**
+`sfx-gift` needs its `acquireSpec` replaced by a reach declaration —
+**offered**, path `select traits → filter traitset_id == ts-3 → navigate
+traitsettings` (the author's original sentence: *all traits of the assets set*),
+which resolves to the **889** owners measured above. And `sfx-sect-cultivation`
+becomes an Entity-sourced **granted** selector over Azure Dawn's occupants:
+`select locations → filter id == loc-74560187 → navigate occupants`. Neither is
+written until the author does it — the mechanism is built and verified, the content
+is theirs.
 
 ## Decisions (author, 2026-09-26)
 
