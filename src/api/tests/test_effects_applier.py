@@ -3588,3 +3588,78 @@ def test_setting_a_plain_trait_does_not_complete_anything(monkeypatch):
     repo = FakeRepo(traits=[FakeTrait("fire", "ts-x")], traitsettings=[ts])
     apply_effects(_entity(), [_effect("modify_trait", "set", "char-1:fire", "d8")], repo)
     assert fired == []
+
+
+from types import SimpleNamespace as NS
+
+# ── A `choose` in an effect's *subject* path ──────────────────────────
+#
+# The Gift shape: `entitySpec = select occupants → choose 1`. A `choose` stops the
+# path with a question and an empty value list, and this used to be dropped twice
+# over — `_resolve_entity_spec` returned None, the handler resolved the spec again,
+# found nothing and reported "resolved to nothing" — so the effect vanished and the
+# question was never put to anyone.
+
+def _subject_choice_repo(occupants):
+    class _Repo:
+        def __init__(self):
+            self.occupants = list(occupants)
+        def list_entities_by_location(self, _loc):
+            return list(self.occupants)
+    return _Repo()
+
+
+def _occupant_spec():
+    from transversal.services.target_spec import ChooseStep, SelectStep, TargetSpec
+
+    return TargetSpec(steps=[SelectStep(collection="occupants"), ChooseStep(count=1)])
+
+
+def test_a_subject_choose_with_one_candidate_is_taken_not_asked():
+    """Nothing to choose between is not a question (the author, 2026-09-26)."""
+    from transversal.domain import Effect
+    from transversal.services.effects_applier.entry import _resolve_entity_spec
+
+    here = NS(id="e1", current_location="loc-1")
+    repo = _subject_choice_repo([NS(id="e2", current_location="loc-1")])
+    pending: list = []
+    out = _resolve_entity_spec(
+        Effect(type="modify_trait", action="move", entity_spec=_occupant_spec()),
+        here, repo, {}, pending_out=pending)
+
+    assert pending == [], "a single candidate must not raise a choice"
+    assert out is not None
+    assert out.entity == "e2" and out.entity_spec is None
+
+
+def test_a_subject_choose_with_a_real_decision_is_reported_not_dropped():
+    """Two candidates is a decision, and it must reach the caller — before this it
+    was discarded here *and* in the handler, so no choice table could ever appear."""
+    from transversal.domain import Effect
+    from transversal.services.effects_applier.entry import _resolve_entity_spec
+
+    here = NS(id="e1", current_location="loc-1")
+    repo = _subject_choice_repo([NS(id="e2", current_location="loc-1"),
+                                 NS(id="e3", current_location="loc-1")])
+    pending: list = []
+    out = _resolve_entity_spec(
+        Effect(type="modify_trait", action="move", entity_spec=_occupant_spec()),
+        here, repo, {}, pending_out=pending)
+
+    assert out is None, "the effect must stay unapplied until the answer arrives"
+    assert len(pending) == 1
+    assert pending[0].count == 1
+    assert len(pending[0].candidates) == 2
+
+
+def test_a_subject_choose_with_no_channel_behaves_as_before():
+    """An older caller that cannot ask keeps the old outcome rather than raising."""
+    from transversal.domain import Effect
+    from transversal.services.effects_applier.entry import _resolve_entity_spec
+
+    here = NS(id="e1", current_location="loc-1")
+    repo = _subject_choice_repo([NS(id="e2"), NS(id="e3")])
+    out = _resolve_entity_spec(
+        Effect(type="modify_trait", action="move", entity_spec=_occupant_spec()),
+        here, repo, {})
+    assert out is None

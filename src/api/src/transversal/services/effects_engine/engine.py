@@ -26,6 +26,7 @@ from transversal.services.effects_engine.firing import (
     bind_declared,
 )
 from transversal.services.effects_engine.refs import (
+    _structured_choice,
     _substitute_effect_context,
     resolve_refs,
 )
@@ -427,9 +428,14 @@ class EffectsEngine:
                 # Resolve any authored ``entity_spec`` against this activation's
                 # variable scope before dispatch, so every handler — the razmerit
                 # service included — receives a concrete entity id rather than a
-                # spec it would silently ignore.
+                # spec it would silently ignore. A subject path that stops at a
+                # ``choose`` reports its question here instead of resolving to
+                # nobody, and it is put to the table below on the same channel
+                # ``target_spec`` and ``refs`` already use.
+                subject_choices: list = []
                 effect = _effects_applier.resolve_effect_entity(
                     effect, event.entity_id, repo, effect_context,
+                    pending_out=subject_choices,
                 )
                 # And its *die*, when the author named one by a path instead of a
                 # literal (`result_spec`): "the capacity slot my position fills".
@@ -443,7 +449,19 @@ class EffectsEngine:
                 )
                 if effect.timing == EffectTiming.IMMEDIATE:
                     blocked = False
-                    if effect.refs:
+                    if subject_choices:
+                        # *Who* this effect lands on is the table's decision — the
+                        # effect stays unapplied until the answer arrives, exactly
+                        # as a `choose` in a target path or a reference behaves.
+                        for pc in subject_choices:
+                            outcome.structured.append(_structured_choice(
+                                pc, effect, "entity", sfx,
+                                source_kind=sfx.source_kind or "",
+                                source_id=source_id or "",
+                                source_sfx_id=sfx.id, repo=repo,
+                            ))
+                        blocked = True
+                    elif effect.refs:
                         before = len(outcome.structured)
                         fire_ctx = _fire_context(event, sfx, repo, bindings=bindings,
                                                  source_id=source_id, source_element=source_element)

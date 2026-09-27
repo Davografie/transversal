@@ -292,7 +292,8 @@ def _apply_spec_effect(effect: Effect, entity: Entity, repo, result: EffectsResu
 
 
 def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | None = None,
-                          collections: dict | None = None) -> Effect:
+                          collections: dict | None = None,
+                          pending_out: list | None = None) -> Effect:
     """Rewrite ``effect`` so its entity is a concrete id, resolving ``entity_spec``.
 
     ``entity_spec`` is resolved against the activation's variable scope (carried
@@ -328,7 +329,8 @@ def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | 
         context, getattr(source, "id", None), source_element)
     seeds.update(collections or {})
     resolved = _resolve_entity_spec(effect, entity, repo, bindings, seeds,
-                                    source=source, source_element=source_element)
+                                    source=source, source_element=source_element,
+                                    pending_out=pending_out)
     return resolved if resolved is not None else effect
 
 
@@ -473,9 +475,18 @@ def resolve_effect_owner(effect: Effect, entity_id: str, repo,
         })
     return effect
 
+def _spec_value_id(value) -> str:
+    """The id a resolved spec value names, whichever shape it arrived in."""
+    rid = getattr(value, "id", None)
+    if rid is None and isinstance(value, dict):
+        rid = value.get("id") or value.get("ts_id")
+    return rid or ""
+
+
 def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict,
                          collections: dict | None = None,
-                         source=None, source_element: str | None = None) -> Effect | None:
+                         source=None, source_element: str | None = None,
+                         pending_out: list | None = None) -> Effect | None:
     """Resolve ``effect.entity_spec`` to a concrete id, or None if it resolves nothing.
 
     ``bindings`` is the activation scope (condition + earlier-effect outputs), so a
@@ -484,6 +495,13 @@ def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict,
     are the activation's resolved source, without which a path that starts
     ``select source`` resolves to nobody (the same gap the immediate-target path
     had).
+
+    A ``choose`` step stops the path *before* it names anyone — it returns a
+    question and an empty value list. Two things follow, and both used to be
+    wrong here: **nothing to choose between is not a question** (one candidate, or
+    exactly as many as the step wants, is simply taken), and a real decision is
+    **reported** through ``pending_out`` rather than dropped, so its caller can put
+    it to the table instead of applying the effect to nobody.
     """
     from transversal.services.target_resolver import TargetContext, resolve
 
@@ -493,10 +511,20 @@ def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict,
                       collections=dict(collections or {}),
                       source=source, source_element=source_element),
     )
+    if resolution.pending_choices:
+        if all(len(pc.candidates) <= pc.count for pc in resolution.pending_choices):
+            for pc in resolution.pending_choices:
+                for candidate in pc.candidates:
+                    rid = _spec_value_id(candidate)
+                    if rid:
+                        return effect.model_copy(update={"entity": rid, "entity_spec": None})
+        if pending_out is not None:
+            pending_out.extend(resolution.pending_choices)
+        # No channel to ask through (an older caller): leave the effect as authored
+        # so the existing "resolved to nothing" report still fires.
+        return None
     for value in resolution.values:
-        rid = getattr(value, "id", None)
-        if rid is None and isinstance(value, dict):
-            rid = value.get("id") or value.get("ts_id")
+        rid = _spec_value_id(value)
         if rid:
             return effect.model_copy(update={"entity": rid, "entity_spec": None})
     return None
