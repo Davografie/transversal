@@ -52,17 +52,22 @@ const E = (id, name, type, currentLocation, currentUniverse) =>
 
 // USA → Washington → White House, plus a sibling place and a place holding
 // nobody — the last is the case a filter creates and an empty place has always
-// had.
+// had. The *last* child of a level has a child of its own, so expanding it is the
+// case the trailing add row has to read correctly.
 const TREE = [
   U('u-earth', 'Earth', 'earth', [
     L('loc-usa', 'USA', 'earth', [
       L('loc-washington', 'Washington', 'earth', [
         L('loc-white-house', 'White House', 'earth'),
       ]),
-      L('loc-ny', 'New York', 'earth'),
+      L('loc-ny', 'New York', 'earth', [
+        L('loc-albany', 'Albany', 'earth'),
+      ]),
     ]),
     L('loc-canada', 'Canada', 'earth'),
-    L('loc-empty', 'Empty Place', 'earth'),
+    L('loc-empty', 'Empty Place', 'earth', [
+      L('loc-attic', 'The Attic', 'earth'),
+    ]),
   ]),
 ]
 
@@ -72,8 +77,10 @@ const ENTITIES = [
   E('loc-washington', 'Washington', 'LOCATION', 'loc-usa', 'earth'),
   E('loc-white-house', 'White House', 'LOCATION', 'loc-washington', 'earth'),
   E('loc-ny', 'New York', 'LOCATION', 'loc-usa', 'earth'),
+  E('loc-albany', 'Albany', 'LOCATION', 'loc-ny', 'earth'),
   E('loc-canada', 'Canada', 'LOCATION', 'u-earth', 'earth'),
   E('loc-empty', 'Empty Place', 'LOCATION', 'u-earth', 'earth'),
+  E('loc-attic', 'The Attic', 'LOCATION', 'loc-empty', 'earth'),
   E('gmc-official', 'Official', 'GMC', 'loc-washington', 'earth'),
   E('gmc-mountie', 'Mountie', 'GMC', 'loc-canada', 'earth'),
 ]
@@ -117,6 +124,42 @@ console.log('\nplain view — every open level still offers its rows\n')
     at(expanded, 'loc-usa'), ['add occupant', 'add zone'])
   ok('the zone row names its parent', on(expanded, 'loc-usa', 'zone')?.parentId, 'loc-usa')
   ok('the occupant row names its parent', on(expanded, 'loc-usa', 'occupant')?.parentId, 'loc-usa')
+}
+
+// ── 1b. a level that ends on an expanded child ──────────────────────────
+// The author: *"Show it only when the level doesn't end on an expanded child. …
+// if the last child is expanded then it becomes ambiguous what I'm creating a
+// zone for."*
+console.log('\na level ending on an expanded child — the trailing row is withheld\n')
+
+{
+  const deep = tree({ expanded: { 'loc-usa': true, 'loc-ny': true } })
+  ok('the parent withholds its zone row', at(deep, 'loc-usa'), ['add occupant'])
+  ok('the child it ends on still offers its own', at(deep, 'loc-ny'), ['add occupant', 'add zone'])
+  ok('the expanded child really did draw a child of its own',
+    deep.flatTree.value.some((n) => n.id === 'loc-albany'), true)
+
+  // The child has to be *collapsed* to get the row back — so the parent is not
+  // left without a way to add a zone.
+  const back = tree({ expanded: { 'loc-usa': true, 'loc-ny': false } })
+  ok('collapsing that child brings the parent\'s row back',
+    at(back, 'loc-usa'), ['add occupant', 'add zone'])
+
+  // A filter draws its path open and a filter-opened level cannot be collapsed,
+  // so the rule must not key on what is *on screen* — only on the GM's own
+  // expand. Otherwise the filtered place would lose its row with no way back.
+  const filteredDeep = tree({
+    filtered: ENTITIES.filter((e) => ['loc-usa', 'loc-washington', 'loc-ny', 'loc-albany'].includes(e.id)),
+    chips: NAME_USA,
+  })
+  ok('a filter-drawn child does not withhold the parent\'s row',
+    at(filteredDeep, 'loc-usa'), ['add occupant', 'add zone'])
+
+  // The same rule for a universe's "add location" row.
+  const uni = tree({ expanded: { 'loc-empty': true } })
+  ok('a universe ending on an expanded child withholds "add location"', at(uni, 'u-earth'), [])
+  ok('collapsing it brings "add location" back',
+    at(tree({ expanded: { 'loc-empty': false } }), 'u-earth'), ['add location'])
 }
 
 // ── 2. a filtered place and its sub-locations ───────────────────────────

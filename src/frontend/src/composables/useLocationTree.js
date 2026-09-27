@@ -431,6 +431,22 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
         // explicit expand the chevron promises.
         result.push(...flattenTree(revealedKids, occupants, allOccupants, depth + 1, revealAll))
       }
+      // Does this level **end** on a child the GM expanded? The trailing add row
+      // then sits one inset step from its parent and below that child's whole
+      // subtree, so it reads as if it belonged to the child rather than to this
+      // level — the author's report: *"it becomes ambiguous what I'm creating a
+      // zone for"*. A child that is only *listed* is fine: the row then reads as
+      // the next sibling, which is exactly what it creates.
+      //
+      // Keyed on the GM's own expand (`expandedNodes[child] === true`), **not** on
+      // "the child drew something". A filter draws its path open and a
+      // filter-opened level cannot be collapsed — `hideAll` needs a baseline that
+      // hides part of the level, which the populated path is not — so measuring
+      // from what is on screen would hide the filtered place's row with no way to
+      // get it back. Keyed this way, collapsing the child brings the row straight
+      // back, which is the escape hatch the rule assumes.
+      const lastDrawnChild = revealedKids[revealedKids.length - 1]
+      const endsOnExpandedChild = !!lastDrawnChild && expandedNodes.value[lastDrawnChild.id] === true
       if (focusMode && onFocus) {
         const hidden = kids.length - revealedKids.length
         if (hidden > 0) {
@@ -442,7 +458,7 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       }
       // Locations are placed in a universe, so the row trails that universe's
       // children — including when it has none yet.
-      if (kind === 'universe' && contentsOpen && showsAddRows(node) && node.universe) {
+      if (kind === 'universe' && contentsOpen && showsAddRows(node) && node.universe && !endsOnExpandedChild) {
         result.push({
           id: 'add:location:' + node.id, kind: 'add', addType: 'location',
           parentId: node.id, universe: node.universe, depth: depth + 1,
@@ -452,7 +468,7 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       // A location's children are its **zones**, so the same row trails them —
       // this is the tree's way to add to the level the author is looking at,
       // where the entity panel has its own Zones section.
-      if (kind === 'location' && contentsOpen && showsAddRows(node)) {
+      if (kind === 'location' && contentsOpen && showsAddRows(node) && !endsOnExpandedChild) {
         result.push({
           id: 'add:zone:' + node.id, kind: 'add', addType: 'zone',
           parentId: node.id, universe: node.universe || '', depth: depth + 1,
