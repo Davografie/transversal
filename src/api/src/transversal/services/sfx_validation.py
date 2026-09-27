@@ -404,6 +404,54 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
         ):
             warnings.append(f"Effect {finding.effect_index + 1}: {finding.message}")
 
+    # ── Half a mechanism is a silent no-op ────────────────────────
+    #
+    # Two shapes read as finished and do nothing at all. Neither shows up at fire
+    # time, so authoring is the only cheap place to say so.
+
+    # 1. A `select` seed that names no collection resolves to nothing, so every path
+    #    through it is dead: a gate that never holds, a condition that never passes,
+    #    an effect that never lands. Live content has one (`sfx-expose-trait`).
+    path_specs: list[tuple[str, object]] = list(_specs_of(sfx))
+    for bv in (getattr(sfx, "bound_variables", None) or []):
+        if getattr(bv, "spec", None) is not None:
+            path_specs.append((f"Bound variable '{getattr(bv, 'name', '') or '?'}'", bv.spec))
+    for path_label, path_spec in path_specs:
+        for path_step in (getattr(path_spec, "steps", None) or []):
+            if (getattr(path_step, "kind", "") == "select"
+                    and not str(getattr(path_step, "collection", "") or "").strip()):
+                warnings.append(
+                    f"{path_label}: the 'select' step names no collection — "
+                    f"that path resolves to nothing"
+                )
+                break
+
+    # 2. A gate with no **offer**. An acquire path is only half of acquisition: the
+    #    other half is something offering the rule — a trait's `possibleSfxIds`, or a
+    #    trait set named in `offerTraitsets`. With a path and no offer the gate can
+    #    hold and still no learn-chip appears anywhere, which is the silent reading
+    #    the author hit on 2026-09-26 (an acquire path authored on the belief that it
+    #    *granted* reach). A warning rather than an error, because a rule may
+    #    legitimately be attached or granted directly and never learned at all.
+    if repo is not None and sfx.id:
+        offered_sets = [str(t) for t in (getattr(sfx, "offer_traitsets", None) or [])]
+        get_traitset = getattr(repo, "get_traitset_by_id", None)
+        if get_traitset is not None:
+            for ts_id in offered_sets:
+                if get_traitset(ts_id) is None:
+                    warnings.append(f"Offered by: '{ts_id}' names no trait set")
+        acquire_steps = getattr(getattr(sfx, "acquire_spec", None), "steps", None) or []
+        if acquire_steps and not offered_sets:
+            list_declaring = getattr(repo, "list_traits_declaring_sfx", None)
+            declaring = list_declaring(sfx.id) if list_declaring is not None else []
+            if not declaring:
+                warnings.append(
+                    "Acquire path: nothing offers this rule — no trait lists it as "
+                    "possible, and no trait set is named under 'Offered by' — so no "
+                    "learn-chip can appear anywhere. Declare the offer, or attach it "
+                    "directly"
+                )
+
     return warnings
 
 

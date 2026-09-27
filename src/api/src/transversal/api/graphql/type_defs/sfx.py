@@ -79,6 +79,12 @@ class SfxRef:
     # learned first (B131) — the trait that declares it in `possibleSfxIds` simply
     # has it. False is the default and what every older payload means.
     implicit: bool = False
+    # Trait sets whose traits **offer** this rule to their instances — "every trait
+    # in these sets may learn it", declared once instead of once per trait
+    # definition. Names trait-set definitions (`ts-3`). Only the *offer*:
+    # `acquireSpec` still gates who may take it right now, and `implicit` still
+    # decides whether it must be taken at all.
+    offer_traitsets: list[strawberry.ID] = strawberry.field(default_factory=list)
     # Values the rule names and resolves for itself, before the conditions run.
     bound_variables: list[BoundVariable] = strawberry.field(default_factory=list)
     conditions: list[Condition] = strawberry.field(default_factory=list)
@@ -101,6 +107,7 @@ class SfxInput:
     listener_spec: Optional[strawberry.scalars.JSON] = None
     acquire_spec: Optional[strawberry.scalars.JSON] = None
     implicit: bool = False
+    offer_traitsets: list[strawberry.ID] = strawberry.field(default_factory=list)
     bound_variables: list[BoundVariableInput] = strawberry.field(default_factory=list)
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
@@ -120,6 +127,9 @@ class SfxUpdateInput:
     listener_spec: Optional[strawberry.scalars.JSON] = None
     acquire_spec: Optional[strawberry.scalars.JSON] = None
     implicit: Optional[bool] = None
+    # ``None`` = leave as stored; ``[]`` = the author removed them all (the same
+    # distinction `bound_variables` documents below).
+    offer_traitsets: Optional[list[strawberry.ID]] = None
     # ``None`` = leave as stored; ``[]`` = the author removed them all. The
     # distinction matters: a save that cannot express "none left" silently keeps
     # deleted variables alive.

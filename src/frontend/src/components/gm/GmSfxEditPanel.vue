@@ -155,20 +155,38 @@
       <PathField v-model="draft.acquire_spec" :source-element="sourceElement" title="Acquire path" />
       <p class="hint">Where this rule may be <em>learned</em> — leaving the place afterwards does not take it away (a condition would). E.g. <em>select source → navigate entity → filter current_location == Azure Dawn</em>.</p>
 
+      <!-- The *offer* — the other half, and the half that is easy to miss: the
+           acquire path above only **gates** where a rule may be taken; something
+           has to offer it first, or no learn-chip appears anywhere. That is
+           normally declared one trait at a time (`possibleSfxIds`); a trait set
+           named here says it once for all of its traits, read at read time, so a
+           trait added to the set later is included by itself and nothing is
+           written onto any trait. -->
+      <label>Offered by <span class="hint-inline">(trait sets)</span></label>
+      <TagInput
+        v-model="draft.offer_traitsets"
+        :suggestions="traitsetSuggestions"
+        :allow-custom="false"
+        placeholder="Add a trait set…"
+        aria-label="Trait sets whose traits offer this rule"
+      />
+      <p class="hint">Every trait in these sets may <em>learn</em> this rule — it shows as a chip on any of their instances, and the acquire path above still decides where it can be taken.</p>
+
       <!-- The acquisition path's other half ([[B131]]): a rule a trait offers
-           without anyone having to take it. The declaration lives on the *trait*
-           (`possibleSfxIds`), so the flag alone does nothing — hence the list
-           below, which is the only place that relation is visible from here. -->
+           without anyone having to take it. The offer lives on a *trait*
+           (`possibleSfxIds`) or on a trait **set** (`offerTraitsets`), so the flag
+           alone does nothing — hence the list below, which is the only place that
+           relation is visible from here. -->
       <label class="sfx-implicit">
         <input type="checkbox" v-model="draft.implicit" />
         <span>Applies without being learned</span>
       </label>
-      <p class="hint">On, every instance of a trait that lists this rule as <em>possible</em> simply has it — no learn-chip, nothing written on the instance. Where it reaches is still the acquire path above.</p>
+      <p class="hint">On, every instance of a trait that lists this rule as <em>possible</em> — or that belongs to a set named above — simply has it: no learn-chip, nothing written on the instance. Where it reaches is still the acquire path above.</p>
       <div v-if="declaringTraits.length" class="sfx-declared-by">
         <span class="declared-label">Declared by</span>
         <span v-for="t in declaringTraits" :key="t.id" class="declared-trait" :title="t.id">{{ t.name }}</span>
       </div>
-      <p v-else-if="sfx" class="hint">No trait lists this rule, so "without being learned" has nothing to act on yet.</p>
+      <p v-else-if="sfx && !draft.offer_traitsets.length" class="hint">No trait lists this rule and no trait set offers it, so nothing can learn it yet.</p>
     </div>
     </template>
 
@@ -215,6 +233,7 @@ import ConditionEditor from './ConditionEditor.vue'
 import BoundVariablesEditor from './BoundVariablesEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import PathField from './PathField.vue'
+import TagInput from '@/components/ui/TagInput.vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import Button from '@/components/ui/Button.vue'
 
@@ -225,6 +244,12 @@ const panel = usePanel()
 // it directly is a **runtime** ReferenceError the build happily passes.
 const selfComponent = getCurrentInstance()?.type
 const { traitNameMap, traitsets, allSfxs, fetchTraitsConfig } = useTraitsConfig()
+
+// The "Offered by" vocabulary. Trait sets are registry *content*, not an enum, so
+// the picker is fed from the data the panel already holds — and free text is
+// refused, because a set id nobody has is an offer to nobody.
+const traitsetSuggestions = computed(() =>
+  (traitsets.value || []).map((t) => ({ value: t.id, label: t.name })))
 // One editor state per panel; the effect-edit child panel injects this same
 // instance so the pair shares a single draft (and two open editors do not).
 const sfxEdit = createSfxEdit()

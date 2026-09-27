@@ -25,6 +25,10 @@ export function createSfxEdit() {
     arming_scope: null,   // null = auto (derive from trigger)
     listener_spec: { steps: [] },
     acquire_spec: { steps: [] },
+    // Trait sets whose traits offer this rule ("every trait in this set may learn
+    // it"). The other half of acquisition: the acquire path is the *gate*, this is
+    // the *offer* — without one the gate can hold and no chip appears anywhere.
+    offer_traitsets: [],
     // Values the rule names and resolves for itself, before the conditions run.
     // Read back from the server so a save round-trips them (an omitted field is a
     // deleted section).
@@ -42,8 +46,8 @@ export function createSfxEdit() {
   // Derived rules text for the current draft ([[SFX Natural Language Plan]]).
   const cardText = ref('')
 
-const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec implicit limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
-const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec implicit limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec implicit offerTraitsets limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec implicit offerTraitsets limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
 const VALIDATE_QUERY = `query($input: SfxInput!) { validateSfx(input: $input) }`
 // Derived rules text for an *unsaved* draft — the SFX editor's live card preview.
 const SFX_TEXT_QUERY = `query($sfx: SfxInput!) { sfxText(sfx: $sfx) }`
@@ -107,6 +111,7 @@ function initialDuration(sfx) {
     draft.arming_scope = sfx?.armingScope ?? sfx?.arming_scope ?? null
     draft.listener_spec = sfx?.listenerSpec ?? sfx?.listener_spec ?? { steps: [] }
     draft.acquire_spec = sfx?.acquireSpec ?? sfx?.acquire_spec ?? { steps: [] }
+    draft.offer_traitsets = [...(sfx?.offerTraitsets ?? sfx?.offer_traitsets ?? [])]
     draft.implicit = !!sfx?.implicit
     draft.bound_variables = (sfx?.boundVariables ?? sfx?.bound_variables ?? [])
       .map(bv => ({ name: bv.name || '', spec: bv.spec || { steps: [] } }))
@@ -131,6 +136,7 @@ function initialDuration(sfx) {
     draft.arming_scope = null
     draft.listener_spec = { steps: [] }
     draft.acquire_spec = { steps: [] }
+    draft.offer_traitsets = []
     draft.implicit = false
     draft.bound_variables = []
     draft.conditions = []
@@ -159,6 +165,7 @@ function initialDuration(sfx) {
       armingScope: draft.arming_scope || null,
       listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
       acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
+      offerTraitsets: [...(draft.offer_traitsets || [])],
       implicit: !!draft.implicit,
       boundVariables: (draft.bound_variables || [])
         .filter(bv => (bv.name || '').trim() && (bv.spec?.steps?.length)),
@@ -198,6 +205,7 @@ function initialDuration(sfx) {
           armingScope: draft.arming_scope || null,
           listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
           acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
+          offerTraitsets: [...(draft.offer_traitsets || [])],
           implicit: !!draft.implicit,
           boundVariables: (draft.bound_variables || []).filter(bv => (bv.name || '').trim() && (bv.spec?.steps?.length)),
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
@@ -216,6 +224,7 @@ function initialDuration(sfx) {
         sourceKind: draft.source_kind, placement: draft.placement,
         armingScope: draft.arming_scope, listenerSpec: draft.listener_spec,
         acquireSpec: draft.acquire_spec,
+        offerTraitsets: [...(draft.offer_traitsets || [])],
         implicit: !!draft.implicit,
         boundVariables: (draft.bound_variables || []).map(bv => ({ ...bv })),
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
@@ -237,6 +246,7 @@ function initialDuration(sfx) {
           armingScope: draft.arming_scope || null,
           listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
           acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
+          offerTraitsets: [...(draft.offer_traitsets || [])],
           implicit: !!draft.implicit,
           boundVariables: (draft.bound_variables || []).filter(bv => (bv.name || '').trim() && (bv.spec?.steps?.length)),
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
@@ -259,6 +269,7 @@ function initialDuration(sfx) {
         sourceKind: draft.source_kind, placement: draft.placement,
         armingScope: draft.arming_scope, listenerSpec: draft.listener_spec,
         acquireSpec: draft.acquire_spec,
+        offerTraitsets: [...(draft.offer_traitsets || [])],
         implicit: !!draft.implicit,
         boundVariables: (draft.bound_variables || []).map(bv => ({ ...bv })),
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],

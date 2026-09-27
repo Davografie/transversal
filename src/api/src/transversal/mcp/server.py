@@ -452,7 +452,7 @@ mutation(
 # typo'd effect or a silently dropped placement was invisible.
 _SFX_WRITE_FIELDS = (
     "id name description trigger limit sourceKind placement armingScope "
-    "listenerSpec acquireSpec implicit "
+    "listenerSpec acquireSpec implicit offerTraitsets "
     "boundVariables { name spec } conditions { type subject target value operator narrative } "
     "duration { timers { event remaining } combine } "
     "effects { %s }"
@@ -1219,10 +1219,15 @@ def update_sfx(args: dict) -> dict:
 
     Pass ``input`` as an ``SfxUpdateInput``: ``id`` plus any of ``name``,
     ``description``, ``trigger``, ``limit``, ``sourceKind``, ``placement``,
-    ``armingScope``, ``listenerSpec``, ``acquireSpec``, ``conditions``,
-    ``effects``, ``duration``. **Only what you pass is written** — an omitted key
-    is left alone rather than cleared, so this is a patch and not a replace. To
-    clear a list, pass it as ``[]``.
+    ``armingScope``, ``listenerSpec``, ``acquireSpec``, ``implicit``,
+    ``offerTraitsets``, ``conditions``, ``effects``, ``duration``. **Only what you
+    pass is written** — an omitted key is left alone rather than cleared, so this
+    is a patch and not a replace. To clear a list, pass it as ``[]``.
+
+    ``offerTraitsets`` is the *offer* half of acquisition: every trait in those
+    trait sets may learn the rule. ``acquireSpec`` is only the *gate* — where an
+    offered rule may be taken — so a rule with a gate and no offer is never
+    learnable, which ``validateSfx`` now warns about.
     """
     return _call_mutation("updateSfx", _MUT_UPDATE_SFX, {"input": args["input"]},
                           args.get("dry_run", True), "updateSfx")
