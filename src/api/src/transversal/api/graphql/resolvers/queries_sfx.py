@@ -420,6 +420,11 @@ class QueriesSfx:
             arming_scope=input.arming_scope,
             listener_spec=_target_spec_from_input(input.listener_spec),
             acquire_spec=_target_spec_from_input(input.acquire_spec),
+            # The offer has to survive this conversion or the "nothing offers this
+            # rule" warning fires on a rule that *does* declare one — the exact
+            # false alarm a warning like that cannot afford.
+            implicit=bool(getattr(input, "implicit", False)),
+            offer_traitsets=[str(t) for t in (getattr(input, "offer_traitsets", None) or [])],
             bound_variables=_bound_variables_from_input(input.bound_variables),
             conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],
