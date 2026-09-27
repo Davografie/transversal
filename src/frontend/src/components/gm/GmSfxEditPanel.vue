@@ -99,7 +99,7 @@
           <h5 class="sfx-slot">How long it's held</h5>
           <label>Armed for (listening window)</label>
           <DurationBuilder v-model="draft.duration" allow-rolls />
-          <p class="hint">How long this SFX stays armed before its delayed effects fire and it drops. Only affects <em>On roll / On result / On contest</em> effects — immediate effects fire once regardless. This is <strong>not</strong> an undo timer; each effect's own duration governs when a change reverts.</p>
+          <p class="hint">How long this SFX stays armed before its delayed effects fire and it drops. Only affects <em>On roll / On result / On contest</em> effects — immediate effects fire once regardless. This is <strong>not</strong> an undo timer; each effect's own duration governs when a change reverts. <strong>Empty means no limit</strong>: a roll-timing effect stays armed until something else drops it, so an empty window is a real choice rather than "one roll".</p>
         </div>
       </template>
 

@@ -33,7 +33,11 @@ export function createSfxEdit() {
     bound_variables: [],
     conditions: [],
     effects: [],
-    duration: { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' },
+    // Nothing authored by default: an empty timer list is "not set", and for a
+    // roll-timing effect that honestly means no roll limit. The editor used to
+    // seed one roll here, which a save then wrote into storage as if the author
+    // had chosen it.
+    duration: { timers: [], combine: 'FIRST_TO_FIRE' },
   })
   const saving = ref(false)
   const errorMsg = ref('')
@@ -70,17 +74,17 @@ function initialConditions(sfx) {
 }
 
 function initialDuration(sfx) {
-  // Backend default = rolls:1; null = indefinite (empty timers).
+  // No authored duration is `null` from the server and "not fetched" is
+  // `undefined` — both mean *the author set nothing*, so both give an empty timer
+  // list. This used to fall back to one roll, which is how a value nobody chose
+  // reached storage on 42 rules and showed up in the Active rail.
   if (sfx && sfx.duration) {
     return {
       timers: (sfx.duration.timers || []).map(t => ({ event: t.event, remaining: t.remaining })),
       combine: sfx.duration.combine || 'FIRST_TO_FIRE',
     }
   }
-  if (sfx && sfx.duration === null) {
-    return { timers: [], combine: 'FIRST_TO_FIRE' }
-  }
-  return { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
+  return { timers: [], combine: 'FIRST_TO_FIRE' }
 }
 
   let _saveTimer = null
@@ -144,7 +148,7 @@ function initialDuration(sfx) {
     draft.reach = []
     draft.bound_variables = []
     draft.conditions = []
-    draft.duration = { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
+    draft.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
     draft.effects = []
     cardText.value = ''
   }

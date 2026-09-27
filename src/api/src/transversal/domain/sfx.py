@@ -11,7 +11,6 @@ from transversal.domain.effects import (
     Condition,
     Effect,
     EffectDuration,
-    Timer,
 )
 from transversal.domain.enums import (
     ConditionType,
@@ -114,13 +113,19 @@ class SFX(BaseModel):
     bound_variables: list["BoundVariable"] = Field(default_factory=list)
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
-    # How long the SFX stays in effect once triggered (the in-memory effective
-    # tracker). Default = one roll. ``rolls``/``beat``/``scene``/``session`` or
-    # a state-change event (``location_changed``/``trait_updated``) timer
-    # extends it; ``None`` = indefinite (until cleared).
-    duration: Optional["EffectDuration"] = Field(
-        default_factory=lambda: EffectDuration(timers=[Timer(event="rolls", remaining=1)])
-    )
+    # How long the SFX stays armed once triggered. **Nothing is authored by
+    # default** — this used to default to one roll, which the editor then wrote
+    # back on every save, so 42 of 46 rules carried a value nobody had set and
+    # could not see (`sfx-gift` showed "Duration 1 roll" in the Active rail for a
+    # rule whose effects are both immediate, where the duration does nothing).
+    #
+    # Its only reader is the arming of **roll-timing** effects: `_split_duration`
+    # takes a ``rolls`` timer as the roll budget and any other timer
+    # (``beat``/``scene``/``session``/a state-change event) as a boundary that
+    # drops the rule. With no duration there is therefore **no roll limit** — the
+    # rule stays armed until something else drops it — which is the honest meaning
+    # of "the author set nothing", and the panel now says so.
+    duration: Optional["EffectDuration"] = None
 
     @model_validator(mode="before")
     @classmethod

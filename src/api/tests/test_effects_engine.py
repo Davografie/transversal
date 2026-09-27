@@ -736,3 +736,28 @@ def test_effect_wire_dict_is_a_valid_effect_input():
     # …and the two shapes stay together, so the *next* field added cannot slip past.
     missing = set(Effect.model_fields) - accepted
     assert missing == set(), f"Effect fields with no EffectInput counterpart: {sorted(missing)}"
+
+
+def test_a_rule_authors_no_duration_by_default():
+    """The 1-roll default is gone, and its absence means what it says.
+
+    It used to default to one roll, which the editor round-tripped and wrote into
+    storage — 42 of 46 live rules carried a value nobody had chosen and could not
+    see, and `sfx-gift` showed "Duration 1 roll" in the Active rail for a rule whose
+    effects are both immediate, where the duration does nothing at all.
+
+    Its only reader is the arming of roll-timing effects, and there `None` means
+    **no roll limit** — the honest reading of "the author set nothing", and what the
+    panel now says out loud.
+    """
+    from transversal.domain import SFX
+    from transversal.services.roll_deferral import _split_duration
+
+    assert SFX(id="x", name="X", trigger="manual").duration is None
+    assert _split_duration(None) == (None, []), "no duration must not invent a budget"
+
+    # …and an authored one still reads as written.
+    from transversal.domain import EffectDuration, Timer
+
+    authored = EffectDuration(timers=[Timer(event="rolls", remaining=2)])
+    assert _split_duration(authored) == (2, [])
