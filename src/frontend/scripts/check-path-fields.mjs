@@ -215,6 +215,24 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   const apply = readFileSync(join(SRC, 'composables', 'useEffectApplication.js'), 'utf8')
   ok('the resolve call carries the origin back for the follow-up',
     /resolveEffectTargets\(entityId: \$entityId, resolutions: \$resolutions, origin: \$origin\)/.test(apply), true)
+
+  // Cancelling a question takes the activation back (the author's rule, 2026-09-26):
+  // "cancelling the choice table cancels the SFX" — the same take-back the sheet's own
+  // toggle-off makes. Scoped to a question a *press* raised, and never a loop decline,
+  // which is the loop ending rather than a bargain being undone.
+  ok('cancelling a question takes the activation back',
+    /function endActivationsBehindChoices\(choices\)/.test(app)
+      && /function clearSfxChoicesAll\(\) \{\s*endActivationsBehindChoices\(sfxChoiceRequest\.value\)/.test(app), true)
+  ok('…through the same take-back the sheet\'s own toggle-off makes',
+    /endSfx: apiEndSfx/.test(app) && /apiEndSfx\(entity, sfxId\)/.test(app), true)
+  ok('…only for an activation a press started',
+    /\(c\?\.origin \|\| 'roll'\) !== 'sheet'/.test(app), true)
+  ok('…naming the rule the question belongs to',
+    /const sfxId = c\.source_sfx_id \|\| c\.sfx_id/.test(app), true)
+  ok('…once per activation, however many questions it raised',
+    /ends\.some\(\(e\) => e\.entity === entity && e\.sfxId === sfxId\)/.test(app), true)
+  ok('…and declining a loop is not a take-back',
+    /if \(c\?\.loop\) continue/.test(app), true)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

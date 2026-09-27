@@ -285,7 +285,7 @@ import { useTroupe } from './composables/useTroupe.js'
 import ToastBar from './components/ToastBar.vue'
 import RollTableMenu from './components/gm/RollTableMenu.vue'
 
-const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools, getActivity: apiGetActivity } = useApi()
+const { graphql, endSfx: apiEndSfx, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools, getActivity: apiGetActivity } = useApi()
 const { fetchEntities: prefetchEntities, entities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const entityCache = useEntityCache()
@@ -1529,7 +1529,37 @@ function handleSseEvent(evt) {
   }
 }
 
+// Cancelling a question is a decision, not a dismissal: it takes the activation
+// back. A rule the table is *answering for* was started by a press, and a press is
+// reversible only while the activation has not committed — which is exactly the
+// window a question is open in. `endSfx` applies the undos the activation still
+// owes (the holds, the timed reverts), drops the parts it never reached and
+// un-arms what was waiting on a roll; the `sfx_ended` push then refreshes the
+// chip and the ledger. It is the same call the sheet's own toggle-off makes, so
+// "Cancel" and "press it again" are one rule.
+//
+// Two things it deliberately does not do:
+//   * A question raised by a **roll** or a **state change** has no press behind
+//     it, so cancelling there only puts the question away (`origin !== 'sheet'`).
+//   * Declining a **loop** is "the loop ends", not a take-back — the wizard only
+//     offers Cancel on a target choice, never on a loop prompt — so a loop answer
+//     is skipped rather than ending the rounds already taken.
+function endActivationsBehindChoices(choices) {
+  const ends = []
+  for (const c of choices || []) {
+    if (c?.loop) continue
+    if ((c?.origin || 'roll') !== 'sheet') continue
+    const entity = c.entity_id || entityId.value
+    const sfxId = c.source_sfx_id || c.sfx_id
+    if (!entity || !sfxId) continue
+    if (ends.some((e) => e.entity === entity && e.sfxId === sfxId)) continue
+    ends.push({ entity, sfxId })
+    apiEndSfx(entity, sfxId)
+  }
+}
+
 function clearSfxChoicesAll() {
+  endActivationsBehindChoices(sfxChoiceRequest.value)
   sfxChoiceRequest.value = null
 }
 
