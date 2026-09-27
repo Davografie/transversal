@@ -13,6 +13,7 @@
 
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { asPlayer } from '../helpers/role.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 const SCREENSHOTS = process.env.PALETTE_SHOTS || ''   // a directory, for a visual pass
@@ -44,6 +45,8 @@ const appliedUniverse = (page) => page.evaluate(() => document.documentElement.d
 
 /** Seed the testing identity and load, with the palette the API really serves. */
 async function load(page, { size = { width: 1280, height: 950 }, palette = null } = {}) {
+  await page.unroute('**/api/v1/players/**')
+  await asPlayer(page)
   await page.setViewportSize(size)
   // Pin the starting theme. Playwright's default emulation is *light*, so a
   // case that means to start dark would otherwise measure the light half — and
