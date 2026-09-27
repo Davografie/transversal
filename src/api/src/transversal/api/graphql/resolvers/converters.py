@@ -319,9 +319,17 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         owner_spec=_target_spec_from_input(e.owner_spec),
         result_spec=_target_spec_from_input(e.result_spec),
         refs=_refs_from_input(e.refs),
+        branches=_effect_branches_from_input(e.branches),
         output=e.output,
         conditions=[_condition_input_to_domain(c) for c in (e.conditions or [])],
     )
+
+def _effect_branches_from_input(raw) -> list:
+    """Validate a GraphQL JSON branch list into domain models (None-safe)."""
+    from transversal.domain import EffectBranch
+
+    return [EffectBranch.model_validate(b) for b in (raw or [])]
+
 
 def _refs_to_gql(refs: dict) -> dict | None:
     """Serialize ``Effect.refs`` to a JSON-friendly ``{name: {value, spec}}``."""

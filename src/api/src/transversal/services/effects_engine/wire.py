@@ -9,6 +9,13 @@ _EFFECT_CAMEL_FIELDS = {
     "die_filter": "dieFilter",
     "target_spec": "targetSpec",
     "entity_spec": "entitySpec",
+    # Both added to `Effect` after this map was written and missed here. Left in
+    # snake_case they are rejected by `EffectInput`, which fails the **whole**
+    # `resolveEffectTargets` mutation — so answering a structured choice silently
+    # did nothing. `test_effect_wire_dict_is_a_valid_effect_input` now holds the
+    # two shapes together so the next field added cannot slip through.
+    "owner_spec": "ownerSpec",
+    "result_spec": "resultSpec",
 }
 
 def effect_to_wire_dict(e: Effect) -> dict:

@@ -692,3 +692,47 @@ def test_resuming_a_subject_choice_also_resolves_the_effects_refs():
     assert resolved.entity_spec is None
     assert resolved.refs["trait"].value == "ts-1", "…and the trait to move, not a path"
     assert resolved.refs["trait"].spec is None
+
+
+def test_effect_wire_dict_is_a_valid_effect_input():
+    """A structured choice's effect is echoed straight back as an `EffectInput`.
+
+    Every key the wire dict emits must therefore be one the input accepts, and the
+    two shapes must not drift apart. This is the check that was missing: `owner_spec`
+    and `result_spec` were added to `Effect` and never to the camel-case map, so the
+    echoed object carried `owner_spec` / `result_spec` / `branches`, GraphQL rejected
+    the **whole** `resolveEffectTargets` mutation, and answering a structured choice
+    did nothing at all — visible only in the browser console, as
+    "Field 'owner_spec' is not defined by type 'EffectInput'".
+    """
+    from transversal.api.graphql.type_defs.effects import EffectInput
+    from transversal.domain import (
+        Condition, ConditionType, Effect, EffectBranch, TargetRef,
+    )
+    from transversal.services.effects_engine.wire import effect_to_wire_dict
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    def spec():
+        return TargetSpec(steps=[SelectStep(collection="source")])
+
+    effect = Effect(
+        timing="immediate", type="modify_trait", action="move",
+        die_filter={"x": 1}, target_spec=spec(), entity_spec=spec(),
+        owner_spec=spec(), result_spec=spec(),
+        refs={"trait": TargetRef(value="", spec=spec())},
+        branches=[EffectBranch(id="a", label="A", effects=[])],
+        conditions=[Condition(type=ConditionType.ALWAYS)],
+    )
+    wire = effect_to_wire_dict(effect)
+
+    accepted = {f.python_name for f in EffectInput.__strawberry_definition__.fields}
+    # The wire dict speaks camelCase where Strawberry renames; map back to compare.
+    camel = {"dieFilter": "die_filter", "targetSpec": "target_spec",
+             "entitySpec": "entity_spec", "ownerSpec": "owner_spec",
+             "resultSpec": "result_spec"}
+    unknown = [k for k in wire if camel.get(k, k) not in accepted]
+    assert unknown == [], f"the wire dict carries keys EffectInput rejects: {unknown}"
+
+    # …and the two shapes stay together, so the *next* field added cannot slip past.
+    missing = set(Effect.model_fields) - accepted
+    assert missing == set(), f"Effect fields with no EffectInput counterpart: {sorted(missing)}"

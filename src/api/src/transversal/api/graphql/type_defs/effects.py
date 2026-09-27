@@ -71,6 +71,10 @@ class EffectInput:
     owner_spec: Optional[strawberry.scalars.JSON] = None
     result_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
+    # A choice node's options. Carried on the input as well as the output so a
+    # `StructuredChoice`'s effect can be echoed back whole: the wire dict *is* the
+    # domain `Effect`, and a field with no input counterpart fails the round trip.
+    branches: Optional[strawberry.scalars.JSON] = None
     output: Optional[str] = None  # the author's name for this step's result
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
 
