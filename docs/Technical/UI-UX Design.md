@@ -152,7 +152,7 @@ each one is a way a generic list would have been *wrong* rather than plain:
    price always has its own cell and is never merged into the label, because the
    ordering guarantee (`cost_effects` first) is only legible if the cost is.
 
-**The key column belongs to the table's `scheme`, never the row.** A row cannot
+**The key's meaning belongs to the table's `scheme`, never the row.** A row cannot
 own it, because the same row means different things in different tables:
 
 | scheme | a row is | the key cell shows |
@@ -217,14 +217,36 @@ is which is the driver's business:
   same shell and keep the marking, states and actions. The slot is handed
   `{ row, index, rolled }`.
 
-**Responsive by container, not viewport.** The same surface is a ~340px column
+**Responsive by container, not viewport.** The same surface is a ~290–340px column
 when the character sheet is docked, ~534px as a modal, and a phone's full width —
 so it asks how much room *it* has (`container-type: inline-size`, `@container
-ct`), not how wide the window is. Three columns → the cost wraps under the result
-(`≤520px`) → one column (`≤340px`). The **legend is dropped the moment the
-columns collapse**, because a header that labels columns which no longer exist is
-worse than no header; the **key survives to the narrowest width**, because on a
-phone the moment a row matters most is the moment the dice found it.
+ct`), not how wide the window is. **Two layouts, not three**: the result and the
+price side by side, then the price wrapped under the result (`≤520px`). The
+**legend is dropped the moment the price wraps**, because a header that labels
+columns which no longer exist is worse than no header.
+
+**The key is a corner chip, not a column** (changed 2026-09-26, the human: *"I'd
+like the rows to be more compact … if the `[ 1 ]` would sit in the top-right then
+we'd lose a lot of height already"* — and it did). The key used to own a 58px
+left column, which at the dock's ~290px collapsed to **a line of its own above
+every row**; floated into the content's top-right, it shares the label's first
+line and the text flows under it, so a row pays for the key only when the row is
+one line tall. Measured on live tables at the dock, as total height for six rows:
+
+| table | before | after |
+|---|---|---|
+| `rt-26339016` (Birth — one-line labels, one effect each) | 438px (`93,69×5`) | **264px** (`59,41×5`) — **−40%** |
+| `rt-ironroots-escalation` (long labels + a full-sentence description) | 1032px (`172,186,158,172×3`) | **736px** (`132,146,104,118×3`) — **−29%** |
+
+The saving is the 16px pip plus the 8px grid gap it no longer needs, per row —
+and the row padding (7→6px), the pip (`2px`→`1px`, `min-width` 34→26px) and the
+effect chips (`2px`→`1px`) each give back a little more. Two details make it
+hold: the conditions/effects stack carries `clear: right`, so a chip never
+overlaps the float's last pixel, and an effect phrase is `overflow-wrap:
+anywhere` with `max-width: 100%` — before that, a long effect chip painted out
+of its own row (a 314px chip inside a 291px row, clipped rather than wrapped).
+`choice-table.spec.js` pins the contract as geometry at every viewport: the key's
+top matches the label's, and its right edge matches the content's.
 
 **Where a prompt lives** (settled 2026-09-25, answering [[Effects]]' open question
 2 — it was blocking [[B5]]'s client half). A choice is a **flow step, not a roll's
@@ -246,7 +268,8 @@ panel**:
   branch) or opens the target wizard — which is a property of the *driver*, not of
   the row, so the surface is already sufficient for both.
 
-**Flashy, and restrained.** A die-pip key column with tabular numerals, a short
+**Flashy, and restrained.** A die-pip key at the content's top-right, tabular so it
+reads as a number rather than as text, a short
 staggered entrance, and a *landing beat* when a roll finds a row — one lift and one
 ring as the dice land, while the mark itself **persists** until the row is taken or
 the rows change. The beat is the arrival; the mark is the record. So "the dice found
@@ -265,10 +288,10 @@ input in the shared set), so the authoring editors stay on `GmList` until those
 exist.
 
 `scripts/check-choice-table.mjs` (64 assertions, no browser) pins the scheme's
-key column and its fallback order, the condition/effect/cost phrasing, the
+key and its fallback order, the condition/effect/cost phrasing, the
 roll-marks-then-click rule (including that no confirm control can creep back), and
 — as shipped text — the resolver's registry-wide read. `e2e/tests/choice-table.spec.js`
-measures the layout at all four viewports **plus the two-column state between
+measures the layout at all four viewports **plus the wrapped-price state between
 them** — the modal is `min(560px, 96vw)`, so the named viewports alone never reach
 it — and drives the two gates, the marking roll, and the click that takes a row
 against the live app.
