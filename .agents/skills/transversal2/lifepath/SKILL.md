@@ -1,13 +1,13 @@
 ---
 name: lifepath
-description: Create (seed) Transversal2 life paths, roll tables, and roll table entries — plus the faction and universe wiring they need. Use when adding new life-path content.
+description: Create Transversal2 life paths, roll tables, and roll table entries — plus the faction and universe wiring they need. Use when adding new life-path content.
 ---
 
 # LifePath Skill
 
 ## Purpose
 
-Author **seed data** for a life path: a `LifePath`, its `RollTable`s, and their
+Author a life path: a `LifePath`, its `RollTable`s, and their
 `RollTableEntry`s (with effects). This skill only covers writing content — not
 how the app runs a term or how to test it.
 
@@ -18,7 +18,11 @@ next table.
 ## Files you touch
 
 - `src/api/src/transversal/domain/__init__.py` — the models below.
-- `src/api/src/transversal/db/seed.py` — `seed_life_paths(repo)`; the reference authoring pattern.
+- The authoring surface is the **API**, not a seed module: `save_life_path` and
+  `save_roll_table` (MCP tools and the equivalent GraphQL mutations). Both are
+  full saves and idempotent — re-running a save with the same ids updates in
+  place. `db/seed.py` was **removed 2026-09-27**; it was never the authoring
+  path and its content had been superseded twice over.
 
 ## Models to write
 
@@ -140,9 +144,10 @@ consistent. Referenced `trait` ids must already exist in the `traits`
 collection for that universe (including `trait-rel-rank` and `trait-rel-tenure`
 when using rank/tenure).
 
-## Seeding pattern
+## Authoring pattern
 
-Copy the builder + idempotent-upsert shape from `seed_life_paths`:
+Build the effects with small helpers, then save each table and the path through
+the API:
 
 ```python
 def eff(type_, action, target="", result=None, context=None):
@@ -158,17 +163,11 @@ def next_step(target=""):
 def trait(action, trait_id, die=None, relationship=None):
     ctx = {"relationship": relationship} if relationship else {}
     return eff("modify_trait", action, trait_id, result=die, context=ctx)
-
-def upsert_table(table):
-    if repo.get_roll_table(table.id) is None:
-        repo.create_roll_table(table)
-    else:
-        repo.update_roll_table(table)
-
-def upsert(path_or_entity):
-    # create/update the LifePath or Entity idempotently, same as upsert_table
-    ...
 ```
+
+Then save them: `save_roll_table(table)` for each table, `save_life_path(path)`
+last (its `entry_table_id` must already exist), and `update_entity` on the
+offering faction to add the path to `suitable_life_path_ids`.
 
 ### Full example — drifter with learn → muster
 
@@ -217,4 +216,4 @@ muster = RollTable(id="rt-drifter-muster", name="Muster Out",
 - Only `trait-rel-*` gets `context.relationship`.
 - Prefer `gain_or_step_up_complication` over `gain_complication` for repeatable mishaps.
 - `TIER` tables need a `RollTableCheck`.
-- Seed idempotently (guard every create/update with an existence check).
+- Saves are idempotent: a re-save with the same ids updates in place, so there is no separate create/update path to guard.

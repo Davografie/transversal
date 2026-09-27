@@ -1,39 +1,23 @@
 """Transversal CLI — management commands.
 
-Usage:
-    python -m transversal seed    (disabled — use migration scripts)
+There are no commands. Data is managed entirely by the migration scripts
+(`python -m transversal.migrate_entities`, `migrate_traits`, …). The old
+`python -m transversal seed` command and its module (`db/seed.py`) were removed
+on 2026-09-27: the content they described had been superseded twice over, and
+reading them taught trait and table ids that no longer exist.
 """
 
 import sys
 
 
-def cmd_seed() -> None:
-    """Seed data is DEPRECATED. Use migration scripts instead.
-
-    All data is now migrated from the old Transversal database.
-    Do not run this — it will overwrite migrated data with outdated defaults.
-    """
+def main() -> None:
     print(
-        "ERROR: Seed command is disabled. "
-        "Data is managed via migration scripts (migrate_traitsets, migrate_traits, etc.). "
-        "Run `python -m transversal.migrate_entities` to migrate remaining data."
+        "No commands. Data is managed via migration scripts, e.g.:\n"
+        "  python -m transversal.migrate_entities\n"
+        "  python -m transversal.migrate_traits\n"
+        "The `seed` command and `db/seed.py` were removed (2026-09-27)."
     )
     sys.exit(1)
-
-
-def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: python -m transversal <command>")
-        print("Commands:")
-        print("  seed    (disabled)")
-        sys.exit(1)
-
-    cmd = sys.argv[1]
-    if cmd == "seed":
-        cmd_seed()
-    else:
-        print(f"Unknown command: {cmd}")
-        sys.exit(1)
 
 
 if __name__ == "__main__":

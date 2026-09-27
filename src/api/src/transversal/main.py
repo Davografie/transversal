@@ -39,7 +39,10 @@ from transversal.services.razmerit import RazmeritService
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Wire core services on startup. Seed data runs via `python -m transversal seed`.
+    """Wire core services on startup.
+
+    There is no seed-on-startup: all data is migrated (`migrate_*.py`). The old
+    ``python -m transversal seed`` command and its module were removed 2026-09-27.
 
     Defined ahead of ``app`` (the DI helpers it calls resolve at startup time, not
     at import time).
@@ -169,7 +172,10 @@ async def get_context(request: Request) -> dict:
 # ── Startup ──────────────────────────────────────────
 
 async def _startup():
-    """Wire core services (run by ``lifespan``). Seed data runs via `python -m transversal seed`."""
+    """Wire core services (run by ``lifespan``).
+
+    All data is migrated, not seeded — see ``migrate_*.py``.
+    """
     from transversal.services.effects_applier import _register_core_handlers
     from transversal.services.sfx_owner import (
         ensure_sfx_owners,

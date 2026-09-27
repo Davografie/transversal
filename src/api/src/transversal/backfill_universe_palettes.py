@@ -1,9 +1,11 @@
 """One-off backfill: give the existing universes their example palettes.
 
-`seed_universes` only runs on creation, so a universe that already exists never
-picks up a palette added later. This pass writes `db/universe_palettes.py`'s
-two worked examples (Earth, Three Realms) onto those universe entities, so
-per-universe styling is visible on an existing database ([[UI-UX Design#Theming]]).
+A universe created before the palette field existed never picks up an example
+added later. This pass writes `db/universe_palettes.py`'s two worked examples
+(Earth, Three Realms) onto those universe entities, so per-universe styling is
+visible on an existing database ([[UI-UX Design#Theming]]). (The creation-time
+seeder that used to do this was `db/seed.py::seed_universes`, removed
+2026-09-27; a new universe is given its example through `update_entity`.)
 
 **Only fills a blank.** A universe that already carries a palette is reported
 and left exactly as it is — the entity field is the source of truth once it has
