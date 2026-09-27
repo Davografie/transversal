@@ -389,7 +389,7 @@ SFX (Special Effect) registry. Defines named abilities with triggers, costs, and
 | `placement` | string? | | Activation surface: `auto` (event-driven), `sheet` (owner card), `menu` (post-roll consequence menu); null = derived from `trigger` |
 | `conditions` | Condition[] | | Optional gates evaluated against the entity before firing |
 | `effects` | Effect[] | | List of declarative effects |
-| `duration` | EffectDuration? | | How long the SFX stays in effect once triggered; default one roll, null = indefinite (until cleared) |
+| `duration` | EffectDuration? | | How long the SFX stays **armed** once triggered; **null = nothing authored**, which for a roll-timing effect means no roll limit. Read only when arming those effects, so it does nothing for an all-immediate rule. It used to default to one roll — and because the editor round-tripped it, that default was written into 42 rules nobody had set (removed 2026-09-26) |
 
 **ID convention:** `sfx-{slug}` (e.g. `sfx-hinder`, `sfx-law-bridge`)
 
