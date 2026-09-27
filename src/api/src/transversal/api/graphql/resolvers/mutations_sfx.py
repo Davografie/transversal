@@ -49,16 +49,15 @@ class MutationsSfx:
             listener_spec=_target_spec_from_input(input.listener_spec),
             acquire_spec=_target_spec_from_input(input.acquire_spec),
             implicit=bool(getattr(input, "implicit", False)),
-            offer_traitsets=[str(t) for t in (getattr(input, "offer_traitsets", None) or [])],
             bound_variables=_bound_variables_from_input(input.bound_variables),
             effects=[_effect_input_to_domain(e) for e in input.effects],
             duration=_duration_input_to_domain(input.duration),
         )
         created = _em(info).repo.create_sfx(s)
-        # The availability caches — SFX records, trait declarations and the
-        # trait-set offer index — are dropped on **every** rule write, not only
-        # when an effects engine happens to be attached. A new `offer_traitsets`
-        # that never invalidated would stay invisible to the chip read.
+        # The availability caches — SFX records and trait declarations — are
+        # dropped on **every** rule write, not only when an effects engine happens
+        # to be attached: a cache that a write does not invalidate is a cache that
+        # keeps answering with the state before it.
         invalidate_sfx_cache()
         # Also register with the in-memory engine
         engine = info.context.get("effects_engine")
@@ -108,8 +107,6 @@ class MutationsSfx:
             existing.acquire_spec = _target_spec_from_input(input.acquire_spec)
         if input.implicit is not None:
             existing.implicit = bool(input.implicit)
-        if input.offer_traitsets is not None:
-            existing.offer_traitsets = [str(t) for t in input.offer_traitsets]
         if input.bound_variables is not None:
             existing.bound_variables = _bound_variables_from_input(input.bound_variables)
         if input.effects is not None:
@@ -117,9 +114,9 @@ class MutationsSfx:
         if input.duration is not None:
             existing.duration = _duration_input_to_domain(input.duration)
         updated = _em(info).repo.update_sfx(existing)
-        # Unconditional, for the same reason as `create_sfx` above: an edited
-        # `offer_traitsets` must reach the chip read whether or not an engine is
-        # attached to this context.
+        # Unconditional, for the same reason as `create_sfx` above: a rule edit
+        # must reach the availability reads whether or not an engine is attached
+        # to this context.
         invalidate_sfx_cache()
         # Also update in-memory engine
         engine = info.context.get("effects_engine")

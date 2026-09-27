@@ -427,29 +427,26 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                 break
 
     # 2. A gate with no **offer**. An acquire path is only half of acquisition: the
-    #    other half is something offering the rule — a trait's `possibleSfxIds`, or a
-    #    trait set named in `offerTraitsets`. With a path and no offer the gate can
-    #    hold and still no learn-chip appears anywhere, which is the silent reading
-    #    the author hit on 2026-09-26 (an acquire path authored on the belief that it
-    #    *granted* reach). A warning rather than an error, because a rule may
-    #    legitimately be attached or granted directly and never learned at all.
+    #    other half is something offering the rule — a trait's `possibleSfxIds`. With
+    #    a path and no offer the gate can hold and still no learn-chip appears
+    #    anywhere, which is the silent reading the author hit on 2026-09-26 (an
+    #    acquire path authored on the belief that it *granted* reach). A warning
+    #    rather than an error, because a rule may legitimately be attached or granted
+    #    directly and never learned at all.
+    #
+    #    The acquisition model is being rebuilt as reach **selectors** — see
+    #    `docs/Technical/Effects/Dynamic SFX Reach.md`. This warning becomes "this
+    #    rule reaches nobody" when that lands.
     if repo is not None and sfx.id:
-        offered_sets = [str(t) for t in (getattr(sfx, "offer_traitsets", None) or [])]
-        get_traitset = getattr(repo, "get_traitset_by_id", None)
-        if get_traitset is not None:
-            for ts_id in offered_sets:
-                if get_traitset(ts_id) is None:
-                    warnings.append(f"Offered by: '{ts_id}' names no trait set")
         acquire_steps = getattr(getattr(sfx, "acquire_spec", None), "steps", None) or []
-        if acquire_steps and not offered_sets:
+        if acquire_steps:
             list_declaring = getattr(repo, "list_traits_declaring_sfx", None)
             declaring = list_declaring(sfx.id) if list_declaring is not None else []
             if not declaring:
                 warnings.append(
-                    "Acquire path: nothing offers this rule — no trait lists it as "
-                    "possible, and no trait set is named under 'Offered by' — so no "
-                    "learn-chip can appear anywhere. Declare the offer, or attach it "
-                    "directly"
+                    "Acquire path: no trait lists this rule as possible, so no "
+                    "learn-chip can appear anywhere — list it on the traits that "
+                    "should offer it, or attach it directly"
                 )
 
     return warnings

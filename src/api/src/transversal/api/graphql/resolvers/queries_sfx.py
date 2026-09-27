@@ -135,39 +135,24 @@ class QueriesSfx:
     def acquirable_sfx_ids(self, info: strawberry.Info, trait_setting_id: strawberry.ID) -> list[strawberry.ID]:
         """The trait instance's *offered* SFX that may be taken right now.
 
-        A rule is offered to an instance in one of two ways, and both are read here:
-
-        - the instance's own **trait** declares it (`Trait.possible_sfx_ids`) —
-          one definition at a time, the original mechanism; or
-        - the trait's whole **set** offers it (`SFX.offer_traitsets`) — "every
-          trait in this set may learn it", said once, read at read time, so a trait
-          added to the set later is included by itself.
-
-        Either way a rule can be gated to where it may be learned (`acquire_spec`):
-        the offer stands, but the chip only appears where the path resolves. This is
-        the list the sheet should render — enforcement lives in the attach, so this
-        is the honest preview of what would be accepted.
+        A rule can be gated to where it may be learned (`acquire_spec`): the
+        instance's trait offers it, but the chip only appears where the path
+        resolves. This is the list the sheet should render — enforcement lives in
+        the attach, so this is the honest preview of what would be accepted.
 
         An **implicit** rule is left out ([[B131]]): it needs no learning, so
         offering a learn-chip for it would offer to take what the instance already
         has. Its reach is the acquire path's business, read by availability
         instead.
         """
-        from transversal.services.sfx_owner import (
-            acquire_gate_holds,
-            possible_sfx_ids,
-            trait_traitset_id,
-            traitset_offer_index,
-        )
+        from transversal.services.sfx_owner import acquire_gate_holds, possible_sfx_ids
 
         repo = _em(info).repo
         ts = repo.get_traitsetting(str(trait_setting_id))
         if ts is None:
             return []
-        offered = list(possible_sfx_ids(repo, ts.trait_id))
-        offered += traitset_offer_index(repo).get(trait_traitset_id(repo, ts.trait_id), [])
         out: list[strawberry.ID] = []
-        for sfx_id in offered:
+        for sfx_id in possible_sfx_ids(repo, ts.trait_id):
             if sfx_id in out:
                 continue
             sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
@@ -420,11 +405,10 @@ class QueriesSfx:
             arming_scope=input.arming_scope,
             listener_spec=_target_spec_from_input(input.listener_spec),
             acquire_spec=_target_spec_from_input(input.acquire_spec),
-            # The offer has to survive this conversion or the "nothing offers this
-            # rule" warning fires on a rule that *does* declare one — the exact
-            # false alarm a warning like that cannot afford.
+            # `implicit` has to survive this conversion: it decides whether an
+            # offered rule must still be learned, so a draft that dropped it would
+            # validate against the wrong rule.
             implicit=bool(getattr(input, "implicit", False)),
-            offer_traitsets=[str(t) for t in (getattr(input, "offer_traitsets", None) or [])],
             bound_variables=_bound_variables_from_input(input.bound_variables),
             conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],

@@ -758,26 +758,17 @@ _SFX_CACHE_FILLED_AT = 0.0
 # as rules do, so the declaration is cached by trait id — including the empty
 # answer, which is the common one, so a trait that declares nothing is asked once.
 _POSSIBLE_SFX_CACHE: dict[str, tuple[str, ...]] = {}
-# A trait definition's trait *set*, cached on the same terms — the trait-set offer
-# is looked up per instance, so this must not be a read each time.
-_TRAIT_TRAITSET_CACHE: dict[str, str] = {}
-# {trait_set_id: [sfx_id]} — which rules each trait set offers (see
-# `traitset_offer_index`). `None` = not built yet; `{}` is a real, cached answer.
-_OFFER_INDEX: Optional[dict[str, list[str]]] = None
 
 
 def invalidate_sfx_cache() -> None:
-    """Drop the cached SFX records, trait declarations and trait-set offers.
+    """Drop the cached SFX records and trait declarations (any rule/trait write).
 
-    Every rule write goes through here: a new or edited `offer_traitsets` is only
-    visible once the index is dropped, which is why the SFX mutations call this
+    Every rule write goes through here, which is why the SFX mutations call it
     whether or not an effects engine happens to be attached.
     """
-    global _SFX_CACHE_FILLED_AT, _OFFER_INDEX
+    global _SFX_CACHE_FILLED_AT
     _SFX_CACHE.clear()
     _POSSIBLE_SFX_CACHE.clear()
-    _TRAIT_TRAITSET_CACHE.clear()
-    _OFFER_INDEX = None
     _SFX_CACHE_FILLED_AT = 0.0
 
 
@@ -796,46 +787,6 @@ def possible_sfx_ids(repo, trait_id: str) -> tuple[str, ...]:
     ids = tuple(getattr(trait, "possible_sfx_ids", None) or ()) if trait is not None else ()
     _POSSIBLE_SFX_CACHE[trait_id] = ids
     return ids
-
-
-def trait_traitset_id(repo, trait_id: str) -> str:
-    """The trait-set **definition** a registry trait belongs to, cached.
-
-    The other half of the offer question: `Trait.possible_sfx_ids` says one trait
-    offers a rule, `SFX.offer_traitsets` says a whole set does, and answering the
-    second needs this lookup per instance. Empty for a trait with no set.
-    """
-    if not trait_id:
-        return ""
-    if trait_id in _TRAIT_TRAITSET_CACHE:
-        return _TRAIT_TRAITSET_CACHE[trait_id]
-    trait = repo.get_trait(trait_id) if hasattr(repo, "get_trait") else None
-    ts_id = str(getattr(trait, "traitset_id", "") or "") if trait is not None else ""
-    _TRAIT_TRAITSET_CACHE[trait_id] = ts_id
-    return ts_id
-
-
-def traitset_offer_index(repo) -> dict[str, list[str]]:
-    """``{trait_set_id: [sfx_id]}`` — which rules each trait set offers.
-
-    `SFX.offer_traitsets` is the offer said once for a whole set, instead of once
-    per trait definition: *every trait in this set may learn it*. Read at read
-    time, so a trait added to the set later is included by itself and nothing is
-    written onto any trait. Cached with the SFX records — a rule write drops it —
-    and the empty answer is a real cached answer, since most registries declare no
-    offer at all.
-    """
-    global _OFFER_INDEX
-    if _OFFER_INDEX is not None:
-        return _OFFER_INDEX
-    index: dict[str, list[str]] = {}
-    docs = repo.get_all_sfxs() if hasattr(repo, "get_all_sfxs") else []
-    for sfx in docs:
-        for ts_id in (getattr(sfx, "offer_traitsets", None) or []):
-            if ts_id:
-                index.setdefault(str(ts_id), []).append(sfx.id)
-    _OFFER_INDEX = index
-    return index
 
 
 def _load_sfx(repo, sfx_id: str):
@@ -1019,14 +970,7 @@ def get_available_sfx_ids(
         # carries it from the moment it exists. An unlearned, non-implicit
         # declaration is the learn-chip's business, not availability's, so it is
         # deliberately not added here.
-        #
-        # `SFX.offer_traitsets` is the same sentence said once for a whole trait
-        # set ("every trait in this set offers it") instead of once per trait
-        # definition, so it is read the same way — and has the same rule about
-        # `implicit`: only an implicit rule is *had* without learning.
-        offered = list(possible_sfx_ids(repo, ts.trait_id))
-        offered += traitset_offer_index(repo).get(trait_traitset_id(repo, ts.trait_id), [])
-        for sid in offered:
+        for sid in possible_sfx_ids(repo, ts.trait_id):
             if sid in ids:
                 continue
             sfx = (prefetch.sfx_by_id.get(sid) if prefetch is not None

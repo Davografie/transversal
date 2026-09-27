@@ -621,15 +621,11 @@ def test_an_effects_output_may_not_shadow_a_declared_variable():
 # *granted* reach — the gate held, and nothing offered the rule, so no chip appeared.
 
 
-class _OfferRepo:
-    """Just the two reads the offer check makes."""
+class _DeclaringRepo:
+    """Just the read the offer check makes: which traits nominate a rule."""
 
-    def __init__(self, traitsets=(), declaring=()):
-        self._traitsets = set(traitsets)
+    def __init__(self, declaring=()):
         self._declaring = list(declaring)
-
-    def get_traitset_by_id(self, ts_id):
-        return object() if ts_id in self._traitsets else None
 
     def list_traits_declaring_sfx(self, sfx_id):
         return list(self._declaring)
@@ -638,30 +634,15 @@ class _OfferRepo:
 def test_an_acquire_path_with_no_offer_warns():
     sfx = _sfx()
     sfx.acquire_spec = TargetSpec(steps=[{"kind": "select", "collection": "source"}])
-    warnings = validate_sfx(sfx, repo=_OfferRepo())
-    assert any("nothing offers this rule" in w for w in warnings), warnings
+    warnings = validate_sfx(sfx, repo=_DeclaringRepo())
+    assert any("no trait lists this rule as possible" in w for w in warnings), warnings
 
 
-def test_either_kind_of_offer_silences_the_no_offer_warning():
+def test_a_declared_offer_silences_the_no_offer_warning():
     sfx = _sfx()
     sfx.acquire_spec = TargetSpec(steps=[{"kind": "select", "collection": "source"}])
-
-    # A trait definition declares it…
-    warnings = validate_sfx(sfx, repo=_OfferRepo(declaring=["trait-x"]))
-    assert not any("nothing offers this rule" in w for w in warnings), warnings
-
-    # …or a trait *set* offers it, which is the same sentence said once.
-    sfx.offer_traitsets = ["ts-3"]
-    warnings = validate_sfx(sfx, repo=_OfferRepo(traitsets=["ts-3"]))
-    assert not any("nothing offers this rule" in w for w in warnings), warnings
-
-
-def test_an_offer_naming_no_trait_set_warns():
-    """An offer to a set that does not exist offers the rule to nobody."""
-    sfx = _sfx()
-    sfx.offer_traitsets = ["ts-nope"]
-    warnings = validate_sfx(sfx, repo=_OfferRepo(traitsets=["ts-3"]))
-    assert "Offered by: 'ts-nope' names no trait set" in warnings, warnings
+    warnings = validate_sfx(sfx, repo=_DeclaringRepo(declaring=["trait-x"]))
+    assert not any("no trait lists this rule as possible" in w for w in warnings), warnings
 
 
 def test_a_select_step_naming_no_collection_warns():

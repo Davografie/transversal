@@ -88,20 +88,6 @@ class SFX(BaseModel):
     # in the Verdant Steps" is a fact about the rule's reach, not about learning,
     # and going implicit must not quietly make it universal.
     implicit: bool = False
-    # Trait sets whose traits **offer** this rule to their instances — "every
-    # trait in these sets may learn it", said once.
-    #
-    # The offer is normally made one trait at a time (`Trait.possible_sfx_ids`),
-    # which cannot say "all asset traits" without editing every definition in the
-    # set. This is that sentence in one place, read at *read time* — so a trait
-    # added to the set later is included by itself, and nothing is written onto any
-    # trait. It names trait-set **definitions** (`ts-3`), which are registry
-    # content, not the per-entity `TraitSetSetting` ("a character's cultivation").
-    #
-    # Only the offer: whether a given instance may take it *right now* is still
-    # `acquire_spec`'s gate, and `implicit` still decides whether it must be taken
-    # at all. Empty is the default and what every older payload means.
-    offer_traitsets: list[str] = Field(default_factory=list)
     # Named values resolved from the world **before the condition gate**, in
     # declaration order — so a condition may read them, a later binding may start
     # from an earlier one, and a flat `{name}` field means the same thing

@@ -593,7 +593,6 @@ def _sfx_ref(sfx, resolve=None) -> SfxRef:
         listener_spec=sfx.listener_spec.model_dump() if sfx.listener_spec else None,
         acquire_spec=sfx.acquire_spec.model_dump() if sfx.acquire_spec else None,
         implicit=bool(getattr(sfx, "implicit", False)),
-        offer_traitsets=[str(t) for t in (getattr(sfx, "offer_traitsets", None) or [])],
         bound_variables=[
             BoundVariable(
                 name=bv.name,
