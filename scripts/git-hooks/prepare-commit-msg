@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Record *which session* and *which ticket* a commit belongs to.
+
+Why this hook exists
+--------------------
+Attribution here is destroyed by three deliberate properties of the workflow, so
+it cannot be recovered after the fact:
+
+1. **One shared identity.** Every session commits as
+   `Codewhale (DeepSeek-v4-PRO)`. The author field has never distinguished
+   sessions, and it has drifted into three capitalisations.
+2. **Fast-forward landings.** AGENTS.md requires rebasing onto `release-build`
+   before merging, and those land as fast-forwards -- so *no merge commit records
+   the source branch*. The `merge <role>: Fast-forward` line survives only in the
+   local reflog: not pushed, not in clones, and pruned by gc.
+3. **Role branches are supersets.** Because every role rebases onto
+   `release-build`, `git branch --contains <sha>` returns a dozen answers (3-21
+   measured), so containment cannot separate roles either.
+
+The information exists at commit time -- the branch name *is* the role -- it is
+simply never written down. This hook writes it down as a message trailer, which
+travels with the commit everywhere: clones, `format-patch`, fast-forwards.
+
+    Session: effects
+    Ticket: B219
+
+Read them back with:
+
+    git log --format='%h %(trailers:key=Session,valueonly) %s'
+    git log --grep='^Session: effects'
+
+Scope and safety
+----------------
+* Only **agent** commits are touched. Sessions commit with
+  `-c user.name="Codewhale ..."`, which is visible here; the human's own commits
+  are never modified.
+* Merges and squashes are skipped outright.
+* Trailers are **omitted rather than guessed**: a ticket is recorded only when
+  the staged ticket note or the subject names one.
+* Idempotent: a message that already carries `Session:` is left alone.
+"""
+
+import pathlib
+import re
+import subprocess
+import sys
+
+CANONICAL = "Codewhale"
+INTEGRATION_BRANCHES = {"release-build", "main"}
+TICKET_RE = re.compile(r"\b(B\d{2,}|P\d+\.\d+)\b")
+TICKET_NOTE_RE = re.compile(r"^docs/Process/Tickets/(B\d+|P[\d.]+)\.md$")
+
+
+def git(*args: str) -> str:
+    """Run git and return stdout, or "" if it fails."""
+    try:
+        out = subprocess.run(
+            ["git", *args], capture_output=True, text=True, check=False
+        )
+    except OSError:
+        return ""
+    return out.stdout.strip() if out.returncode == 0 else ""
+
+
+def session_for_branch(branch: str) -> str:
+    """The branch name *is* the role -- except on the integration branch, which
+    the Overseer owns."""
+    if not branch:
+        return ""
+    return "Overseer" if branch in INTEGRATION_BRANCHES else branch
+
+
+def ticket_from_index() -> str:
+    """A staged ticket note is the strongest signal available."""
+    for path in git("diff", "--cached", "--name-only").splitlines():
+        m = TICKET_NOTE_RE.match(path)
+        if m:
+            return m.group(1)
+    return ""
+
+
+def ticket_from_subject(text: str) -> str:
+    """Fall back to the subject -- `docs(B225, B226): ...`, `... (B206 ...)`."""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        m = TICKET_RE.search(stripped)
+        return m.group(1) if m else ""
+    return ""
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        return 0
+    msg_path = pathlib.Path(sys.argv[1])
+    source = sys.argv[2] if len(sys.argv) > 2 else ""
+
+    # Never rewrite a merge or squash message.
+    if source in {"merge", "squash"}:
+        return 0
+
+    # Only agent commits. The human's identity is not ours, so leave it alone.
+    if not git("config", "user.name").startswith(CANONICAL):
+        return 0
+
+    role = session_for_branch(git("symbolic-ref", "--short", "HEAD"))
+    if not role:
+        return 0
+
+    text = msg_path.read_text(encoding="utf-8") if msg_path.exists() else ""
+
+    # Idempotent: already attributed.
+    if re.search(r"^Session: ", text, re.M):
+        return 0
+
+    ticket = ticket_from_index() or ticket_from_subject(text)
+
+    trailers = [f"Session: {role}"]
+    if ticket:
+        trailers.append(f"Ticket: {ticket}")
+
+    body = text.rstrip("\n")
+    msg_path.write_text(
+        (body + "\n\n" if body else "") + "\n".join(trailers) + "\n",
+        encoding="utf-8",
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,24 @@
+# Canonicalise agent authorship spellings.
+#
+# All sessions commit under ONE shared identity, and it drifted into three
+# capitalisations. Before this file, `--author='Codewhale (DeepSeek-v4-PRO)'`
+# silently missed 158 commits (~8% of agent work).
+#
+# A mailmap fixes the *display* and the *matching* of those commits without
+# rewriting history: no filter-repo, no new hashes, nothing to re-clone.
+#
+# What actually honours it (verified with git 2.55 on 2026-09-27):
+#
+#   %aN / %aE          canonical  <-- use these, NOT %an/%ae
+#   log --author=...   canonical  (and therefore now matches the variants too)
+#   shortlog -sn       canonical
+#   %an                NOT canonicalised, even with --use-mailmap
+#   blame              no --mailmap flag in 2.55; a blame.mailmap config exists
+#                      but was not verifiable here (no variant-authored line
+#                      could be isolated once --author became mailmap-aware)
+#
+# Format:  Proper Name <proper@email>  Commit Name <commit@email>
+#
+# Add a line here whenever a fourth spelling appears.
+Codewhale (DeepSeek-v4-PRO) <codewhale@example.invalid> Codewhale (DeepSeek-v4-Pro) <codewhale@example.invalid>
+Codewhale (DeepSeek-v4-PRO) <codewhale@example.invalid> Codewhale (DeepSeek-V4-PRO) <codewhale@example.invalid>
