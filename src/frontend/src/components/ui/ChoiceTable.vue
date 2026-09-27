@@ -11,9 +11,9 @@
              surface has collapsed to stacked rows, so it never labels a layout
              the reader cannot see. -->
         <div v-if="headerOn" class="ct-head" aria-hidden="true">
-          <span class="ct-cell-key">{{ keyHeader }}</span>
-          <span class="ct-cell-main">Result</span>
-          <span class="ct-cell-cost">{{ costHeader }}</span>
+          <span class="ct-head-cell ct-head-result">Result</span>
+          <span v-if="showKey" class="ct-head-cell ct-head-key">{{ keyHeader }}</span>
+          <span class="ct-head-cell ct-head-cost">{{ costHeader }}</span>
         </div>
 
         <div class="ct-rows" role="list">
@@ -34,10 +34,17 @@
             @click="onRow(r, i)"
           >
             <slot name="row" :row="r" :index="i" :rolled="rolled === i">
-              <span v-if="showKey" class="ct-cell-key">
-                <span class="ct-pip">{{ keyOf(r, i) }}</span>
-              </span>
               <span class="ct-cell-main">
+                <!-- The key is a **corner chip inside the content**, not a column
+                     of its own: at the dock's ~290px the old left key column
+                     collapsed to a full line above every row (18px + a 10px grid
+                     gap on each), and the row is the thing being read. Floated
+                     right, it shares the label's first line and the text flows
+                     under it — so the key costs a line only when the row is one
+                     line tall. See [[UI-UX Design#Choice table]]. -->
+                <span v-if="showKey" class="ct-cell-key">
+                  <span class="ct-pip">{{ keyOf(r, i) }}</span>
+                </span>
                 <span class="ct-label">{{ r.label }}</span>
                 <span v-if="r.description" class="ct-desc">{{ r.description }}</span>
                 <span v-if="conditionLines(r).length" class="ct-conds">
@@ -283,14 +290,16 @@ function pickRandom() {
 .ct-rows { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 
 /* ── the column legend ─────────────────────────────────────────────────────
-   A hairline under a micro-caps line: it labels the key column without
-   competing with the rows, which are the content. */
+   A hairline under a micro-caps line: it labels the columns without competing
+   with the rows, which are the content. It mirrors the row's own order — the
+   result, then the key (which sits at the content's right edge), then the
+   price. */
 .ct-head {
   display: grid;
-  grid-template-columns: var(--ct-key-w, 58px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: end;
-  padding: 0 10px 4px;
+  padding: 0 9px 4px;
   font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -301,19 +310,21 @@ function pickRandom() {
   background-size: 100% 1px;
   background-position: bottom;
 }
-.ct-head .ct-cell-cost { text-align: right; }
+.ct-head-key { min-width: 26px; text-align: center; }
+.ct-head-cost { text-align: right; }
 
 /* ── a row ─────────────────────────────────────────────────────────────────
-   Three cells, one grid: the key (what a roll finds), the block (what it is and
-   what it does), the price. The middle cell is unbounded height on purpose —
-   conditions and effects stack inside it rather than widening the row. */
+   Two cells, one grid: the block (what it is and what it does, with the key
+   floated into its top-right corner) and the price. The block is unbounded
+   height on purpose — conditions and effects stack inside it rather than
+   widening the row. */
 .ct-row {
   display: grid;
-  grid-template-columns: var(--ct-key-w, 58px) minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
   align-items: start;
   width: 100%;
-  padding: 7px 10px;
+  padding: 6px 9px;
   border-radius: var(--radius-xs);
   border: 1px solid var(--overlay-10);
   background: var(--overlay-4);
@@ -363,14 +374,17 @@ function pickRandom() {
 
 /* ── the key pip ───────────────────────────────────────────────────────────
    The roll's own number, as a die-face chip: tabular so a column of them lines
-   up, and it fills when a roll lands on it. */
-.ct-cell-key { display: flex; align-items: flex-start; }
+   up, and it fills when a roll lands on it. Floated, so it is a corner marker
+   rather than a column — the label's first line wraps beside it and the text
+   continues beneath. */
+.ct-cell-main { display: block; min-width: 0; }
+.ct-cell-key { float: right; margin: 0 0 2px 8px; }
 .ct-pip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  padding: 2px 6px;
+  min-width: 26px;
+  padding: 1px 6px;
   border-radius: var(--radius-xs);
   border: 1px solid var(--overlay-20);
   background: var(--overlay-6);
@@ -380,28 +394,32 @@ function pickRandom() {
   white-space: nowrap;
 }
 
-.ct-cell-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ct-label { font-weight: 600; }
-.ct-desc { font-size: 11px; color: var(--text-dim); }
+/* The stack starts below the pip rather than beside it: a chip is wide, and
+   overlapping the float's last pixel would read as a rendering fault. */
+.ct-label { display: block; font-weight: 600; }
+.ct-desc { display: block; font-size: 11px; color: var(--text-dim); }
 
-.ct-conds { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; margin-top: 1px; }
+.ct-conds { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; margin-top: 1px; clear: right; }
 .ct-cond { font-size: 10px; color: var(--accent); }
 
-.ct-effects { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 2px; }
+.ct-effects { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 2px; clear: right; }
 .ct-effect {
   font-family: monospace;
   font-size: 10px;
   line-height: 1.35;
-  padding: 2px 6px;
+  padding: 1px 6px;
   border-radius: var(--radius-xs);
   background: var(--overlay-6);
   border: 1px solid var(--overlay-10);
-  word-break: break-word;
+  /* A long effect phrase is wrapped, never clipped: the panel does not scroll
+     sideways, so an over-wide chip used to paint out of its own row. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* "Why not" is a line in the row, not a tooltip: a locked row has to say what
    it is waiting for without being hovered or tapped ([[B190]]). */
-.ct-why { font-size: 10px; color: var(--danger-bright); margin-top: 1px; }
+.ct-why { display: block; font-size: 10px; color: var(--danger-bright); margin-top: 1px; clear: right; }
 
 .ct-cell-cost { display: flex; justify-content: flex-end; align-items: flex-start; }
 .ct-cost {
@@ -438,29 +456,22 @@ function pickRandom() {
 
 /* ── narrowing: the row becomes a card ─────────────────────────────────────
    Below ~520px of *surface* width the cost wraps under the result and the
-   legend goes: a three-column table read at 380px is three cramped columns, and
-   the same content stacked is one comfortable one. This is what makes the
-   surface work on a phone in portrait and in a 400px dock. */
+   legend goes: a table read at 380px is two cramped columns, and the same
+   content stacked is one comfortable one. This is what makes the surface work
+   on a phone in portrait and in a 400px dock. The key is **not** part of this:
+   it is a corner chip in the content at every width, so it never costs a line
+   of its own — which is where the dock's ~290px used to spend 28px per row. */
 @container ct (max-width: 520px) {
   .ct-head { display: none; }
-  .ct-row { grid-template-columns: auto minmax(0, 1fr); }
-  .ct-cell-cost { grid-column: 2; justify-content: flex-start; margin-top: 1px; }
-  .ct-pip { min-width: 28px; }
-}
-
-/* A phone is one column — but the key stays, on its own line: it is what the
-   dice found, and the moment a row is worth seeing is exactly the moment the
-   surface is this narrow. */
-@container ct (max-width: 340px) {
   .ct-row { grid-template-columns: minmax(0, 1fr); }
-  .ct-cell-cost { grid-column: 1; }
+  .ct-cell-cost { grid-column: 1; justify-content: flex-start; margin-top: 1px; }
 }
 
 /* ── compact: the roller's own menus ───────────────────────────────────────
    Same row, smaller bones: the dice roller's panels are ~360px and the menu
    sits under a pool, so it must not out-shout the roll it followed. */
 .ct-compact { gap: 4px; font-size: 11px; }
-.ct-compact .ct-row { --ct-key-w: 46px; padding: 6px 9px; gap: 8px; font-size: 11px; }
+.ct-compact .ct-row { padding: 5px 8px; gap: 6px; font-size: 11px; }
 .ct-compact .ct-label { font-weight: 600; }
 .ct-compact .ct-desc { font-size: 10px; }
 .ct-compact .ct-effect { font-size: 9px; padding: 1px 5px; }

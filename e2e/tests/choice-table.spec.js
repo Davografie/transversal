@@ -16,6 +16,7 @@
 
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { asPlayer } from '../helpers/role.js'
 
 const DESKTOP = { width: 1280, height: 950 }
 
@@ -130,14 +131,26 @@ async function focusBand(page, bandClass) {
  * left alone, the stack opens on the location band and the roller band's
  * `.band-tap` teaser sits over the pill.
  */
-async function seed(page, size, { stack = false } = {}) {
+async function seed(page, size, { stack = false, alreadySeeded = false } = {}) {
+  // Pin the role in the browser: the app turns a stored `architect` into GM
+  // free-roam (and PATCHes the role back), so a spec that depends on the shared
+  // fixture's role is at the mercy of whatever ran before it — and a GM's own
+  // sheet renders no ↩ settings button, which is what nine cases here hit.
+  // Idempotent: this spec re-seeds inside one test, and registering the same
+  // route twice leaves the shadowed handler trying to fulfil a request it no
+  // longer owns — the identity fetch is aborted, `ensurePlayer` reads that as a
+  // stale id and clears `playerId`, and the login overlay comes back up.
+  await page.unroute('**/api/v1/players/**')
+  await asPlayer(page)
   await page.setViewportSize(size)
-  await page.goto('/')
-  await page.evaluate(([pid, pname, eid]) => {
-    localStorage.setItem('playerId', pid)
-    localStorage.setItem('playerName', pname)
-    localStorage.setItem('entityId', eid)
-  }, [character.playerId, character.playerName, character.entityId])
+  if (!alreadySeeded) {
+    await page.goto('/')
+    await page.evaluate(([pid, pname, eid]) => {
+      localStorage.setItem('playerId', pid)
+      localStorage.setItem('playerName', pname)
+      localStorage.setItem('entityId', eid)
+    }, [character.playerId, character.playerName, character.entityId])
+  }
   await page.goto('/')
 
   // The identity overlay (`.name-entry.panel`) is up on the first load — there is
@@ -174,9 +187,34 @@ async function seed(page, size, { stack = false } = {}) {
   }
 }
 
+/**
+ * Re-enter the app *once* with the identity already seeded.
+ *
+ * `seed()` navigates twice — the first load is what makes setting localStorage
+ * take effect. That is fine for a first entry, but a second `seed()` inside one
+ * test races the app: the first of its two loads starts `GET /players/{id}`,
+ * the second navigation aborts it, and `usePlayerIdentity`'s `fetchPlayer`
+ * returns null for an aborted fetch — which `ensurePlayer` reads as *"stale
+ * id"* and answers by deleting `playerId` from localStorage. The next load then
+ * has no identity at all and the login overlay comes up.
+ *
+ * That the app treats a *failed* fetch as a stale id is its own problem
+ * (reported, not patched here); what a re-entry needs is simply one load.
+ */
+async function reseed(page) {
+  await seed(page, DESKTOP, { alreadySeeded: true })
+}
+
 /** Settings → "create a support character" → the menu (the human's reference surface). */
 async function openCreateSupport(page) {
-  await page.locator('.sheet-pills button[title="Player settings"]').click({ timeout: 15_000 })
+  // The ↩ settings button is a *sibling* of `.sheet-pills`, not a child: the tab
+  // row became a horizontal scroller (the phone-landscape dock is ~179px of
+  // sheet, and wrapping the tabs inside the group's rounded border stopped it
+  // reading as a group), so the ↩ was deliberately left outside to stay pinned
+  // rather than scroll away. This selector used to be
+  // `.sheet-pills button[title="Player settings"]`, which after that change could
+  // never match — which is what made nine cases in this spec red.
+  await page.locator('.sheet-embedded button[title="Player settings"]').first().click({ timeout: 15_000 })
   await page.locator('.support-create-btn').first().click({ timeout: 15_000 })
   await page.locator('.rtm-root').waitFor({ state: 'visible', timeout: 15_000 })
   await page.locator('.ct-row').first().waitFor({ state: 'visible', timeout: 15_000 })
@@ -193,6 +231,7 @@ const measure = (page) => page.evaluate(() => {
   const costBox = cost && cost.getBoundingClientRect()
   const labelBox = label && label.getBoundingClientRect()
   const rowBox = row && row.getBoundingClientRect()
+  const keyBox = key && key.getBoundingClientRect()
   return {
     containerW: ct.clientWidth,
     head: head ? getComputedStyle(head).display : '(no legend)',
@@ -204,6 +243,13 @@ const measure = (page) => page.evaluate(() => {
     costH: costBox && Math.round(costBox.height),
     // Is the price beside the result (same line) or wrapped under it?
     costBelowLabel: !!(costBox && labelBox) && costBox.top >= labelBox.bottom - 1,
+    // The key is a *corner chip*, not a column: it shares the label's first line
+    // at every width and sits at the content's right edge. Its failure mode is
+    // silent — the row simply gets a line taller, which reads as "these rows are
+    // a bit roomy" rather than as a bug. It cost 28px per row at the dock's
+    // ~290px before this was pinned.
+    keyOnLabelLine: !!(keyBox && labelBox) && Math.abs(keyBox.top - labelBox.top) <= 2,
+    keyAtContentRight: !!(keyBox && labelBox) && Math.abs(labelBox.right - keyBox.right) <= 1,
     costText: cost && cost.innerText,
     rows: document.querySelectorAll('.ct-row').length,
     pips: Array.from(document.querySelectorAll('.ct-pip')).map((e) => e.innerText),
@@ -239,9 +285,16 @@ for (const [label, size, layout, stack] of VIEWPORTS) {
     // Rows fill the surface rather than a fixed column width.
     expect(m.rowW).toBeGreaterThan(m.containerW - 2)
 
+    // The key is a corner chip in the content at *every* width — it shares the
+    // label's first line and sits at the content's right edge. This is the
+    // compaction contract: if it ever claims a line of its own again, each row
+    // silently grows by ~28px (measured at the dock's ~290px).
+    expect(m.keyOnLabelLine, 'the key shares the label\'s first line').toBe(true)
+    expect(m.keyAtContentRight, 'the key sits at the content\'s right edge').toBe(true)
+
     if (layout === 'table') {
-      // There is room: three columns, the legend up, the key present, and the
-      // cost on one line *beside* the result.
+      // There is room: the legend is up, the key present, and the cost on one
+      // line *beside* the result.
       expect(m.containerW).toBeGreaterThanOrEqual(520)
       expect(m.head, 'the column legend is up where there is room').not.toBe('(no legend)')
       expect(m.head).not.toBe('none')
@@ -250,16 +303,16 @@ for (const [label, size, layout, stack] of VIEWPORTS) {
       expect(m.costH, 'the cost is not squeezed onto two lines').toBeLessThan(24)
       expect(m.costBelowLabel, 'the cost sits beside the result, not under it').toBe(false)
     } else if (layout === 'columns') {
-      // Two columns: the cost has wrapped under the result, and the legend has
-      // gone with the column it labelled.
+      // The cost has wrapped under the result, and the legend has gone with the
+      // second column it labelled.
       expect(m.containerW).toBeLessThan(520)
       expect(m.containerW).toBeGreaterThan(340)
       expect(m.head, 'the legend leaves with the columns').toBe('none')
       expect(m.key, 'the key survives').not.toBe('none')
       expect(m.costBelowLabel, 'the cost wraps under the result').toBe(true)
     } else {
-      // A phone: one column, and the row still carries its key — that is what the
-      // dice found, and it is the moment the row matters most.
+      // A phone: one column, and the row still carries its key in the corner —
+      // that is what the dice found, and it is the moment the row matters most.
       expect(m.containerW).toBeLessThanOrEqual(340)
       expect(m.head, 'the legend is hidden once the columns collapse').toBe('none')
       expect(m.key, 'the key survives the collapse').not.toBe('none')
@@ -374,7 +427,7 @@ test('the 🎲 marks a row; the click takes it — there is no confirm', async (
 
   // And the other half of the same rule: a roll never locks the choice in, so a
   // click on a *different* row takes that one instead.
-  await seed(page, DESKTOP)
+  await reseed(page)
   await openCreateSupport(page)
   await page.locator('.ct-actions').getByRole('button', { name: /roll/i }).click()
   const other = await page.locator('.ct-row').evaluateAll(
