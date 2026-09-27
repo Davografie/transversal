@@ -4,6 +4,7 @@ from transversal.services.effects_registry.action_types import (
     TRAIT_OWNER_ELEMENTS,
     EffectActionMeta,
     EffectFieldDef,
+    RefDef,
     _ENTITY_FIELD,
     _IF_NOT_EXISTS_FIELD,
     _NOTES_CONTEXT_FIELD,
@@ -166,10 +167,13 @@ ACTIONS: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
         ],
-        context_fields=[
-            EffectFieldDef(name="learner", label="Learner", field_type="entity",
-                          required=False, default="self"),
-        ],
+        # Who learns it is a **path**, not a text box: the useful case is dynamic
+        # (the trait's *owner*, for spying), and that is exactly what a targeting
+        # path expresses. The named reference is resolved by `resolve_refs` before
+        # dispatch, so a multi-value path reveals to each in turn. Empty means the
+        # entity the effect lands on. It used to be a `context` field, and stored
+        # content still carries that key — `_resolve_learners` reads it as a fallback.
+        refs=[RefDef("learner", "Learner", "entity")],
         path_element=("traitsetting",),
     ),
 

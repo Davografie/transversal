@@ -2121,6 +2121,99 @@ def test_reveal_is_idempotent():
     assert result.applied[0].summary == "char-1 already knows hidden-trait"
 
 
+def test_reveal_uses_the_learner_reference():
+    """The learner is a named reference now, so a stored value reveals to *that* entity."""
+    owner = _entity(id="char-2")
+    spy = _entity(id="char-4")
+    ts = _ts("hidden-trait", [DieType.D8], entity_id="char-2", traitset_id="ts-x", known_to=[])
+    repo = FakeRepo(traits=[FakeTrait("hidden-trait", "ts-x")], traitsettings=[ts],
+                    entities=[owner, spy])
+    entity = _entity()  # char-1
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="reveal",
+        target="hidden-trait", entity="char-2",
+        refs={"learner": TargetRef(value="char-4")},
+    )
+    result = apply_effects(entity, [effect], repo)
+
+    assert ts.known_to == ["char-4"]
+    assert result.applied[0].summary == "revealed hidden-trait to char-4"
+
+
+def test_reveal_resolves_a_learner_path_on_the_direct_entry_point():
+    """The learner is a *targeting path*, and the direct entry point has to resolve
+    it here: `apply_effects` never runs `resolve_refs` (only the engine does), so a
+    spec left to it would be silently ignored — a learner path that worked on an
+    automatic trigger and did nothing for a life-path or roll-table effect."""
+    owner = _entity(id="char-2")
+    ts = _ts("hidden-trait", [DieType.D8], entity_id="char-2", traitset_id="ts-x", known_to=[])
+    repo = FakeRepo(traits=[FakeTrait("hidden-trait", "ts-x")], traitsettings=[ts], entities=[owner])
+    entity = _entity()  # char-1
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="reveal",
+        target="hidden-trait", entity="char-2",
+        refs={"learner": TargetRef(
+            value="",
+            spec=TargetSpec(steps=[{"kind": "select", "collection": "self"}]),
+        )},
+    )
+    result = apply_effects(entity, [effect], repo)
+
+    # `select self` is the acting entity — the same reading the empty default has.
+    assert ts.known_to == ["char-1"]
+    assert result.applied[0].summary == "revealed hidden-trait to char-1"
+
+
+def test_reveal_reports_a_learner_path_that_matches_nobody():
+    """A path that matches nobody reveals to nobody and says so — it does not fall
+    back to `self`, which is what a handler that only read `ref.value` would do."""
+    owner = _entity(id="char-2")
+    ts = _ts("hidden-trait", [DieType.D8], entity_id="char-2", traitset_id="ts-x", known_to=[])
+    repo = FakeRepo(traits=[FakeTrait("hidden-trait", "ts-x")], traitsettings=[ts], entities=[owner])
+    entity = _entity()  # char-1
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="reveal",
+        target="hidden-trait", entity="char-2",
+        refs={"learner": TargetRef(
+            value="",
+            spec=TargetSpec(steps=[
+                {"kind": "select", "collection": "self"},
+                {"kind": "filter", "field": "id", "operator": "==", "value": "char-nobody"},
+            ]),
+        )},
+    )
+    result = apply_effects(entity, [effect], repo)
+
+    assert ts.known_to == []
+    assert result.revealed == []
+    assert result.applied[0].summary == "no learner matched the path"
+
+
+def test_reveal_still_honours_a_stored_context_learner():
+    """Live content authored before the reference existed stores `context.learner`
+    (`sfx-expose-trait`): a stored context key keeps working whatever the action
+    now declares."""
+    owner = _entity(id="char-2")
+    spy = _entity(id="char-4")
+    ts = _ts("hidden-trait", [DieType.D8], entity_id="char-2", traitset_id="ts-x", known_to=[])
+    repo = FakeRepo(traits=[FakeTrait("hidden-trait", "ts-x")], traitsettings=[ts],
+                    entities=[owner, spy])
+    entity = _entity()  # char-1
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="reveal",
+        target="hidden-trait", entity="char-2",
+        context={"learner": "char-4"},
+    )
+    result = apply_effects(entity, [effect], repo)
+
+    assert ts.known_to == ["char-4"]
+    assert result.applied[0].summary == "revealed hidden-trait to char-4"
+
+
 # ── Travel (portal) ─────────────────────────────────
 
 class TravelRepo:

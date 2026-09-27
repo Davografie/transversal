@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="sfx-summary">{{ sfxSummary }}</div>
+    <div v-if="sfx" class="sfx-summary">{{ sfxSummary }}</div>
     <!-- Where this rule is attached, when the caller knows. Manage SFX knows (its
          owner filter picked it); the editor alone never does — and since the
          attachment lives on another screen, that fact is invisible here. -->
@@ -18,6 +18,20 @@
       <input v-model="draft.name" placeholder="SFX name…" />
       <label>Description</label>
       <textarea v-model="draft.description" rows="2" placeholder="Flavour text…"></textarea>
+
+      <!-- Before the rule exists, nothing on this panel is written anywhere: the
+           auto-save has no id to save to, so every authoring control below would be
+           a silent promise that an edit was kept. It is **not** a save bug — Create
+           sends the whole draft, conditions and effects included (verified on the
+           wire) — it is that a rule built and then abandoned is lost with no
+           warning, which is exactly how it read. So create mode asks only for what
+           *creates* the rule; pressing Create turns this same panel into the rule's
+           editor (nothing closes), and every edit from then on saves itself. -->
+      <p v-if="!sfx" class="hint sfx-create-note">
+        Name it and press <strong>Create SFX</strong>. The rest of the rule appears
+        then — from that point every edit saves as you make it.
+      </p>
+      <template v-if="sfx">
 
       <!-- The author's grouping: where a rule *lives* and what *starts* it are
            one subject — the trigger — and were two sibling headings that read as
@@ -111,8 +125,10 @@
       <h5 class="sfx-slot">Limits</h5>
       <label>Conditions</label>
       <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" :variables="allVariables" />
+      </template>
     </div>
 
+    <template v-if="sfx">
     <!-- Effects: list inline; each effect's form opens in a child panel.
          "Costs & Effects" rather than "What it does" (the author's call,
          2026-09-26): the list is one ordered sequence — the array *is* the
@@ -154,6 +170,7 @@
       </div>
       <p v-else-if="sfx" class="hint">No trait lists this rule, so "without being learned" has nothing to act on yet.</p>
     </div>
+    </template>
 
     <!-- Status messages -->
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
@@ -594,6 +611,10 @@ async function onDelete() {
 .sfx-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: var(--accent-12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); }
 .sfx-var-type { font-style: normal; font-family: inherit; font-size: 8px; color: var(--text-dim); margin-left: 3px; }
 .hint { text-transform: none; letter-spacing: 0; color: var(--text-dim); font-size: 9px; }
+/* In create mode this note is the only thing under the name field, so it gets to
+   be readable: `.hint`'s 9px is a field's footnote, not the panel's explanation
+   of what Create does and when saving starts. */
+.sfx-create-note { margin: 8px 0 0; font-size: 11px; line-height: 1.4; }
 /* The implicit checkbox is a control, not a field label — it keeps the sentence
    case the base rule above would otherwise uppercase. */
 .sfx-acquire label.sfx-implicit {

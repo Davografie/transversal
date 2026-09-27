@@ -312,3 +312,17 @@ def test_an_action_need_not_declare_a_render_order():
     so only the actions that need it carry one."""
     meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "gain_trait")
     assert meta.field_order == ()
+
+
+def test_reveal_asks_for_the_learner_as_a_path():
+    """The learner is a named **reference**, not a flat entity box: the useful case
+    is dynamic (the trait's *owner*, for spying) and a targeting path is what says
+    it. It used to be a `context` field, and live content still stores that key
+    (`sfx-expose-trait`) — the handler keeps reading it, but the action must no
+    longer declare one, or the editor shows a text box that cannot express it."""
+    meta = _meta("reveal")
+    assert meta is not None
+    refs = {r.name: r for r in meta.refs}
+    assert "learner" in refs, "reveal must declare the learner as a reference"
+    assert refs["learner"].element == "entity"
+    assert "learner" not in {f.name for f in meta.context_fields}

@@ -78,7 +78,7 @@ from transversal.services.effects_applier.handlers_traits import (  # noqa: F401
     _maybe_complete_challenge,
     _apply_remove,
     _apply_reveal,
-    _resolve_learner,
+    _resolve_learners,
     _apply_discover,
 )
 

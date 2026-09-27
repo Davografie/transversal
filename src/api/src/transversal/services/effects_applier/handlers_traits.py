@@ -547,26 +547,62 @@ def _apply_remove(entity, effect, repo, result):
     result.removed_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"removed {target}", existing.id))
 
-def _resolve_learner(entity: Entity, effect: Effect, result: EffectsResult) -> Optional[str]:
-    """Resolve who learns a revealed trait.
+def _resolve_learners(entity: Entity, effect: Effect, repo, result: EffectsResult) -> list[str]:
+    """Everyone who learns a revealed trait.
 
-    ``effect.context.learner`` defaults to ``"self"`` (the entity the effect
-    is applied to — the activating entity for a manual SFX). A literal entity id
-    passes through; a ``{token}`` does not, because a learner chosen at fire time
-    would have to be a targeting path (the owner entity is the intended dynamic
-    piece for spying).
+    The learner is a **named reference** (`refs.learner`), so the author points at
+    an entity with a targeting path — the useful case being dynamic (the trait's
+    *owner*, for spying), which is exactly what a path expresses. A path that
+    matches several entities reveals to each of them.
+
+    Two resolution routes, because there are two firing kinds of path: the engine
+    runs `resolve_refs` before dispatch (turning the spec into one concrete
+    `value` and fanning the effect out), while `apply_effects` — the direct entry
+    point a life-path or roll-table entry uses — does **not** resolve refs at all,
+    so a spec left to it would be silently ignored. The spec is therefore resolved
+    here too, the same way `_body_pool` resolves the travel `projection` ref, and
+    the resolved value wins when both are present.
+
+    Empty means ``self``: the entity the effect is applied to, which is the
+    activating entity for a manual SFX — the reading this had before the reference
+    existed, and the one `select self` starts from. ``context.learner`` is read as
+    the last fallback, because live content authored before the reference existed
+    stores it there (`sfx-expose-trait`).
     """
-    learner = (effect.context or {}).get("learner") or "self"
-    learner = (learner or "").strip()
-    if learner in ("", "self"):
-        return entity.id
-    if learner.startswith("{") and learner.endswith("}"):
-        result.applied.append(AppliedEffect(effect, f"learner token not supported: {learner}"))
-        return None
-    return learner
+    ref = (effect.refs or {}).get("learner")
+
+    # 1. Resolved by the engine already (or a literal value the author stored).
+    value = (getattr(ref, "value", "") or "").strip() if ref is not None else ""
+    if value:
+        if value == "self":
+            return [entity.id]
+        if value.startswith("{") and value.endswith("}"):
+            result.applied.append(AppliedEffect(effect, f"learner token not supported: {value}"))
+            return []
+        return [value]
+
+    # 2. A direct entry point: the spec is still here, and nothing else will run it.
+    if ref is not None and ref.spec is not None and getattr(ref.spec, "steps", None) and repo is not None:
+        from transversal.services.target_resolver import TargetContext, resolve, resolved_id
+
+        resolution = resolve(ref.spec, TargetContext(subject=entity, repo=repo))
+        found = [rid for v in resolution.values if (rid := resolved_id(v))]
+        if found:
+            return found
+        result.applied.append(AppliedEffect(effect, "no learner matched the path"))
+        return []
+
+    # 3. A stored context key from before the reference existed.
+    legacy = ((effect.context or {}).get("learner") or "").strip()
+    if legacy in ("", "self"):
+        return [entity.id]
+    if legacy.startswith("{") and legacy.endswith("}"):
+        result.applied.append(AppliedEffect(effect, f"learner token not supported: {legacy}"))
+        return []
+    return [legacy]
 
 def _apply_reveal(entity, effect, repo, result):
-    """Add the learner to a trait setting's ``known_to`` (fog of war)."""
+    """Add the learner(s) to a trait setting's ``known_to`` (fog of war)."""
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
         return
@@ -578,14 +614,12 @@ def _apply_reveal(entity, effect, repo, result):
     if ts is None:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to reveal"))
         return
-    learner = _resolve_learner(entity, effect, result)
-    if learner is None:
-        return
-    if reveal_trait_to(ts, learner):
-        result.revealed.append((ts, learner))
-        result.applied.append(AppliedEffect(effect, f"revealed {target} to {learner}", ts.id))
-    else:
-        result.applied.append(AppliedEffect(effect, f"{learner} already knows {target}"))
+    for learner in _resolve_learners(entity, effect, repo, result):
+        if reveal_trait_to(ts, learner):
+            result.revealed.append((ts, learner))
+            result.applied.append(AppliedEffect(effect, f"revealed {target} to {learner}", ts.id))
+        else:
+            result.applied.append(AppliedEffect(effect, f"{learner} already knows {target}"))
 
 
 def _apply_set_statement(entity, effect, repo, result):
