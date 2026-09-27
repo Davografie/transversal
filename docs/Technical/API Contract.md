@@ -102,6 +102,7 @@ type TraitRef {
   polarity: Polarity
   possibleSfxIds: [ID!]!
   tags: [String!]!
+  explanation: String!     # the definition's own text (registry only, never per instance)
 }
 
 type TraitSetRef {
@@ -114,6 +115,7 @@ type TraitSetRef {
   allowDuplicates: Boolean!
   sheetTab: SheetTab!      # which sheet tab the set's traits render on (TRAITS | PROFILE)
   polarity: Polarity
+  explanation: String!     # the set's own text; legacy documents stored it as `description`
 }
 
 enum SheetTab {
@@ -297,8 +299,8 @@ type Mutation {
   addProjection(entityId: ID!, universe: String!, type: TransversalType): Entity!
 
   # Trait-set registry (GM authoring)
-  createTraitSet(id: String!, name: String!, universes: [String!]!, entityTypes: [EntityType!], description: String, order: Int, limit: Int, allowDuplicates: Boolean, polarity: Polarity): TraitSetRef!
-  updateTraitSet(id: ID!, name: String, universes: [String!], entityTypes: [EntityType!], description: String, order: Int, limit: Int, allowDuplicates: Boolean, polarity: Polarity, clearPolarity: Boolean): TraitSetRef!
+  createTraitSet(id: String!, name: String!, universes: [String!]!, entityTypes: [EntityType!], explanation: String, description: String, order: Int, limit: Int, allowDuplicates: Boolean, polarity: Polarity): TraitSetRef!
+  updateTraitSet(id: ID!, name: String, universes: [String!], entityTypes: [EntityType!], explanation: String, description: String, order: Int, limit: Int, allowDuplicates: Boolean, polarity: Polarity, clearPolarity: Boolean): TraitSetRef!
   deleteTraitSet(id: ID!): String!
   reorderTraitsets(ids: [ID!]!): Boolean!
 

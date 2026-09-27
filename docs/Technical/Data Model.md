@@ -251,7 +251,7 @@ Registry of trait groupings. Defines named sets of traits available to entity ty
 | `_key` | string | ✅ | e.g. `ts-attributes-8f3a`, `ts-cultivation-9d4e` |
 | `name` | string | ✅ | Display name (e.g. `attributes`, `skills`, `cultivation`) |
 | `universes` | string[] | ✅ | Universe keys where this traitset applies |
-| `description` | string | | Explainer text |
+| `explanation` | string | | What the set is for, in the author's words — the old app's `explainer`. Read through a legacy fold: documents the migration stored under `description` still answer, and the stale key leaves on the next write |
 | `entity_types` | EntityType[] | | Which entity types can use this set |
 | `order` | int | | Display sort order (default `0`) |
 | `limit` | int | | Max traits an entity can select from this set (default `1`) |
@@ -292,7 +292,7 @@ Registry of all possible traits per universe. Shared definitions — not per-ent
 | `possible_subtrait_ids` | string[] | | Sub-traits that can be nested under this trait |
 | `possible_sfx_ids` | string[] | | SFX IDs unlockable for this trait |
 | `default_ego` | bool | | Grant default: true = entity (ego/persists), false = projection (morph/gated) |
-| `explanation` | string | | Flavor or rules explanation text |
+| `explanation` | string | | What the trait is, in the author's words — the old app's `explanation`, which the migration has carried since the registry landed |
 | `random_weight` | int | | Weight for random trait generation (default `0`) |
 | `display_names` | TraitDisplayName[] | | Dynamic display names keyed by dice rating + universe |
 | `possible_subtraitset_ids` | string[] | | Whole traitsets that can be nested as sub-traits |
