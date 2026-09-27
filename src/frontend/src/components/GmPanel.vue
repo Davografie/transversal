@@ -510,26 +510,31 @@ function goToLocation(locId) {
 
 // Create panel, opened from a tree "add" row. `type` preselects the form's
 // entity type; `ctx` is the add-row node — its collection decides the default
-// universe (and, for occupants, the default location).
+// universe, and for an occupant or a zone the default parent location too.
 function startCreate(type = '', ctx = null) {
   creating.value = true; editing.value = false; selected.value = null
+  const inheritsParent = ctx?.addType === 'occupant' || ctx?.addType === 'zone'
   panel.open({
     component: GmEntityCreatePanel,
     title: 'New Entity',
     props: {
       defaultUniverse: ctx?.universe || props.universe,
-      defaultLocationId: ctx?.addType === 'occupant' ? ctx.parentId : '',
+      defaultLocationId: inheritsParent ? ctx.parentId : '',
       defaultType: type,
       locationTree: locationTree.value,
     },
-    listeners: { 'create': createEntity },
+    // The tree's structure comes from its own read, so a new *location* does not
+    // appear in it until the tree is re-fetched — `createEntity` only refreshes
+    // the entity list. Waiting for the write before announcing keeps the re-fetch
+    // from racing it.
+    listeners: { 'create': async (payload) => { await createEntity(payload); bus.emit('locations-changed') } },
   })
 }
 
 function onAddEntity(node) {
   // Occupants default to CHARACTER — the create form's type dropdown still
   // offers GMC / ASSET / FACTION / LOCATION / UNIVERSE.
-  const typeByAdd = { occupant: 'CHARACTER', location: 'LOCATION', universe: 'UNIVERSE' }
+  const typeByAdd = { occupant: 'CHARACTER', location: 'LOCATION', universe: 'UNIVERSE', zone: 'LOCATION' }
   startCreate(typeByAdd[node.addType] || '', node)
 }
 

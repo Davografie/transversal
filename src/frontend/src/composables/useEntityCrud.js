@@ -142,22 +142,42 @@ export function createEntityCrud() {
 
   async function createEntity(formData) {
     saving.value = true
-    await graphql(
-      `mutation($input: CreateEntityInput!) {
-        createEntity(input: $input) { id name type razmerit currentUniverse currentLocation }
-      }`,
-      {
-        input: {
-          name: formData.name,
-          type: formData.type,
-          universe: formData.universe,
-          location: formData.location || null,
-          razmerit: formData.razmerit || 0,
-        },
+    try {
+      const result = await graphql(
+        `mutation($input: CreateEntityInput!) {
+          createEntity(input: $input) { id name type razmerit currentUniverse currentLocation }
+        }`,
+        {
+          input: {
+            name: formData.name,
+            type: formData.type,
+            universe: formData.universe,
+            location: formData.location || null,
+            razmerit: formData.razmerit || 0,
+          },
+        }
+      )
+      // A location's parent is an **edge**, not a field. `create_entity` stores
+      // the denormalized `current_location` and writes no `super` edge, so a zone
+      // created under a parent would never appear in the tree (nor get the
+      // parent's zone / the child's nav-dot defaults, which the edge endpoint
+      // seeds). The entity panel's Zones section does these same two steps by
+      // hand; this is the one place the tree's create rows land, so the edge
+      // belongs here.
+      const created = result?.createEntity
+      if (created?.id && formData.type === 'LOCATION' && formData.location) {
+        await fetch(`/api/v1/locations/${created.id}/edges/${formData.location}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'super' }),
+        })
       }
-    )
-    saving.value = false
-    creating.value = false
+    } finally {
+      // The edge write is a second thing that can throw; the create panel's
+      // spinner must not survive either failure.
+      saving.value = false
+      creating.value = false
+    }
     await fetchEntities()
   }
 

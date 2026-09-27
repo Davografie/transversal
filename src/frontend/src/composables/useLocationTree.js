@@ -224,13 +224,47 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
   // any other level ("… N more universes").
   const ROOT_KEY = '__root__'
 
-  // Inline "add" rows hang off the end of their collection. They are only
-  // offered while browsing the whole tree: with filters or focus active the
-  // list shows a curated subset, so "the end of the collection" is not a
-  // stable place to put them.
-  const showAddRows = computed(() =>
+  // Inline "add" rows hang off the end of their collection. They used to be
+  // offered only while browsing the whole tree — with a filter or a focus the
+  // list is a curated subset, so "the end of the collection" is not a stable
+  // place to put them. That left **no way to create anything at all** while a
+  // chip was active, because these rows are the only create entry point (the
+  // author's report, 2026-09-26). The rule is per level now:
+  //
+  //   * the plain view (no filter, no focus) offers them everywhere, as before;
+  //   * a place the filter matched **and its sub-locations** offer them — there
+  //     the place *is* the scope the author is working in;
+  //   * any level the GM expanded by hand offers them, which is what covers a
+  //     filter that names no place (a type, player or status chip) and the focus
+  //     chain.
+  //
+  // `expandedNodes[id] === true` is the explicit expand. `false` is a level the
+  // GM closed and `undefined` is one the filter's baseline opened, and neither
+  // is the GM saying "work here".
+  const filterPlaceIds = computed(() => {
+    const ids = new Set()
+    if (!hasEntityChip.value) return ids
+    // The places the filter matched. `matchedScope` already closes a location
+    // chip over its whole subtree, so a sub-location of the filtered place is in
+    // this list on its own — which is exactly "the filtered location and its
+    // sub-locations".
+    for (const e of (filteredEntities?.value ?? [])) {
+      if (e.type === 'LOCATION') ids.add(e.id)
+    }
+    return ids
+  })
+
+  // No filter and no focus: the whole tree is on screen and every collection is
+  // complete, which is the case the old blanket rule was written for.
+  const plainView = computed(() =>
     !hasEntityChip.value && !activeUniverseFilters.value.size && focusPathIds.value.size === 0
   )
+
+  function showsAddRows(node) {
+    if (plainView.value) return true
+    if (expandedNodes.value[node.id] === true) return true
+    return filterPlaceIds.value.has(node.id)
+  }
 
   // `occupants` / `allOccupants` are the matched and the full rosters; the
   // difference is what the filter is hiding, which the chevron has to own up to.
@@ -370,14 +404,18 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
             entityType: e.type, entity: e, unpublished: !!e.unpublished,
           })
         }
-        // Occupants live in locations, so the row trails each location's roster.
-        if (kind === 'location' && contentsOpen && showAddRows.value) {
-          result.push({
-            id: 'add:occupant:' + node.id, kind: 'add', addType: 'occupant',
-            parentId: node.id, universe: node.universe || '', depth: depth + 1,
-            hasChildren: false, name: 'add occupant',
-          })
-        }
+      }
+      // Occupants live in locations, so the row trails each location's roster.
+      // It is offered even when the *shown* roster is empty — which is the case a
+      // filter creates (nothing here matched it) and the case a brand-new place
+      // has always had. Nested inside `shownRoster.length` it used to disappear
+      // exactly when a GM needed it most.
+      if (kind === 'location' && contentsOpen && showsAddRows(node)) {
+        result.push({
+          id: 'add:occupant:' + node.id, kind: 'add', addType: 'occupant',
+          parentId: node.id, universe: node.universe || '', depth: depth + 1,
+          hasChildren: false, name: 'add occupant',
+        })
       }
       if (shownUnplaced.length) {
         for (const e of shownUnplaced) {
@@ -404,11 +442,21 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       }
       // Locations are placed in a universe, so the row trails that universe's
       // children — including when it has none yet.
-      if (kind === 'universe' && contentsOpen && showAddRows.value && node.universe) {
+      if (kind === 'universe' && contentsOpen && showsAddRows(node) && node.universe) {
         result.push({
           id: 'add:location:' + node.id, kind: 'add', addType: 'location',
           parentId: node.id, universe: node.universe, depth: depth + 1,
           hasChildren: false, name: 'add location',
+        })
+      }
+      // A location's children are its **zones**, so the same row trails them —
+      // this is the tree's way to add to the level the author is looking at,
+      // where the entity panel has its own Zones section.
+      if (kind === 'location' && contentsOpen && showsAddRows(node)) {
+        result.push({
+          id: 'add:zone:' + node.id, kind: 'add', addType: 'zone',
+          parentId: node.id, universe: node.universe || '', depth: depth + 1,
+          hasChildren: false, name: 'add zone',
         })
       }
     }
@@ -422,8 +470,10 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
         })
       }
     }
-    // Universes are the top level, so their "add" row closes the whole tree.
-    if (depth === 0 && showAddRows.value) {
+    // Universes are the top level, so their "add" row closes the whole tree. The
+    // root is not a node, so it has no place scope to inherit: it offers the row
+    // in the plain view, or once the root stub itself has been expanded.
+    if (depth === 0 && (plainView.value || expandedNodes.value[ROOT_KEY] === true)) {
       result.push({
         id: 'add:universe', kind: 'add', addType: 'universe',
         parentId: '', universe: '', depth: 0, hasChildren: false, name: 'add universe',

@@ -124,11 +124,11 @@ console.log('\nthe create panel offers the types it must\n')
 ok('UNIVERSE is offerable — its type list is the shared one', /v-for="t in ENTITY_TYPES"/.test(CREATE), true)
 ok('a universe cannot be given a location', /:disabled="form\.type === 'UNIVERSE'"/.test(CREATE), true)
 ok('an add row prefills the type it trails',
-  /const typeByAdd = \{ occupant: 'CHARACTER', location: 'LOCATION', universe: 'UNIVERSE' \}/.test(
+  /const typeByAdd = \{ occupant: 'CHARACTER', location: 'LOCATION', universe: 'UNIVERSE', zone: 'LOCATION' \}/.test(
     readFileSync(new URL('../src/components/GmPanel.vue', import.meta.url), 'utf8')), true)
 ok('an occupant add row is given its location as the parent',
   readFileSync(new URL('../src/components/GmPanel.vue', import.meta.url), 'utf8')
-    .includes("ctx?.addType === 'occupant' ? ctx.parentId : ''"), true)
+    .includes("ctx?.addType === 'occupant' || ctx?.addType === 'zone'"), true)
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)
