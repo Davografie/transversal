@@ -51,9 +51,21 @@ still tier 1.
 | **2** | Rich | *reward* being explored: people to meet, things to do, danger, ways out | + cast, occupations, challenges, portals |
 | **3** | Deep | *change over a campaign*: it has an owner, a mood that shifts, secrets, a history of what happened here | + faction ties, SFX, blue book |
 
-**Tier 1 is the minimum for play. Nothing in the live corpus is above tier 0** for most
-locations — 85 of 100 earth locations carry no trait setting at all, and **no earth
-location has a background image**. This guide is the recipe for closing that.
+**Tier 1 is the minimum for play, and earth has no location that reaches it:** 85 of its
+100 locations carry no trait setting at all, and **not one has a background image**. In
+three_realms the sect grounds do reach tier 2, so the target is proven rather than
+hypothetical: ***Azure Dawn* reads 16 settings — of which 7 are `laws`, the block this
+guide recommends for tier 1 — two challenges (one a negative event, "Sweeping the Path of
+Petals"), a background image, four zones, and twelve occupants.** That is the model to
+copy. This guide is the recipe for bringing earth up to it.
+
+**One counting trap, before you measure anything:** the setting *count* is a bad proxy
+for readiness, because `imagen` prompt text and a `secrets` description both count, and
+so do duplicate traits. § 2's worked example shows earth's best-developed place at 28
+settings with **almost no location mechanics** among them. Count by *what the settings
+do*, not how many there are.
+
+
 
 ## 2. Layer 0 — the place exists
 
@@ -76,20 +88,46 @@ derived from it.
 > travel route reaches it. In the live data this is not hypothetical: **195 of 410
 > locations are unreachable from the authored control point** (B174).
 
-> [!example] The default-placement problem, on the one place earth has authored
-> `Krasnoyarsk-45` reads, live:
-> ```json
-> "zones": [
->   {"location_id": "location-ard-facility-de4078f2",  "x": 50, "y": 50},
->   {"location_id": "location-the-mountain-road-dc5d20e0", "x": 50, "y": 50}
-> ],
-> "nav_positions": {"parent": {"x": 23, "y": 84}, "portal": {"x": 88, "y": 52}},
-> "background_image": null, "unpublished": true
-> ```
-> Both zones sit at the **default (50, 50)**, so the ARD facility and the mountain road
-> open from the same point in the middle of a background **that does not exist yet** —
-> and the location is still `unpublished`, so players cannot reach it at all. It is the
-> best-developed earth location and it is still tier 0.
+> [!example] What "developed" actually looks like, on live earth data
+> Three places, counted through the `super` edges — which is where the hierarchy
+> really lives, **not** in the denormalised `current_location` field:
+>
+> | Place | Locations | Trait settings | Published |
+> |---|---:|---:|---|
+> | **Турышка** | **9** | **28** | all live |
+> | Krasnoyarsk-45 | 4 | 5 | **every one `unpublished`** |
+> | São Bento do Vale | 5 | 0 | unpublished |
+>
+> **Турышка is the best-developed place in the earth universe** — it is the model to
+> copy, and it is also the honest measure of how far the corpus still is from tier 2.
+> Of its 28 settings, **what the rooms actually contain is:**
+>
+> | Set | Count | What it is |
+> |---|---:|---|
+> | `imagen` | 10 | prompt text (`appearance`, `positive imagen`) — **not mechanics** |
+> | `location` | 9 | and of those, **only two traits**: `genre` ×5, `appearance` ×4 |
+> | `secrets` | 7 | a `description` note per room — the one-line "what this is" |
+> | `assets` | 1 | the jian, `melee weapon` d8, sitting in the basement |
+> | `challenges` | 1 | `event` — "extract blade", in the basement |
+>
+> So: **no `atmosphere`, no `function`, no `mood`, no `surveillance`, no `population`,
+> no `laws`, and not one background image** anywhere in earth's best place. Nine rooms
+> described in a sentence each, five of which share the same `genre` tag. The richest
+> *single* location is the `basement` (6 settings) — of which one is a location trait.
+>
+> **The lesson this guide exists to teach:** a setting count is a bad proxy for
+> readiness. Twenty-eight settings of prompt text read as "developed" in an inventory
+> and leave a scene with nothing to roll against. Krasnoyarsk-45 shows the other
+> failure mode — three **named** children (ARD Facility, The Mountain Road, The
+> Resonance Chamber) with **zero content on any of them**, and its two zones at the
+> default (50, 50). **Names without mechanics are tier 0 with better branding.**
+>
+> On `unpublished`: it is **not** a travel gate. The backend stores and returns it;
+> the client keeps unpublished **occupants** off a player's dot set
+> (`LocationViewer.vue:315`) and badges drafts in the GM tree. An unpublished
+> *location* is still reachable — a GM-only marker, not a lock.
+
+
 
 
 **A child location is two things, not one.** The entity in the tree, **and** a zone on
@@ -381,6 +419,16 @@ zone REST endpoints (`api/rest/locations.py`), the viewer's dot model
 schemas (`mcp/server.py` — `create_location`, `set_zones`, `update_entity`), and the
 domain models. **The completeness figures are from [[Content Gap Analysis]]'s live
 census**, not from this guide's own measurement.
+
+**A correction this note carries, because I made the mistake first:** I originally
+described `Krasnoyarsk-45` as earth's best-developed location. It is not — **Турышка**
+is, by a wide margin. Two errors compounded: I read the per-entity setting count for a
+single location as its subtree's total, and I walked the hierarchy through
+`current_location` when **the parent link is the `super` edge** (`super` is child →
+parent), so descendants were invisible. § 2's tables are re-measured through the edges.
+**The figures above are counted that way: a location's subtree is found by walking
+`super` inbound, not by reading any stored field.**
+
 
 **Scope note:** this authoring surface covers places and the things attached to them. It
 does **not** cover a player character — a PC's sheet is the player's, always. When a
