@@ -15,6 +15,7 @@
 
 import { test, expect } from '@playwright/test'
 import { gql, openSheet } from '../helpers/sheet.js'
+import { asPlayer } from '../helpers/role.js'
 
 const DESKTOP = { width: 1280, height: 950 }
 const TABLET_LANDSCAPE = { width: 1194, height: 834 }
@@ -45,6 +46,8 @@ test.beforeAll(async ({ request }) => {
 
 /** Seed identity and load — deliberately with no further interaction. */
 async function seedAndLoad(page, size) {
+  await page.unroute('**/api/v1/players/**')
+  await asPlayer(page)
   await page.setViewportSize(size)
   await page.goto('/')
   await page.evaluate(([pid, pname, eid]) => {
@@ -57,6 +60,7 @@ async function seedAndLoad(page, size) {
 
 /** Set the viewport, then seed identity and open the sheet on the self dot. */
 async function openAt(page, size) {
+  await asPlayer(page)
   await page.setViewportSize(size)
   await openSheet(page, character)
 }
