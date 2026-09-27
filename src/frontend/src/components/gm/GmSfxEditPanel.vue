@@ -142,17 +142,18 @@
       @edit="openEffectEditor"
     />
 
-    <!-- Who already offers this rule: a trait's `possibleSfxIds` ([[B131]]), the
-         *static* half of reach. The dynamic half — reach declarations on the rule
-         itself, each a path plus granted/offered — is authored here next; see
-         [[Dynamic SFX Reach]]. -->
+    <!-- How this rule reaches owners. The paths are the *dynamic* half — each one
+         yields the owners it reaches, with its own relationship, and is resolved
+         against the world at read time so nothing is written on anyone. The static
+         half is a trait's `possibleSfxIds`, listed below ([[Dynamic SFX Reach]]). -->
     <div class="sfx-acquire">
-      <h4 class="ps-section-title">Who offers it</h4>
+      <h4 class="ps-section-title">Who it reaches</h4>
+      <ReachEditor v-model="draft.reach" :source-element="sourceElement" />
       <div v-if="declaringTraits.length" class="sfx-declared-by">
         <span class="declared-label">Declared by</span>
         <span v-for="t in declaringTraits" :key="t.id" class="declared-trait" :title="t.id">{{ t.name }}</span>
       </div>
-      <p v-else-if="sfx" class="hint">No trait lists this rule as possible, so nothing offers it as a learn-chip yet.</p>
+      <p v-else-if="sfx" class="hint">No trait lists this rule as possible yet — the paths above are the other way to reach owners.</p>
     </div>
     </template>
 
@@ -197,6 +198,7 @@ import GmEffectEditPanel from './GmEffectEditPanel.vue'
 import EffectList from './EffectList.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import BoundVariablesEditor from './BoundVariablesEditor.vue'
+import ReachEditor from './ReachEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import PathField from './PathField.vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'

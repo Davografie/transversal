@@ -82,6 +82,7 @@ const find = (name) => VUE.find((p) => rel(p) === name)
     'components/gm/EffectForm.vue',
     'components/gm/EffectRefField.vue',
     'components/gm/BoundVariablesEditor.vue',
+    'components/gm/ReachEditor.vue',
     'components/gm/GmSfxEditPanel.vue',
   ]
   for (const s of surfaces) {
@@ -99,6 +100,35 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   ok('…with a drag handle (the rows are full of form controls)', /<GmList[\s\S]{0,200}drag-handle/.test(ce), true)
   ok('…and a commit handler', /@reorder="onReorder"/.test(ce), true)
   ok('the move rewrites the list', /function onReorder\(from, to\)/.test(ce), true)
+}
+
+// ── A reach declaration is a path plus a relationship ─────────────
+//
+// [[Dynamic SFX Reach]]: the path *yields* the owners, so a declaration is not a
+// gate. Two things distinguish it from the acquire path it replaced and are worth
+// pinning: it is **typed by the rule's `Source`** (a path ending anywhere else is
+// not a reach declaration), and it carries one of two **flavours**.
+{
+  const re = read(find('components/gm/ReachEditor.vue'))
+  ok('ReachEditor renders exactly one PathField per declaration',
+    (re.match(/<PathField/g) || []).length, 1)
+  ok('…typed by the rule\'s source — the element a path must land on',
+    /elements: \[props\.sourceElement\]/.test(re), true)
+  // The destination is the element and *only* the element: `literal` selects one
+  // owner and `select locations` selects many, so constraining cardinality here
+  // would refuse a legitimate declaration.
+  ok('…and the destination is exactly that element, nothing more',
+    /\{ elements: \[props\.sourceElement\] \}/.test(re), true)
+  ok('…with both flavours declared',
+    /value: 'granted'/.test(re) && /value: 'offered'/.test(re), true)
+  ok('a new declaration starts offered (the gentler of the two)',
+    /flavour: 'offered'/.test(re), true)
+  ok('ReachEditor derives no type of its own — the builder does that',
+    /traceTargetSpec/.test(re), false)
+
+  const panel = read(find('components/gm/GmSfxEditPanel.vue'))
+  ok('the SFX panel authors reach through it', /<ReachEditor v-model="draft\.reach"/.test(panel), true)
+  ok('…and hands it the source element', /<ReachEditor[\s\S]{0,120}:source-element="sourceElement"/.test(panel), true)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
