@@ -2005,3 +2005,29 @@ def test_a_rule_with_no_reach_declaration_is_unrestricted():
     from transversal.services.sfx_owner import reach_refusal
 
     assert reach_refusal(SimpleNamespace(id="sfx-plain", reach=[]), "anything", Repo()) is None
+
+
+def test_granted_sfx_by_owner_inverts_the_granted_reach_index():
+    """The read the sheet uses to show a rule *on* the trait that has it.
+
+    Deliberately separate from `TraitSetting.sfx_ids`: that list is what is attached,
+    and the trait editor writes it back whole, so folding reach into it would
+    materialise the rule the first time anything saved a trait.
+    """
+    from transversal.services.sfx_owner import granted_sfx_by_owner, invalidate_sfx_cache
+
+    rule = _reach_rule("granted")
+    repo = _reach_world(rule)
+    invalidate_sfx_cache()
+    assert granted_sfx_by_owner(repo) == {"ts-1": ("sfx-reach",)}
+
+    # An *offered* declaration is the chip's business, never "has it".
+    repo = _reach_world(_reach_rule("offered"))
+    invalidate_sfx_cache()
+    assert granted_sfx_by_owner(repo) == {}
+
+    # A rule with no reach at all contributes nothing — every rule in content today.
+    plain = SimpleNamespace(id="sfx-plain", reach=[])
+    repo = _reach_world(plain)
+    invalidate_sfx_cache()
+    assert granted_sfx_by_owner(repo) == {}

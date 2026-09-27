@@ -766,10 +766,11 @@ def invalidate_sfx_cache() -> None:
     Every rule write goes through here, which is why the SFX mutations call it
     whether or not an effects engine happens to be attached.
     """
-    global _SFX_CACHE_FILLED_AT
+    global _SFX_CACHE_FILLED_AT, _GRANTED_BY_OWNER_CACHE
     _SFX_CACHE.clear()
     _POSSIBLE_SFX_CACHE.clear()
     _REACH_INDEX_CACHE.clear()
+    _GRANTED_BY_OWNER_CACHE = None
     _SFX_CACHE_FILLED_AT = 0.0
 
 
@@ -856,6 +857,33 @@ def reach_index(repo, flavour: str) -> dict[str, frozenset[str]]:
             index[sfx.id] = frozenset(owners)
     _REACH_INDEX_CACHE[flavour] = index
     return index
+
+
+#: ``owner id -> the rules that simply have it``: the inverse of the *granted* half of
+#: the reach index. Built once per cache fill, so a per-row read — the sheet asking each
+#: trait instance what it has — is a dict lookup rather than a scan of every rule.
+_GRANTED_BY_OWNER_CACHE: dict[str, tuple[str, ...]] | None = None
+
+
+def granted_sfx_by_owner(repo) -> dict[str, tuple[str, ...]]:
+    """Which rules each owner id simply *has*, from **granted** reach declarations.
+
+    Read-time only, and deliberately **not** folded into ``TraitSetting.sfx_ids``: that
+    list is what is *attached*, and the trait editor writes it back wholesale, so
+    merging the two would materialise a reach rule onto the instance the first time
+    anything saved a trait — quietly turning a live read into a one-time grant. The
+    aggregate is built from the same index availability reads, so the two cannot
+    disagree about who has what ([[Dynamic SFX Reach]]).
+    """
+    global _GRANTED_BY_OWNER_CACHE
+    if _GRANTED_BY_OWNER_CACHE is not None:
+        return _GRANTED_BY_OWNER_CACHE
+    by_owner: dict[str, list[str]] = {}
+    for sfx_id, owners in reach_index(repo, "granted").items():
+        for owner_id in owners:
+            by_owner.setdefault(owner_id, []).append(sfx_id)
+    _GRANTED_BY_OWNER_CACHE = {k: tuple(sorted(v)) for k, v in by_owner.items()}
+    return _GRANTED_BY_OWNER_CACHE
 
 
 def _load_sfx(repo, sfx_id: str):

@@ -263,6 +263,25 @@ class TraitSetting:
     relationship_type: Optional[str] = None
 
     @strawberry.field
+    def granted_sfx_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
+        """Rules this instance simply **has** without carrying them ([[Dynamic SFX Reach]]).
+
+        A **granted** reach declaration on a rule yields this instance as an owner, so
+        the rule is available from it — resolved against the live world at read time,
+        with nothing written onto the instance.
+
+        Deliberately a separate field from ``sfxIds`` rather than merged into it: that
+        list is what is *attached*, and the trait editor writes it back wholesale, so
+        merging the two would materialise reach onto the instance the first time
+        anything saved a trait.
+        """
+        from transversal.services.sfx_owner import granted_sfx_by_owner
+
+        repo = info.context["entity_manager"].repo
+        return [strawberry.ID(sfx_id)
+                for sfx_id in granted_sfx_by_owner(repo).get(str(self.id), ())]
+
+    @strawberry.field
     def ego(self, info: strawberry.Info) -> bool:
         """Entity-anchored traits (from_type='entity') are ego; others morph.
 

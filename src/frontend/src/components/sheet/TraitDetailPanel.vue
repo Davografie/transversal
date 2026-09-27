@@ -69,11 +69,21 @@
     <p v-if="trait.statement" class="detail-statement">{{ trait.statement }}</p>
   </div>
 
-  <div v-if="trait.sfxIds?.length" class="detail-section">
+  <div v-if="trait.sfxIds?.length || trait.grantedSfxIds?.length" class="detail-section">
     <div class="detail-section-head"><span class="detail-label">SFX</span></div>
     <div class="sfx-cards">
       <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId, 'full')"
                @activate="api.activateSfx(sfxId, trait.id)" />
+      <!-- Granted to this trait by a rule's reach rather than attached to it:
+           read-time, so there is nothing here to detach ([[Dynamic SFX Reach]]). -->
+      <SfxCard
+        v-for="sfxId in (trait.grantedSfxIds || [])"
+        :key="'granted-' + sfxId"
+        class="sfx-granted"
+        v-bind="api.sfxCardModel(sfxId, 'full')"
+        title="Always on: granted to this trait by a rule's reach — not attached, so there is nothing to take"
+        @activate="api.activateSfx(sfxId, trait.id)"
+      />
     </div>
   </div>
 
@@ -228,6 +238,13 @@ const tagRows = computed(() => {
 }
 .detail-tag-inherited { opacity: 0.6; border-style: dashed; }
 .detail-section { padding: 10px 0; border-top: 1px solid var(--overlay-8); }
+/* A rule the trait **has** rather than carries ([[Dynamic SFX Reach]]): granted by
+   another rule's reach, read-time, nothing on the instance to detach. Readable and
+   activatable — never dimmed (B189) — so it is marked with a dashed edge only. */
+.sfx-granted {
+  outline: 1px dashed var(--accent-dim);
+  outline-offset: -1px;
+}
 .detail-section-head {
   display: flex;
   align-items: baseline;

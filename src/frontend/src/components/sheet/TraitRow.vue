@@ -41,9 +41,24 @@
            group instead of repeating the name on every line. -->
       <span v-if="trait.fromType === 'relationship' && trait.relationshipContactName && !hideContact" class="trait-contact">→ {{ trait.relationshipContactName }}</span>
       <span v-if="trait.statement" class="trait-statement">{{ trait.statement }}</span>
-      <div v-if="trait.sfxIds?.length" class="sfx-cards">
+      <div v-if="trait.sfxIds?.length || trait.grantedSfxIds?.length" class="sfx-cards">
         <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId, 'chip')"
                  @activate="api.activateSfx(sfxId, trait.id)" />
+        <!-- Rules this trait simply **has** — granted to it by a rule's reach
+             declaration, not attached to the instance ([[Dynamic SFX Reach]]). They
+             are read-time: nothing was written on the trait, so there is nothing here
+             to detach (the edit panel's list stays what is *attached*), and such a
+             rule can stop applying when the world changes — a place that no longer
+             qualifies, a trait that left the set. They are activatable like any other,
+             so they carry the same card rather than an inert one. -->
+        <SfxCard
+          v-for="sfxId in (trait.grantedSfxIds || [])"
+          :key="'granted-' + sfxId"
+          class="sfx-granted"
+          v-bind="api.sfxCardModel(sfxId, 'chip')"
+          title="Always on: granted to this trait by a rule's reach — not attached, so there is nothing to take"
+          @activate="api.activateSfx(sfxId, trait.id)"
+        />
       </div>
       <!-- The notes, where the host asks for them and the statement is not already
            saying the same thing in one line. A trait with a `statement` reads as
@@ -744,6 +759,15 @@ function onRowClick() {
   opacity: 0.75;
 }
 
+/* A rule the trait **has** rather than carries ([[Dynamic SFX Reach]]): granted to
+   it by another rule's reach, so there is nothing on the instance to detach. Fully
+   readable and activatable — dimming a rule to look like a disabled button is the
+   mistake B189 records — so the only difference is a dashed edge, which says "not
+   one of your attached rules" without making it harder to read. */
+.sfx-granted {
+  outline: 1px dashed var(--accent-dim);
+  outline-offset: -1px;
+}
 .sub-trait-right {
   flex-shrink: 0;
   display: flex;
