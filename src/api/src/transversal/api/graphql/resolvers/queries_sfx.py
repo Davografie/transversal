@@ -137,11 +137,9 @@ class QueriesSfx:
         """The trait instance's *offered* SFX: what its trait declares as possible.
 
         A **granted** rule is not a chip — it needs no learning — so it belongs in
-        availability, not here. The acquire *gate* this used to apply is retired:
-        reach is a selector that yields owners, so there is no per-candidate path
-        left to test ([[Dynamic SFX Reach]]).
+        availability, not here.
         """
-        from transversal.services.sfx_owner import possible_sfx_ids
+        from transversal.services.sfx_owner import possible_sfx_ids, reach_index
 
         repo = _em(info).repo
         ts = repo.get_traitsetting(str(trait_setting_id))
@@ -150,6 +148,12 @@ class QueriesSfx:
         out: list[strawberry.ID] = []
         for sfx_id in possible_sfx_ids(repo, ts.trait_id):
             if sfx_id not in out:
+                out.append(strawberry.ID(sfx_id))
+        # …and any rule whose **offered** reach selects this very instance: the
+        # dynamic form of the same offer ([[Dynamic SFX Reach]]). Testing `ts.id`
+        # against the selected owners is what keeps this to trait instances.
+        for sfx_id, owners in reach_index(repo, "offered").items():
+            if ts.id in owners and sfx_id not in out:
                 out.append(strawberry.ID(sfx_id))
         return out
 

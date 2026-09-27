@@ -176,7 +176,9 @@ def test_direct_entity_ownership():
 def test_active_projection_ownership():
     repo = Repo()
     repo.entity = _entity(current_projection="proj-1")
-    repo.projection = SimpleNamespace(sfx_ids=["sfx-proj"])
+    # The id is what a reach declaration selects a projection *by*, so the fake
+    # carries one like the real record does.
+    repo.projection = SimpleNamespace(id="proj-1", sfx_ids=["sfx-proj"])
     assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-proj"]
 
 
@@ -1927,3 +1929,79 @@ def test_a_disabled_relationship_trait_grants_nothing():
                               trait_id="statement", enabled=False)
     repo.edge_traits["e1"] = [{"setting": edge_ts}]
     assert get_available_sfx_ids("e1", "earth", repo) == []
+
+
+# ── Reach declarations on the rule ([[Dynamic SFX Reach]]) ─────
+#
+# A reach path *yields* the owners: `granted` means every owner it selects simply
+# has the rule, `offered` means they are offered it as a chip. Together they
+# replaced the acquire gate, whose per-candidate reading could not say "everyone
+# here" — and whose enforcement is now membership in the selected set.
+
+def _reach_rule(flavour, owner_id="ts-1"):
+    from transversal.domain import ReachDeclaration, ReachFlavour
+    from transversal.services.target_spec import LiteralStep, TargetSpec
+
+    return SimpleNamespace(
+        id="sfx-reach", trigger="manual", source_kind="trait_setting", conditions=[],
+        reach=[ReachDeclaration(
+            spec=TargetSpec(steps=[LiteralStep(element="traitsetting", value=owner_id)]),
+            flavour=ReachFlavour(flavour),
+        )],
+    )
+
+
+def _reach_world(rule, instance_id="ts-1"):
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()          # the SFX record cache is process-global
+    repo = Repo()
+    repo.entity = SimpleNamespace(id="e1", sfx_ids=[], current_projection=None,
+                                  current_location="loc-1")
+    repo.trait_settings = [SimpleNamespace(id=instance_id, trait_id="trait-x", sfx_ids=[],
+                                           enabled=True, entity_id="e1")]
+    repo.sfxs = {rule.id: rule}
+    repo.get_all_sfxs = lambda: list(repo.sfxs.values())
+    repo.get_traitsetting = lambda tid: next(
+        (ts for ts in repo.trait_settings if ts.id == tid), None)
+    repo.get_sfx = lambda sid: repo.sfxs.get(sid)
+    return repo
+
+
+def test_a_granted_reach_declaration_simply_gives_the_rule():
+    """No chip and nothing written on the instance: the owner the path yields has it
+    from the moment the path resolves — which is what `implicit` used to mean, now
+    said once for any set of owners instead of only for a trait's declarations."""
+    repo = _reach_world(_reach_rule("granted"))
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-reach"]
+
+
+def test_an_offered_reach_declaration_is_not_available_until_taken():
+    """Offered is the chip's business, not availability's — taking it is what puts it
+    on the owner's list."""
+    repo = _reach_world(_reach_rule("offered"))
+    assert get_available_sfx_ids("e1", "earth", repo) == []
+
+
+def test_a_reach_declaration_reaches_only_the_owners_it_selects():
+    repo = _reach_world(_reach_rule("granted", owner_id="ts-elsewhere"))
+    assert get_available_sfx_ids("e1", "earth", repo) == []
+
+
+def test_attach_refuses_an_owner_outside_the_rules_reach():
+    """The gate's enforcement, read from the selector instead of tested per
+    candidate: a rule that declares who it reaches is not attached to anyone else."""
+    from transversal.services.sfx_owner import reach_refusal
+
+    rule = _reach_rule("granted")
+    repo = _reach_world(rule)
+    assert reach_refusal(rule, "ts-1", repo) is None
+    assert reach_refusal(rule, "ts-elsewhere", repo) == "outside this rule's reach"
+
+
+def test_a_rule_with_no_reach_declaration_is_unrestricted():
+    """The common case: its hand-picked lists are what offer it, and attaching is how
+    it gets onto a surface at all."""
+    from transversal.services.sfx_owner import reach_refusal
+
+    assert reach_refusal(SimpleNamespace(id="sfx-plain", reach=[]), "anything", Repo()) is None

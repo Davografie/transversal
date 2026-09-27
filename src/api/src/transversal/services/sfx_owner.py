@@ -769,6 +769,7 @@ def invalidate_sfx_cache() -> None:
     global _SFX_CACHE_FILLED_AT
     _SFX_CACHE.clear()
     _POSSIBLE_SFX_CACHE.clear()
+    _REACH_INDEX_CACHE.clear()
     _SFX_CACHE_FILLED_AT = 0.0
 
 
@@ -787,6 +788,74 @@ def possible_sfx_ids(repo, trait_id: str) -> tuple[str, ...]:
     ids = tuple(getattr(trait, "possible_sfx_ids", None) or ()) if trait is not None else ()
     _POSSIBLE_SFX_CACHE[trait_id] = ids
     return ids
+
+
+#: ``flavour -> {rule id: the owner ids its reach declarations select}``. Resolved
+#: once and cached beside the SFX records (same invalidation), because a reach
+#: declaration is a **set-producing** query where the old offer was a lookup — the
+#: read must not become "walk every owner and run a path" ([[Dynamic SFX Reach]]).
+_REACH_INDEX_CACHE: dict[str, dict[str, frozenset[str]]] = {}
+
+
+def reach_owner_ids(repo, sfx, flavour: str) -> tuple[str, ...]:
+    """The owner ids one rule's reach declarations of ``flavour`` select.
+
+    Each declaration's path **yields** the owners, so this resolves it against the
+    live world — read-only, with nothing written onto anyone. Declarations of one
+    flavour combine with **OR** (the union *is* the reach). A path that errors or
+    resolves to nothing contributes nothing rather than raising: a broken
+    declaration is an authoring problem `validateSfx` reports, not a reason to fail
+    a sheet read.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for declaration in (getattr(sfx, "reach", None) or []):
+        declared = getattr(declaration, "flavour", None)
+        if getattr(declared, "value", declared) != flavour:
+            continue
+        result = _resolve_reach_spec(repo, getattr(declaration, "spec", None))
+        for value in result:
+            owner_id = getattr(value, "id", None) or str(value)
+            if owner_id not in seen:
+                seen.add(owner_id)
+                out.append(owner_id)
+    return tuple(out)
+
+
+def _resolve_reach_spec(repo, spec) -> list:
+    """Resolve one reach path against the live world, failing closed."""
+    if spec is None or not getattr(spec, "steps", None):
+        return []
+    from transversal.services.target_resolver import TargetContext, resolve
+
+    try:
+        # No subject on purpose: a reach declaration *yields* the owners, so it must
+        # not depend on which owner is asking — that was the retired gate's reading.
+        result = resolve(spec, TargetContext(subject=None, repo=repo))
+    except Exception:
+        return []
+    return [] if result.errors else list(result.values)
+
+
+def reach_index(repo, flavour: str) -> dict[str, frozenset[str]]:
+    """Every rule declaring reach of ``flavour``, mapped to the owners it selects.
+
+    One pass over the registry, cached until a rule write — so a fan-out over many
+    entities resolves each declaration **once** rather than per entity (the cost
+    note in [[Dynamic SFX Reach]]). Empty while no rule declares reach, which is
+    the state content is in today.
+    """
+    cached = _REACH_INDEX_CACHE.get(flavour)
+    if cached is not None:
+        return cached
+    index: dict[str, frozenset[str]] = {}
+    getter = getattr(repo, "get_all_sfxs", None)
+    for sfx in (getter() if callable(getter) else []):
+        owners = reach_owner_ids(repo, sfx, flavour)
+        if owners:
+            index[sfx.id] = frozenset(owners)
+    _REACH_INDEX_CACHE[flavour] = index
+    return index
 
 
 def _load_sfx(repo, sfx_id: str):
@@ -903,6 +972,9 @@ def get_available_sfx_ids(
     unset: a manual activation has no event type.
     """
     ids: set[str] = set()
+    # The active projection's id, if any — one more surface this entity "owns", for
+    # the reach membership test below.
+    owned_projection_id = ""
     # Map each trait-granted SFX id to its source trait-setting, so source-aware
     # conditions (SOURCE_RATING) can resolve "the trait this SFX is on".
     sfx_sources: dict[str, Any] = {}
@@ -921,6 +993,7 @@ def get_available_sfx_ids(
                 proj = repo.get_projection(entity.current_projection)
             if proj is not None:
                 ids.update(proj.sfx_ids or [])
+                owned_projection_id = proj.id
 
     # Table-wide ownership (available to every entity).
     bucket = prefetch.table_bucket if prefetch is not None else repo.get_sfx_owner("table")
@@ -976,6 +1049,33 @@ def get_available_sfx_ids(
     # Trait-set-as-unit grants, universe-gated via effective set settings.
     for tss in traitset_settings:
         ids.update(tss.sfx_ids or [])
+
+    # Reach declarations on the rules themselves ([[Dynamic SFX Reach]]): a
+    # **granted** declaration means every owner its path yields simply *has* the
+    # rule. Resolved once per rule and cached (`reach_index`), then membership-tested
+    # against what this entity owns — so this does not become "walk every owner, for
+    # every rule, on every event". An **offered** declaration is the learn-chip's
+    # business (`acquirableSfxIds`), not availability's: it needs taking first.
+    granted = reach_index(repo, "granted")
+    if granted:
+        owned_ids: set[str] = set()
+        if entity is not None:
+            owned_ids.add(entity.id)
+        if owned_projection_id:
+            owned_ids.add(owned_projection_id)
+        owned_ids.update(ts.id for ts in trait_settings)
+        owned_ids.update(tss.id for tss in traitset_settings)
+        if owned_ids:
+            for sfx_id, owners in granted.items():
+                if sfx_id in ids or not (owners & owned_ids):
+                    continue
+                ids.add(sfx_id)
+                # A rule granted through a trait instance sits on that instance, so
+                # a source-aware condition reads the right trait.
+                for ts in trait_settings:
+                    if ts.id in owners:
+                        sfx_sources.setdefault(sfx_id, ts)
+                        break
 
     # Membership scope: a rule owned by a *faction* reaches its members
     # ([[B109]]). Read-time only, exactly like the place scope below — nothing is
@@ -1255,19 +1355,38 @@ def can_attach(sfx, owner_type: str) -> bool:
     return owner_type in owner_surfaces_for(sfx)
 
 
+def reach_refusal(sfx, owner_id: str, repo) -> str | None:
+    """Why this rule may not attach to that owner — or ``None`` when it may.
+
+    A rule that declares reach says **who it reaches**, so attaching it outside that
+    set contradicts the declaration. This is the acquire gate's *enforcement*, moved
+    onto the selector: the gate asked "does the path hold for *this* candidate?", the
+    selector answers "here is the whole set", and membership is the same refusal
+    without a per-candidate read. A rule with no reach declaration is unrestricted —
+    the common case, where its hand-picked lists are what offer it.
+    """
+    if repo is None or not owner_id or not (getattr(sfx, "reach", None) or []):
+        return None
+    reached = set(reach_owner_ids(repo, sfx, "granted"))
+    reached |= set(reach_owner_ids(repo, sfx, "offered"))
+    return None if owner_id in reached else "outside this rule's reach"
+
+
 def attach_refusal(sfx, owner_type: str, owner_id: str = "", repo=None) -> str | None:
     """Why this SFX can't attach there — or ``None`` when it can.
 
-    One question: *may it live on this kind of thing* (its declared source).
-    Author-facing: the picker filters on it and shows this text for what it leaves
-    out. (It used to also ask *may it be taken right now* — the acquire gate — which
-    is retired: reach is a selector that yields owners, not a per-candidate gate.
-    See [[Dynamic SFX Reach]].)
+    Two questions, in order: *may it live on this kind of thing* (its declared
+    source), and *does this rule reach that owner* (its reach declarations, when it
+    has any). Author-facing: the picker filters on the first and the chip list on the
+    second, and both show this text for what they leave out.
     """
     if not can_attach(sfx, owner_type):
         wanted = sorted(owner_surfaces_for(sfx))
         named = " or ".join(_SURFACE_LABELS.get(s, s) for s in wanted)
         return f"belongs on {named}"
+    refusal = reach_refusal(sfx, owner_id, repo)
+    if refusal:
+        return refusal
     # Directions have to be *followable* from the place that grants them. Only a
     # place owner is measured: an entity moves, so what it could tell you depends
     # on where it stands when the rule fires. [[Guided Route]]
@@ -1602,11 +1721,16 @@ def add_sfx_to_owner(repo, owner_type: str, owner_id: str, sfx_id: str) -> bool:
     Enforces the SFX's declared ``source_kind``: an SFX that states a source
     kind may only attach to the matching owner surface (the single seam; see
     ``target_catalog.SOURCE_KINDS``). Buckets (``table``/``gm``) and SFX without
-    a source kind are unrestricted.
+    a source kind are unrestricted. A rule that declares **reach** is also held to
+    it — enforced here rather than only in the picker, because a list that lives in
+    the UI is a suggestion and a direct attach would walk past it.
     """
     sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
-    if sfx is not None and not can_attach(sfx, owner_type):
-        return False
+    if sfx is not None:
+        if not can_attach(sfx, owner_type):
+            return False
+        if reach_refusal(sfx, owner_id, repo):
+            return False
     ids = _get_owner_sfx_ids(repo, owner_type, owner_id)
     if ids is None:
         return False
