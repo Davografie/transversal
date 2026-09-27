@@ -210,6 +210,18 @@
       </div>
     </div>
   </div>
+  <!-- The third host ([[B230]]): a question from an automatic rule — a state
+       change or a timer nobody pressed — has no surface its reader is looking at,
+       so it floats. The wizard's own Cancel is the explicit "leave it", which
+       writes nothing; nothing here dismisses it on a timer. -->
+  <FloatingChoicePanel
+    v-if="autoChoices.length"
+    :choices="autoChoices"
+    :entity-id="autoChoices[0]?.entity_id || entityId"
+    @answer="(r) => answerSfxChoices(r, 'auto')"
+    @leave="clearSfxChoicesAll"
+    @loop="(c) => loopSfxChoice(c, 'auto')"
+  />
   <RelationalCanvas
     v-if="fullCanvas"
     :key="fullCanvas.mode + ':' + fullCanvas.entityId"
@@ -247,6 +259,7 @@ import { useUniverseTheme } from '@/composables/useUniverseTheme.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
 import LoginPrompt from '@/components/app/LoginPrompt.vue'
 import UnauthorizedNotice from '@/components/app/UnauthorizedNotice.vue'
+import FloatingChoicePanel from '@/components/app/FloatingChoicePanel.vue'
 import { unauthorized } from '@/composables/useAuthGate.js'
 import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
@@ -504,12 +517,19 @@ const sfxChoiceRequest = ref(null) // pending {choose_*} SFX choices, each tagge
 //
 // `auto` still renders in the roller until [[ui-ux]]'s floating host exists, so nothing
 // is dropped in the meantime; that host filters `auto` out of the roller when it lands.
+// — landed 2026-09-26: `autoChoices` below feeds `app/FloatingChoicePanel.vue`, and the
+// roller's filter excludes it ([[B230]]).
 const { resolveEffectTargets, resolveSfxLoop } = useEffectApplication()
 
+// `auto` renders in the floating host ([[B230]]). It is filtered **out** of the
+// roller rather than falling through, because "no obvious place its reader is
+// looking" is exactly what the roller is not.
 const rollerChoices = computed(() =>
-  (sfxChoiceRequest.value || []).filter((c) => (c.origin || 'roll') !== 'sheet'))
+  (sfxChoiceRequest.value || []).filter((c) => !['sheet', 'auto'].includes(c.origin || 'roll')))
 const sheetChoices = computed(() =>
   (sfxChoiceRequest.value || []).filter((c) => (c.origin || 'roll') === 'sheet'))
+const autoChoices = computed(() =>
+  (sfxChoiceRequest.value || []).filter((c) => (c.origin || 'roll') === 'auto'))
 
 /** Answer a table: resolve, then put any *next* question back where this one was. */
 async function answerSfxChoices(resolutions, origin = 'roll') {
