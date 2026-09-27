@@ -237,10 +237,14 @@
           <input v-model="newEffect.extraContext[key]" type="text" :placeholder="key" />
         </div>
       </div>
-      <div v-if="durationOffered" class="ee-field">
+      <div v-if="durationShown" class="ee-field">
         <label>Duration (undo timer)</label>
         <DurationBuilder v-model="newEffect.duration" allow-rolls />
-        <p class="ee-help">How long before this change reverts. This is the effect's own timer — separate from the SFX-level listening window (how long the SFX stays armed).</p>
+        <p v-if="durationOffered" class="ee-help">How long before this change reverts. This is the effect's own timer — separate from the SFX-level listening window (how long the SFX stays armed).</p>
+        <!-- A duration that is *set* is always shown, even where this action has no
+             use for one: a timer you cannot see is a timer you cannot clear, and
+             saving drops it silently (see the payload builder). -->
+        <p v-else class="ee-help">This action doesn't use a duration — the timer above is left over, and saving this effect drops it. Clear it here if you want to see that happen.</p>
       </div>
       <div v-if="selectedAction.supportsPolarity && !isGainAction" class="ee-field ee-polarity">
         <label class="ee-check">
@@ -570,6 +574,12 @@ const durationOffered = computed(() => {
   if (!only.length) return true
   return newEffect.targetMode === 'spec' && only.includes(targetLocus.value)
 })
+
+// A duration that exists is shown whether or not this action offers one: hiding a
+// set value makes it impossible to clear, and this is exactly how a fabricated
+// "1 roll" survived on rules nobody had authored one for.
+const durationShown = computed(() =>
+  durationOffered.value || (newEffect.duration?.timers || []).length > 0)
 
 const actionGroups = computed(() => {
   const groups = {}

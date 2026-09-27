@@ -97,9 +97,9 @@
              panel — which is what made "Listens to" read as unrelated. -->
         <div class="sfx-duration">
           <h5 class="sfx-slot">How long it's held</h5>
-          <label>Armed for (listening window)</label>
+          <label>Duration</label>
           <DurationBuilder v-model="draft.duration" allow-rolls />
-          <p class="hint">How long this SFX stays armed before its delayed effects fire and it drops. Only affects <em>On roll / On result / On contest</em> effects — immediate effects fire once regardless. This is <strong>not</strong> an undo timer; each effect's own duration governs when a change reverts. <strong>Empty means no limit</strong>: a roll-timing effect stays armed until something else drops it, so an empty window is a real choice rather than "one roll".</p>
+          <p class="hint">This rule's own duration — the <em>Duration</em> the Active rail shows while it is armed. It changes what a <em>delayed</em> effect (<em>On roll / On result / On contest</em>) does; immediate effects fire once regardless. This is <strong>not</strong> an undo timer; each effect's own duration governs when a change reverts. <strong>Empty means no limit</strong>: a roll-timing effect stays armed until something else drops it, so empty is a real choice rather than "one roll".</p>
         </div>
       </template>
 

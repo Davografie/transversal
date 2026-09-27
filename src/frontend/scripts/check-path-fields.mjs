@@ -131,5 +131,33 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   ok('…and hands it the source element', /<ReachEditor[\s\S]{0,120}:source-element="sourceElement"/.test(panel), true)
 }
 
+// ── A duration that is set is never hidden ────────────────────────
+//
+// The rule-level `duration` used to default to one roll; the editor round-tripped
+// it and wrote it into 42 rules nobody had authored, and it was invisible in the
+// panel where it mattered. Two shapes keep that from returning: the editor must not
+// fabricate a duration, and a set duration must render even where the action has no
+// use for one — a hidden value is one you cannot clear.
+{
+  // `find`/`read` walk `.vue` files only; this one is a composable.
+  const edit = readFileSync(join(SRC, 'composables', 'useSfxEdit.js'), 'utf8')
+  ok('the SFX editor fabricates no duration fallback',
+    /remaining:\s*1\s*\}\],\s*combine/.test(edit), false)
+  ok('…every duration it seeds is an empty timer list',
+    (edit.match(/timers: \[\], combine: 'FIRST_TO_FIRE'/g) || []).length, 3)
+
+  const form = read(find('components/gm/EffectForm.vue'))
+  ok('the effect form decides visibility from "is it offered OR is it set"',
+    /const durationShown = computed\(\(\) =>\s*durationOffered\.value \|\| \(newEffect\.duration\?\.timers \|\| \[\]\)\.length > 0\)/.test(form), true)
+  ok('…and the duration field is gated on that, not on "offered" alone',
+    /<div v-if="durationShown" class="ee-field">/.test(form) && !/<div v-if="durationOffered"/.test(form), true)
+  ok('…with the two explanations alternating on "offered"',
+    /<p v-if="durationOffered" class="ee-help">/.test(form) && /<p v-else class="ee-help">/.test(form), true)
+
+  const panel = read(find('components/gm/GmSfxEditPanel.vue'))
+  ok('the SFX panel calls the rule duration what the Active rail calls it',
+    /<label>Duration<\/label>/.test(panel), true)
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)
