@@ -251,14 +251,14 @@ query { traitsets { id name } }
 """
 
 _QUERY_TRAITSETS_FULL = """
-query { traitsets { id name universes entityTypes order limit sheetTab } }
+query { traitsets { id name explanation universes entityTypes order limit sheetTab } }
 """
 
 _QUERY_TRAITS = """
 query {
   traitsets {
-    id name traits {
-      id name universes traitsetId defaultDieType defaultRatingType tags
+    id name explanation traits {
+      id name explanation universes traitsetId defaultDieType defaultRatingType tags
     }
   }
 }
@@ -371,7 +371,7 @@ mutation($id: ID!) { removeTraitSetting(id: $id) }
 # what anchors an instance to the entity instead of the active projection, and
 # until this selection carried it a caller could set the flag and see nothing.
 _TRAIT_WRITE_FIELDS = (
-    "id name universes traitsetId defaultDieType defaultRatingType "
+    "id name universes traitsetId explanation defaultDieType defaultRatingType "
     "possibleSfxIds defaultSfxIds possibleSubtraitIds possibleSubtraitsetIds "
     "defaultEgo tags polarity displayNames { name universe ratings }"
 )
