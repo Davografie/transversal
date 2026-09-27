@@ -964,23 +964,14 @@ def get_available_sfx_ids(
         for sid in (ts.sfx_ids or []):
             ids.add(sid)
             sfx_sources.setdefault(sid, ts)
-        # …and the rules the trait says every instance simply *has* ([[B131]]).
-        # A trait lists a rule in `possible_sfx_ids` to say "this trait offers
-        # it"; with `implicit` set that offer needs no learning, so the instance
-        # carries it from the moment it exists. An unlearned, non-implicit
-        # declaration is the learn-chip's business, not availability's, so it is
-        # deliberately not added here.
-        for sid in possible_sfx_ids(repo, ts.trait_id):
-            if sid in ids:
-                continue
-            sfx = (prefetch.sfx_by_id.get(sid) if prefetch is not None
-                   else _load_sfx(repo, sid))
-            if sfx is None or not getattr(sfx, "implicit", False):
-                continue
-            # The acquire gate still bounds where it reaches, when one is set.
-            if acquire_gate_holds(sfx, "trait_instance", ts.id, repo):
-                ids.add(sid)
-                sfx_sources.setdefault(sid, ts)
+        # …and the rules the trait says every instance simply *has*. A trait lists
+        # a rule in `possible_sfx_ids` to say "this trait offers it"; a declaration
+        # on its own is the learn-chip's business, not availability's, so it is
+        # deliberately not added here. The exception used to be a rule-level
+        # `implicit` flag ([[B131]]), now retired in favour of a **granted reach
+        # declaration** on the rule itself — the dynamic form of the same
+        # relationship, which availability reads wherever the rule reaches
+        # ([[Dynamic SFX Reach]]).
 
     # Trait-set-as-unit grants, universe-gated via effective set settings.
     for tss in traitset_settings:
@@ -1267,17 +1258,16 @@ def can_attach(sfx, owner_type: str) -> bool:
 def attach_refusal(sfx, owner_type: str, owner_id: str = "", repo=None) -> str | None:
     """Why this SFX can't attach there — or ``None`` when it can.
 
-    Two questions, in order: *may it live on this kind of thing* (its declared
-    source), and *may it be taken right now* (its acquire path). Author-facing:
-    the picker filters on the first and the chip list on the second, and both
-    show this text for what they leave out.
+    One question: *may it live on this kind of thing* (its declared source).
+    Author-facing: the picker filters on it and shows this text for what it leaves
+    out. (It used to also ask *may it be taken right now* — the acquire gate — which
+    is retired: reach is a selector that yields owners, not a per-candidate gate.
+    See [[Dynamic SFX Reach]].)
     """
     if not can_attach(sfx, owner_type):
         wanted = sorted(owner_surfaces_for(sfx))
         named = " or ".join(_SURFACE_LABELS.get(s, s) for s in wanted)
         return f"belongs on {named}"
-    if repo is not None and owner_id and not acquire_gate_holds(sfx, owner_type, owner_id, repo):
-        return "can't be acquired here"
     # Directions have to be *followable* from the place that grants them. Only a
     # place owner is measured: an entity moves, so what it could tell you depends
     # on where it stands when the rule fires. [[Guided Route]]
@@ -1303,41 +1293,6 @@ def _owner_object(repo, owner_type: str, owner_id: str):
         return repo.get_entity(owner_id)
     except Exception:
         return None
-
-
-def acquire_gate_holds(sfx, owner_type: str, owner_id: str, repo) -> bool:
-    """Whether this rule may be *taken* by that owner right now.
-
-    The acquire path is seeded at the owner itself (``select source``), so it can
-    ask the author's question — *is the thing I'm being attached to somewhere this
-    may be learned?* (`trait instance → entity → filter current_location == …`).
-    No path means ungated, which is the common case.
-
-    Enforced here rather than only in the picker: a gate that lives in the UI is
-    a suggestion, and a direct attach would walk past it.
-    """
-    spec = getattr(sfx, "acquire_spec", None)
-    if spec is None or not spec.steps:
-        return True
-
-    from transversal.services import target_catalog as tc
-    from transversal.services.target_resolver import TargetContext, resolve
-
-    owner = _owner_object(repo, owner_type, owner_id)
-    if owner is None:
-        return False
-
-    # `select self` should mean the entity that bears the owner (for a trait
-    # instance, the character holding it).
-    subject = owner
-    entity_id = getattr(owner, "entity_id", None)
-    if entity_id:
-        subject = repo.get_entity(entity_id) or owner
-
-    source_element = tc.source_element(sfx.source_kind) if getattr(sfx, "source_kind", None) else None
-    context = TargetContext(subject=subject, repo=repo, source=owner, source_element=source_element)
-    result = resolve(spec, context)
-    return bool(result.values) and not result.errors
 
 
 def owned_surfaces(repo, sfx_id: str) -> set[str]:
@@ -1650,11 +1605,8 @@ def add_sfx_to_owner(repo, owner_type: str, owner_id: str, sfx_id: str) -> bool:
     a source kind are unrestricted.
     """
     sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
-    if sfx is not None:
-        if not can_attach(sfx, owner_type):
-            return False
-        if not acquire_gate_holds(sfx, owner_type, owner_id, repo):
-            return False
+    if sfx is not None and not can_attach(sfx, owner_type):
+        return False
     ids = _get_owner_sfx_ids(repo, owner_type, owner_id)
     if ids is None:
         return False

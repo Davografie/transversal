@@ -698,24 +698,25 @@ def test_several_enum_values_read_as_alternatives():
     assert render_phrase(phrase, "each") == "each positive or negative trait instance you rolled"
 
 
-def test_an_acquire_gate_is_not_shown_on_the_card():
-    """The card states the ability. Where a rule may be *taken* is not part of what
-    it does, so the gate never reaches the rendered text — it lives in the editor
-    and is enforced at the attach."""
+def test_reach_is_not_shown_on_the_card():
+    """The card states the ability. *Who the rule reaches* is not part of what it
+    does, so reach never reaches the rendered text — it lives in the editor and is
+    read where ownership is decided."""
+    from transversal.domain import ReachDeclaration
     from transversal.services.target_spec import TargetSpec
 
     effect = Effect(type="modify_trait", action="step_up", target="trait-fire")
-    sfx = SFX(id="sfx-gated", name="Sect Technique", trigger="on_roll",
+    sfx = SFX(id="sfx-reaches", name="Sect Technique", trigger="on_roll",
               source_kind="trait_setting", effects=[effect])
-    ungated = sfx_text(sfx, resolve=resolve)
-    assert "gained only where" not in ungated
+    without = sfx_text(sfx, resolve=resolve)
+    assert "gained only where" not in without
 
-    sfx.acquire_spec = TargetSpec(steps=[
-        {"kind": "select", "collection": "source"},
-        {"kind": "navigate", "edge": "entity"},
-        {"kind": "filter", "field": "current_location", "operator": "==", "value": "loc-rusted-gate"},
-    ])
-    assert sfx_text(sfx, resolve=resolve) == ungated
+    sfx.reach = [ReachDeclaration(spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "locations"},
+        {"kind": "filter", "field": "id", "operator": "==", "value": "loc-rusted-gate"},
+        {"kind": "navigate", "edge": "occupants"},
+    ]))]
+    assert sfx_text(sfx, resolve=resolve) == without
 
 
 def test_a_random_sample_reads_as_an_indefinite_noun():

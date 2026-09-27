@@ -116,8 +116,9 @@ def _specs_of(sfx: SFX):
                 yield f"Effect {i + 1} condition {j + 1}", condition.spec
     if sfx.listener_spec is not None:
         yield "Listener path", sfx.listener_spec
-    if sfx.acquire_spec is not None:
-        yield "Acquire path", sfx.acquire_spec
+    for i, declaration in enumerate(getattr(sfx, "reach", None) or []):
+        if getattr(declaration, "spec", None) is not None:
+            yield f"Reach path {i + 1}", declaration.spec
 
 
 def _condition_specs(sfx: SFX):
@@ -426,28 +427,32 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                 )
                 break
 
-    # 2. A gate with no **offer**. An acquire path is only half of acquisition: the
-    #    other half is something offering the rule — a trait's `possibleSfxIds`. With
-    #    a path and no offer the gate can hold and still no learn-chip appears
-    #    anywhere, which is the silent reading the author hit on 2026-09-26 (an
-    #    acquire path authored on the belief that it *granted* reach). A warning
-    #    rather than an error, because a rule may legitimately be attached or granted
-    #    directly and never learned at all.
-    #
-    #    The acquisition model is being rebuilt as reach **selectors** — see
-    #    `docs/Technical/Effects/Dynamic SFX Reach.md`. This warning becomes "this
-    #    rule reaches nobody" when that lands.
-    if repo is not None and sfx.id:
-        acquire_steps = getattr(getattr(sfx, "acquire_spec", None), "steps", None) or []
-        if acquire_steps:
-            list_declaring = getattr(repo, "list_traits_declaring_sfx", None)
-            declaring = list_declaring(sfx.id) if list_declaring is not None else []
-            if not declaring:
-                warnings.append(
-                    "Acquire path: no trait lists this rule as possible, so no "
-                    "learn-chip can appear anywhere — list it on the traits that "
-                    "should offer it, or attach it directly"
-                )
+    # 2. A rule that **reaches nobody**. Reach has two forms: the static one, a
+    #    trait declaring the rule in its `possibleSfxIds` (offered) or
+    #    `defaultSfxIds` (granted), and the dynamic one, a reach declaration on the
+    #    rule itself. With neither, no learn-chip can appear anywhere and no one
+    #    simply has it — the silent reading the author hit on 2026-09-26, when an
+    #    acquire path was authored on the belief that it *granted* reach. A warning
+    #    rather than an error, because a rule may legitimately be attached or
+    #    granted directly and never learned at all (and a fresh draft reaches
+    #    nobody until something declares it). [[Dynamic SFX Reach]]
+    if repo is not None and sfx.id and not (getattr(sfx, "reach", None) or []):
+        list_declaring = getattr(repo, "list_traits_declaring_sfx", None)
+        declaring = list_declaring(sfx.id) if list_declaring is not None else []
+        # Being attached is *also* reaching someone (`entity.sfx_ids`, the table
+        # bucket), so ownership has to be checked too — and an ownership read that
+        # cannot answer must not invent a warning.
+        try:
+            from transversal.services.sfx_owner import owned_surfaces
+            unowned = not owned_surfaces(repo, sfx.id)
+        except Exception:
+            unowned = False
+        if not declaring and unowned:
+            warnings.append(
+                "Reach: no trait lists this rule as possible, it declares no reach "
+                "path, and nothing owns it — so it reaches nobody: no learn-chip "
+                "can appear anywhere and no one simply has it"
+            )
 
     return warnings
 

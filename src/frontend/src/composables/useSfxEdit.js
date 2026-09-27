@@ -24,7 +24,9 @@ export function createSfxEdit() {
     placement: null,
     arming_scope: null,   // null = auto (derive from trigger)
     listener_spec: { steps: [] },
-    acquire_spec: { steps: [] },
+    // How the rule reaches owners: a list of `{ spec, flavour }` ([[Dynamic SFX
+    // Reach]]). Replaces the old single acquire path + implicit flag.
+    reach: [],
     // Values the rule names and resolves for itself, before the conditions run.
     // Read back from the server so a save round-trips them (an omitted field is a
     // deleted section).
@@ -42,8 +44,8 @@ export function createSfxEdit() {
   // Derived rules text for the current draft ([[SFX Natural Language Plan]]).
   const cardText = ref('')
 
-const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec implicit limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
-const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec implicit limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec reach limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec reach limit boundVariables { name spec } conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
 const VALIDATE_QUERY = `query($input: SfxInput!) { validateSfx(input: $input) }`
 // Derived rules text for an *unsaved* draft — the SFX editor's live card preview.
 const SFX_TEXT_QUERY = `query($sfx: SfxInput!) { sfxText(sfx: $sfx) }`
@@ -106,8 +108,10 @@ function initialDuration(sfx) {
     draft.placement = sfx?.placement ?? null
     draft.arming_scope = sfx?.armingScope ?? sfx?.arming_scope ?? null
     draft.listener_spec = sfx?.listenerSpec ?? sfx?.listener_spec ?? { steps: [] }
-    draft.acquire_spec = sfx?.acquireSpec ?? sfx?.acquire_spec ?? { steps: [] }
-    draft.implicit = !!sfx?.implicit
+    draft.reach = (sfx?.reach ?? []).map(d => ({
+      spec: d.spec ?? { steps: [] },
+      flavour: d.flavour || 'offered',
+    }))
     draft.bound_variables = (sfx?.boundVariables ?? sfx?.bound_variables ?? [])
       .map(bv => ({ name: bv.name || '', spec: bv.spec || { steps: [] } }))
     draft.conditions = initialConditions(sfx)
@@ -137,8 +141,7 @@ function initialDuration(sfx) {
     draft.placement = null
     draft.arming_scope = null
     draft.listener_spec = { steps: [] }
-    draft.acquire_spec = { steps: [] }
-    draft.implicit = false
+    draft.reach = []
     draft.bound_variables = []
     draft.conditions = []
     draft.duration = { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
@@ -165,8 +168,7 @@ function initialDuration(sfx) {
       placement: draft.placement || null,
       armingScope: draft.arming_scope || null,
       listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
-      acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
-      implicit: !!draft.implicit,
+      reach: (draft.reach || []).filter(d => d.spec?.steps?.length),
       boundVariables: (draft.bound_variables || [])
         .filter(bv => (bv.name || '').trim() && (bv.spec?.steps?.length)),
       conditions: draft.conditions || [],
@@ -204,8 +206,7 @@ function initialDuration(sfx) {
           sourceKind: draft.source_kind || null, placement: draft.placement || null,
           armingScope: draft.arming_scope || null,
           listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
-          acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
-          implicit: !!draft.implicit,
+          reach: (draft.reach || []).filter(d => d.spec?.steps?.length),
           boundVariables: (draft.bound_variables || []).filter(bv => (bv.name || '').trim() && (bv.spec?.steps?.length)),
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
@@ -218,12 +219,11 @@ function initialDuration(sfx) {
         // just-saved bound variable came back empty after closing and reopening
         // the editor: `boundVariables` still held the value from the last fetch
         // while the fresh edit went to `bound_variables`. Same trap for
-        // sourceKind / armingScope / listenerSpec / acquireSpec.
+        // sourceKind / armingScope / listenerSpec / reach.
         name: draft.name, trigger: draft.trigger, description: draft.description,
         sourceKind: draft.source_kind, placement: draft.placement,
         armingScope: draft.arming_scope, listenerSpec: draft.listener_spec,
-        acquireSpec: draft.acquire_spec,
-        implicit: !!draft.implicit,
+        reach: draft.reach,
         boundVariables: (draft.bound_variables || []).map(bv => ({ ...bv })),
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
@@ -243,8 +243,7 @@ function initialDuration(sfx) {
           sourceKind: draft.source_kind || null, placement: draft.placement || null,
           armingScope: draft.arming_scope || null,
           listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
-          acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
-          implicit: !!draft.implicit,
+          reach: (draft.reach || []).filter(d => d.spec?.steps?.length),
           boundVariables: (draft.bound_variables || []).filter(bv => (bv.name || '').trim() && (bv.spec?.steps?.length)),
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
@@ -265,8 +264,7 @@ function initialDuration(sfx) {
         id, name: draft.name.trim(), trigger: draft.trigger, description: draft.description,
         sourceKind: draft.source_kind, placement: draft.placement,
         armingScope: draft.arming_scope, listenerSpec: draft.listener_spec,
-        acquireSpec: draft.acquire_spec,
-        implicit: !!draft.implicit,
+        reach: draft.reach,
         boundVariables: (draft.bound_variables || []).map(bv => ({ ...bv })),
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
@@ -294,16 +292,15 @@ function initialDuration(sfx) {
     if (_suppressEdits) return
     fetchScopeVariables(t || '', sk || null)
   }, { flush: 'sync' })
-  watch(() => [draft.trigger, draft.source_kind, draft.arming_scope, draft.listener_spec, draft.conditions, draft.effects], () => {
+  watch(() => [draft.trigger, draft.source_kind, draft.arming_scope, draft.listener_spec, draft.reach, draft.conditions, draft.effects], () => {
     if (_suppressEdits) return
     clearTimeout(_validationTimer)
     _validationTimer = setTimeout(() => { validate(); previewText() }, 400)
   }, { deep: true, flush: 'sync' })
   // The auto-save follows the **whole draft**, not a list of its field names: a
   // list is a promise to keep it in step, and it had already fallen behind twice
-  // — `acquire_spec` was never in it, and neither was `bound_variables` when it
-  // arrived. Both edits simply never saved, which reads as "auto-save is broken"
-  // rather than as a missing name in a list.
+  // before this — a newly added field simply never saved, which reads as
+  // "auto-save is broken" rather than as a missing name in a list.
   watch(
     () => draft,
     () => {

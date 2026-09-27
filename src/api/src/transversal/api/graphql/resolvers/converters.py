@@ -359,6 +359,31 @@ def _target_spec_from_input(raw) -> Optional[TargetSpec]:
     return TargetSpec.model_validate(raw)
 
 
+def _reach_from_input(raw) -> list:
+    """Validate a GraphQL JSON reach list into domain declarations.
+
+    An entry with no path is dropped rather than persisted: the editor can hold a
+    half-authored row, and a declaration that selects nothing would read as reach
+    that never arrives.
+    """
+    from transversal.domain import ReachDeclaration
+
+    out = []
+    for item in raw or []:
+        if not isinstance(item, dict) or not item.get("spec"):
+            continue
+        out.append(ReachDeclaration.model_validate(item))
+    return out
+
+
+def _reach_to_json(reach) -> list:
+    """The wire shape of a rule's reach declarations (``{spec, flavour}``)."""
+    return [
+        {"spec": d.spec.model_dump(), "flavour": d.flavour.value}
+        for d in (reach or [])
+    ]
+
+
 def _bound_variables_from_input(raw) -> list:
     """Validate an SFX's declared bound variables into domain models.
 
@@ -591,8 +616,7 @@ def _sfx_ref(sfx, resolve=None) -> SfxRef:
         owner_surfaces=sorted(owner_surfaces_for(sfx)),
         placement=sfx.placement, arming_scope=sfx.arming_scope,
         listener_spec=sfx.listener_spec.model_dump() if sfx.listener_spec else None,
-        acquire_spec=sfx.acquire_spec.model_dump() if sfx.acquire_spec else None,
-        implicit=bool(getattr(sfx, "implicit", False)),
+        reach=_reach_to_json(getattr(sfx, "reach", None)),
         bound_variables=[
             BoundVariable(
                 name=bv.name,

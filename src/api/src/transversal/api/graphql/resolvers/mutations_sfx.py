@@ -17,6 +17,7 @@ from transversal.api.graphql.resolvers.converters import (
     _effect_input_to_domain,
     _em,
     _maybe_rearm_passives,
+    _reach_from_input,
     _sfx_ref,
     _target_spec_from_input,
 )
@@ -47,8 +48,7 @@ class MutationsSfx:
             source_kind=input.source_kind, placement=input.placement,
             arming_scope=input.arming_scope,
             listener_spec=_target_spec_from_input(input.listener_spec),
-            acquire_spec=_target_spec_from_input(input.acquire_spec),
-            implicit=bool(getattr(input, "implicit", False)),
+            reach=_reach_from_input(input.reach),
             bound_variables=_bound_variables_from_input(input.bound_variables),
             effects=[_effect_input_to_domain(e) for e in input.effects],
             duration=_duration_input_to_domain(input.duration),
@@ -103,10 +103,8 @@ class MutationsSfx:
             existing.arming_scope = input.arming_scope
         if input.listener_spec is not None:
             existing.listener_spec = _target_spec_from_input(input.listener_spec)
-        if input.acquire_spec is not None:
-            existing.acquire_spec = _target_spec_from_input(input.acquire_spec)
-        if input.implicit is not None:
-            existing.implicit = bool(input.implicit)
+        if input.reach is not None:
+            existing.reach = _reach_from_input(input.reach)
         if input.bound_variables is not None:
             existing.bound_variables = _bound_variables_from_input(input.bound_variables)
         if input.effects is not None:

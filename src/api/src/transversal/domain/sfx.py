@@ -1,5 +1,7 @@
 """Sfx — split out of src/api/src/transversal/domain/__init__.py."""
 
+from enum import Enum
+
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -38,6 +40,34 @@ class BoundVariable(BaseModel):
     spec: TargetSpec
 
 
+class ReachFlavour(str, Enum):
+    """How a reach declaration relates the owners its path yields to the rule.
+
+    ``GRANTED`` — they simply *have* it: available from them, no learn-chip.
+    ``OFFERED`` — they are *offered* it as a chip and may take it.
+    """
+    GRANTED = "granted"
+    OFFERED = "offered"
+
+
+class ReachDeclaration(BaseModel):
+    """One way this rule reaches owners: a targeting path plus the relationship.
+
+    The path **yields the owners** — it is a *selector*, not a gate, so there is
+    no per-candidate question left to ask. ``Source`` declares the element every
+    path must land on, and stays the seed the rule's other fields start from.
+
+    Declarations combine with **OR** (the union is the reach), and where an owner
+    is both granted and offered, **granted wins** — they simply have it. The
+    hand-picked lists stay as the static form of the same two relationships
+    (``Trait.possible_sfx_ids`` = offered, ``default_sfx_ids`` = granted).
+    See [[Dynamic SFX Reach]].
+    """
+
+    spec: TargetSpec
+    flavour: ReachFlavour = ReachFlavour.OFFERED
+
+
 class SFX(BaseModel):
     """SFX registry entry.
 
@@ -66,28 +96,15 @@ class SFX(BaseModel):
     # ``listener_spec`` (e.g. ``select self → navigate relationships → filter
     # type == curse_bind → navigate target``).
     listener_spec: Optional[TargetSpec] = None
-    # A **gate on acquiring** this rule, not on using it: a path seeded at the
-    # thing being unlocked (`select source` = the trait instance), resolved when
-    # someone tries to take it. Passes iff it resolves non-empty and error-free —
-    # the same reading a `TARGET_PATH` condition gets. `None` = acquirable
-    # anywhere, which is the common case.
+    # How this rule **reaches owners**, beyond the hand-picked lists a trait
+    # declares. Each declaration is a targeting path plus a flavour; the path
+    # yields the owners, so it is a *selector* and not a gate — the old
+    # per-candidate acquire path is gone ([[Dynamic SFX Reach]]). Resolved
+    # read-only at read time; nothing is written onto anyone.
     #
-    # Deliberately not a condition: conditions are evaluated when the rule *fires*
-    # as well as when it is offered, so gating with one would take the rule away
-    # again the moment its bearer left the place they learned it.
-    acquire_spec: Optional[TargetSpec] = None
-    # Whether the rule applies to the surfaces its acquisition path targets
-    # **without being learned first** ([[B131]]).
-    #
-    # `Trait.possible_sfx_ids` is the declaration: it says which trait offers the
-    # rule, and with this flag set every *instance* of that trait simply has it —
-    # no learn-chip, no `sfx_ids` entry on the instance. Unset (the default, and
-    # what every existing rule means) it must be taken before it can be used.
-    #
-    # The acquire gate still bounds *where* it applies when one is declared: "only
-    # in the Verdant Steps" is a fact about the rule's reach, not about learning,
-    # and going implicit must not quietly make it universal.
-    implicit: bool = False
+    # ``Source`` above declares the element *every* path must land on, which is
+    # what keeps a path that ends somewhere else from being a reach declaration.
+    reach: list["ReachDeclaration"] = Field(default_factory=list)
     # Named values resolved from the world **before the condition gate**, in
     # declaration order — so a condition may read them, a later binding may start
     # from an earlier one, and a flat `{name}` field means the same thing

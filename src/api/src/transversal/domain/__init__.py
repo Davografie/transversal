@@ -108,6 +108,8 @@ from transversal.domain.effects import (  # noqa: F401
 from transversal.domain.sfx import (  # noqa: F401
     SFX,
     BoundVariable,
+    ReachDeclaration,
+    ReachFlavour,
     SfxOwner,
 )
 

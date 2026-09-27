@@ -142,33 +142,17 @@
       @edit="openEffectEditor"
     />
 
-    <!-- Where this may be *taken*, not where it works: the last question on the
-         panel, because it is optional and it describes the rule's history rather
-         than its behaviour. Seeded at the thing being unlocked, so `select
-         source` is the trait instance (or entity) the rule is being attached to.
-         Empty = acquirable anywhere. -->
+    <!-- Who already offers this rule: a trait's `possibleSfxIds` ([[B131]]), the
+         *static* half of reach. The dynamic half — reach declarations on the rule
+         itself, each a path plus granted/offered — is authored here next; see
+         [[Dynamic SFX Reach]]. -->
     <div class="sfx-acquire">
-      <h4 class="ps-section-title">Where it may be learned</h4>
-      <label>Acquire path <span class="hint-inline">(optional)</span></label>
-      <!-- No destination hint: "who may take this" is not a fixed type — it ends
-           wherever the author means (an entity, a trait instance, …). -->
-      <PathField v-model="draft.acquire_spec" :source-element="sourceElement" title="Acquire path" />
-      <p class="hint">Where this rule may be <em>learned</em> — leaving the place afterwards does not take it away (a condition would). E.g. <em>select source → navigate entity → filter current_location == Azure Dawn</em>.</p>
-
-      <!-- The acquisition path's other half ([[B131]]): a rule a trait offers
-           without anyone having to take it. The declaration lives on the *trait*
-           (`possibleSfxIds`), so the flag alone does nothing — hence the list
-           below, which is the only place that relation is visible from here. -->
-      <label class="sfx-implicit">
-        <input type="checkbox" v-model="draft.implicit" />
-        <span>Applies without being learned</span>
-      </label>
-      <p class="hint">On, every instance of a trait that lists this rule as <em>possible</em> simply has it — no learn-chip, nothing written on the instance. Where it reaches is still the acquire path above.</p>
+      <h4 class="ps-section-title">Who offers it</h4>
       <div v-if="declaringTraits.length" class="sfx-declared-by">
         <span class="declared-label">Declared by</span>
         <span v-for="t in declaringTraits" :key="t.id" class="declared-trait" :title="t.id">{{ t.name }}</span>
       </div>
-      <p v-else-if="sfx" class="hint">No trait lists this rule, so "without being learned" has nothing to act on yet.</p>
+      <p v-else-if="sfx" class="hint">No trait lists this rule as possible, so nothing offers it as a learn-chip yet.</p>
     </div>
     </template>
 
@@ -616,12 +600,6 @@ async function onDelete() {
    be readable: `.hint`'s 9px is a field's footnote, not the panel's explanation
    of what Create does and when saving starts. */
 .sfx-create-note { margin: 8px 0 0; font-size: 11px; line-height: 1.4; }
-/* The implicit checkbox is a control, not a field label — it keeps the sentence
-   case the base rule above would otherwise uppercase. */
-.sfx-acquire label.sfx-implicit {
-  display: flex; align-items: center; gap: 6px; margin-top: 10px;
-  text-transform: none; letter-spacing: 0; font-size: 11px; color: var(--text);
-}
 .sfx-declared-by { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
 .declared-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .declared-trait { font-size: 10px; padding: 2px 6px; background: var(--overlay-4); border: 1px solid var(--overlay-10); border-radius: 4px; color: var(--text-dim); }

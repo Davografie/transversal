@@ -5,6 +5,7 @@ from transversal.domain import (
     ConditionType,
     Effect,
     EffectTiming,
+    ReachDeclaration,
     SFX,
     TargetRef,
     TargetSpec,
@@ -418,7 +419,9 @@ def test_ownership_guard_skipped_when_unowned_or_no_repo(monkeypatch):
     monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: set())
     sfx = _sfx()
     sfx.source_kind = "trait_setting"
-    assert validate_sfx(sfx, repo=object()) == []  # unowned → skip
+    # Unowned → the *source* guard is skipped. (An unowned rule reaching nobody is a
+    # separate warning, and a true one.)
+    assert not any(w.startswith("Source is") for w in validate_sfx(sfx, repo=object()))
     assert validate_sfx(sfx) == []  # no repo → skip
 
 
@@ -631,32 +634,53 @@ class _DeclaringRepo:
         return list(self._declaring)
 
 
-def test_an_acquire_path_with_no_offer_warns():
-    sfx = _sfx()
-    sfx.acquire_spec = TargetSpec(steps=[{"kind": "select", "collection": "source"}])
-    warnings = validate_sfx(sfx, repo=_DeclaringRepo())
-    assert any("no trait lists this rule as possible" in w for w in warnings), warnings
+def test_a_rule_that_reaches_nobody_warns(monkeypatch):
+    """Reach has two forms — a trait declaring the rule, and a reach declaration on
+    the rule — and being attached is a third. With none of them it reaches nobody,
+    which is the silent reading the author hit on 2026-09-26 ([[Dynamic SFX Reach]])."""
+    import transversal.services.sfx_owner as sfo
+    monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: set())
+    warnings = validate_sfx(_sfx(), repo=_DeclaringRepo())
+    assert any("reaches nobody" in w for w in warnings), warnings
 
 
-def test_a_declared_offer_silences_the_no_offer_warning():
+def test_a_declared_offer_silences_the_reaches_nobody_warning():
     sfx = _sfx()
-    sfx.acquire_spec = TargetSpec(steps=[{"kind": "select", "collection": "source"}])
     warnings = validate_sfx(sfx, repo=_DeclaringRepo(declaring=["trait-x"]))
-    assert not any("no trait lists this rule as possible" in w for w in warnings), warnings
+    assert not any("reaches nobody" in w for w in warnings), warnings
+
+
+def test_a_reach_declaration_silences_the_reaches_nobody_warning():
+    sfx = _sfx()
+    sfx.reach = [ReachDeclaration(
+        spec=TargetSpec(steps=[{"kind": "select", "collection": "locations"}]))]
+    warnings = validate_sfx(sfx, repo=_DeclaringRepo())
+    assert not any("reaches nobody" in w for w in warnings), warnings
+
+
+def test_an_attached_rule_does_not_warn_about_reaching_nobody(monkeypatch):
+    """Attached *is* reaching someone (`entity.sfx_ids`, the table bucket), so the
+    ownership read has to be part of the question."""
+    import transversal.services.sfx_owner as sfo
+    monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: {"entity"})
+    warnings = validate_sfx(_sfx(), repo=_DeclaringRepo())
+    assert not any("reaches nobody" in w for w in warnings), warnings
 
 
 def test_a_select_step_naming_no_collection_warns():
-    """The live `sfx-expose-trait` shape: the seed resolves to nothing, so every
-    path through it — and therefore the gate — is dead."""
+    """A seed that names no collection resolves to nothing, so every path through it
+    — a reach declaration included — is dead. Live content has one
+    (`sfx-expose-trait`)."""
     sfx = _sfx()
-    sfx.acquire_spec = TargetSpec(steps=[{"kind": "select", "collection": ""}])
+    sfx.reach = [ReachDeclaration(
+        spec=TargetSpec(steps=[{"kind": "select", "collection": ""}]))]
     warnings = validate_sfx(sfx)
-    assert any(w.startswith("Acquire path:") and "names no collection" in w
-               for w in warnings), warnings
+    assert any("names no collection" in w for w in warnings), warnings
 
 
 def test_a_healthy_path_does_not_warn_about_its_seed():
     sfx = _sfx()
-    sfx.acquire_spec = TargetSpec(steps=[{"kind": "select", "collection": "source"}])
+    sfx.reach = [ReachDeclaration(
+        spec=TargetSpec(steps=[{"kind": "select", "collection": "locations"}]))]
     warnings = validate_sfx(sfx)
     assert not any("names no collection" in w for w in warnings), warnings

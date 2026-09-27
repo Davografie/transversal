@@ -452,7 +452,7 @@ mutation(
 # typo'd effect or a silently dropped placement was invisible.
 _SFX_WRITE_FIELDS = (
     "id name description trigger limit sourceKind placement armingScope "
-    "listenerSpec acquireSpec implicit "
+    "listenerSpec reach "
     "boundVariables { name spec } conditions { type subject target value operator narrative } "
     "duration { timers { event remaining } combine } "
     "effects { %s }"
@@ -1219,8 +1219,8 @@ def update_sfx(args: dict) -> dict:
 
     Pass ``input`` as an ``SfxUpdateInput``: ``id`` plus any of ``name``,
     ``description``, ``trigger``, ``limit``, ``sourceKind``, ``placement``,
-    ``armingScope``, ``listenerSpec``, ``acquireSpec``, ``implicit``,
-    ``conditions``, ``effects``, ``duration``. **Only what you pass is written** —
+    ``armingScope``, ``listenerSpec``, ``reach``, ``conditions``, ``effects``,
+    ``duration``. **Only what you pass is written** —
     an omitted key is left alone rather than cleared, so this is a patch and not a
     replace. To clear a list, pass it as ``[]``.
     """
@@ -3549,12 +3549,12 @@ TOOL_SCHEMAS = {
     },
     "create_sfx": {
         "name": "create_sfx",
-        "description": "Create a new SFX. Pass the full SfxInput as `input`. Required: id, name, description, trigger, limit. Optional: sourceKind, placement, armingScope, listenerSpec, acquireSpec, conditions, effects, duration. (description and limit may be omitted — the backend defaults them — but the other three are required.)",
+        "description": "Create a new SFX. Pass the full SfxInput as `input`. Required: id, name, description, trigger, limit. Optional: sourceKind, placement, armingScope, listenerSpec, reach, conditions, effects, duration. (description and limit may be omitted — the backend defaults them — but the other three are required.)",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "input": {"type": "object",
-                           "description": "SfxInput: id, name, description, trigger, limit, sourceKind, placement, armingScope, listenerSpec, acquireSpec, conditions, effects, duration"},
+                           "description": "SfxInput: id, name, description, trigger, limit, sourceKind, placement, armingScope, listenerSpec, reach, conditions, effects, duration"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["input"],
@@ -3562,7 +3562,7 @@ TOOL_SCHEMAS = {
     },
     "update_sfx": {
         "name": "update_sfx",
-        "description": "Edit an existing SFX. Pass an SfxUpdateInput as `input`: id plus any of name, description, trigger, limit, sourceKind, placement, armingScope, listenerSpec, acquireSpec, conditions, effects, duration. A patch, not a replace — omitted keys are left alone; pass [] to clear a list.",
+        "description": "Edit an existing SFX. Pass an SfxUpdateInput as `input`: id plus any of name, description, trigger, limit, sourceKind, placement, armingScope, listenerSpec, reach, conditions, effects, duration. A patch, not a replace — omitted keys are left alone; pass [] to clear a list.",
         "inputSchema": {
             "type": "object",
             "properties": {

@@ -19,6 +19,7 @@ from transversal.api.graphql.resolvers.converters import (
     _duration_input_to_domain,
     _effect_input_to_domain,
     _em,
+    _reach_from_input,
     _scheduled_event_to_gql,
     _sfx_ref,
     _target_spec_from_input,
@@ -133,19 +134,14 @@ class QueriesSfx:
 
     @strawberry.field
     def acquirable_sfx_ids(self, info: strawberry.Info, trait_setting_id: strawberry.ID) -> list[strawberry.ID]:
-        """The trait instance's *offered* SFX that may be taken right now.
+        """The trait instance's *offered* SFX: what its trait declares as possible.
 
-        A rule can be gated to where it may be learned (`acquire_spec`): the
-        instance's trait offers it, but the chip only appears where the path
-        resolves. This is the list the sheet should render — enforcement lives in
-        the attach, so this is the honest preview of what would be accepted.
-
-        An **implicit** rule is left out ([[B131]]): it needs no learning, so
-        offering a learn-chip for it would offer to take what the instance already
-        has. Its reach is the acquire path's business, read by availability
-        instead.
+        A **granted** rule is not a chip — it needs no learning — so it belongs in
+        availability, not here. The acquire *gate* this used to apply is retired:
+        reach is a selector that yields owners, so there is no per-candidate path
+        left to test ([[Dynamic SFX Reach]]).
         """
-        from transversal.services.sfx_owner import acquire_gate_holds, possible_sfx_ids
+        from transversal.services.sfx_owner import possible_sfx_ids
 
         repo = _em(info).repo
         ts = repo.get_traitsetting(str(trait_setting_id))
@@ -153,12 +149,7 @@ class QueriesSfx:
             return []
         out: list[strawberry.ID] = []
         for sfx_id in possible_sfx_ids(repo, ts.trait_id):
-            if sfx_id in out:
-                continue
-            sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
-            if sfx is None or getattr(sfx, "implicit", False):
-                continue
-            if acquire_gate_holds(sfx, "trait_instance", ts.id, repo):
+            if sfx_id not in out:
                 out.append(strawberry.ID(sfx_id))
         return out
 
@@ -404,11 +395,7 @@ class QueriesSfx:
             source_kind=input.source_kind, placement=input.placement,
             arming_scope=input.arming_scope,
             listener_spec=_target_spec_from_input(input.listener_spec),
-            acquire_spec=_target_spec_from_input(input.acquire_spec),
-            # `implicit` has to survive this conversion: it decides whether an
-            # offered rule must still be learned, so a draft that dropped it would
-            # validate against the wrong rule.
-            implicit=bool(getattr(input, "implicit", False)),
+            reach=_reach_from_input(input.reach),
             bound_variables=_bound_variables_from_input(input.bound_variables),
             conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],

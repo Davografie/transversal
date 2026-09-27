@@ -33,8 +33,8 @@ SfxOwnerKindGql = strawberry.enum(SfxOwnerKind)
 class BoundVariable:
     """A named value the rule resolves before it does anything (see § Bound Variables).
 
-    ``spec`` is a targeting path as JSON, the same wire shape ``listenerSpec`` /
-    ``acquireSpec`` use. The name is the author's; the path usually starts at
+    ``spec`` is a targeting path as JSON, the same wire shape ``listenerSpec``
+    uses. The name is the author's; the path usually starts at
     ``select source``.
     """
     name: str
@@ -74,11 +74,11 @@ class SfxRef:
     placement: Optional[str] = None
     arming_scope: Optional[str] = None
     listener_spec: Optional[strawberry.scalars.JSON] = None
-    acquire_spec: Optional[strawberry.scalars.JSON] = None
-    # The rule applies to the surfaces its acquisition path targets without being
-    # learned first (B131) — the trait that declares it in `possibleSfxIds` simply
-    # has it. False is the default and what every older payload means.
-    implicit: bool = False
+    # How the rule reaches owners: a list of ``{spec, flavour}``, where the path
+    # **yields** the owners (``granted`` = they simply have it, ``offered`` = a
+    # learn-chip). Replaces the old single ``acquireSpec`` gate. See
+    # [[Dynamic SFX Reach]].
+    reach: Optional[strawberry.scalars.JSON] = None
     # Values the rule names and resolves for itself, before the conditions run.
     bound_variables: list[BoundVariable] = strawberry.field(default_factory=list)
     conditions: list[Condition] = strawberry.field(default_factory=list)
@@ -99,8 +99,7 @@ class SfxInput:
     placement: Optional[str] = None
     arming_scope: Optional[str] = None
     listener_spec: Optional[strawberry.scalars.JSON] = None
-    acquire_spec: Optional[strawberry.scalars.JSON] = None
-    implicit: bool = False
+    reach: Optional[strawberry.scalars.JSON] = None
     bound_variables: list[BoundVariableInput] = strawberry.field(default_factory=list)
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
@@ -118,8 +117,7 @@ class SfxUpdateInput:
     placement: Optional[str] = None
     arming_scope: Optional[str] = None
     listener_spec: Optional[strawberry.scalars.JSON] = None
-    acquire_spec: Optional[strawberry.scalars.JSON] = None
-    implicit: Optional[bool] = None
+    reach: Optional[strawberry.scalars.JSON] = None
     # ``None`` = leave as stored; ``[]`` = the author removed them all. The
     # distinction matters: a save that cannot express "none left" silently keeps
     # deleted variables alive.
