@@ -766,11 +766,12 @@ def invalidate_sfx_cache() -> None:
     Every rule write goes through here, which is why the SFX mutations call it
     whether or not an effects engine happens to be attached.
     """
-    global _SFX_CACHE_FILLED_AT, _GRANTED_BY_OWNER_CACHE
+    global _SFX_CACHE_FILLED_AT, _GRANTED_BY_OWNER_CACHE, _REACH_CACHE_FILLED_AT
     _SFX_CACHE.clear()
     _POSSIBLE_SFX_CACHE.clear()
     _REACH_INDEX_CACHE.clear()
     _GRANTED_BY_OWNER_CACHE = None
+    _REACH_CACHE_FILLED_AT = 0.0
     _SFX_CACHE_FILLED_AT = 0.0
 
 
@@ -796,6 +797,25 @@ def possible_sfx_ids(repo, trait_id: str) -> tuple[str, ...]:
 #: declaration is a **set-producing** query where the old offer was a lookup — the
 #: read must not become "walk every owner and run a path" ([[Dynamic SFX Reach]]).
 _REACH_INDEX_CACHE: dict[str, dict[str, frozenset[str]]] = {}
+
+#: When the reach-derived caches were last built, on the same clock the SFX records
+#: use (``_SFX_CACHE_TTL``). A reach declaration is a **live query over the world** —
+#: its answer changes when a trait moves, a place fills up, a tag changes — so it
+#: cannot be kept honest by enumerating every write that might affect it; it refreshes
+#: on a clock instead. This used to be missing, which meant the index only aged out
+#: when some *other* code path happened to load an SFX record: a trait that changed
+#: hands kept offering the rule to its old owner and the new owner saw nothing, until
+#: somebody edited a rule.
+_REACH_CACHE_FILLED_AT = 0.0
+
+
+def _age_out_reach_caches() -> None:
+    """Drop the reach-derived caches once they are older than the record TTL."""
+    global _REACH_CACHE_FILLED_AT, _GRANTED_BY_OWNER_CACHE
+    if _REACH_CACHE_FILLED_AT and (time.monotonic() - _REACH_CACHE_FILLED_AT) > _SFX_CACHE_TTL:
+        _REACH_INDEX_CACHE.clear()
+        _GRANTED_BY_OWNER_CACHE = None
+        _REACH_CACHE_FILLED_AT = 0.0
 
 
 def reach_owner_ids(repo, sfx, flavour: str) -> tuple[str, ...]:
@@ -841,11 +861,14 @@ def _resolve_reach_spec(repo, spec) -> list:
 def reach_index(repo, flavour: str) -> dict[str, frozenset[str]]:
     """Every rule declaring reach of ``flavour``, mapped to the owners it selects.
 
-    One pass over the registry, cached until a rule write — so a fan-out over many
-    entities resolves each declaration **once** rather than per entity (the cost
-    note in [[Dynamic SFX Reach]]). Empty while no rule declares reach, which is
-    the state content is in today.
+    One pass over the registry, cached until a rule write **or** the record TTL —
+    so a fan-out over many entities resolves each declaration **once** rather than
+    per entity (the cost note in [[Dynamic SFX Reach]]), while a world that changed
+    underneath it (a trait that moved, a place that filled up) is picked up within
+    the TTL rather than never. Empty while no rule declares reach.
     """
+    global _REACH_CACHE_FILLED_AT
+    _age_out_reach_caches()
     cached = _REACH_INDEX_CACHE.get(flavour)
     if cached is not None:
         return cached
@@ -856,6 +879,7 @@ def reach_index(repo, flavour: str) -> dict[str, frozenset[str]]:
         if owners:
             index[sfx.id] = frozenset(owners)
     _REACH_INDEX_CACHE[flavour] = index
+    _REACH_CACHE_FILLED_AT = time.monotonic()
     return index
 
 
@@ -876,6 +900,7 @@ def granted_sfx_by_owner(repo) -> dict[str, tuple[str, ...]]:
     disagree about who has what ([[Dynamic SFX Reach]]).
     """
     global _GRANTED_BY_OWNER_CACHE
+    _age_out_reach_caches()
     if _GRANTED_BY_OWNER_CACHE is not None:
         return _GRANTED_BY_OWNER_CACHE
     by_owner: dict[str, list[str]] = {}

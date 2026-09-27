@@ -2031,3 +2031,37 @@ def test_granted_sfx_by_owner_inverts_the_granted_reach_index():
     repo = _reach_world(plain)
     invalidate_sfx_cache()
     assert granted_sfx_by_owner(repo) == {}
+
+
+def test_the_reach_index_ages_out_on_the_record_ttl(monkeypatch):
+    """Reach is a **live query over the world**, so it refreshes on a clock.
+
+    It has no write hook to hang off: a trait that moves, a place that fills up, a tag
+    that changes all move its answer, and enumerating every such write is not a thing
+    one can keep up. Without a TTL the index only aged out when some *other* code path
+    happened to load an SFX record — and the trait chip (`TraitSetting.grantedSfxIds`)
+    never does. So a trait that changed hands kept offering the rule to its old owner
+    and the new owner saw nothing, and a browser refresh could not help: the staleness
+    is in the server process, not the page.
+    """
+    import transversal.services.sfx_owner as sfo
+
+    calls = {"n": 0}
+
+    def owners(_repo, _sfx, _flavour):
+        calls["n"] += 1
+        return (f"owner-{calls['n']}",)
+
+    monkeypatch.setattr(sfo, "reach_owner_ids", owners)
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(sfo.time, "monotonic", lambda: clock["t"])
+
+    repo = _reach_world(_reach_rule("granted"))
+    assert sfo.granted_sfx_by_owner(repo) == {"owner-1": ("sfx-reach",)}
+    assert sfo.granted_sfx_by_owner(repo) == {"owner-1": ("sfx-reach",)}, "cached, as designed"
+    assert calls["n"] == 1, "the second read must not recompute"
+
+    # The clock passes the record TTL, so the next read rebuilds from the world.
+    clock["t"] += sfo._SFX_CACHE_TTL + 1
+    assert sfo.granted_sfx_by_owner(repo) == {"owner-2": ("sfx-reach",)}
+    assert calls["n"] == 2, "the TTL must force a rebuild"
