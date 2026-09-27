@@ -125,6 +125,13 @@ function initialDuration(sfx) {
     _suppressEdits = false
     fetchScopeVariables(draft.trigger, draft.source_kind)
     previewText()
+    // …and validate what was opened, not only what is edited. The debounced
+    // watcher fires on *changes*, so a rule opened with a problem in it showed an
+    // empty warning list until something was touched — which reads as "this rule
+    // is fine", and hides exactly the warnings worth seeing first (a dead path, a
+    // gate nothing offers, a source that matches no owner). Same request shape as
+    // `previewText` above, so it costs one read per open and no new race.
+    validate()
   }
 
   function reset() {
