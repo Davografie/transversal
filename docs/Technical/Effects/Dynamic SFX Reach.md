@@ -99,10 +99,13 @@ invalidation, already wired), and membership-test against it. Sizes are modest �
 on top exactly as they do now. Revisit if a declaration is authored against a much
 larger collection.
 
-## Migration and revert plan (first task after compaction)
+## Migration and revert plan
 
-**Revert `offer_traitsets`** — it is the wrong shape; remove it rather than build on
-it. In `92babf6c` (and its follow-ups):
+**The revert is DONE** (`3af9873f`, 2026-09-26) — 2065 pass, 0 failures, frontend
+builds. `sfx-gift` has no reach until the selectors land; the author accepted that.
+**Next task: the `trait → traitsettings` edge, then the reach declarations.**
+
+What came out of `92babf6c` and its follow-ups, and what deliberately survived:
 
 - **Out:** `SFX.offer_traitsets` (domain, `SfxRef`/`SfxInput`/`SfxUpdateInput`,
   create/update resolvers, `_sfx_ref`), the `acquireTraitsets`-style reads in
@@ -110,10 +113,11 @@ it. In `92babf6c` (and its follow-ups):
   `acquirableSfxIds` and `get_available_sfx_ids` offer reads, the MCP document
   field, the "Offered by" picker and its `useSfxEdit` wiring, and the
   offer-specific tests.
-- **Keep:** the **`validateSfx` warnings** (reword the no-offer one to the new
-  model — "this rule reaches nobody" — since "Offered by" disappears), the
-  **validate-on-open** fix (`69bcf611`), and the `invalidate_sfx_cache()` calls
-  being unconditional (correct regardless).
+- **Kept:** the **`validateSfx` warnings** (the no-offer one reworded to *"no trait
+  lists this rule as possible"*, and it becomes *"this rule reaches nobody"* when the
+  selectors land), the **validate-on-open** fix (`69bcf611`), `implicit` surviving
+  the `validateSfx` draft conversion, and the `invalidate_sfx_cache()` calls being
+  unconditional (correct regardless).
 - **Live data:** clear the stored key on `sfx-gift` so no ghost field lingers, and
   keep its `source_kind` fixed at `trait_setting` (it had drifted to `table`, under
   which the rule could not be taken at all — see [[B228]]).
