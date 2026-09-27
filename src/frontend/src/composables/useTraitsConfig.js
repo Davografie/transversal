@@ -16,10 +16,10 @@ export function useTraitsConfig() {
     const [ts, sf] = await Promise.all([
       graphql(`query {
         traitsets {
-          id name universes entityTypes order limit allowDuplicates polarity sheetTab
+          id name universes entityTypes order limit allowDuplicates polarity sheetTab explanation
           traits {
             id name defaultDieType defaultRatingType traitsetId universes
-            defaultEgo polarity tags
+            defaultEgo polarity tags explanation
             possibleSfxIds defaultSfxIds possibleSubtraitIds possibleSubtraitsetIds
             displayNames { name universe ratings }
             sheetImage: image(role: "sheet")

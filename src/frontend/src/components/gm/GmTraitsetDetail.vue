@@ -21,6 +21,16 @@
         <option value="PROFILE">Profile</option>
       </select>
       <label class="checkbox-label"><input type="checkbox" v-model="form.allowDuplicates" /> Allow duplicate trait instances</label>
+      <!-- The set's own `explanation` — "what this set is for, in the author's
+           words" (B227: the old app's `explainer`, migrated in under the name
+           `description` and renamed). Registry record only — the set, never a
+           per-entity instance. -->
+      <label>Explanation</label>
+      <textarea
+        v-model="form.explanation"
+        rows="3"
+        placeholder="What this set is for — the reader's guide to its traits…"
+      ></textarea>
     </div>
 
     <h4 class="ps-section-title">Traits</h4>
@@ -137,7 +147,7 @@ watch(traitset, (ts) => {
 })
 
 const saving = ref(false)
-const form = reactive({ name: '', universes: [], entityTypes: [], limit: 1, polarity: '', allowDuplicates: false, sheetTab: 'TRAITS' })
+const form = reactive({ name: '', universes: [], entityTypes: [], limit: 1, polarity: '', allowDuplicates: false, sheetTab: 'TRAITS', explanation: '' })
 
 watch(traitset, (ts) => {
   if (ts) {
@@ -148,11 +158,12 @@ watch(traitset, (ts) => {
     form.polarity = ts.polarity || ''
     form.allowDuplicates = !!ts.allowDuplicates
     form.sheetTab = ts.sheetTab || 'TRAITS'
+    form.explanation = ts.explanation || ''
   }
 }, { immediate: true })
 
 let saveTimer = null
-watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], () => form.limit, () => form.polarity, () => form.allowDuplicates, () => form.sheetTab], () => {
+watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], () => form.limit, () => form.polarity, () => form.allowDuplicates, () => form.sheetTab, () => form.explanation], () => {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => saveTraitset(), 600)
 })
@@ -160,11 +171,11 @@ watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], 
 async function saveTraitset() {
   if (!traitset.value?.id) return
   await graphql(
-    `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int, $polarity: Polarity, $clearPolarity: Boolean, $allowDuplicates: Boolean, $sheetTab: SheetTab) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit, polarity: $polarity, clearPolarity: $clearPolarity, allowDuplicates: $allowDuplicates, sheetTab: $sheetTab) { id } }`,
-    { id: traitset.value.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit, polarity: form.polarity || null, clearPolarity: !form.polarity, allowDuplicates: form.allowDuplicates, sheetTab: form.sheetTab }
+    `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int, $polarity: Polarity, $clearPolarity: Boolean, $allowDuplicates: Boolean, $sheetTab: SheetTab, $explanation: String) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit, polarity: $polarity, clearPolarity: $clearPolarity, allowDuplicates: $allowDuplicates, sheetTab: $sheetTab, explanation: $explanation) { id } }`,
+    { id: traitset.value.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit, polarity: form.polarity || null, clearPolarity: !form.polarity, allowDuplicates: form.allowDuplicates, sheetTab: form.sheetTab, explanation: form.explanation }
   )
   patchData('traitsets', traitset.value.id, {
-    name: form.name, universes: [...form.universes], entityTypes: [...form.entityTypes], limit: form.limit, polarity: form.polarity || null, allowDuplicates: form.allowDuplicates, sheetTab: form.sheetTab,
+    name: form.name, universes: [...form.universes], entityTypes: [...form.entityTypes], limit: form.limit, polarity: form.polarity || null, allowDuplicates: form.allowDuplicates, sheetTab: form.sheetTab, explanation: form.explanation,
   })
 }
 

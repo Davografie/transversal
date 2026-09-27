@@ -42,6 +42,12 @@
           placeholder="Add tag…"
           aria-label="Trait tags"
         />
+        <label>Explanation</label>
+        <textarea
+          v-model="form.explanation"
+          rows="3"
+          placeholder="What this trait means in play — flavour or rules text…"
+        ></textarea>
       </div>
 
       <!-- Images (B200) — one gallery and one viewer, shared with the entity
@@ -195,6 +201,12 @@
           placeholder="Add tag…"
           aria-label="Trait tags"
         />
+        <label>Explanation</label>
+        <textarea
+          v-model="createForm.explanation"
+          rows="3"
+          placeholder="What this trait means in play — flavour or rules text…"
+        ></textarea>
       </div>
 
       <h4 class="ps-section-title">Possible SFXs</h4>
@@ -367,6 +379,7 @@ const form = reactive({
   defaultEgo: false,
   polarity: '',
   tags: [],   // free-form labels a condition/target can match on (B116) — edited via TagInput
+  explanation: '',  // the trait's own descriptive text — also the prompt seed for its image
   possibleSfxIds: [],
   defaultSfxIds: [],
   possibleSubtraitIds: [],
@@ -430,6 +443,7 @@ watch(trait, (t) => {
     form.defaultEgo = t.defaultEgo || false
     form.polarity = t.polarity || ''
     form.tags = [...(t.tags || [])]
+    form.explanation = t.explanation || ''
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
     form.defaultSfxIds = [...(t.defaultSfxIds || [])]
     form.possibleSubtraitIds = [...(t.possibleSubtraitIds || [])]
@@ -442,7 +456,7 @@ let saveTimer = null
 watch([
   () => form.name, () => [...form.universes], () => form.defaultDieType,
   () => form.defaultRatingType, () => form.defaultEgo,
-  () => form.polarity, () => [...form.tags],
+  () => form.polarity, () => [...form.tags], () => form.explanation,
   () => [...form.possibleSfxIds], () => [...form.defaultSfxIds], () => [...form.possibleSubtraitIds], () => [...form.possibleSubtraitsetIds],
 ], () => {
   if (!trait.value) return
@@ -464,12 +478,13 @@ async function save() {
   if (!trait.value?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, defaultEgo: form.defaultEgo, tags: form.tags, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds, possibleSubtraitIds: form.possibleSubtraitIds, possibleSubtraitsetIds: form.possibleSubtraitsetIds } }
+    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, defaultEgo: form.defaultEgo, tags: form.tags, explanation: form.explanation, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds, possibleSubtraitIds: form.possibleSubtraitIds, possibleSubtraitsetIds: form.possibleSubtraitsetIds } }
   )
   patchData('traits', trait.value.id, {
     name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
     defaultRatingType: form.defaultRatingType, defaultEgo: form.defaultEgo,
     tags: [...form.tags],
+    explanation: form.explanation,
     polarity: form.polarity || null,
     possibleSfxIds: [...form.possibleSfxIds],
     defaultSfxIds: [...form.defaultSfxIds],
@@ -528,6 +543,7 @@ const createForm = reactive({
   defaultEgo: false,
   polarity: '',
   tags: [],
+  explanation: '',
   possibleSfxIds: [],
   defaultSfxIds: [],
   possibleSubtraitIds: [],
@@ -575,6 +591,7 @@ async function onCreate() {
       defaultRatingType: createForm.defaultRatingType,
       defaultEgo: createForm.defaultEgo,
       tags: [...createForm.tags],
+      explanation: createForm.explanation,
       polarity: createForm.polarity || null,
       possibleSfxIds: [...createForm.possibleSfxIds],
       defaultSfxIds: [...createForm.defaultSfxIds],
