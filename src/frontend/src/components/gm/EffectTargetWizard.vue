@@ -1,5 +1,5 @@
 <template>
-  <div class="etw-root">
+  <div class="etw-root" :class="{ 'etw-embedded': embedded }">
     <div class="etw-title">{{ title }}</div>
     <div v-if="current" class="etw-step">
       <div class="etw-step-head">
@@ -78,6 +78,16 @@ const props = defineProps({
   entityId: { type: String, required: true },
   pendingChoices: { type: Array, default: () => [] },
   title: { type: String, default: 'Resolve targets' },
+  // Draw the card, or let the host be the container.
+  //
+  // The roller and the menus are hosts that want the wizard to arrive as an
+  // object of its own, so the card is the default. A **sheet panel** is the other
+  // case: the panel already *is* the container, and the life path's table sits
+  // flat in that same panel — which is why this exists, since a card there reads
+  // as a card inside a box. Chrome belongs to the component that draws it, so the
+  // choice lives here rather than in each host's scoped styles
+  // (`LifePathWizard` carries the same prop for the same reason).
+  embedded: { type: Boolean, default: false },
 })
 const emit = defineEmits(['resolve', 'cancel', 'run-loop'])
 
@@ -193,6 +203,9 @@ function apply() {
 
 <style scoped>
 .etw-root { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--overlay-2); border: 1px solid var(--overlay-8); border-radius: 6px; }
+/* The host is the container: no card, no padding of its own — the flat shape the
+   life path's choice table already has inside the very same panel. */
+.etw-embedded { padding: 0; background: transparent; border: 0; border-radius: 0; }
 .etw-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
 .etw-step { display: flex; flex-direction: column; gap: 4px; }
 .etw-step-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 9px; color: var(--text-dim); }

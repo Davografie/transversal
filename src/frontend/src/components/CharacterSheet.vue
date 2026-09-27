@@ -1,19 +1,6 @@
 <template>
   <!-- Embedded: single root for attribute inheritance -->
   <div v-if="embedded" class="sheet-embedded" :class="{ 'transparent-portrait': sheetPortraitTransparent }">
-    <!-- A choice asked *from this sheet* is answered on this sheet. Not a blocking
-         modal: the sheet stays readable behind it, because the trait that raised the
-         question is the context for answering it. -->
-    <div v-if="sfxChoiceRequest && sfxChoiceRequest.length" class="sheet-sfx-choice">
-      <EffectTargetWizard
-        :entity-id="entityId"
-        :pending-choices="sfxChoiceRequest"
-        title="Choose a target"
-        @resolve="(r) => emit('sfx-choice-answer', r)"
-        @cancel="emit('sfx-choice-cancel')"
-        @run-loop="(c) => emit('sfx-choice-loop', c)"
-      />
-    </div>
     <!-- The loading/error placeholders are gated on `!hasEntity`, not on
          `loading` alone. `useApi()`'s `loading` ref is set by *every* call, so a
          plain `v-if="loading"` swaps this branch out during each background
@@ -184,8 +171,26 @@
           <span v-if="entityTimerLabel" class="active-effects" :title="'Timed effects pending: ' + entityTimerLabel">⏳ {{ entityTimerLabel }}</span>
         </div>
       </div>
+      <!-- A choice raised *from this sheet* is answered **as this sheet's body**,
+           not floated over it. It takes the same slot every other sheet view
+           takes, so it reads like the life path's choice table in this same
+           panel instead of a card lying over the trait that raised the question
+           — which was both unreadable (its own background is `--overlay-2`, ~2%
+           opaque) and a lie about what the click did. `embedded` removes the
+           wizard's own card for the same reason: the panel is the container. -->
+      <div v-if="sfxChoiceRequest && sfxChoiceRequest.length" class="sheet-sfx-choice">
+        <EffectTargetWizard
+          :entity-id="entityId"
+          :pending-choices="sfxChoiceRequest"
+          title="Choose a target"
+          embedded
+          @resolve="(r) => emit('sfx-choice-answer', r)"
+          @cancel="emit('sfx-choice-cancel')"
+          @run-loop="(c) => emit('sfx-choice-loop', c)"
+        />
+      </div>
       <BlueBook
-        v-if="activeSheetView === 'bluebook'"
+        v-else-if="activeSheetView === 'bluebook'"
         :entity-id="overrideEntityId || entityId"
         ref="blueBookRef"
         :entity-name="entity?.name || ''"
@@ -3066,22 +3071,22 @@ watch(() => props.externalPoolSources, (sources) => {
 </script>
 
 <style scoped>
-/* The sheet's own choice table: **layout only**. `EffectTargetWizard` draws the card
-   itself (`.etw-root` carries its own background, border and radius), which is why
-   every other host wraps it in nothing — the roller's wrapper is a lone `margin-top`.
-   A second card here, with its own colours and shadow, is what made this one look
-   unlike the same table everywhere else. So: position it, size it, otherwise keep out
-   of the way. Anchored to the sheet rather than the roller, and not full-screen — the
-   trait that raised the question stays readable behind it, because it is the context
-   for answering it. */
+/* The sheet's own choice table — the sheet body while a question is open, the
+   same way the life path's is. It therefore takes the body-scroll idiom every
+   other sheet view uses (`.sheet-scroll`), and adds nothing else: the wizard is
+   `embedded`, so it draws no card here, exactly as the life path's `ChoiceTable`
+   has none in this same panel.
+
+   It used to be an absolutely-positioned card at `right/bottom: 12px`,
+   `z-index: 40`, `max-height: 70%`. Two things were wrong with that. It claimed
+   to leave the raising trait readable behind it, but its own background is
+   `--overlay-2` — two percent opaque — so the rows showed *through* it and the
+   question was unreadable over its own context. And a question you must answer
+   before the effect lands is a step, not a footnote: floating it made the sheet
+   look unchanged, as if the click had done nothing. */
 .sheet-sfx-choice {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  z-index: 40;
-  width: min(420px, calc(100% - 24px));
-  max-height: 70%;
-  overflow: auto;
+  flex: 1;
+  overflow-y: auto; overflow-x: hidden;
 }
 
 .sheet-embedded {
