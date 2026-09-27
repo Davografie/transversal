@@ -159,8 +159,20 @@
           <Button class="transversal-toggle" variant="neutral" size="sm" :class="link.transversal_type || 'inapposite'" @click="toggleLinkType(link)">
             {{ link.transversal_type || 'inapposite' }}
           </Button>
+          <!-- Remove the link (the route drops its reverse edge too). Two-step
+               like the danger button, sized for a row; one row arms at a time. -->
+          <Button
+            class="tie-remove"
+            :variant="armedTie === link._key ? 'danger' : 'danger-ghost'"
+            :active="armedTie === link._key"
+            size="sm"
+            :loading="tieBusy === link._key"
+            :title="armedTie === link._key ? `Confirm: remove the transversal link to ${link.name}` : `Remove the transversal link to ${link.name}`"
+            @click.stop="removeTransversalLink(link)"
+          >{{ armedTie === link._key ? '✓?' : '✕' }}</Button>
         </div>
       </div>
+      <div v-if="transversalNote" class="members-note">{{ transversalNote }}</div>
       <div class="transversal-add">
         <TargetPicker v-model="newTransversalLocationId" kind="location" placeholder="Add link to location…" class="proj-picker" @select="onTransversalLocationSelect" />
         <Button class="section-btn proj-add-btn" variant="neutral" @click="createTransversalLinkLocal">+ Add</Button>
@@ -659,9 +671,10 @@ watch(() => [props.entityId, form.value?.type], ([id, type]) => {
 
 // ── Transversal links (location entities) ───────────
 const transversalLinks = ref([])
-const { toggleTransversalType, createTransversalLink } = useTransversalLinks()
+const { toggleTransversalType, createTransversalLink, deleteTransversalLink } = useTransversalLinks()
 const newTransversalLocationId = ref('')
 const newTransversalLocation = ref(null)
+const transversalNote = ref('')
 
 async function loadTransversalLinks() {
   transversalLinks.value = []
@@ -691,6 +704,25 @@ async function createTransversalLinkLocal() {
 async function toggleLinkType(link) {
   const next = await toggleTransversalType(props.entityId, link._key, link.transversal_type)
   link.transversal_type = next
+}
+
+async function removeTransversalLink(link) {
+  // Two-step, like the other row removals: first click arms, second confirms
+  // inside the same 3s window.
+  if (!armOrConfirm(link._key)) return
+  tieBusy.value = link._key
+  transversalNote.value = ''
+  try {
+    // `link._key` is the destination location's id — a `transversal` entry in the
+    // navigate payload is the target document, which is also why the type toggle
+    // passes it as the `toId`.
+    await deleteTransversalLink(props.entityId, link._key)
+    await loadTransversalLinks()
+  } catch (e) {
+    transversalNote.value = e?.message || 'Could not remove that link.'
+  } finally {
+    tieBusy.value = ''
+  }
 }
 
 function openPortalConfig(link) {
