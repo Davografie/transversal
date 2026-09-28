@@ -153,10 +153,23 @@ would have made the rule look removable in the edit panel while removing it did 
      component and drove it through the DOM (22 assertions) and then ran the whole
      chain — `draft.reach` → `save()` → server → read back, on a temporary rule
      selecting one GMC's instance, deleted again (6 more, **28/28**).
-5. **Later, and explicitly deferred by the author:** `traitset.limit` as a catalog
-   field, and validating/filtering on trait-definition and trait-instance tags.
-   (Definition and instance `tags` *do* exist as fields; `traitset` exposes only
-   `id`, `name`, `universes`, so `limit` is a one-line catalog addition.)
+5. **`traitset.limit` — LANDED (2026-09-27).** One catalog line (`ScalarField("traitset", "limit", "int")`),
+   so "the sets that allow more than one" is `select traitsets → filter limit > 1` — **4 of 36** live sets,
+   measured. The other half of this deferral, **filtering on trait-definition and trait-instance tags, needed
+   no work**: `trait.tags` and `traitsetting.tags` are both catalog fields already (matched with `contains`,
+   `suggest="trait_tags"`), which is what the "all traits tagged `utility`" example above relies on. Still
+   open and deliberately not built: **validating** a tag — nothing yet warns that an authored tag matches no
+   trait.
+   - **`entity.hidden` landed in the same pass**, for the same reason: a reach selector needs a flag to select
+     *on*. It is a `boolean` field — the type already existed (`starter_location` uses it) — so
+     `select entities → filter type == gmc → filter hidden == true` traces and resolves. **The live count is
+     the thing to know: 0 hidden GMCs.** One entity in the whole database is hidden and it is an *asset*, so a
+     rule reaching "every hidden GMC" reaches nobody until the flag is set on one.
+   - **What `hidden` does today, which is narrower than it sounds:** its only functional readers are the
+     canvas location graph (`exclude_hidden` pathfinding, `from_hidden`/`to_hidden` edges) and
+     `trait_visible_to` (a hidden *owner* gates its traits' visibility, read against the **trait's** own
+     `known_to`). Nothing hides a GMC from a player-facing read, so flagging one is currently inert outside
+     the map.
 6. ~~**Retire `implicit`.**~~ **Landed with item 2 — and it needed no migration.**
    Measured on the live DB before writing anything: **0 of 46 rules** set
    `implicit`, so the flag was retired outright and the "generated granted path"

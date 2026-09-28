@@ -249,3 +249,23 @@ def test_a_trait_instance_exposes_order_as_an_ordered_int():
     names = [a.name for a in tc.aggregations_for(f.type)]
     for fn in ("min", "max", "top", "bottom", "mean"):
         assert fn in names, fn
+
+
+# ── Fields a reach selector needs on a *definition* or a flag ──────
+
+def test_a_hidden_entity_is_filterable():
+    """Fog of war (B92). A rule *reaches* the hidden ones by filtering on the
+    flag — "every hidden GMC" is a selector, not an attachment on each one."""
+    f = tc.field("entity", "hidden")
+    assert f is not None
+    assert f.type == "boolean"
+    assert "==" in tc.operators_for(f)
+
+
+def test_a_traitset_limit_is_filterable():
+    """The set's limit is an int, so `> 1` is sayable — "the sets that allow
+    more than one" (deferred out of B228; the set exposed only id/name/universes)."""
+    f = tc.field("traitset", "limit")
+    assert f is not None
+    assert f.type == "int"
+    assert tc.is_orderable(f)

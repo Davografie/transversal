@@ -547,7 +547,8 @@ def _apply_remove(entity, effect, repo, result):
     result.removed_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"removed {target}", existing.id))
 
-def _resolve_learners(entity: Entity, effect: Effect, repo, result: EffectsResult) -> list[str]:
+def _resolve_learners(entity: Entity, effect: Effect, repo, result: EffectsResult,
+                      default: list[str] | None = None) -> list[str]:
     """Everyone who learns a revealed trait.
 
     The learner is a **named reference** (`refs.learner`), so the author points at
@@ -568,6 +569,12 @@ def _resolve_learners(entity: Entity, effect: Effect, repo, result: EffectsResul
     existed, and the one `select self` starts from. ``context.learner`` is read as
     the last fallback, because live content authored before the reference existed
     stores it there (`sfx-expose-trait`).
+
+    ``default`` is who learns when **nothing is declared anywhere**, for the
+    actions that ask the question differently: Reveal Trait lands on the entity
+    that knows (so its default is the acting entity), while Learn lands on the
+    entity being learned about (so its default is that subject). An explicit
+    ``self`` is not a missing declaration and stays the acting entity either way.
     """
     ref = (effect.refs or {}).get("learner")
 
@@ -594,8 +601,11 @@ def _resolve_learners(entity: Entity, effect: Effect, repo, result: EffectsResul
 
     # 3. A stored context key from before the reference existed.
     legacy = ((effect.context or {}).get("learner") or "").strip()
-    if legacy in ("", "self"):
+    if legacy == "self":
         return [entity.id]
+    if legacy == "":
+        # Nothing declared anywhere — the caller says who that means.
+        return list(default) if default is not None else [entity.id]
     if legacy.startswith("{") and legacy.endswith("}"):
         result.applied.append(AppliedEffect(effect, f"learner token not supported: {legacy}"))
         return []

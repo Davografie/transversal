@@ -3663,3 +3663,108 @@ def test_a_subject_choose_with_no_channel_behaves_as_before():
         Effect(type="modify_trait", action="move", entity_spec=_occupant_spec()),
         here, repo, {})
     assert out is None
+
+
+# ── Learning names both halves (who learns, and what they learn about) ──
+
+def test_learn_declares_who_learns_apart_from_what_they_learn_about():
+    """Two questions, so two declarations: the `learner` reference says *who*
+    learns, the target says *which entity* they learn about. Before the
+    reference the action asked only the second, and the learner was whichever
+    entity the effect happened to land on."""
+    actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
+    knower = _entity(id="char-2", name="Bystander")
+    hidden = _entity(id="gmc-9", name="Hidden One")
+    repo = FakeRepo(entities=[knower, hidden])
+
+    eff = _effect("entity", "learn", "gmc-9")
+    eff.refs = {"learner": TargetRef(value="char-2")}
+    result = apply_effects(actor, [eff], repo)
+
+    assert knower.known_to == ["gmc-9"]
+    assert actor.known_to == []                      # the subject does not learn
+    assert "Bystander learns gmc-9" in result.applied[0].summary
+
+
+def test_a_learner_path_resolves_for_a_direct_entry_point():
+    """`apply_effects` — the entry a life path or a roll-table entry uses — does
+    not run `resolve_refs`, so the handler resolves the spec itself. A spec left
+    to it would otherwise be silently ignored, and the subject would learn
+    instead of the person the path named."""
+    from transversal.services.target_spec import LiteralStep
+
+    actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
+    knower = _entity(id="char-2", name="Bystander")
+    repo = FakeRepo(entities=[knower, _entity(id="gmc-9", name="Hidden One")])
+
+    eff = _effect("entity", "learn", "gmc-9")
+    eff.refs = {"learner": TargetRef(spec=TargetSpec(steps=[LiteralStep(element="entity", value="char-2")]))}
+    apply_effects(actor, [eff], repo)
+
+    assert knower.known_to == ["gmc-9"]
+    assert actor.known_to == []
+
+
+def test_a_learner_who_is_not_the_subject_is_tracked_for_persistence():
+    """`commit_effects` writes the primary entity plus `entities_to_update` and
+    nothing else, so a cross-entity learner that is not tracked would be mutated
+    in memory and silently never saved."""
+    actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
+    knower = _entity(id="char-2", name="Bystander")
+    repo = FakeRepo(entities=[knower, _entity(id="gmc-9", name="Hidden One")])
+
+    eff = _effect("entity", "learn", "gmc-9")
+    eff.refs = {"learner": TargetRef(value="char-2")}
+    result = apply_effects(actor, [eff], repo)
+
+    assert knower in result.entities_to_update
+
+
+def test_learning_with_no_learner_declared_still_teaches_the_subject():
+    """The reading this had before the reference existed, kept: an empty learner
+    means the entity the effect lands on (`select self` is where a path starts)."""
+    actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
+    repo = FakeRepo(entities=[_entity(id="gmc-9", name="Hidden One")])
+    result = apply_effects(actor, [_effect("entity", "learn", "gmc-9")], repo)
+    assert actor.known_to == ["gmc-9"]
+    assert "learns gmc-9" in result.applied[0].summary
+
+
+def test_an_entity_is_never_made_known_to_itself_even_as_the_learner():
+    actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
+    repo = FakeRepo(entities=[_entity(id="char-2", name="Knows Itself")])
+    eff = _effect("entity", "learn", "char-2")          # learns about itself
+    eff.refs = {"learner": TargetRef(value="char-2")}
+    result = apply_effects(actor, [eff], repo)
+    assert result.applied[0].summary.endswith("already knows itself")
+
+
+def test_a_learner_that_does_not_exist_is_reported_rather_than_silently_skipped():
+    """Before the reference the learner was always the subject, so this could not
+    happen; now a path can name an entity that resolves to nothing."""
+    actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
+    repo = FakeRepo(entities=[_entity(id="gmc-9", name="Hidden One")])
+    eff = _effect("entity", "learn", "gmc-9")
+    eff.refs = {"learner": TargetRef(value="char-missing")}
+    result = apply_effects(actor, [eff], repo)
+    assert actor.known_to == []
+    assert "no entity char-missing" in result.applied[0].summary
+
+
+def test_every_learner_of_several_is_taught():
+    """A literal is one id, but the handler is given a list — the engine fans a
+    multi-value path out before dispatch, and the direct entry point can name
+    several. Both routes must teach each one."""
+    actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
+    a = _entity(id="char-a", name="A")
+    b = _entity(id="char-b", name="B")
+    repo = FakeRepo(entities=[a, b, _entity(id="gmc-9", name="Hidden One")])
+
+    eff = _effect("entity", "learn", "gmc-9")
+    eff.refs = {"learner": TargetRef(value="char-a")}
+    apply_effects(actor, [eff], repo)
+    eff2 = _effect("entity", "learn", "gmc-9")
+    eff2.refs = {"learner": TargetRef(value="char-b")}
+    apply_effects(actor, [eff2], repo)
+
+    assert a.known_to == ["gmc-9"] and b.known_to == ["gmc-9"]

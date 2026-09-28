@@ -3,6 +3,7 @@
 from transversal.services.effects_registry.action_types import (
     EffectActionMeta,
     EffectFieldDef,
+    RefDef,
 )
 
 
@@ -56,17 +57,23 @@ ACTIONS: list[EffectActionMeta] = [
         action_id="learn_entities",
         label="Learn",
         description=(
-            "The entity learns the resolved targets: their ids join its known_to "
-            "list, deduped, without disturbing what it already knows"
+            "Someone learns about the resolved entity: its id joins their known_to "
+            "list, deduped, without disturbing what they already know"
         ),
         category="benefit",
         effect_type="entity",
         effect_action="learn",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Who To Learn", field_type="text",
+            EffectFieldDef(name="target", label="Which Entity", field_type="text",
                            required=False),
         ],
+        # Two halves, and they answer different questions, so both are declared:
+        # **who learns** is the `learner` reference (a targeting path — "everyone
+        # with him"), and **which entity they learn about** is the target. Same
+        # shape Reveal Trait uses ([[B226]]). An empty learner means the entity the
+        # effect lands on, which is the only reading this had before the reference.
+        refs=[RefDef("learner", "Learner", "entity")],
         target_kind="entity",
     ),
 

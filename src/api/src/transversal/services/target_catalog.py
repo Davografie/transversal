@@ -299,6 +299,9 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "name": ScalarField("traitset", "name", "string", suggest="traitset_names", label="name"),
         "universes": ScalarField("traitset", "universes", "string",
                                  operators=("contains", "==", "!="), label="universe"),
+        # How many of this set a character may hold (an int, so `>=`/`<=` work —
+        # "the sets that allow more than one").
+        "limit": ScalarField("traitset", "limit", "int", label="limit"),
     },
     # A life path and a roll table: the two registry things a life-path SFX names.
     # `universe` is a plain attribute on both, and a table also says which path it
@@ -331,6 +334,10 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         # field rather than a scope of its own.
         "starter_location": ScalarField("entity", "starter_location", "boolean",
                                         label="starter location"),
+        # Fog of war (B92): a hidden entity is only visible to a viewer its
+        # `known_to` names. Filtering on it is how a rule *reaches* the hidden
+        # ones — "every hidden GMC" is a reach declaration, not an attachment.
+        "hidden": ScalarField("entity", "hidden", "boolean", label="hidden"),
         "type": ScalarField("entity", "type", "string", ("character", "location", "faction", "asset", "gmc", "universe", "subtrait", "relation")),
         "current_location": ScalarField("entity", "current_location", "string", references="location"),
         "current_universe": ScalarField("entity", "current_universe", "string", references="universe"),

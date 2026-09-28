@@ -10,6 +10,9 @@ from transversal.services.effects_applier.datatypes import (
     AppliedEffect,
     PendingChoice,
 )
+from transversal.services.effects_applier.handlers_traits import (
+    _resolve_learners,
+)
 from transversal.services.effects_applier.reverts import (
     _queue_entity_revert,
 )
@@ -465,7 +468,7 @@ def _apply_clear_destination(entity, effect, repo, result):
 
 
 def _apply_learn(entity, effect, repo, result):
-    """The subject learns the effect's target ([[B121]]).
+    """The learner learns the effect's target ([[B121]]).
 
     A **union**, never a replace: the id joins ``known_to`` only if it is not
     already there, so a rule that fires twice — or a second rule that teaches
@@ -474,9 +477,13 @@ def _apply_learn(entity, effect, repo, result):
     the GM assuming a hidden occupant must not forget what that occupant already
     knew.
 
-    A path fans out before it reaches here, so "every occupant of my location"
-    arrives as one call per occupant and the membership check does the dedupe.
-    An entity is never made known to itself.
+    **Two questions, so two declarations:** *who learns* is the ``learner``
+    reference — a targeting path, so "everyone with him" is sayable — and *which
+    entity they learn about* is the target. An empty learner means the entity the
+    effect lands on (the subject), which is the only reading this had before the
+    reference existed. A path fans out before it reaches here, so "every occupant
+    of my location" arrives as one call per entity and the membership check does
+    the dedupe. An entity is never made known to itself.
     """
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -487,15 +494,26 @@ def _apply_learn(entity, effect, repo, result):
     if not target:
         result.applied.append(AppliedEffect(effect, "no one named to learn"))
         return
-    if target == subject.id:
+
+    # The learner may be someone other than the subject, so each one is tracked
+    # for persistence — `commit_effects` writes the primary entity plus every
+    # entity in `entities_to_update`, and nothing else.
+    for learner_id in _resolve_learners(entity, effect, repo, result, default=[subject.id]):
+        learner = subject if learner_id == subject.id else (
+            repo.get_entity(learner_id) if repo is not None else None)
+        if learner is None:
+            result.applied.append(AppliedEffect(effect, f"no entity {learner_id} to learn it"))
+            continue
+        _track_subject(result, entity, learner)
+        if learner.id == target:
+            result.applied.append(AppliedEffect(
+                effect, f"{learner.name or learner.id} already knows itself"))
+            continue
+        known = list(getattr(learner, "known_to", None) or [])
+        if target in known:
+            result.applied.append(AppliedEffect(
+                effect, f"{learner.name or learner.id} already knows {target}"))
+            continue
+        learner.known_to = [*known, target]
         result.applied.append(AppliedEffect(
-            effect, f"{subject.name or subject.id} already knows itself"))
-        return
-    known = list(getattr(subject, "known_to", None) or [])
-    if target in known:
-        result.applied.append(AppliedEffect(
-            effect, f"{subject.name or subject.id} already knows {target}"))
-        return
-    subject.known_to = [*known, target]
-    result.applied.append(AppliedEffect(
-        effect, f"{subject.name or subject.id} learns {target}"))
+            effect, f"{learner.name or learner.id} learns {target}"))
