@@ -172,6 +172,26 @@ const find = (name) => VUE.find((p) => rel(p) === name)
     /<label>Duration<\/label>/.test(panel), true)
 }
 
+// ── A step's count asks for a number ──────────────────────────────
+//
+// The author, 2026-09-27: *"when I enter 'N' into the choose.pick input, it sets
+// it to '1' instead. I want multiple choice for the user."* The input is a number
+// input and always was — the **hint** said "N = multi-select", inviting the letter,
+// which the browser refused, and `onCount` fell back to 1. Multi-select itself
+// worked the whole time. Copy is the defect, so copy is what is pinned.
+{
+  const b = read(find('components/gm/TargetSpecBuilder.vue'))
+  // Read the *hints*, not the file: the comment explaining this fix quotes the old
+  // copy, so a whole-file regex matches the explanation and fails on correct code.
+  const hints = [...b.matchAll(/<em>(.*?)<\/em>/g)].map((m) => m[1]).join(' | ')
+  ok('a count hint names a number, never a bare N',
+    /2 or more = multi-select/.test(hints) && /2 or more = subset/.test(hints), true)
+  ok('…and no hint invites the letter', /\bN = (multi-select|subset)/.test(hints), false)
+  ok('the count input is a number input', /<input type="number" min="1" :value="step\.count \?\? 1"/.test(b), true)
+  ok('an unusable value falls back to one rather than to nothing',
+    /Number\.isFinite\(n\) && n >= 1 \? n : 1/.test(b), true)
+}
+
 // ── A choice table appears where the question was raised ──────────
 //
 // The author's rule (2026-09-26): a manual press on a sheet asks on the sheet, a roll

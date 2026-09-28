@@ -800,3 +800,51 @@ def test_a_choice_event_says_where_the_question_came_from(monkeypatch):
         captured.clear()
         ro._emit_pending_choices("e1", "earth", [], [choice], origin=origin)
         assert captured[0].data["choices"][0]["origin"] == origin
+
+
+def test_a_multi_select_ref_fans_out_to_one_effect_per_pick():
+    """The author's case: a Learner path of `select occupants → choose 2`, answered
+    with two people, must teach **both**.
+
+    `choose` reports its `count` on the pending choice (that is what the wizard's
+    multi-select reads), and answering with several ids must fan the reference out
+    the same way a multi-value path does — one effect per pick, each carrying one
+    concrete learner. A resume that collapsed the picks to the first would look
+    like it worked and only ever teach one person.
+    """
+    from types import SimpleNamespace as NS
+
+    from transversal.domain import Effect, TargetRef
+    from transversal.services.effects_engine.refs import resolve_effect_spec_choices
+    from transversal.services.target_spec import (
+        ChooseStep, SelectStep, TargetSpec,
+    )
+
+    class _Repo:
+        def __init__(self):
+            self.here = NS(id="e1", current_location="loc-1")
+            self.a = NS(id="e2", current_location="loc-1")
+            self.b = NS(id="e3", current_location="loc-1")
+
+        def get_entity(self, eid):
+            return {"e1": self.here, "e2": self.a, "e3": self.b}.get(eid)
+
+        def list_entities_by_location(self, _loc):
+            return [self.here, self.a, self.b]
+
+    repo = _Repo()
+    effect = Effect(
+        type="entity", action="learn", target="gmc-hidden",
+        refs={"learner": TargetRef(value="", spec=TargetSpec(steps=[
+            SelectStep(collection="occupants"), ChooseStep(count=2)]))},
+    )
+
+    applied, pending = resolve_effect_spec_choices(
+        effect, "refs.learner", {1: ["e2", "e3"]}, repo.here, repo,
+        source_kind="entity", source_id="e1", source_sfx_id="sfx-reveal-entity")
+
+    assert pending == []
+    assert sorted(e.refs["learner"].value for e in applied) == ["e2", "e3"], \
+        "one effect per pick, each with a concrete learner"
+    assert all(e.refs["learner"].spec is None for e in applied), \
+        "…and no path left for the handler to read instead"

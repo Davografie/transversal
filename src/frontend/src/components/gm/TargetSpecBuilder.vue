@@ -175,7 +175,7 @@
           <label v-if="aggNeedsCount(step.fn)" class="tsb-check">
             <span>pick</span>
             <input type="number" min="1" :value="step.count ?? 1" @input="onCount(i, $event)" />
-            <em>1 = single · N = subset</em>
+            <em>1 = single · 2 or more = subset</em>
           </label>
         </div>
 
@@ -184,7 +184,10 @@
           <label class="tsb-check">
             <span>pick</span>
             <input type="number" min="1" :value="step.count ?? 1" @input="onCount(i, $event)" />
-            <em>1 = single pick · N = multi-select</em>
+            <!-- "N = multi-select" invited the *letter* N, which a number input
+                 refuses — so the field snapped back to 1 and multi-select looked
+                 broken. It is a count: say the number. -->
+            <em>1 = single pick · 2 or more = multi-select</em>
           </label>
         </div>
 
