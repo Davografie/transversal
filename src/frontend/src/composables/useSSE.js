@@ -42,7 +42,7 @@ export function useSSE(sessionId, entityId, playerId) {
 
     const eventTypes = [
       'location_changed', 'trait_updated', 'razmerit_changed',
-      'roll_result', 'pool_updated', 'sfx_triggered', 'sfx_ended', 'sfx_armed', 'beat_end', 'scene_change',
+      'roll_result', 'pool_updated', 'sfx_triggered', 'sfx_ended', 'sfx_armed', 'beat_end', 'scene_change', 'effects_changed',
       'entity_updated', 'entity_moved', 'difficulty_set', 'sfx_choice_required',
       'contest_challenged', 'contest_set', 'contest_resolved', 'contest_give_in', 'contest_compare', 'contest_push', 'contest_stakes', 'traits_revealed',
       'dice_limits_changed',

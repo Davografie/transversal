@@ -248,24 +248,45 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   // through to the roller (a question with no reader), and a second card — the
   // wizard draws its own surface, so a host that adds another makes the same
   // table look different depending on where it was raised.
-  const host = read(find('components/app/FloatingChoicePanel.vue'))
+  const splash = read(find('components/app/SplashPanel.vue'))
   ok('the shell has a third routing bucket for automatic rules',
     /const autoChoices = computed/.test(app), true)
   ok('…and the roller excludes it rather than showing it by default',
     /filter\(\(c\) => !\['sheet', 'auto'\]\.includes\(c\.origin \|\| 'roll'\)\)/.test(app), true)
-  ok('…the floating host is mounted with the origin-carrying handlers',
-    /<FloatingChoicePanel/.test(app)
+  ok('…the splash is mounted with the origin-carrying handlers',
+    /<SplashPanel/.test(app)
       && /answerSfxChoices\(r, 'auto'\)/.test(app)
       && /loopSfxChoice\(c, 'auto'\)/.test(app), true)
-  ok('…the question goes to its own entity, which is not always the acting one',
-    /:entity-id="autoChoices\[0\]\?\.entity_id \|\| entityId"/.test(app), true)
-  ok('the floating host positions the wizard rather than re-drawing it',
-    /<EffectTargetWizard/.test(host) && /position: fixed/.test(host), true)
+  ok('…and the question goes to its own entity, which is not always the acting one',
+    /entity_id \|\| props\.entityId/.test(splash), true)
+
+  // The activation splash ([[B229]]): one surface, two faces. The prompt face is
+  // the wizard and waits; the note face reports and fades.
+  ok('the splash is the prompt face — the wizard, positioned, not re-drawn',
+    /<EffectTargetWizard/.test(splash) && /position: fixed/.test(splash), true)
   ok('…with one surface, not a second card of its own token set',
-    /background: var\(--bg-panel-solid\)/.test(host), true)
-  ok('…and no timer or auto-close: the only exit is the wizard\'s own Cancel',
-    /aria-label="A rule is asking for a choice"/.test(host)
-      && !/setTimeout|setInterval|autoDismiss/.test(host), true)
+    /background: var\(--bg-panel-solid\)/.test(splash), true)
+  ok('…and no timer on the question: only the wizard\'s own Cancel leaves it',
+    /'A rule is asking for a choice'/.test(splash)
+      && !/setTimeout|setInterval|autoDismiss/.test(splash), true)
+  // Both of these bit for real (`emit` in the first host, `props` in this one):
+  // a bare defineProps/defineEmits leaves the identifier undefined, which reads
+  // as "the click did nothing" or a blank splash rather than as a missing
+  // declaration.
+  ok('the splash captures what its template and computeds read',
+    /const props = defineProps\(/.test(splash) && /const emit = defineEmits\(/.test(splash), true)
+  ok('…and the SSE client subscribes to the note event, or it is dropped silently',
+    /'effects_changed'/.test(read(`${SRC}/composables/useSSE.js`)), true)
+  ok('…and it carries the note face, announced and non-interactive',
+    /role="status"/.test(splash) && /sp-note-lines/.test(splash), true)
+  ok('the shell owns the note queue and its dwell',
+    /function pushSplashNote/.test(app) && /SPLASH_DWELL = \{ change: 2000, summary: 5000 \}/.test(app), true)
+  ok('…queued one at a time rather than stacked',
+    /splashNote\.value = splashQueue\.value\.shift\(\) \|\| null/.test(app), true)
+  ok('…and held while a question is up, so a note cannot fade unseen behind it',
+    /watch\(\(\) => autoChoices\.value\.length/.test(app), true)
+  ok('a change is aimed at the entity acting, or the place they are standing',
+    /evt\.data\.entity_id === entityId\.value[\s\S]{0,120}evt\.data\.location_id === currentLocationId\.value/.test(app), true)
 
   const roller = read(find('components/DiceRoller.vue'))
   ok('the roller hands the answer up rather than resolving it',

@@ -210,14 +210,16 @@
       </div>
     </div>
   </div>
-  <!-- The third host ([[B230]]): a question from an automatic rule — a state
-       change or a timer nobody pressed — has no surface its reader is looking at,
-       so it floats. The wizard's own Cancel is the explicit "leave it", which
-       writes nothing; nothing here dismisses it on a timer. -->
-  <FloatingChoicePanel
-    v-if="autoChoices.length"
+  <!-- The activation splash ([[B229]]): the one place a player looks when the
+       engine did something they did not ask for. It carries the routed/automatic
+       question ([[B230]]'s host, now this surface's prompt face) and the brief
+       notes about what an activation changed. A question waits for an
+       interaction; a note fades. -->
+  <SplashPanel
+    v-if="autoChoices.length || splashNote"
     :choices="autoChoices"
-    :entity-id="autoChoices[0]?.entity_id || entityId"
+    :entity-id="entityId"
+    :note="splashNote"
     @answer="(r) => answerSfxChoices(r, 'auto')"
     @leave="clearSfxChoicesAll"
     @loop="(c) => loopSfxChoice(c, 'auto')"
@@ -259,7 +261,7 @@ import { useUniverseTheme } from '@/composables/useUniverseTheme.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
 import LoginPrompt from '@/components/app/LoginPrompt.vue'
 import UnauthorizedNotice from '@/components/app/UnauthorizedNotice.vue'
-import FloatingChoicePanel from '@/components/app/FloatingChoicePanel.vue'
+import SplashPanel from '@/components/app/SplashPanel.vue'
 import { unauthorized } from '@/composables/useAuthGate.js'
 import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
@@ -534,6 +536,49 @@ const sheetChoices = computed(() =>
   (sfxChoiceRequest.value || []).filter((c) => (c.origin || 'roll') === 'sheet'))
 const autoChoices = computed(() =>
   (sfxChoiceRequest.value || []).filter((c) => (c.origin || 'roll') === 'auto'))
+
+// ── The splash's note queue ([[B229]]) ──────────────────────────────────────
+// A note is a *report*, so it fades — and a queue of them is not a stack of
+// dialogs, so they show one at a time. The dwell is the author's: a change lands
+// for 1–2 seconds, a rule that has run its full course for 3–5.
+const SPLASH_DWELL = { change: 2000, summary: 5000 }
+const splashQueue = ref([])
+const splashNote = ref(null)
+let splashNoteId = 0
+let splashTimer = null
+
+/** A question is on the surface, so a note cannot be seen (and must not age). */
+const splashBlocked = () => autoChoices.value.length > 0
+
+function startSplashTimer() {
+  if (splashTimer) clearTimeout(splashTimer)
+  const kind = splashNote.value?.kind || 'change'
+  splashTimer = setTimeout(advanceSplash, SPLASH_DWELL[kind] || SPLASH_DWELL.change)
+}
+/**
+ * Show the next report, and start its clock **only if it is actually visible**.
+ *
+ * The clock used to start on arrival, so a note that arrived while a question was
+ * up aged behind it and was replaced without ever being read — the exact thing
+ * the queue exists to prevent. A note's dwell is the time it spends *on screen*.
+ */
+function advanceSplash() {
+  if (splashTimer) { clearTimeout(splashTimer); splashTimer = null }
+  splashNote.value = splashQueue.value.shift() || null
+  if (splashNote.value && !splashBlocked()) startSplashTimer()
+}
+/** Queue a report. It waits its turn rather than replacing what is on screen. */
+function pushSplashNote(note) {
+  splashQueue.value = [...splashQueue.value, { id: ++splashNoteId, kind: 'change', lines: [], ...note }]
+  if (!splashNote.value) advanceSplash()
+}
+// The question takes the surface and the whole splash with it: hold the queue
+// while it is up, and start the note's clock when it clears.
+watch(() => autoChoices.value.length, (n) => {
+  if (n) { if (splashTimer) { clearTimeout(splashTimer); splashTimer = null } }
+  else if (splashNote.value) startSplashTimer()
+  else advanceSplash()
+})
 
 /** Answer a table: resolve, then put any *next* question back where this one was. */
 async function answerSfxChoices(resolutions, origin = 'roll') {
@@ -1523,6 +1568,19 @@ function handleSseEvent(evt) {
       // entity, so — unlike `sfx_triggered` — it is not gated on the viewer's.
       addToast(`SFX armed: ${evt.data?.sfx_name || evt.data?.sfx_id}`, 'sfx')
       armedSfxRefresh.value++  // it belongs in the Active rail now
+      break
+    case 'effects_changed':
+      // What an activation did, for *this* player: on the entity they are acting
+      // as, or in the place they are standing. Deliberately not every GM's
+      // business — a change to someone else's sheet is not theirs to read.
+      if (evt.data && (evt.data.entity_id === entityId.value
+        || (evt.data.location_id && evt.data.location_id === currentLocationId.value))) {
+        pushSplashNote({
+          title: evt.data.title || 'Effects',
+          kind: evt.data.kind === 'summary' ? 'summary' : 'change',
+          lines: evt.data.lines || [],
+        })
+      }
       break
     case 'sfx_choice_required':
       if (evt.data?.entity_id === entityId.value || gmMode.value) {
