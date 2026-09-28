@@ -101,6 +101,7 @@ from transversal.services.effects_applier.handlers_pools import (  # noqa: F401
     _find_traitsetsetting,
     _apply_set_traitset_limit,
     _apply_dice_limit,
+    _apply_set_hitch_threshold,
     _resolve_pool,
     _apply_add_dice,
     _add_trait_rating_to_pool,

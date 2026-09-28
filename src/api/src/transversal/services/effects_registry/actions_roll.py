@@ -4,6 +4,7 @@ from transversal.services.effects_registry.action_types import (
     EffectActionMeta,
     EffectFieldDef,
     RefDef,
+    _ENTITY_FIELD,
 )
 
 #: How many steps along the die ladder a step-up/step-down moves (d8 + 2 → d12).
@@ -325,6 +326,34 @@ ACTIONS: list[EffectActionMeta] = [
         field_order=("pool", "limit", "result"),
         supports_duration=True,
         inverse=("modify_dice_limit", "increase"),
+    ),
+    EffectActionMeta(
+        action_id="set_hitch_threshold",
+        label="Widen Hitches",
+        description=(
+            "Make more of this entity's dice count as hitches — \"both 1s and 2s "
+            "count as hitches\" is hitch on 2. A hitched die cannot be kept in the "
+            "total or taken as an effect die, so this is a real drawback; a "
+            "duration puts the range back"
+        ),
+        # A drawback by nature, but authored as *either*: the same action is what
+        # restores the range on a duration revert, and a rule that narrows the
+        # range back is not a cost.
+        category="either",
+        effect_type="modify_hitch_threshold",
+        effect_action="set",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL"],
+        fields=[
+            _ENTITY_FIELD,
+            # A face, not a count. 1 is the base rule and 2 is the only widening
+            # any book in the corpus asks for, so the legal values are named.
+            EffectFieldDef(name="result", label="Hitch on", field_type="select",
+                           required=True, default="2", options=["1", "2"],
+                           description="Faces up to this count as hitches; 1 is the base rule."),
+        ],
+        supports_duration=True,
+        inverse=("modify_hitch_threshold", "set"),
+        inverse_captures_prior=True,
     ),
 
     # ── Outcome (modify_outcome) ───────────────────────

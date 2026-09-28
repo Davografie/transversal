@@ -1244,6 +1244,13 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
         # dice limit is said out loud.
         polarity = str((effect.context or {}).get("polarity") or "positive")
         text = f"{text} to {polarity}"
+    if effect.type == "modify_hitch_threshold" and effect.action == "set":
+        # Which **face** hitches *is* the effect, and it is a choice with two
+        # answers ([[B231]]). "Hitch on 2" is jargon a reader has to decode, and
+        # the template cannot branch, so the clause is written here — and 1 reads
+        # as the base rule rather than as "hitch on 1s and 1s".
+        face = display_value(str(effect.result or "2").strip())
+        text = "hitches on 1s and 2s" if face == "2" else "hitches on 1s only"
     if "{result}" not in template and result_text:
         text = f"{text} ({result_text})"
 

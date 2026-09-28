@@ -49,6 +49,11 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     # otherwise two effects that do different things read identically.
     ("modify_dice_limit", "increase"): "increase the {limit} dice limit by {result}",
     ("modify_dice_limit", "decrease"): "decrease the {limit} dice limit by {result}",
+    # Fallback phrasing only — ``_effect_core`` rewrites it as "hitches on 1s and
+    # 2s" / "hitches on 1s only", because "hitch on 2" is jargon and 1 has to read
+    # as the base rule. The template keeps ``{result}`` so the generic
+    # "(2)" suffix does not get appended to the rewritten clause.
+    ("modify_hitch_threshold", "set"): "hitch on faces up to {result}",
     ("entity", "targeting_ban"): "impose a targeting ban on {target}",
     ("contest", "start"): "start a contest with {target}",
     ("entity", "learn"): "learn {target}",

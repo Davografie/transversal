@@ -83,6 +83,7 @@ def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | 
     old_universe = entity.current_universe
     old_total_bonus = entity.total_dice_bonus
     old_effect_bonus = entity.effect_dice_bonus
+    old_hitch_threshold = entity.hitch_threshold
     result = apply_effects(entity, effects, repo, context, source=source, source_element=source_element)
 
     # Other entities mutated (e.g. razmerit transfer recipient).
@@ -114,12 +115,17 @@ def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | 
                 "reason": "effect",
             })
 
-    # Dice-pool selection limits changed — tell the roller to re-read its limits.
-    if entity.total_dice_bonus != old_total_bonus or entity.effect_dice_bonus != old_effect_bonus:
+    # How the pool *reads* changed — the selection limits, or which faces hitch —
+    # so tell the roller to re-read rather than keep drawing the old rules
+    # ([[B231]] rides this same event: a widened hitch range is a drawing change).
+    if (entity.total_dice_bonus != old_total_bonus
+            or entity.effect_dice_bonus != old_effect_bonus
+            or entity.hitch_threshold != old_hitch_threshold):
         _publish("dice_limits_changed", {
             "entity_id": entity.id,
             "total_dice_bonus": entity.total_dice_bonus,
             "effect_dice_bonus": entity.effect_dice_bonus,
+            "hitch_threshold": entity.hitch_threshold,
         })
 
     # Projections produced/updated by travel effects.

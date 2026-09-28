@@ -136,6 +136,18 @@ class Entity(BaseModel):
     # Adjusted by ``modify_dice_limit`` effects; duration reverts undo the delta.
     total_dice_bonus: int = 0
     effect_dice_bonus: int = 0
+    # The **highest die face that counts as a hitch** on this entity's rolls.
+    # ``1`` (the default) is the base rule — a 1 hitches. ``2`` is a rule that
+    # widens the range ("both 1s and 2s count as hitches"), which is the commonest
+    # non-cost mechanic in the written SFX: MHR *Growing Dread*, ToX *Dread*,
+    # TorchLite *Sunlight Sensitivity*, Cortex Lite *Violent Escalation*, Xine One
+    # *Finite Energies* ([[B231]]). Set by a ``modify_hitch_threshold`` effect and
+    # reverted by a duration or a cancelled activation.
+    #
+    # A **botch** is unaffected: it stays "every die shows 1". Widening the range
+    # makes 2s *buyable* (and so un-keepable in the total), not botching — see
+    # ``dice_resolver._is_botch``.
+    hitch_threshold: int = 1
     sfx_ids: list[str] = Field(default_factory=list)  # SFX owned directly by this entity
     scheduled_events: list["ScheduledEvent"] = Field(default_factory=list)  # pending timed reverts
     # Universe — per-entity-type LoRA configuration

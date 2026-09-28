@@ -63,6 +63,23 @@ def _dice_to_specs(dice: list[dict]) -> list[DieSpec]:
     ]
 
 
+def _hitch_threshold(entity_id: str) -> int:
+    """How wide this entity's hitch range is — the highest face that hitches.
+
+    Read from the entity rather than sent by the client: the roller is a *view* of
+    the rules, not their author, and a client-computed threshold would drift from
+    the resolver's ([[B231]]). A difficulty pool's "entity" is a location, so there
+    is nothing to ask and the base rule applies — which is moot anyway, since
+    ``difficulty_roll`` turns hitches off entirely.
+    """
+    from transversal.main import _get_repo
+
+    entity = _get_repo().get_entity(entity_id)
+    if entity is None:
+        return 1
+    return max(1, int(getattr(entity, "hitch_threshold", 1) or 1))
+
+
 def _roll_stored_pool(location_id: str, entity_id: str, hitches_apply: bool) -> tuple[list[dict], list[dict], bool]:
     """Roll the stored pool in place, setting ``result`` + ``hitch`` per die.
 
@@ -70,9 +87,10 @@ def _roll_stored_pool(location_id: str, entity_id: str, hitches_apply: bool) -> 
     """
     store = get_scene_store()
     dice = store.get_pool(location_id, entity_id)
+    threshold = _hitch_threshold(entity_id)
     rolls = roll_pool_dice(_dice_to_specs(dice))
     enriched = [
-        {**d, "result": r.result, "hitch": r.result == 1, "role": None, "bought": False,
+        {**d, "result": r.result, "hitch": r.result <= threshold, "role": None, "bought": False,
          "tier": r.tier.value if r.tier else None,
          "effect_die": r.tier.effect_die.value if r.tier and r.tier.effect_die else None}
         for d, r in zip(dice, rolls)
@@ -150,6 +168,7 @@ async def manual_roll(location_id: str, entity_id: str, req: ManualRollRequest):
             detail=f"That pool has {len(dice)} dice, but {len(req.results)} results arrived",
         )
 
+    threshold = _hitch_threshold(entity_id)
     enriched = []
     for d, value in zip(dice, req.results):
         try:
@@ -166,7 +185,7 @@ async def manual_roll(location_id: str, entity_id: str, req: ManualRollRequest):
         enriched.append({
             **d,
             "result": face,
-            "hitch": face == 1,
+            "hitch": face <= threshold,
             "role": None,
             "bought": False,
             "tier": tier.value if tier else None,
@@ -175,9 +194,11 @@ async def manual_roll(location_id: str, entity_id: str, req: ManualRollRequest):
 
     store.save_pool(location_id, entity_id, enriched)
     # Mirrors `_roll_stored_pool`: a difficulty determination has no hitches, so
-    # its caller turns them off — and a botch is every die showing a 1.
+    # its caller turns them off. A botch is every die showing **1** — not "every
+    # die hitches", which a widened hitch range would make a different question
+    # ([[B231]]).
     hitches = [d for d in enriched if d.get("hitch")] if req.hitches else []
-    botch = bool(req.hitches) and all(d["hitch"] for d in enriched)
+    botch = bool(req.hitches) and all(d["result"] == 1 for d in enriched)
     _fire_entity_roll_sfx(entity_id, enriched, hitches, botch)
     broadcast_pool_change(location_id, entity_id, dice=enriched, phase="rolled")
     return {

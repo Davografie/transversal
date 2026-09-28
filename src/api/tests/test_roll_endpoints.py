@@ -200,3 +200,84 @@ class TestManualRoll:
     def test_no_pool_is_refused(self, client):
         r = client.post("/api/v1/locations/loc-1/pools/e1/manual-roll", json={"results": []})
         assert r.status_code == 400
+
+
+class TestHitchRangeReachesTheRollEndpoints:
+    """A widened hitch range is read from the entity, not sent by the client.
+
+    The roller is a *view* of the rules ([[B231]]), so the endpoint has to ask the
+    entity. These use ``manual-roll`` because it takes the faces outright — a
+    server roll could not assert anything deterministic about a 2.
+    """
+
+    @staticmethod
+    def _with_threshold(monkeypatch, threshold):
+        """Pin the entity read, and stub the SFX firing that follows a roll.
+
+        The roll endpoints fire roll SFX *after* enriching the dice, and those
+        fire sites need a full repository. What is under test here is the hitch
+        marking, so the firing is stubbed rather than mocked out a repository at a
+        time — its own tests cover it.
+        """
+        from types import SimpleNamespace
+
+        from transversal.domain import Entity, EntityType
+
+        entities = {}
+
+        def get_entity(eid):
+            if eid not in entities:
+                entities[eid] = Entity(
+                    id=eid, type=EntityType.CHARACTER, name=eid,
+                    current_universe="earth", hitch_threshold=threshold,
+                )
+            return entities[eid]
+
+        monkeypatch.setattr(
+            "transversal.main._get_repo",
+            lambda: SimpleNamespace(get_entity=get_entity),
+        )
+        monkeypatch.setattr(
+            "transversal.api.rest.roll._fire_entity_roll_sfx",
+            lambda *a, **k: None,
+        )
+        # Saving the pool fires `on_pool_change`, which reaches the same repository.
+        monkeypatch.setattr(
+            "transversal.services.state_events.fire_pool_change_sfx",
+            lambda *a, **k: None,
+        )
+
+    def test_a_two_hitches_when_the_entity_says_so(self, client, monkeypatch):
+        self._with_threshold(monkeypatch, 2)
+        _save(client, "loc-1", "e1", [_die("d6"), _die("d8"), _die("d8")])
+        r = client.post("/api/v1/locations/loc-1/pools/e1/manual-roll",
+                        json={"results": [2, 5, 6]})
+        assert r.status_code == 200, r.text
+        assert [d["result"] for d in r.json()["hitches"]] == [2]
+        assert [d["hitch"] for d in r.json()["rolls"]] == [True, False, False]
+
+    def test_a_two_is_ordinary_at_the_base_rule(self, client, monkeypatch):
+        self._with_threshold(monkeypatch, 1)
+        _save(client, "loc-1", "e1", [_die("d6"), _die("d8"), _die("d8")])
+        r = client.post("/api/v1/locations/loc-1/pools/e1/manual-roll",
+                        json={"results": [2, 5, 6]})
+        assert r.json()["hitches"] == []
+        assert [d["hitch"] for d in r.json()["rolls"]] == [False, False, False]
+
+    def test_all_twos_are_not_a_botch(self, client, monkeypatch):
+        """A widened range makes 2s buyable, not botching — a botch is all 1s."""
+        self._with_threshold(monkeypatch, 2)
+        _save(client, "loc-1", "e1", [_die("d6"), _die("d6")])
+        r = client.post("/api/v1/locations/loc-1/pools/e1/manual-roll",
+                        json={"results": [2, 2]})
+        assert r.json()["botch"] is False
+        assert len(r.json()["hitches"]) == 2
+
+    def test_the_cortex_roll_reads_the_same_entity_field(self, client, monkeypatch):
+        """The auto-roll path marks hitches by the same read (no client value)."""
+        self._with_threshold(monkeypatch, 2)
+        _save(client, "loc-1", "e1", [_die("d4"), _die("d4"), _die("d4")])
+        r = client.post("/api/v1/locations/loc-1/pools/e1/cortex-roll")
+        assert r.status_code == 200, r.text
+        for d in r.json()["rolls"]:
+            assert d["hitch"] == (d["result"] <= 2)

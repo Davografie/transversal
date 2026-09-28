@@ -353,7 +353,7 @@
             v-for="(r, i) in remoteView.rolls"
             :key="i"
             class="roll-die-wrap"
-            :class="{ 'is-hitch': r.result === 1, 'is-bought': r.bought, 'is-selected': selectedHitches.includes(i) }"
+            :class="{ 'is-hitch': remoteIsHitch(r), 'is-bought': r.bought, 'is-selected': selectedHitches.includes(i) }"
             @click="toggleHitch(r, i)"
           >
             <DieIcon :die="r.die" :result="r.result" :label="r.label || r.source_id || r.die" />
@@ -409,6 +409,11 @@ const props = defineProps({
   universe: { type: String, default: 'earth' },
   keepCount: { type: Number, default: 2 },
   effectCount: { type: Number, default: 1 },
+  // Highest die face that counts as a hitch: 1 is the base rule, 2 is a rule
+  // that widens the range ("both 1s and 2s count as hitches", [[B231]]). The
+  // server already stamps `hitch` per die on the roll it returns; this is what
+  // lets the *picking* UI agree with it.
+  hitchThreshold: { type: Number, default: 1 },
   mode: { type: String, default: 'cortex' }, // 'cortex' | 'roll_table'
   gmMode: { type: Boolean, default: false },
   difficulty: { type: Number, default: null }, // received difficulty (player mode)
@@ -1404,13 +1409,29 @@ function stampArmedSfx(tsId, sfxId) {
 
 defineExpose({ addFromSheet, removeBySource, removeByTsId, retractNegative, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, onContestCancelled, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, stampArmedSfx, panelOpen, poolMatchesRollTableDice })
 
+function hitchCeiling() {
+  // The highest face that hitches. Floored at 1 so a bad value cannot make a
+  // pool hitch-free — the same floor the resolver applies ([[B231]]).
+  return Math.max(1, props.hitchThreshold || 1)
+}
+
 function isHitch(idx) {
   if (!result.value) return false
   // When the GM is rolling to set difficulty, a 1 is an ordinary die —
   // hitches only apply to actual rolls, not difficulty determination.
   if (props.gmMode && !props.entityId && poolPurpose.value === 'difficulty') return false
   const r = result.value.rolls[idx]
-  return r ? r.result === 1 : false
+  return r ? r.result <= hitchCeiling() : false
+}
+
+/** Whether a *remote* pool's die reads as a hitch.
+ *
+ * Its owner's threshold is not this client's to know, so the server's own stamp
+ * leads; the local ceiling is only the fallback for a die the server has not
+ * rolled yet.
+ */
+function remoteIsHitch(r) {
+  return r.hitch ?? (r.result <= hitchCeiling())
 }
 
 function toggleDie(idx) {
@@ -2181,7 +2202,9 @@ function resyncTraitDie(traitSettingId, newDice) {
 function restoreRolledResult(dice, phase = '') {
   // Reconstruct the rolled result + selection from the stateful pool dice.
   const hitches = dice.filter(d => d.hitch)
-  const botch = dice.length > 0 && dice.every(d => d.hitch)
+  // A botch is every die showing **1** — not "every die hitches", which a widened
+  // hitch range would make a different question ([[B231]]).
+  const botch = dice.length > 0 && dice.every(d => d.result === 1)
   const hasResource = dice.some(d => d.resource)
   if (dice.length <= 2 && !hasResource) {
     // Simplified rolls resolve immediately (no picking phase).

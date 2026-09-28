@@ -56,7 +56,14 @@ def determine_tier(highest: int) -> OutcomeTier:
 
 
 def _is_botch(rolls: list[DieRoll]) -> bool:
-    """A botch occurs when ALL dice show 1."""
+    """A botch occurs when ALL dice show 1.
+
+    Deliberately **not** widened by a hitch threshold ([[B231]]). A rule that
+    makes 2s hitch makes them *buyable* — and so un-keepable in the total — but a
+    botch stays the all-ones case the base rules describe: the corpus's widened
+    ranges (MHR *Growing Dread*, ToX *Dread*) still leave "everything came up 1"
+    as the disaster.
+    """
     return len(rolls) > 0 and all(r.result == 1 for r in rolls)
 
 
@@ -73,9 +80,26 @@ def roll_dice(specs: list[DieSpec]) -> list[DieRoll]:
     return [_roll_die(spec) for spec in specs]
 
 
-def detect_hitches(rolls: list[DieRoll]) -> list[DieRoll]:
-    """Return the dice that rolled a 1 (hitches)."""
-    return [r for r in rolls if r.result == 1]
+def _hitch_threshold(request: "DicePoolRequest") -> int:
+    """The request's hitch range, floored at the base rule.
+
+    ``1`` means a 1 hitches; ``2`` means 1s and 2s do. Clamped at 1 so a stored
+    ``0`` cannot make a pool hitch-free ([[B231]]).
+    """
+    return max(1, int(request.hitch_threshold or 1))
+
+
+def detect_hitches(rolls: list[DieRoll], threshold: int = 1) -> list[DieRoll]:
+    """Return the dice that count as hitches.
+
+    ``threshold`` is the **highest face** that hitches — ``1`` is the base rule
+    ("a 1 hitches"), ``2`` is a rule that widens the range ("both 1s and 2s count
+    as hitches", [[B231]]). A die that hitches cannot be kept in the total and is
+    not eligible as an effect die, which is what makes a widened range a real
+    cost rather than a labels change.
+    """
+    ceiling = max(1, threshold)
+    return [r for r in rolls if r.result <= ceiling]
 
 
 def is_botch(rolls: list[DieRoll]) -> bool:
@@ -92,18 +116,21 @@ def pick_effect_die(
     rolls: list[DieRoll],
     total_indices: list[int],
     hitches_apply: bool = True,
+    threshold: int = 1,
 ) -> Optional[DieRoll]:
     """Choose the effect die from dice not used in the total.
 
     Prefers the largest die type among eligible leftovers; hitches are
-    ineligible. Ties in die type prefer the higher rolled result (matching the
-    auto-resolve ordering). Returns the chosen roll, or ``None`` when nothing
-    remains — callers fall back to ``d4``.
+    ineligible, so ``threshold`` widens what is excluded ([[B231]]). Ties in die
+    type prefer the higher rolled result (matching the auto-resolve ordering).
+    Returns the chosen roll, or ``None`` when nothing remains — callers fall back
+    to ``d4``.
     """
     used = set(total_indices)
     candidates = [r for i, r in enumerate(rolls) if i not in used]
     if hitches_apply:
-        candidates = [r for r in candidates if r.result != 1]
+        ceiling = max(1, threshold)
+        candidates = [r for r in candidates if r.result > ceiling]
     if not candidates:
         return None
     candidates = sorted(candidates, key=lambda r: r.result, reverse=True)
@@ -115,18 +142,21 @@ def _pick_effect_dice(
     total_indices: list[int],
     count: int,
     hitches_apply: bool = True,
+    threshold: int = 1,
 ) -> list[DieRoll]:
     """Choose up to ``count`` effect dice from dice not used in the total.
 
     Prefers the largest die type; ties prefer the higher rolled result (matching
     ``pick_effect_die``). Returns at most ``count`` rolls in preference order.
+    A hitch is ineligible, so ``threshold`` widens what is excluded ([[B231]]).
     """
     if count <= 0:
         return []
     used = set(total_indices)
     candidates = [r for i, r in enumerate(rolls) if i not in used]
     if hitches_apply:
-        candidates = [r for r in candidates if r.result != 1]
+        ceiling = max(1, threshold)
+        candidates = [r for r in candidates if r.result > ceiling]
     if not candidates:
         return []
     candidates = sorted(candidates, key=lambda r: (r.die.max_value, r.result), reverse=True)
@@ -212,7 +242,8 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
     rolls = roll_dice(request.dice)
     highest = max(r.result for r in rolls)
     tier = _determine_tier(highest)
-    hitches = detect_hitches(rolls) if request.hitches_apply else []
+    threshold = _hitch_threshold(request)
+    hitches = detect_hitches(rolls, threshold) if request.hitches_apply else []
     botch = is_botch(rolls) if request.hitches_apply else False
     hitches_count = len(hitches)  # buyable count; no auto-earn
 
@@ -288,21 +319,29 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
 
     main_rolls = roll_dice(main_specs)
     resource_rolls = roll_dice(resource_specs)
-    # Only the highest non-hitch resource die applies — a rolled 1 is a hitch
-    # and doesn't count toward the total (the same rule as every other die).
+    threshold = _hitch_threshold(request)
+    # Only the highest non-hitch resource die applies — a hitch doesn't count
+    # toward the total (the same rule as every other die, and the same range).
     eligible_resource = (
-        [r for r in resource_rolls if r.result != 1]
+        [r for r in resource_rolls if r.result > threshold]
         if request.hitches_apply else resource_rolls
     )
     resource_kept = max(eligible_resource, key=lambda r: r.result) if eligible_resource else None
 
     # Hitch/botch detection sees every rolled die (main + resource).
     all_rolls = main_rolls + resource_rolls
-    hitches = detect_hitches(all_rolls) if request.hitches_apply else []
+    hitches = detect_hitches(all_rolls, threshold) if request.hitches_apply else []
     botch = is_botch(all_rolls) if request.hitches_apply else False
     hitches_count = len(hitches)
 
     # Keep the highest MAIN dice for the total (base 2 + bonus); the rest unused.
+    #
+    # Deliberately *not* touched by the hitch threshold ([[B231]]): a face that
+    # hitches is always lower than every face that does not, so sorting by result
+    # already puts them last — and a short pool still fills from them, which is
+    # what the base rule does with a 1 today. What a widened range changes is which
+    # dice are *reported* as hitches (and so cannot be picked) and which are
+    # ineligible as effect dice, below.
     keep_count = min(len(main_rolls), 2 + max(0, request.total_dice_bonus))
     order = sorted(range(len(main_rolls)), key=lambda i: main_rolls[i].result, reverse=True)
     kept_indices = order[:keep_count]
@@ -313,7 +352,7 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
     # Effect dice: choose from unused MAIN dice (resource dice are ineligible).
     # Base 1 + bonus; the primary (highest) stays the single ``effect_die``.
     effect_count = 1 + max(0, request.effect_dice_bonus)
-    effect_rolls = _pick_effect_dice(main_rolls, kept_indices, effect_count, request.hitches_apply)
+    effect_rolls = _pick_effect_dice(main_rolls, kept_indices, effect_count, request.hitches_apply, threshold)
     primary_effect = effect_rolls[0] if effect_rolls else None
     effect_die = primary_effect.die if primary_effect else DieType.D4
     effect_die_value = primary_effect.result if primary_effect else None

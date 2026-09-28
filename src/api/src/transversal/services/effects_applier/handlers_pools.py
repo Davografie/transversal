@@ -110,6 +110,56 @@ def _apply_dice_limit(entity, effect, repo, result):
     )
     _queue_entity_revert(repo, subject, effect)
 
+
+def _apply_set_hitch_threshold(entity, effect, repo, result):
+    """Set the highest die face that counts as a hitch on this entity's rolls.
+
+    ``result`` is the **face** — ``2`` is "both 1s and 2s count as hitches", the
+    shape five of the ten books ship it in ([[B231]]). ``1`` is the base rule, and
+    a value outside 1–2 is not a thing any book asks for, so it is refused rather
+    than clamped silently: a widened range makes a die un-keepable in the total,
+    and quietly accepting ``3`` would have taken a pool apart with no complaint.
+
+    The prior face rides the revert as its ``result``, so a duration — or
+    cancelling the activation — puts the range *back* rather than resetting it to
+    the base rule (a rule that narrows the range again would otherwise be undone
+    into the wrong state).
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    raw = (effect.result or "").strip()
+    if raw == "":
+        return
+    try:
+        face = int(raw)
+    except (TypeError, ValueError):
+        result.applied.append(
+            AppliedEffect(effect, f"hitch threshold {raw!r} is not a number — left unchanged")
+        )
+        return
+
+    prior = max(1, int(getattr(subject, "hitch_threshold", 1) or 1))
+    if face not in (1, 2):
+        result.applied.append(
+            AppliedEffect(effect, f"hitch threshold {face} is not 1 or 2 — left at {prior}")
+        )
+        return
+    if face == prior:
+        result.applied.append(AppliedEffect(effect, f"hitches already on {face}"))
+        return
+
+    subject.hitch_threshold = face
+    result.applied.append(AppliedEffect(
+        effect,
+        "hitches on 1s and 2s" if face == 2 else "hitches on 1s only",
+        subject.id,
+    ))
+    _queue_entity_revert(repo, subject, effect, prior_result=str(prior))
+
+
 def _resolve_pool(target: str, entity, repo) -> tuple[str, str]:
     """Map a resolved pool target id to ``(location_id, owner_id)``.
 

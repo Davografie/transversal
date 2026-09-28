@@ -100,6 +100,9 @@ class Entity:
     razmerit: int
     total_dice_bonus: int = 0
     effect_dice_bonus: int = 0
+    #: Highest die face that counts as a hitch (1 = the base rule, 2 = "both 1s
+    #: and 2s"), so the roller draws a hatched 2 as a hitch ([[B231]]).
+    hitch_threshold: int = 1
     current_universe: str
     current_location: Optional[str] = None
     current_projection: Optional[str] = None

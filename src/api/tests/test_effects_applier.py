@@ -1308,6 +1308,102 @@ def test_dice_limit_without_pool_ref_falls_back_to_subject():
     assert entity.total_dice_bonus == 1
 
 
+# ── Hitch range ([[B231]]) ──────────────────────────
+
+def test_widen_hitches_sets_the_face_and_schedules_the_prior_one():
+    """`result` is a face, and the *prior* face rides the revert.
+
+    Not the inverse action with a fixed value: a rule that narrows the range back
+    has to be undone into the wider state, so the undo must carry the old number.
+    """
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_hitch_threshold", action="set",
+        result="2",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert entity.hitch_threshold == 2
+    assert result.applied[0].summary == "hitches on 1s and 2s"
+    assert len(repo.scheduled_events) == 1
+    revert = repo.scheduled_events[0].effect
+    assert (revert.type, revert.action) == ("modify_hitch_threshold", "set")
+    assert revert.result == "1"  # the prior face, not the action's default
+
+
+def test_widen_hitches_reverts_a_narrowing_to_the_widened_value():
+    """The undo restores what was there, not the base rule."""
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    repo = FakeRepo()
+    entity = _entity(hitch_threshold=2)
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_hitch_threshold", action="set",
+        result="1",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    apply_effects(entity, [effect], repo)
+    assert entity.hitch_threshold == 1
+    assert repo.scheduled_events[0].effect.result == "2"
+
+
+def test_widen_hitches_without_duration_is_permanent():
+    repo = FakeRepo()
+    entity = _entity()
+    apply_effects(entity, [
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_hitch_threshold", action="set", result="2"),
+    ], repo)
+    assert entity.hitch_threshold == 2
+    assert repo.scheduled_events == []
+
+
+def test_widen_hitches_refuses_a_face_no_book_asks_for():
+    """A `3` would take a pool apart, so it is refused — and *said*, not clamped."""
+    repo = FakeRepo()
+    entity = _entity()
+    result = apply_effects(entity, [
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_hitch_threshold", action="set", result="3"),
+    ], repo)
+    assert entity.hitch_threshold == 1
+    assert result.applied[0].summary == "hitch threshold 3 is not 1 or 2 — left at 1"
+
+
+def test_widen_hitches_refuses_a_non_number():
+    repo = FakeRepo()
+    entity = _entity()
+    result = apply_effects(entity, [
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_hitch_threshold", action="set", result="wide"),
+    ], repo)
+    assert entity.hitch_threshold == 1
+    assert "not a number" in result.applied[0].summary
+
+
+def test_widen_hitches_is_a_no_op_when_already_there():
+    repo = FakeRepo()
+    entity = _entity(hitch_threshold=2)
+    result = apply_effects(entity, [
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_hitch_threshold", action="set", result="2"),
+    ], repo)
+    assert entity.hitch_threshold == 2
+    assert repo.scheduled_events == []  # nothing changed → nothing to undo
+    assert result.applied[0].summary == "hitches already on 2"
+
+
+def test_widen_hitches_can_target_another_entity():
+    """The `entity` field names whose rolls read differently."""
+    repo = FakeRepo(entities=[_entity(id="char-2", name="Other")])
+    actor = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_hitch_threshold", action="set",
+        result="2", entity="char-2",
+    )
+    result = apply_effects(actor, [effect], repo)
+    assert repo.get_entity("char-2").hitch_threshold == 2
+    assert actor.hitch_threshold == 1
+    assert repo.get_entity("char-2") in result.entities_to_update
+
+
 def test_dice_limit_unresolvable_pool_ref_falls_back_to_subject():
     """A pool ref that names no entity falls back rather than erroring."""
     repo = FakeRepo()

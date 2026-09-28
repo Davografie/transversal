@@ -69,6 +69,11 @@ class DicePoolRequest(BaseModel):
     hitches_apply: bool = True  # False for GM difficulty rolls (1s are just dice)
     total_dice_bonus: int = 0  # extra dice kept in the total (base 2)
     effect_dice_bonus: int = 0  # extra effect dice kept (base 1)
+    #: The highest die face that counts as a hitch: ``1`` = the base rule,
+    #: ``2`` = "both 1s and 2s count as hitches". Carried on the request the way
+    #: the two bonuses above are, so one rule reading ("which dice hitch") lives
+    #: in one place ([[B231]]).
+    hitch_threshold: int = 1
 
     @field_validator("dice", mode="before")
     @classmethod

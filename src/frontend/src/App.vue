@@ -203,7 +203,7 @@
         <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @touchstart="onBandDragStart($event, 'sheet')" @click="tapBand('sheet')"></div>
       </div>
       <div ref="rollerBandEl" class="roller-band" :class="{ open: sheetDock && rollerOpen(), dragging: sheetDock && occupantDragging && !isMobile }">
-        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="rollerChoices" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => { mirrorOwnResult({ result: r }); shareRoll(r) }" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-answer="(r) => answerSfxChoices(r, r?.[0]?.origin || 'roll')"
+        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :hitch-threshold="hitchThreshold" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="rollerChoices" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => { mirrorOwnResult({ result: r }); shareRoll(r) }" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-answer="(r) => answerSfxChoices(r, r?.[0]?.origin || 'roll')"
           @sfx-choice-cancel="clearSfxChoicesAll"
           @sfx-choice-loop="(c) => loopSfxChoice(c, c?.origin || 'roll')" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
         <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @touchstart="onBandDragStart($event, 'dice')" @click="tapBand('dice')"></div>
@@ -487,18 +487,22 @@ watch(entityId, () => {
   locationInitPromise = initLocation()
   refreshDiceBonuses()
 }, { flush: 'sync' })
-const diceBonuses = reactive({ total: 0, effect: 0 })  // persisted deltas from modify_dice_limit effects
+const diceBonuses = reactive({ total: 0, effect: 0, hitch: 1 })  // persisted reads from effects: selection limits + which faces hitch
 const sprayNprayActive = ref(false)  // local override: +1 effect die while sfx-spray-n-pray is armed
 const keepCount = computed(() => Math.max(1, 2 + diceBonuses.total))
 const effectCount = computed(() => Math.max(0, 1 + diceBonuses.effect + (sprayNprayActive.value ? 1 : 0)))
+// The highest face that counts as a hitch. 1 is the base rule; 2 is a rule that
+// widens the range, and a hatched 2 cannot be kept ([[B231]]).
+const hitchThreshold = computed(() => Math.max(1, diceBonuses.hitch || 1))
 
 async function refreshDiceBonuses() {
   const id = entityId.value
   if (!id || gmMode.value) return
-  const data = await graphql(`query($id: ID!) { entity(id: $id) { totalDiceBonus effectDiceBonus } }`, { id })
+  const data = await graphql(`query($id: ID!) { entity(id: $id) { totalDiceBonus effectDiceBonus hitchThreshold } }`, { id })
   if (data?.entity) {
     diceBonuses.total = data.entity.totalDiceBonus ?? 0
     diceBonuses.effect = data.entity.effectDiceBonus ?? 0
+    diceBonuses.hitch = data.entity.hitchThreshold ?? 1
   }
 }
 const phase = ref('adding')
@@ -1176,6 +1180,7 @@ function handleSseEvent(evt) {
       if (evt.data?.entity_id === entityId.value) {
         diceBonuses.total = evt.data.total_dice_bonus ?? 0
         diceBonuses.effect = evt.data.effect_dice_bonus ?? 0
+        diceBonuses.hitch = evt.data.hitch_threshold ?? 1
       }
       break
     case 'beat_end':

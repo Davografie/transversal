@@ -53,6 +53,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "add_trait_rating_dice": "Dice Pool", "roll_pool": "Dice Pool", "resolve_pool": "Dice Pool",
     "step_up_effect": "Outcome", "step_up_outcome": "Outcome",
     "increase_dice_limit": "Outcome", "decrease_dice_limit": "Outcome",
+    "set_hitch_threshold": "Outcome",
     "negate_complication": "Outcome", "convert_complication": "Outcome",
     "reroll_highest": "Outcome",
     "step_up_trait": "Trait", "step_down_trait": "Trait", "set_trait": "Trait",

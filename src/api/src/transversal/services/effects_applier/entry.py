@@ -49,6 +49,7 @@ from transversal.services.effects_applier.handlers_pools import (
     _apply_remove_added_dice,
     _apply_resolve_pool,
     _apply_roll_pool,
+    _apply_set_hitch_threshold,
     _apply_set_traitset_limit,
 )
 from transversal.services.effects_applier.handlers_outcome import (
@@ -123,6 +124,8 @@ _MUTATION_HANDLERS = {
     ("set_destination", "clear"): _apply_clear_destination,
     ("modify_dice_limit", "increase"): _apply_dice_limit,
     ("modify_dice_limit", "decrease"): _apply_dice_limit,
+    # How the pool *reads* rather than what it holds: which faces hitch ([[B231]]).
+    ("modify_hitch_threshold", "set"): _apply_set_hitch_threshold,
     ("modify_pool", "add_dice"): _apply_add_dice,
     ("modify_pool", "add_trait_rating"): _apply_add_trait_rating,
     ("modify_pool", "remove_added_dice"): _apply_remove_added_dice,
