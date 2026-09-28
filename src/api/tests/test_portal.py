@@ -47,6 +47,33 @@ def test_effect_from_wire_duration_and_lowercase_enum_values():
     assert eff.duration.timers[0].remaining == 2
 
 
+def test_effect_from_wire_carries_the_structured_specs():
+    """The destination of a portal effect lives in `targetSpec`, not in `target`.
+
+    Dropping it left the effect with nowhere to go, so the applier reported
+    `applied: []` and the traveller did not move — the Eindhoven Airport →
+    Турышка аэропорт case, which did nothing even once the 404 was fixed
+    (2026-09-26). The spec is the whole point of the effect.
+    """
+    eff = _effect_from_wire({
+        "timing": "IMMEDIATE", "type": "travel", "action": "move",
+        "target": "", "entity": "",
+        "context": {"transversal_type": "inapposite"},
+        "targetSpec": {"steps": [
+            {"kind": "select", "collection": "locations"},
+            {"kind": "filter", "field": "id", "operator": "in", "value": ["loc-a", "loc-b"]},
+            {"kind": "choose"},
+        ]},
+        "refs": {"projection": {"value": "", "spec": None, "scope": None}},
+        "dieFilter": {"role": None},
+    })
+
+    assert eff.target_spec is not None, "the spec must survive the wire adapter"
+    assert len(eff.target_spec.steps) == 3
+    assert "projection" in eff.refs
+    assert eff.die_filter == {"role": None}
+
+
 # ── fire_portal ─────────────────────────────────────
 
 class _FakeEdges:
