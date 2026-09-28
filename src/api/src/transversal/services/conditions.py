@@ -115,6 +115,18 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
             return False
         return _compare(int(margin), condition.operator or ">=", threshold)
 
+    if condition.type == ConditionType.ROLL_PURPOSE:
+        # What the roll is *for*, as the tags the pool's traits carry ([[B235]]).
+        # A **list**, so it is matched the way every other list is: `contains` is
+        # "any of them", `not contains` is "none of them" — and `==`/`in` would be
+        # silently wrong here, which is why the declaration offers only the two.
+        purpose = list((context or {}).get("purpose") or [])
+        wanted = condition.target_values()
+        if not wanted:
+            return False
+        matched = any(w in purpose for w in wanted)
+        return not matched if (condition.operator or "contains") == "not contains" else matched
+
     if condition.type == ConditionType.ROLL_TIER:
         from transversal.domain import OutcomeTier
 
@@ -521,6 +533,8 @@ def condition_context_keys(condition: Condition) -> frozenset[str]:
         return frozenset({"tier"})
     if ctype == ConditionType.MARGIN:
         return frozenset({"margin"})
+    if ctype == ConditionType.ROLL_PURPOSE:
+        return frozenset({"purpose"})
     if ctype == ConditionType.PHASE:
         return frozenset({"phase"})
     if ctype == ConditionType.HIGH_STAKES:
@@ -599,6 +613,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
                      group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.ARRIVAL_KIND.name, "Arrival kind", needs_target=True, target_placeholder="arrival", target_options=("transversal", "hierarchy", "move", "effect"), requires_context_any_of=("arrival_kind",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<"), requires_context_any_of=("tier",), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.ROLL_PURPOSE.name, "Roll purpose", needs_target=True, target_placeholder="tag", operators=("contains", "not contains"), requires_context_any_of=("purpose",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.MARGIN.name, "Margin", value_kind="number", operators=("<", "<=", "==", "!=", ">=", ">"), requires_context_any_of=("margin",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail"), requires_context_any_of=("tier",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), requires_source_elements=("traitsetting",), group=GROUP_RULE),

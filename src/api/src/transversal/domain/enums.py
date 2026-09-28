@@ -192,6 +192,7 @@ class ConditionType(str, Enum):
     CONTEST_OUTCOME = "contest_outcome"  # target = "player" | "opponent" | "give_in"; reads context
     HITCH = "hitch"                      # marker: the hitch-buying menu is active (reads context["hitch"])
     ROLL_TIER = "roll_tier"              # operator + value against OutcomeTier (e.g. >= success); reads roll_result.tier
+    ROLL_PURPOSE = "roll_purpose"        # contains / not contains against the tags the pool's traits carry (the books' "when you roll to inflict Damaged"); reads context["purpose"]
     MARGIN = "margin"                    # operator + value against how far the roll beat its opposition (the books' "beat it by 5"); reads context["margin"]
     TEST_OUTCOME = "test_outcome"        # target = "success" | "fail" (binary); success = tier != fail
     SOURCE_RATING = "source_rating"      # the source trait-setting's rating (dice) vs a die threshold

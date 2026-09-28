@@ -46,6 +46,11 @@ class Repo:
     def get_trait(self, trait_id):
         return None
 
+    def get_traitsetting(self, ts_id):
+        # A repo that knows nothing about trait instances yields an **empty
+        # purpose** — a legitimate state, and not an error ([[B235]]).
+        return None
+
     def get_effective_traitsetsettings(self, entity_id, universes):
         return []
 
@@ -190,6 +195,9 @@ def test_fire_result_sfx_exposes_roll_state_in_context(monkeypatch):
     monkeypatch.setattr(main, "_get_engine", lambda: FakeEngine())
     monkeypatch.setattr(main, "_get_repo", lambda: SimpleNamespace(
         get_entity=lambda eid: SimpleNamespace(razmerit=3, sfx_ids=[], current_projection=None, current_universe="earth"),
+        # Read for the roll's purpose; nothing here is tagged.
+        get_traitsetting=lambda ts_id: None,
+        get_trait=lambda trait_id: None,
     ))
     monkeypatch.setattr(roll_orchestrator, "get_available_sfx_ids", lambda *a, **k: [])
     monkeypatch.setattr(roll_orchestrator, "_emit_pending_choices", lambda *a, **k: None)
@@ -203,6 +211,63 @@ def test_fire_result_sfx_exposes_roll_state_in_context(monkeypatch):
     assert ev.context["effect_die"] == "d6"
     assert ev.context["total"] == 12
     assert ev.context["rolls"] == rolls
+
+
+def test_every_roll_trigger_variable_is_actually_populated(monkeypatch):
+    """The roll fire sites populate everything the roll triggers declare.
+
+    The state-trigger version of this guard already exists in
+    ``test_menu_contexts``; the roll sites had none, which is how a variable can
+    be *offered* by the editor and silently empty at fire time — the reader sees
+    ``{margin}`` in the picker and gets nothing at the table. Both builders are
+    checked, because they are two separate dicts (``on_roll`` for the roll itself,
+    ``on_result`` for the committed state).
+    """
+    import transversal.main as main
+    from transversal.services.effects_engine import EventOutcome
+    from transversal.services.menu_contexts import trigger_variables
+
+    rolls = [{"die": "d8", "result": 7, "role": None, "tier": "success", "ts_id": None}]
+
+    # ── the on_roll builder, which also feeds on_success / on_failure ──
+    import transversal.services.roll_deferral as roll_deferral
+
+    armed: dict = {}
+    monkeypatch.setattr(
+        roll_deferral, "fire_armed",
+        lambda entity_id, event, universe, context: armed.update(context),
+    )
+    engine = EffectsEngine()
+    repo = Repo({"e1": SimpleNamespace(
+        razmerit=10, sfx_ids=[], current_projection=None, current_location="loc-a")})
+    fire_roll_sfx(engine, repo, "e1", "earth",
+                  SimpleNamespace(rolls=rolls, hitches=[], botch=False, margin=4, tier=None))
+    for trigger in ("on_roll", "on_success", "on_failure"):
+        declared = {v.name for v in trigger_variables(trigger)}
+        missing = declared - set(armed)
+        assert not missing, f"{trigger}: declared {sorted(missing)} but the roll site omits them"
+
+    # ── the on_result builder ──
+    captured: list = []
+
+    class FakeEngine:
+        def process_event_outcome(self, event, sfx_ids, razmerit, repo=None):
+            captured.append(event)
+            return EventOutcome()
+
+    monkeypatch.setattr(main, "_get_engine", lambda: FakeEngine())
+    monkeypatch.setattr(main, "_get_repo", lambda: SimpleNamespace(
+        get_entity=lambda eid: SimpleNamespace(
+            razmerit=3, sfx_ids=[], current_projection=None, current_universe="earth"),
+        get_traitsetting=lambda ts_id: None,
+        get_trait=lambda trait_id: None,
+    ))
+    monkeypatch.setattr(roll_orchestrator, "get_available_sfx_ids", lambda *a, **k: [])
+    roll_orchestrator.fire_result_sfx("e1", "earth", rolls, effect_die="d6", total=12, margin=4)
+    for trigger in ("on_result", "on_set"):
+        declared = {v.name for v in trigger_variables(trigger)}
+        missing = declared - set(captured[0].context)
+        assert not missing, f"{trigger}: declared {sorted(missing)} but the roll site omits them"
 
 
 def test_fire_roll_sfx_passes_rolls_to_fire_armed(monkeypatch):

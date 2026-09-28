@@ -173,6 +173,10 @@ def fire_roll_sfx(
     # (`on_success` / `on_failure`) can gate on *how far* the roll got, not only
     # on the tier.
     roll_context["margin"] = getattr(roll_result, "margin", None)
+    # What the roll is *for*: the tags the pool's traits carry ([[B235]]). Read off
+    # the dice rather than sent by the client, so the gate is a rule and not a claim.
+    from transversal.services.roll_purpose import roll_purpose
+    roll_context["purpose"] = roll_purpose(rolls, repo)
     event = GameEvent(
         type="on_roll",
         entity_id=entity_id,
@@ -210,6 +214,7 @@ def fire_result_sfx(
     """
     from transversal.main import _get_engine, _get_repo
     from transversal.services.effects_engine import GameEvent
+    from transversal.services.roll_purpose import roll_purpose
 
     repo = _get_repo()
     sfx_ids, razmerit = _entity_sfx_context(repo, entity_id, universe)
@@ -221,6 +226,7 @@ def fire_result_sfx(
             "effect_die": effect_die,
             "total": total,
             "margin": margin,
+            "purpose": roll_purpose(rolls, repo),
             "rolls": rolls,
         },
     )

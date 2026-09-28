@@ -296,8 +296,10 @@ async def resolve_pool(location_id: str, entity_id: str):
     entity = _get_repo().get_entity(entity_id)
     universe = entity.current_universe if entity else ""
 
+    from transversal.services.roll_purpose import roll_purpose
     roll_context = {"effect_die": effect_die, "total": total, "tier": tier,
-                    "margin": margin, "rolls": dice}
+                    "margin": margin, "purpose": roll_purpose(dice, _get_repo()),
+                    "rolls": dice}
     # Whether the contest in play is high-stakes, so a roll-timed effect can gate
     # on it (B97). Read from the tracker: the resolve call carries no stakes.
     from transversal.services.contest_tracker import get_contest_tracker
@@ -311,7 +313,8 @@ async def resolve_pool(location_id: str, entity_id: str):
 
     from transversal.services.state_events import fire_state_sfx
     fire_state_sfx(entity_id, universe, "on_set",
-                   {"effect_die": effect_die, "total": total, "margin": margin})
+                   {"effect_die": effect_die, "total": total, "margin": margin,
+                    "purpose": roll_context["purpose"]})
 
     # This is the *test* path — a contest commits through the tracker's own
     # `/set`. Record which one it was while the flow is known: a challenge made

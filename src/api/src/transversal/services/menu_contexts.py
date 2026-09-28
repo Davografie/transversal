@@ -154,11 +154,15 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     TriggerDef("menu", "Post-roll menu (player picks)", group="manual"),
     TriggerDef("on_roll", "On Roll", (
         Variable("margin", "number"),
+        # A **list** of tags, read with `contains` / `not contains` — the type
+        # chip says the scalar because that is what a tag is ([[B235]]).
+        Variable("purpose", "string"),
     ), group="dicepool"),
     TriggerDef("on_result", "On Result", (
         Variable("effect_die", "die"),
         Variable("total", "number"),
         Variable("margin", "number"),
+        Variable("purpose", "string"),
     ), group="dicepool"),
     TriggerDef("on_complication", "On Complication (hitch)", group="dicepool"),
     TriggerDef("on_botch", "On Botch", group="dicepool"),
@@ -167,9 +171,11 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     # beside them, not only on the set/result pair.
     TriggerDef("on_success", "On Success", (
         Variable("margin", "number"),
+        Variable("purpose", "string"),
     ), group="dicepool"),
     TriggerDef("on_failure", "On Failure", (
         Variable("margin", "number"),
+        Variable("purpose", "string"),
     ), group="dicepool"),
     # ``effect_die`` is the **effective complication die** — the winner's, as it
     # lands on the loser — and it is the same value for both sides, which is why
@@ -269,6 +275,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("effect_die", "die"),
         Variable("total", "number"),
         Variable("margin", "number"),
+        Variable("purpose", "string"),
     ), group="dicepool"),
     TriggerDef("on_beat", "On Beat Advance", group="auto"),
     TriggerDef("on_scene", "On Scene Advance", group="auto"),
