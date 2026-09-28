@@ -569,10 +569,19 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
     from transversal.services.effects_commit import commit_effects
 
     repo = _repo()
-    edge_key = f"edge:{from_id}:{to_id}:transversal"
-    edge = repo._relationships.get(edge_key)
+    # Resolve by the **(from, to, type) triple**, never by a derived `_key`. Edge
+    # keys are not uniform in live data, and the one authored portal that carries
+    # effects was stored as `26763380` — so `get("edge:{from}:{to}:transversal")`
+    # answered None and this endpoint **404'd on a portal that is plainly there**.
+    # That is why Eindhoven Airport → Турышка аэропорт animated, lit its effect in
+    # the viewer, and then applied nothing (2026-09-26): the viewer fires this
+    # endpoint, the 404 came back, and the entity was never moved.
+    edge = repo.get_relationship(from_id, to_id, "transversal")
     if edge is None:
-        raise HTTPException(status_code=404, detail=f"Portal '{edge_key}' not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Portal '{from_id}' -> '{to_id}' (transversal) not found",
+        )
 
     entity = repo.get_entity(body.entity_id)
     if entity is None:

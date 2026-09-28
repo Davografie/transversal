@@ -68,11 +68,28 @@ class _FakeRepo:
     def get_entity(self, eid):
         return self._entities.get(eid)
 
+    def get_relationship(self, from_id, to_id, rel_type):
+        """The triple lookup the endpoint must use — see the legacy-key test.
+
+        Deliberately keyed on `_from`/`_to`/`type` and **not** on `_key`: a fake that
+        matched the canonical key is what let the by-key bug ship, because every
+        fixture edge happened to be canonical while the live one was not.
+        """
+        e = self._relationships.edge or {}
+        if (e.get("_from") == f"entities/{from_id}"
+                and e.get("_to") == f"entities/{to_id}"
+                and e.get("type") == rel_type):
+            return e
+        return None
+
 
 def test_fire_portal_applies_edge_effects(monkeypatch):
     entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
     edge = {
         "_key": "edge:loc-a:loc-b:transversal",
+        "_from": "entities/loc-a",
+        "_to": "entities/loc-b",
+        "type": "transversal",
         "effects": [
             {"timing": "IMMEDIATE", "type": "travel", "action": "move",
              "target": "loc-b", "context": {"transversal_type": "inapposite"}},
@@ -105,4 +122,61 @@ def test_fire_portal_applies_edge_effects(monkeypatch):
     assert captured["effects"][0].type == "travel"
     assert captured["effects"][0].target == "loc-b"
     assert captured["effects"][0].context == {"transversal_type": "inapposite"}
+
+
+def test_fire_portal_finds_an_edge_stored_under_a_legacy_key(monkeypatch):
+    """The live shape of the bug: the one authored portal with effects is `26763380`.
+
+    Not the canonical `edge:loc-a:loc-b:transversal`. The endpoint looked the edge up
+    by that derived key, got None, and 404'd on a portal that is plainly there — so
+    Eindhoven Airport → Турышка аэропорт animated, lit its effect, and applied
+    nothing. A by-triple lookup cannot care what the key looks like.
+    """
+    entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
+    edge = {
+        "_key": "26763380",                      # ← the legacy/random key
+        "_from": "entities/loc-a",
+        "_to": "entities/loc-b",
+        "type": "transversal",
+        "effects": [
+            {"timing": "IMMEDIATE", "type": "travel", "action": "move",
+             "target": "loc-b", "context": {"transversal_type": "inapposite"}},
+        ],
+    }
+    repo = _FakeRepo(entity, edge)
+    monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+
+    captured = {}
+
+    def fake_commit_effects(e, effects, r, **kwargs):
+        captured["effects"] = effects
+        class _R:
+            applied = []
+            pending_choices = []
+        return _R()
+
+    monkeypatch.setattr("transversal.services.effects_commit.commit_effects", fake_commit_effects)
+
+    app = FastAPI()
+    app.include_router(locations_router)
+    client = TestClient(app)
+
+    r = client.post("/api/v1/locations/loc-a/portal/loc-b/fire", json={"entity_id": "char-1"})
+    assert r.status_code == 200, r.text
+    assert len(captured["effects"]) == 1, "the legacy-keyed portal must still fire"
+
+
+def test_fire_portal_still_404s_when_there_is_no_portal(monkeypatch):
+    """The lookup must not become a rubber stamp — a missing portal is a real 404."""
+    entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
+    repo = _FakeRepo(entity, None)
+    monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+
+    app = FastAPI()
+    app.include_router(locations_router)
+    client = TestClient(app)
+
+    r = client.post("/api/v1/locations/loc-a/portal/loc-b/fire", json={"entity_id": "char-1"})
+    assert r.status_code == 404
+    assert "not found" in r.json()["detail"]
 
