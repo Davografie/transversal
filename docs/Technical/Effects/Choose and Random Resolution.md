@@ -31,6 +31,7 @@ The targeting path (`TargetSpec`) is a pipeline of steps (`select` / `filter` / 
 
 - **`choose` / `random` are ordinary steps, not terminal-only.** "Terminal" was a *cost* decision (single-shot resolution), not a type rule. The step grammar must allow them mid-path; a terminal `choose` is just the common case.
 - **Cardinality.** Single `choose`/`random` collapse `many → one`; multi `choose`/`random` collapse `many → many` (a user-selected subset). `random` carries an optional count `N`.
+- **A `choose` asks for one *or* many, and says so (settled 2026-09-27).** Its `count` is `1` or **`null`** — *choose one* / *choose multiple, as many as they like* — drawn as a toggle in the wizard, and a `null` **must** be read as multiple (`null > 1` is false in JS, which is how a nullable count would silently become a single pick). No number above 1 is written: it only ever decided single-pick vs multi-select while *looking* like a cap it never enforced, since the picker always let every candidate be ticked. **`random`'s count is different and stays a number** — it is an exact sample size.
 - **Fan-out.** For a multi result, apply **once per element** (matches `all`).
 - **`choose → filter` is type-valid but degenerate** (filtering the single chosen thing). The meaningful order is `filter → choose` (narrow, then pick). The type-checker does not forbid it.
 - **Dialog is element-type-aware.** The picker renders per element type (trait shows rating/statement, entity shows universe, die shows size). Renderers are data-driven from `target_catalog` — each element type declares its display fields — rather than a bespoke component per type.
@@ -132,8 +133,13 @@ needed by `sfx-heal` effects 2/3 which `select occupants` directly), and a
    activation and reuse the answer across effects that reference the same
    `(spec, field)`. Decide the concrete mechanism before wiring `sfx-heal`.
 
-6. **Multi-`choose` fan-out.** `count > 1` applies once per chosen element
-   (frontend currently resolves only the first selection).
+6. ✅ **Multi-`choose` fan-out — DONE, both halves** (2026-09-27). The frontend hands
+   back **every** pick (an array of ids, not the first) and the answer path applies
+   once per chosen element. The half this hung on was the **subject** path: its
+   "nothing to choose between is not a question" shortcut fired on
+   `candidates <= count` and returned the **first** candidate, silently dropping the
+   rest — so `choose 2` over exactly two people applied to one of them. It now fires
+   on **exactly one candidate**, and anything with a real choice goes to the table.
 
 ## Relationship to named refs (Step 3)
 
