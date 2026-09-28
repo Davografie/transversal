@@ -108,6 +108,12 @@
           >
             <template #item="{ item: e }">
               <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
+              <span
+                v-if="factionPresence(e.id)?.presence"
+                class="presence-badge"
+                :class="factionPresence(e.id).presence"
+                :title="presenceTitle(e.id)"
+              >{{ presenceLabel(e.id) }}</span>
               <span v-if="e.unpublished" class="draft-badge" title="Unpublished — GM-only">draft</span>
               <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
               <Button class="faction-canvas-btn" variant="ghost" size="sm" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</Button>
@@ -245,20 +251,25 @@ const {
   focusPath, setFocus, collapseAll,
 } = useLocationTree({ entities, filteredEntities, agencyByEntity, activeFilters, currentUniverse: toRef(props, 'universe') })
 
-// ── Faction distance ranking ────────────────────────
-// The factions list is read nearest-first: how far each faction's closest
-// *controlled* ground is from where the GM is, by the weighted walk the backend
-// computes (`factionDistances`, B134). The read returns every faction already
-// ordered — reachable ones by distance, the rest by name — so its index *is* the
-// sort key, which keeps the backend's tie-break without restating it here.
-const factionRank = ref(null)   // Map factionId → rank, or null before the first read
+// ── Faction presence ranking ────────────────────────
+// The factions list is read nearest-first: how far each faction's nearest
+// **presence** is from where the GM is, by the weighted walk the backend computes
+// (`factionDistances`, B134). Presence is either an authored faction → location
+// tie ("holds ground") or a member of that faction standing there ("has people") —
+// which is what makes an informant's faction surface at all. The read returns every
+// faction already ordered — reachable ones by distance, the rest by name — so its
+// index *is* the sort key, which keeps the backend's tie-break without restating it
+// here. The reason travels with the index so the row can say *why* it is listed.
+const factionRank = ref(null)   // Map factionId → { rank, presence, distance, place }, or null
 const rankingLocation = ref('')
 
 async function fetchFactionRank() {
   const loc = props.currentLocationId
   if (!loc) return
   const data = await graphql(
-    `query($id: ID!) { factionDistances(locationId: $id) { factionId } }`,
+    `query($id: ID!) { factionDistances(locationId: $id) {
+       factionId presence distance nearestLocationName
+     } }`,
     { id: loc },
   )
   // A failed read keeps a ranking that belongs to this same place — a blip must
@@ -269,7 +280,9 @@ async function fetchFactionRank() {
     return
   }
   const rank = new Map()
-  data.factionDistances.forEach((f, i) => rank.set(f.factionId, i))
+  data.factionDistances.forEach((f, i) => rank.set(f.factionId, {
+    rank: i, presence: f.presence, distance: f.distance, place: f.nearestLocationName,
+  }))
   factionRank.value = rank
   rankingLocation.value = loc
 }
@@ -281,11 +294,29 @@ const sortedFactions = computed(() => {
   if (!rank) return filteredFactions.value
   return [...filteredFactions.value].sort((a, b) => {
     // A faction that appeared since the read (a new one) has no rank yet: last.
-    const ra = rank.has(a.id) ? rank.get(a.id) : Infinity
-    const rb = rank.has(b.id) ? rank.get(b.id) : Infinity
+    const ra = rank.has(a.id) ? rank.get(a.id).rank : Infinity
+    const rb = rank.has(b.id) ? rank.get(b.id).rank : Infinity
     return ra !== rb ? ra - rb : String(a.name).localeCompare(String(b.name))
   })
 })
+
+// Why this faction is on the list, and where — the reminder the list exists to give.
+function factionPresence(id) { return factionRank.value?.get(id) || null }
+
+function presenceLabel(id) {
+  const p = factionPresence(id)
+  if (!p || !p.presence) return ''
+  return p.distance === 0 ? 'here' : `+${p.distance}`
+}
+
+function presenceTitle(id) {
+  const p = factionPresence(id)
+  if (!p || !p.presence) return ''
+  const what = p.presence === 'holds_ground' ? 'Holds ground' : 'Has people'
+  const where = p.distance === 0 ? 'here' : (p.place || 'somewhere')
+  const how = p.distance === 0 ? '' : `, ${p.distance} step${p.distance === 1 ? '' : 's'} away`
+  return `${what} at ${where}${how}`
+}
 
 // ── Free-roam drill-down ────────────────────────────
 // With no acting entity there is no name filter focusing the tree, so expand
@@ -762,6 +793,21 @@ onUnmounted(() => {
   padding: 1px 5px; border-radius: 3px; color: var(--accent-pale);
   background: var(--accent-16); border: 1px solid var(--accent-45);
   margin-left: 6px;
+}
+
+/* Why a faction is on the list and how far: "here" / "+2", tinted by kind.
+   Authored ground reads warmer than derived presence, so a glance separates a
+   faction that *is* here from one that merely has ears here. */
+.presence-badge {
+  flex: 0 0 auto; font-size: 9px; letter-spacing: 0.5px; padding: 1px 5px;
+  border-radius: 3px; margin-left: 6px; cursor: help;
+}
+.presence-badge.holds_ground {
+  color: var(--accent-pale); background: var(--accent-16); border: 1px solid var(--accent-45);
+}
+.presence-badge.has_people {
+  color: var(--map-text-dim); background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.18);
 }
 
 .entity-row { margin-bottom: 4px; }

@@ -181,9 +181,10 @@ class QueriesEntities:
         """Every faction ranked by its distance to this location, nearest first.
 
         The read behind a distance-sorted faction list ([[Tickets#B134]]): the
-        near ones float to the top, a faction controlling this very place is 0,
-        and a faction with no reachable ground carries a null distance and sorts
-        last — most of the world today, since only one control point is authored.
+        near ones float to the top, a faction present at this very place is 0, and
+        each entry says *why* it is present — an authored tie (``holds_ground``) or
+        members standing there (``has_people``) — and *where*. A faction present
+        nowhere reachable carries a null distance and sorts last; 52 of 81 today.
         See :class:`~transversal.api.graphql.type_defs.relationships.FactionDistance`.
         """
         repo = _em(info).repo
@@ -191,6 +192,8 @@ class QueriesEntities:
             FactionDistance(
                 faction_id=r["faction_id"], name=r["name"],
                 distance=r["distance"], nearest_location_id=r["nearest_location_id"],
+                nearest_location_name=r["nearest_location_name"],
+                presence=r["presence"],
             )
             for r in repo.get_faction_distances_for_location(str(location_id))
         ]

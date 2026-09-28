@@ -98,19 +98,27 @@ class EntityFactionRef:
 
 @strawberry.type
 class FactionDistance:
-    """How far a faction's nearest controlled ground is from a location.
+    """How far a faction's nearest **presence** is from a location.
+
+    Presence is two things (the author's widening, 2026-09-26): an authored
+    ``faction → location`` tie (``presence = "holds_ground"``), or a member of the
+    faction standing at the location (``presence = "has_people"``). The kind is
+    reported rather than flattened because the list exists to *remind* the GM why
+    a faction is on it — "has people in Murkwell Caves" is the useful half of the
+    answer, and an informant anywhere is what makes their faction visible at all.
 
     ``distance`` is a weighted step count along the location graph (``super`` and
     ``transversal`` edges, walked undirected); a portal that crosses a universe
-    boundary costs more than a step inside one. It is None when the faction
-    controls nothing, or nothing it controls can be reached from here — which is
-    true of roughly half the world today, since most locations sit in different
-    components from the one authored control point.
+    boundary costs more than a step inside one. It is None when the faction is
+    present nowhere reachable — still true for most factions, since 52 of 81 have
+    neither members nor ties.
 
-    ``nearest_location_id`` is the controlled location the measurement was taken
-    to, so a surface can name it as well as count to it.
+    ``nearest_location_id``/``nearest_location_name`` are the place the
+    measurement was taken to, so a surface can name it as well as count to it.
     """
     faction_id: strawberry.ID
     name: str
     distance: Optional[int] = None
     nearest_location_id: Optional[strawberry.ID] = None
+    nearest_location_name: Optional[str] = None
+    presence: Optional[str] = None

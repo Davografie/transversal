@@ -21,10 +21,14 @@ from transversal.db.repository_mixins.common import (
 ROLE_TRAIT_NAME = "role"
 RANK_TRAIT_NAME = "rank"
 
-# The trait that marks a *control* tie — a faction's claim on a location. Matched
-# by exact name, like `role`/`rank`: the registry also carries `primordial
-# control`, which is a power, not a claim on ground.
-CONTROL_TRAIT_NAME = "control"
+# The two kinds of faction *presence* the distance read reports, and why it
+# reports which. Authored ground is the stronger statement, so it wins a tie at
+# equal distance. A `control`-traited tie is no longer the *gate* — it is just
+# one authored tie among others (`CONTROL_TRAIT_NAME` used to be, and the author
+# widened it 2026-09-26: "just a faction/location relationship should already
+# carry the faction presence to the GM's awareness").
+PRESENCE_GROUND = "holds_ground"   # an authored faction → location tie
+PRESENCE_PEOPLE = "has_people"     # a member of the faction standing there
 
 # What a portal costs when it crosses a universe boundary, in the same units as
 # one `super`/same-universe step. Inside a universe a portal is just a door, so it
@@ -862,10 +866,32 @@ class RepositoryCanvas:
         The read behind a distance-sorted faction list ([[Tickets#B134]]).
         Distance runs along the **location graph** — ``super`` and
         ``transversal`` edges, walked **undirected** — from this location to the
-        nearest location the faction *controls*; a faction controlling this very
-        place scores 0.
+        nearest location the faction is **present** at; a faction present at this
+        very place scores 0.
 
-        Four decisions, all the author's (2026-09-16):
+        **Presence is two things, and the author widened it (2026-09-26):**
+
+        * **Authored ground** — any ``faction → location`` relationship, whatever
+          trait it carries, reported as ``holds_ground``. It used to *require* a
+          ``control`` setting, and gating on that one trait was too narrow: a
+          faction↔place tie is itself the statement that the faction is here, and
+          the gate hid every other authored tie (7 of 12 live ties, measured).
+          ``control`` is still the strongest reading of ground; it is simply no
+          longer the gate.
+        * **People present** — a member of the faction standing at the location,
+          reported as ``has_people``: ``membership`` edges (member → faction)
+          joined to where the member's **body** is, by the same direct-or-projected
+          rule the occupant read uses ([[B137]] S1), so the GM's list and the map
+          cannot disagree about who is somewhere. **Assets are excluded** — a
+          parked asset is not ears. A member anywhere makes their whole faction
+          present there, which is the point: *an informant becomes visible*.
+
+        That widening is worth its cost because the derived half is already
+        maintained for free: measured 2026-09-26 there are 94 memberships (66 GMC,
+        27 character, 1 asset) and **every** member carries a location, while only
+        **1 of 81** factions held any ``control`` ground. Presence covers **21**.
+
+        Four decisions, all the author's (2026-09-16, extended 2026-09-26):
 
         * **Undirected.** ``super`` is stored child → parent only, so following
           stored direction reaches **49 of 410** locations from the Iron Roots
@@ -877,53 +903,87 @@ class RepositoryCanvas:
           cross universes.
         * **A portal costs 1 inside its universe and ``CROSS_UNIVERSE_WEIGHT``
           across a boundary**; a ``super`` edge always costs 1.
-        * **The control tie's die is ignored** — a d10 "sect seat" says *how
-          much*, not *how far*.
+        * **A tie's die is ignored** — a d10 "sect seat" says *how much*, not *how
+          far*.
 
-        A control tie is a **faction → location** edge carrying a trait setting
-        named ``control``. Direction matters: the reverse (a location's posture
-        toward a faction) is not a claim on ground.
+        A presence tie is a **faction → location** edge. Direction matters: the
+        reverse (a location's posture toward a faction) is not presence.
 
         **Computed on read, deliberately not materialized.** Measured 2026-09-16:
         a full recompute for all 74 factions is ~2.4 ms at 410 locations and 711
         edges, and one location needs a single search. Materializing would add an
         invalidation surface spanning every location, ``super``/``transversal``
-        edge and control edit, to save a fraction of a millisecond. **Revisit if
-        the graph or the faction count grows by orders of magnitude** — the
+        edge, tie and member move, to save a fraction of a millisecond. **Revisit
+        if the graph or the faction count grows by orders of magnitude** — the
         design log records the trigger.
 
-        Returns ``[{faction_id, name, distance, nearest_location_id}]`` for
-        **every** faction, sorted: reachable ones by distance then name, then the
-        rest by name. ``distance`` is None when the faction controls nothing, or
-        nothing it controls is reachable — those are kept so a caller can show
-        the whole faction list with the near ones at the top.
+        Returns ``[{faction_id, name, distance, nearest_location_id,
+        nearest_location_name, presence}]`` for **every** faction, sorted:
+        reachable ones by distance, then authored ground before derived people,
+        then name, then the rest by name. ``distance`` is None when the faction is
+        present nowhere reachable — those are kept so a caller can show the whole
+        faction list with the near ones at the top.
         """
         adjacency = self._location_adjacency()
 
-        control_query = f"""
-            FOR ts IN {TRAITSETTINGS}
-            FILTER ts.from_type == 'relationship'
-            LET tr = DOCUMENT('{TRAITS}', ts.trait_id)
-            FILTER tr != null AND tr.name == @cname
-            LET e = DOCUMENT('{RELATIONSHIPS}', ts.entity_id)
-            FILTER e != null
-            LET f = DOCUMENT(e._from)
-            LET t = DOCUMENT(e._to)
+        # Both presence sources resolve a **projection to the entity behind it**,
+        # because a tie or a membership is often anchored to a body: three live
+        # `control` ties sat on `projections/…` edges and were silently dropped by
+        # the old `f.type == 'faction'` document filter, since projections carry
+        # `type: null`.
+        ground_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'relation'
+            LET fc = PARSE_IDENTIFIER(r._from).collection
+            LET tc = PARSE_IDENTIFIER(r._to).collection
+            LET fraw = DOCUMENT(r._from)
+            LET traw = DOCUMENT(r._to)
+            FILTER fraw != null AND traw != null
+            LET f = fc == 'projections' ? DOCUMENT(CONCAT('entities/', fraw.entity_id)) : fraw
+            LET t = tc == 'projections' ? DOCUMENT(CONCAT('entities/', traw.entity_id)) : traw
             FILTER f != null AND t != null
             FILTER f.type == 'faction' AND t.type == 'location'
-            RETURN {{ faction: f._key, location: t._key }}
+            RETURN DISTINCT {{ faction: f._key, location: t._key }}
         """
-        by_location: dict[str, set[str]] = {}
-        for row in self.db.aql.execute(
-            control_query, bind_vars={"cname": CONTROL_TRAIT_NAME}
-        ):
-            by_location.setdefault(row["location"], set()).add(row["faction"])
-        claiming = {f for factions_here in by_location.values() for f in factions_here}
+        # A member's standing places: their own `current_location` (the active
+        # body's) plus every body of theirs parked somewhere — the same union the
+        # occupant read builds, so "who is here" has one answer.
+        people_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'membership'
+            LET mc = PARSE_IDENTIFIER(r._from).collection
+            LET fc = PARSE_IDENTIFIER(r._to).collection
+            LET mraw = DOCUMENT(r._from)
+            LET fraw = DOCUMENT(r._to)
+            FILTER mraw != null AND fraw != null
+            LET f = fc == 'projections' ? DOCUMENT(CONCAT('entities/', fraw.entity_id)) : fraw
+            LET m = mc == 'projections' ? DOCUMENT(CONCAT('entities/', mraw.entity_id)) : mraw
+            FILTER f != null AND f.type == 'faction'
+            FILTER m != null AND m.type IN ['character', 'gmc']
+            FOR l IN UNION_DISTINCT(
+                (m.current_location != null AND m.current_location != ''
+                    ? [m.current_location] : []),
+                (FOR p IN {PROJECTIONS}
+                    FILTER p.entity_id == m._key
+                      AND p.current_location != null AND p.current_location != ''
+                    RETURN p.current_location))
+            RETURN DISTINCT {{ faction: f._key, location: l }}
+        """
+        # Authored ground is written first so that, where both hold, the stronger
+        # reading survives the `setdefault` below.
+        by_location: dict[str, dict[str, str]] = {}
+        for row in self.db.aql.execute(ground_query):
+            by_location.setdefault(row["location"], {})[row["faction"]] = PRESENCE_GROUND
+        for row in self.db.aql.execute(people_query):
+            by_location.setdefault(row["location"], {}).setdefault(
+                row["faction"], PRESENCE_PEOPLE
+            )
+        present = {f for factions_here in by_location.values() for f in factions_here}
 
         # One Dijkstra from the requested location settles nodes nearest-first, so
-        # the first time a faction's ground is reached *is* its nearest claim —
-        # no per-faction search needed.
-        found: dict[str, tuple[int, str]] = {}
+        # the first time a faction's presence is reached *is* its nearest one — no
+        # per-faction search needed.
+        found: dict[str, tuple[int, str, str]] = {}
         seen: set[str] = set()
         heap: list[tuple[int, str]] = [(0, location_id)]
         while heap:
@@ -931,13 +991,25 @@ class RepositoryCanvas:
             if node in seen:
                 continue
             seen.add(node)
-            for faction_id in by_location.get(node, ()):
-                found.setdefault(faction_id, (dist, node))
-            if len(found) == len(claiming):
-                break  # every faction that holds ground has been reached
+            for faction_id, kind in by_location.get(node, {}).items():
+                found.setdefault(faction_id, (dist, node, kind))
+            if len(found) == len(present):
+                break  # every faction that is present anywhere has been reached
             for neighbour, cost in adjacency.get(node, ()):
                 if neighbour not in seen:
                     heapq.heappush(heap, (dist + cost, neighbour))
+
+        # Name the places the ranking points at, in one read: "has people in
+        # Murkwell Caves" is the reminder the list exists to give.
+        nearest_ids = sorted({hit[1] for hit in found.values()})
+        names: dict[str, str] = {}
+        if nearest_ids:
+            for row in self.db.aql.execute(
+                f"FOR e IN {ENTITIES} FILTER e._key IN @ids "
+                "RETURN { id: e._key, name: e.name }",
+                bind_vars={"ids": nearest_ids},
+            ):
+                names[row["id"]] = row["name"]
 
         factions = list(self.db.aql.execute(
             f"FOR e IN {ENTITIES} FILTER e.type == 'faction' "
@@ -951,8 +1023,15 @@ class RepositoryCanvas:
                 "name": faction["name"],
                 "distance": hit[0] if hit else None,
                 "nearest_location_id": hit[1] if hit else None,
+                "nearest_location_name": names.get(hit[1]) if hit else None,
+                "presence": hit[2] if hit else None,
             })
-        rows.sort(key=lambda r: (r["distance"] is None, r["distance"] or 0, r["name"]))
+        rows.sort(key=lambda r: (
+            r["distance"] is None,
+            r["distance"] or 0,
+            0 if r["presence"] == PRESENCE_GROUND else 1,
+            r["name"],
+        ))
         return rows
 
     def canvas_faction(self, faction_id: str) -> dict:
