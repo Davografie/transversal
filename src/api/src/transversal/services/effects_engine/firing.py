@@ -110,6 +110,66 @@ def _emit_sfx_triggered(entity_id: str, sfx) -> None:
         ))
 
 
+def _emit_effects_changed(
+    entity_id: str,
+    title: str,
+    kind: str,
+    lines: list,
+    location_id: str = "",
+) -> None:
+    """Broadcast an ``effects_changed`` SSE event — the activation splash's note.
+
+    The wire contract is [[ui-ux]]'s, in [[UI-UX Design]] § *Activation splash*:
+    ``entity_id`` is the **audience** (whose change this is), ``title`` the rule's
+    name, ``kind`` either ``"summary"`` (a rule that has run its course, the longer
+    dwell) or ``"change"`` (a brief note), and ``lines`` what each effect did or why
+    it did nothing ([[B236]]).
+
+    ``location_id`` is deliberately left empty for a summary: it widens the audience
+    to everyone standing in that place, which is right for a change *in* a room and
+    wrong for a report about one character's own activation.
+    """
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    if not lines:
+        return
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="effects_changed",
+            session_id=s.id,
+            data={
+                "entity_id": entity_id,
+                "location_id": location_id,
+                "title": title,
+                "kind": kind,
+                "lines": list(lines),
+            },
+        ))
+
+
+def _note_lines(records: list[dict]) -> list[str]:
+    """One line per recorded effect: what it did, or why it did nothing.
+
+    ``<action>: <note>`` — *"play_as_rating: trait-114764719 plays as d4"* — so the
+    line names the verb as well as the outcome, which is what the splash showed the
+    author could not see.
+
+    An effect with **no** note is one that never reached the commit path
+    (``transfer_razmerit``, a passthrough), so nothing recorded what it did. It is
+    left out rather than given a sentence nobody wrote: the rule still reports
+    through ``sfx_triggered``, and an invented line is worse than a missing one.
+    """
+    lines: list[str] = []
+    for record in records or []:
+        text = str(record.get("note") or "").strip()
+        if not text:
+            continue
+        action = str(record.get("action") or "").strip()
+        lines.append(f"{action}: {text}" if action else text)
+    return lines
+
+
 def _emit_sfx_armed(sfx) -> None:
     """Broadcast an ``sfx_armed`` SSE event for a passive armed for the session.
 

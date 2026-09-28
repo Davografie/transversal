@@ -53,6 +53,8 @@ from transversal.services.effects_engine.firing import (  # noqa: F401
     _resolve_activation_source,
     _attach_continuation,
     _emit_sfx_triggered,
+    _emit_effects_changed,
+    _note_lines,
     _emit_sfx_ended,
     _emit_sfx_armed,
     _fire_context,

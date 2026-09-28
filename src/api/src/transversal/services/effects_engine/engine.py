@@ -333,6 +333,10 @@ class EffectsEngine:
 
             # Execute each effect with its own timing
             sfx_applied = False
+            # The notes list is per *outcome*; this rule's own records are the ones
+            # it appends, so the slice since this iteration began is what this rule
+            # did ([[B236]]). The splash reports exactly that ([[B229]]).
+            notes_before = len(notes)
             # Bind the declared source variable: if the SFX states a source kind
             # and the activation resolved a source, map it to the typed
             # ``{variable}`` so effect fields resolve to the concrete id.
@@ -553,6 +557,15 @@ class EffectsEngine:
                 # by rebinding ``effects_engine._emit_sfx_triggered``.
                 from transversal.services import effects_engine as _pkg
                 _pkg._emit_sfx_triggered(event.entity_id, sfx)
+                # …and the report: an activation that has run its course says what
+                # its effects did. `summary` is the longer dwell — a change waits
+                # ~2 s, a rule's whole outcome ~5 s ([[UI-UX Design]]).
+                _pkg._emit_effects_changed(
+                    entity_id=event.entity_id,
+                    title=sfx.name,
+                    kind="summary",
+                    lines=_pkg._note_lines(notes[notes_before:]),
+                )
 
         outcome.notes = notes
         return outcome
