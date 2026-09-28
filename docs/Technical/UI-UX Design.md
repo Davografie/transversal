@@ -1170,6 +1170,61 @@ backfill); keep both `dark` and `light` readable; check it in the app in both
 themes. Nothing in the frontend changes, and a universe without one keeps the
 app's default look.
 
+## Activation splash
+
+The surface for everything the **engine** does to a player who asked for nothing
+([[B229]]): `app/SplashPanel.vue`. It sits where the floating choice host sat
+(bottom-right on a desktop — the sheet docks left, the roller bottom-centre, the ✨
+rail left; the top banner on a phone, where the bands own the bottom), above the GM
+panel viewport and below the login overlay. **One surface, two faces** — the author's
+rule is that the splash *is* where engine-initiated prompts appear, so a question and
+a "here is what changed" must not be two different corners of the screen.
+
+| face | what it is | how it ends |
+|---|---|---|
+| **prompt** | a choice the engine raised: an automatic rule, a routed question, a [[B5]] branch | only an interaction — answered, or the wizard's own Cancel (writes nothing) |
+| **note** | what an activation did, including **why an effect did nothing** ([[B236]]) | it **fades**: ~2 s for a change, ~5 s for a rule that has run its course |
+
+- **A note is a report, not a decision.** It never blocks anything, never has a
+  scrim, is never interactive, and is announced (`role="status"`) rather than only
+  seen. Its lines carry a `silent` flag for an effect that did nothing — the whole
+  point of the surface, because a refusal used to be indistinguishable from a
+  success on the wire.
+- **The queue shows one at a time, in order.** A burst of changes is not a stack
+  of dialogs; each is a brief banner that waits its turn.
+- **A note's dwell is the time it is on screen.** The clock starts only when the
+  note is actually visible, so a report that arrives while a question is up is
+  *held* rather than ageing unseen behind it, and released when the question is
+  answered or left.
+- **The audience is the player it happened to**: the entity they are acting as, or
+  the place they are standing in. A change to someone else's sheet is not theirs to
+  read — deliberately not even a GM's, whose acting entity is the one that counts.
+- **The shell owns the timing, the surface owns the shape.** `App.vue` holds the
+  queue, the dwell and the audience; the component renders the prompt or the head
+  of the queue. That is what keeps "1–2 seconds" a decision in one place instead of
+  a number in a component.
+
+### What the effects layer emits for it
+
+A prompt needs nothing new: `sfx_choice_required` already carries `origin`
+(`auto` for a rule nobody pressed), `entity_id` and the `choices` — so **a routed
+question ([[B229]] item 4) is aimed by setting `entity_id` to the chosen entity and
+emitting to *their* session**; the surface renders whatever it is handed, and its
+`entity_id` is what the wizard resolves against.
+
+A note is one event, and its shape is the contract:
+
+```
+event: effects_changed
+data: {
+  entity_id:   "<whose change this is>",     // the audience
+  location_id: "<the place>",                // optional: a change *in* their location
+  title:       "<the rule's name>",
+  kind:        "change" | "summary",         // the dwell: ~2 s | ~5 s
+  lines:       [ "what it did", { text: "why it did nothing", silent: true } ]
+}
+```
+
 ## Razmerit
 
 `− value +` controls around the amount, with touch-friendly round buttons (no background). Tapping the value opens direct numeric input.
