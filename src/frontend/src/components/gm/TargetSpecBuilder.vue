@@ -592,8 +592,31 @@ function onReferenceValue(i, val) {
   if (!step) return
   const values = (Array.isArray(val) ? val : (val ? [val] : [])).filter(Boolean)
   step.value = values.length > 1 ? values : (values[0] || '')
-  if (values.length > 1) step.operator = 'in'
-  else if (step.operator === 'in') step.operator = '=='
+  if (isListField(i)) {
+    // A field that declares `contains` and not `in` is a list, and a list is only
+    // ever matched by `contains` — one pick means *is on the list*, several mean
+    // *any of* (the resolver reads both). Forcing `in` here wrote a step the
+    // resolver evaluates as "the whole list equals one of these", which can never
+    // be true, so the filter looked authored and matched nothing.
+    step.operator = 'contains'
+  } else if (values.length > 1) {
+    step.operator = 'in'
+  } else if (step.operator === 'in') {
+    step.operator = '=='
+  }
+}
+
+/** Whether a field holds a *list* of values.
+ *
+ * Declared, not guessed from the value: `contains` is the operator that only
+ * means something for a list, and a field that also offers `in` is a scalar
+ * taking one-or-several. That is how `tags`, `universes` and `known_to` are
+ * distinguished from `entity.type` or `traitset_id`.
+ */
+function isListField(i) {
+  const f = fieldsFor(priorElement(i)).find((x) => x.name === steps.value[i]?.field)
+  const ops = f?.operators || []
+  return ops.includes('contains') && !ops.includes('in')
 }
 
 // A value that names a bound variable rather than holding a literal.

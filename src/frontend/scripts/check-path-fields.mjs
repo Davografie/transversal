@@ -190,6 +190,15 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   ok('the count input is a number input', /<input type="number" min="1" :value="step\.count \?\? 1"/.test(b), true)
   ok('an unusable value falls back to one rather than to nothing',
     /Number\.isFinite\(n\) && n >= 1 \? n : 1/.test(b), true)
+
+  // A list-valued field (`known_to`, `tags`, `universes`) is matched with
+  // `contains`: a pick that set `==` or `in` would write a step the resolver
+  // evaluates against the whole list, which is never true.
+  ok('a pick on a list field sets contains, not an operator that cannot match',
+    /function isListField\(i\)/.test(b)
+      && /if \(isListField\(i\)\) \{[\s\S]{0,500}?step\.operator = 'contains'/.test(b), true)
+  ok('…and list-ness is read from the field\'s declared operators',
+    /return ops\.includes\('contains'\) && !ops\.includes\('in'\)/.test(b), true)
 }
 
 // ── A choice table appears where the question was raised ──────────

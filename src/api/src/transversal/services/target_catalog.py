@@ -338,6 +338,16 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         # `known_to` names. Filtering on it is how a rule *reaches* the hidden
         # ones — "every hidden GMC" is a reach declaration, not an attachment.
         "hidden": ScalarField("entity", "hidden", "boolean", label="hidden"),
+        # A **list** of entity ids, so it is matched with `contains` — never `==`,
+        # which a list can never satisfy (`["a"] == "a"` is false), so `==`/`!=` are
+        # deliberately *not* offered here even though `tags` lists them. One pick
+        # means *is on the list*, several mean *any of*, per the resolver's
+        # one-or-several rule; `references` gives the wizard a picker, because ids
+        # are not typeable. **Negation is not expressible** — there is no
+        # `not contains`, so "nobody knows this one" cannot be said yet.
+        "known_to": ScalarField("entity", "known_to", "string",
+                                operators=("contains",),
+                                references="entity", label="known to"),
         "type": ScalarField("entity", "type", "string", ("character", "location", "faction", "asset", "gmc", "universe", "subtrait", "relation")),
         "current_location": ScalarField("entity", "current_location", "string", references="location"),
         "current_universe": ScalarField("entity", "current_universe", "string", references="universe"),

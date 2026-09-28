@@ -1091,3 +1091,29 @@ def test_max_order_reads_the_number_not_the_element():
     s = _agenda_path(AggregateStep(fn="max", field="order"))
     res = resolve(s, TargetContext(subject=faction, repo=repo))
     assert res.values == [4]
+
+
+def test_a_list_field_is_asked_about_with_contains():
+    """`entity.known_to` is a list of entity ids, so `contains` is the only operator
+    that can match it — one id means *is on the list*, several mean *any of*.
+
+    The last case is the one that matters: `==` is what an id picker reaches for by
+    habit, and a list can never equal a string, so the filter would look authored
+    and match nothing.
+    """
+    kael = NS(id="kael", type="character", known_to=["gmc-1", "gmc-2"])
+    repo = FakeRepo(entities={"kael": kael})
+    ctx = TargetContext(subject=kael, repo=repo)
+
+    def run(value, operator="contains"):
+        s = spec(SelectStep(collection="self"),
+                 FilterStep(field="known_to", operator=operator, value=value))
+        r = resolve(s, ctx)
+        assert r.errors == []
+        return [v.id for v in r.values]
+
+    assert run("gmc-1") == ["kael"], "is on the list"
+    assert run("gmc-9") == [], "…and not otherwise"
+    assert run(["gmc-9", "gmc-2"]) == ["kael"], "several means any of"
+    assert run(["gmc-8", "gmc-9"]) == [], "…none of them means no"
+    assert run("gmc-1", operator="==") == [], "a list never equals a string"

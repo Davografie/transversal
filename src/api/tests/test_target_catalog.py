@@ -269,3 +269,14 @@ def test_a_traitset_limit_is_filterable():
     assert f is not None
     assert f.type == "int"
     assert tc.is_orderable(f)
+
+
+def test_known_to_is_filterable_as_a_list():
+    """`known_to` is a list of entity ids, so `contains` is the only operator that
+    can match — offering `==` would be offering a filter that is never true."""
+    f = tc.field("entity", "known_to")
+    assert f is not None
+    assert f.references == "entity", "ids are not typeable: the wizard needs a picker"
+    assert "contains" in tc.operators_for(f)
+    assert "==" not in tc.operators_for(f)
+    assert "in" not in tc.operators_for(f), "`in` tests a list against a list and never hits"
