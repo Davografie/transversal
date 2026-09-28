@@ -36,7 +36,11 @@ renderers that wire composable state to the DOM.**
   clamps.
 - `src/composables/usePanelWindows.js` — the window registry (`spawn/close/
   replace/toggleCollapse/setDock/move/setDirection`), each window carrying
-  `{ id, spec, x, y, direction, sourceParentKey }`.
+  `{ id, spec, dock, collapsed, x, y, direction, sourceParentKey, z }`. It also
+  **restores and stores** the windows per device — see *Panel persistence*.
+- `src/composables/panelWindowPersistence.js` — the storage rules for a window
+  (pure functions), and `src/constants/restorablePanels.js` — the allow-list of
+  panels a reload may bring back, with every exclusion and its reason.
 - `src/composables/usePanelDiagnostics.js` — drag-release dumps: every drag
   start/release records the live DOM geometry *and* each panel's internal layout
   state into `window.__PANEL_DUMPS__` (silent unless `window.__PANEL_DEBUG__`).
@@ -67,8 +71,41 @@ floating window, which keeps its own anchor and direction and docks back (`⤓`)
 into the panel it came from, matched by `component + spec.id`. See
 [[GM Panel Positioning Plan]].
 
-## Rule 1 — Data and mutations live in composables
+## Panel persistence (per device)
 
+Floating windows — and whether a panel is **collapsed** to its chip — are
+remembered in `localStorage` beside the anchor (`gmPanelAnchor`), because they
+belong to *this screen*, not to the campaign. Keys: `gmPanelWindows` (the
+windows) and `gmPanelStackCollapsed` (the stack root's chip state, a
+`usePersistedRef`). A window's collapse rides in its own record.
+
+**A spec cannot be stored, and that is the whole shape of this.** A spec is
+`{ component, title, id, props, listeners, context, badge }`: the component is a
+Vue object, `listeners` are closures, `context` holds refs and live instances.
+So a window is stored as a **registry name + props + geometry** and rebuilt on
+load, and `restorablePanels.js` is a short allow-list rather than "every panel" —
+a restored window has **no listeners and no context**, so it shows its record and
+edits it (its own mutations are its own) but the *opener's* reactions do not fire
+(a gallery refresh, a tree re-read after a save). A panel whose spec needs a
+context — one that edits a draft handed to it — must **not** be added to the
+list; the file records each exclusion with its reason.
+
+Three properties worth keeping when touching this:
+
+- **Match by `__name`, falling back from identity.** The Vite dev server serves a
+  module it has invalidated (HMR) under `<path>?t=<stamp>`, so the same SFC can
+  exist as two different objects — the opener's and the registry's. Identity alone
+  silently missed and *nothing* persisted.
+- **Props are checked, not trusted.** A function or a class instance serializes to
+  something that restores wrong, so such a window is not persisted at all. A
+  **ref** is refused (a live handle would restore as a plain value); a reactive
+  proxy is *snapshotted* through `toRaw`, since a panel opened from a shared store
+  has proxy props by construction.
+- **The stack's 🛠 open/closed state is not a collapse** and is deliberately not
+  persisted ([[GM Panel Positioning Plan]]: closing the 🛠 hides the chain, not
+  the windows).
+
+## Rule 1 — Data and mutations live in composables
 Each domain owns its queries, mutations, and state in a composable under
 `src/composables/`. Panels import and consume the composable.
 
@@ -309,14 +346,25 @@ An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
 
 There is no frontend test runner: checks are plain `node` scripts in
 `src/frontend/scripts/check-*.mjs`, run against the `transversal2-frontend:latest`
-image (build the same way, in Docker). **14 suites exist** and a shared primitive
-can move several — `check-theme-tokens`, `check-combobox`, `check-trait-tree`,
-`check-panel-close`, `check-player-filter`, `check-tree-expand/order/locate`,
-`check-place-filter`, `check-sheet-profile`, `check-sheet-api`, `check-landing`,
-`check-auth-gate`, `check-entity-create`. **Ping [[gm-panels]] when the component
-lands** and I will re-run all 14 and migrate my 17 call sites — tell me whether
-you want that migration or will take it, and once the API is chosen, which of the
-eight capabilities above it covers.
+image (build the same way, in Docker). **29 suites exist** (the count was 14 when
+the shared table component was handed over) and a shared primitive can move
+several — `check-theme-tokens`, `check-combobox`, `check-trait-tree`,
+`check-panel-close`, `check-panel-placement`, `check-panel-persistence`,
+`check-player-filter`, `check-tree-expand/order/locate`, `check-place-filter`,
+`check-trait-explanations`, `check-sheet-profile`, `check-sheet-api`,
+`check-landing`, `check-auth-gate`, `check-entity-create`. **Ping [[gm-panels]]
+when the component lands** and I will re-run them and migrate my 17 call sites —
+tell me whether you want that migration or will take it, and once the API is
+chosen, which of the eight capabilities above it covers.
+
+> [!warning] A node check cannot prove a *browser* fact
+> `e2e/` (Playwright, run from the host: `cd e2e && npm test`) is the rendering
+> and interaction half. Floating-panel persistence is the cautionary case: the
+> node check passed **53/53 while the feature did nothing at all**, because
+> whether a detach writes to `localStorage` and whether a reload restores a window
+> are browser facts. Anything about layout, scrolling, focus or storage belongs in
+> a spec there — assert geometry **numerically** rather than with
+> `toBeInViewport`, which samples mid-flight and is flaky across engines.
 
 ## Reference panels
 
