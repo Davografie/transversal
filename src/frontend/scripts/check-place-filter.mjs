@@ -246,5 +246,74 @@ const CHIP_UNPUBLISHED = [{ type: 'unpublished', value: 'true', label: 'Unpublis
   ok('a draft universe with no draft descendants draws itself', got.includes('universe-emberline'), true)
 }
 
+// ── the suggestion that names one entity carries its id ─────────────────
+// Picking a suggestion adds a chip; picking one that names a *single entity* also
+// takes the GM to it (centre the tree, open the panel). That needs the id, and
+// the id is not otherwise on the suggestion — it is only inside the synthetic
+// `ent:<id>` key, which a consumer should not have to parse.
+console.log('\nsuggestion → the entity it names\n')
+
+const { readFileSync } = await import('node:fs')
+const PANEL = readFileSync(new URL('../src/components/GmPanel.vue', import.meta.url), 'utf8')
+
+{
+  const f = useEntityFilter(ref(ENTITIES))
+  f.filterInput.value = 'Craigmuir'
+  const rows = f.suggestions.value
+  const entity = rows.find((s) => s.hint === 'name')
+  ok('an entity suggestion is offered', !!entity, true)
+  ok('and it carries the entity id', entity?.entityId, 'location-craigmuir')
+  ok('while a type chip carries none', rows.find((s) => s.hint === 'type')?.entityId, undefined)
+  ok('and a universe chip carries none', rows.find((s) => s.hint === 'universe')?.entityId, undefined)
+}
+
+{
+  // Both ways in have to go through the same handler, or Enter and the mouse
+  // diverge — the exact class the filter's combobox work fixed once already.
+  ok('the click uses the revealing handler',
+    /@mousedown\.prevent="selectFilterSuggestion\(s\)"/.test(PANEL), true)
+  ok('and so does Enter', /selectFilterSuggestion\(suggestions\.value\[i\]\)/.test(PANEL), true)
+  ok('the chip is still added first', /function selectFilterSuggestion\(s\) \{\s*selectSuggestion\(s\)/.test(PANEL), true)
+  ok('and only an entity suggestion goes further',
+    /if \(s\.entityId\) revealEntity\(s\.entityId\)/.test(PANEL), true)
+}
+
+{
+  const body = PANEL.slice(PANEL.indexOf('async function revealEntity'), PANEL.indexOf('async function revealEntity') + 1500)
+  ok('it brings the tree\'s own surface forward', /mode\.value = 'prep'/.test(body) && /browseTab\.value = 'tree'/.test(body), true)
+  ok('it opens the panel by the same path a row click takes', /onSelectEntity\(\{ id: entityId \}\)/.test(body), true)
+  ok('it opens the level an occupant lives in, then centres on the entity itself',
+    /expandToNode\(levelId\)/.test(body) && /centreOn\(entityId\)/.test(body), true)
+  ok('a location is its own level', /entity\.type === 'LOCATION' \? entityId : \(entity\.currentLocation \|\| ''\)/.test(body), true)
+
+  // The centring **waits for the layout to settle**, because one measured scroll is
+  // not enough: the tree's rows keep shifting after the click, and a scroll computed
+  // mid-flight lands on a position that no longer exists (measured live: the row
+  // settled 624px below the fold while the scroll stopped at 52).
+  const reveal = PANEL.slice(PANEL.indexOf('async function centreOn'), PANEL.indexOf('async function centreOn') + 1600)
+  ok('the reveal waits for the row\'s position to hold still',
+    /stable >= 2/.test(reveal) && /for \(let frame = 0; frame < 30; frame\+\+\)/.test(reveal), true)
+  ok('it measures the row against its own scroller',
+    /function rowOffset\(id\)[\s\S]{0,400}?row\.getBoundingClientRect\(\)\.top - zone\.getBoundingClientRect\(\)\.top/.test(PANEL), true)
+  ok('then scrolls instantly — a smooth scroll would animate toward a stale position',
+    /scrollLocationIntoView\(id, \{ align: 'top', behavior: 'auto' \}\)/.test(reveal), true)
+  ok('and repeats: settle, scroll, settle, scroll',
+    /for \(let attempt = 0; attempt < 3; attempt\+\+\) \{\s*await settle\(\)/.test(reveal), true)
+  // The trap that made this flaky: stopping as soon as the row *looks* visible.
+  // An interim layout can put it on screen and shift it back out (chromium
+  // measured `scrollTop: 48` with the row 600px below the fold).
+  ok('it never stops on "looks visible" — that interim layout does not last',
+    /rowInView/.test(PANEL), false)
+  ok('the wait is a timer, not rAF — rAF stops when a tab is not painted',
+    /setTimeout\(resolve, 16\)/.test(reveal), true)
+  ok('and it is bounded, so a row that never appears cannot spin',
+    /frame < 30/.test(reveal), true)
+
+  // Pre-fix: adding the chip touched neither the tree nor a panel.
+  const preFix = 'selectSuggestion(s)'
+  ok('pre-fix: adding the chip touched neither the tree nor a panel',
+    [/scrollToNode/.test(preFix), /onSelectEntity/.test(preFix), /mode\.value/.test(preFix)], [false, false, false])
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)

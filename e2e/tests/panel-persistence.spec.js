@@ -18,8 +18,8 @@
 // `gmMode` is a ref **seeded from localStorage**, not a live read of the player's
 // role, so arrange mode has to be seeded before load rather than mocked after it.
 import { test, expect } from '@playwright/test'
-import { asArchitect } from '../helpers/arrange.js'
 import { gql } from '../helpers/sheet.js'
+import { bootGmPanel, enterPrep, openStack } from '../helpers/gm.js'
 
 const TEST_CHARACTER = 'character-kael-drift-e555ccde'
 const DETACH = '[title="Detach into a floating window"]'
@@ -37,30 +37,12 @@ test.beforeAll(async ({ request }) => {
   character = { playerId: owner.id, playerName: owner.name, entityId: TEST_CHARACTER }
 })
 
-async function openStack(page) {
-  await page.locator('button', { hasText: '🛠' }).first().click()
-  await page.waitForTimeout(1000)
-}
-
-async function bootGmPanel(page) {
-  await asArchitect(page)
-  await page.addInitScript(([pid, eid, pname]) => {
-    localStorage.setItem('playerId', pid)
-    localStorage.setItem('playerName', pname)
-    localStorage.setItem('entityId', eid)
-    localStorage.setItem('architectMode', 'true')
-  }, [character.playerId, character.entityId, character.playerName])
-  await page.goto('/')
-  await page.waitForTimeout(2500)
-  await openStack(page)
-}
 
 const stored = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), STORE)
 
 test('an entity panel: detach, reload, still floating', async ({ page }) => {
-  await bootGmPanel(page)
-  const prep = page.locator('.mode-tabs button, .tab-btn', { hasText: 'Prep' })
-  if (await prep.count()) { await prep.first().click(); await page.waitForTimeout(1000) }
+  await bootGmPanel(page, character)
+  await enterPrep(page)
 
   await page.locator('.tree-row').first().click()
   await page.waitForTimeout(1400)
@@ -85,9 +67,8 @@ test('an entity panel: detach, reload, still floating', async ({ page }) => {
 })
 
 test('an SFX panel: detach, reload, still floating', async ({ page }) => {
-  await bootGmPanel(page)
-  const prep = page.locator('.mode-tabs button, .tab-btn', { hasText: 'Prep' })
-  if (await prep.count()) { await prep.first().click(); await page.waitForTimeout(1000) }
+  await bootGmPanel(page, character)
+  await enterPrep(page)
 
   await page.locator('.panel-node button', { hasText: 'SFX' }).first().click()
   await page.waitForTimeout(1500)
@@ -116,9 +97,8 @@ test('an SFX panel: detach, reload, still floating', async ({ page }) => {
 // keeps it privately — which is why a reload used to come back expanded however
 // the window had been left.
 test('a collapsed window comes back collapsed', async ({ page }) => {
-  await bootGmPanel(page)
-  const prep = page.locator('.mode-tabs button, .tab-btn', { hasText: 'Prep' })
-  if (await prep.count()) { await prep.first().click(); await page.waitForTimeout(1000) }
+  await bootGmPanel(page, character)
+  await enterPrep(page)
 
   await page.locator('.tree-row').first().click()
   await page.waitForTimeout(1400)
@@ -142,7 +122,7 @@ test('a collapsed window comes back collapsed', async ({ page }) => {
 })
 
 test('a collapsed stack root comes back collapsed', async ({ page }) => {
-  await bootGmPanel(page)
+  await bootGmPanel(page, character)
   const root = page.locator('[data-panel-window="root"]')
   await expect(root.locator('.panel'), 'the root starts expanded').not.toHaveClass(/is-collapsed/)
 

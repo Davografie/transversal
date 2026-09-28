@@ -185,6 +185,10 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
         filterType: 'name',
         filterValue: e.name,
         filterLabel: e.name,
+        // The one suggestion that names a single entity carries its id, so a
+        // consumer can act on "take me to *this*" without parsing the `ent:`
+        // prefix back out of the synthetic id.
+        entityId: e.id,
         terms: [e.name, e.id].filter(Boolean),
       })
     }

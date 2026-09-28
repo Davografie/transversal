@@ -51,16 +51,18 @@ const ok = (name, got, want) => {
 
 const PANEL = 'src/components/GmPanel.vue'
 const script = readFileSync(PANEL, 'utf8').match(/<script setup>([\s\S]*?)<\/script>/)[1]
-const scrollBody = script.match(/function scrollLocationIntoView\(locationId, \{ align = 'center' \} = \{\}\) \{([\s\S]*?)\n\}/)[1]
-const locateBody = script.match(/function scrollToNode\(nodeId\) \{([\s\S]*?)\n\}/)[1]
+const scrollBody = script.match(/function scrollLocationIntoView\(locationId, \{ align = 'center', behavior = 'smooth' \} = \{\}\) \{([\s\S]*?)\n\}/)[1]
+const expandBody = script.match(/function expandToNode\(nodeId\) \{([\s\S]*?)\n\}/)[1]
+const locateBody = script.match(/function scrollToNode\(nodeId, \{ targetId = nodeId \} = \{\}\) \{([\s\S]*?)\n\}/)[1]
 
 // The shipped text, run with a stubbed document. `nextTick` is Vue's real one,
 // so the deferred scroll runs in the same order it does in the app.
 const compile = (document) => new Function('deps', `
   const { expandedNodes, locationTree, findAncestorIds, nextTick, document } = deps
-  function scrollLocationIntoView(locationId, { align = 'center' } = {}) { ${scrollBody} }
-  function scrollToNode(nodeId) { ${locateBody} }
-  return { scrollLocationIntoView, scrollToNode }
+  function scrollLocationIntoView(locationId, { align = 'center', behavior = 'smooth' } = {}) { ${scrollBody} }
+  function expandToNode(nodeId) { ${expandBody} }
+  function scrollToNode(nodeId, { targetId = nodeId } = {}) { ${locateBody} }
+  return { scrollLocationIntoView, expandToNode, scrollToNode }
 `)({ expandedNodes: TREE.expandedNodes, locationTree: TREE.locationTree, findAncestorIds: TREE.findAncestorIds, nextTick, document })
 
 // A location two levels down, with children of its own.
@@ -82,7 +84,10 @@ function dom({ rowTop = 500, zoneTop = 100, scrollTop = 1000, rowH = 32, hasZone
     closest: () => zone,
     scrollIntoView: (o) => intoView.push(o),
   }
-  return { document: { querySelector: () => row }, scrolled, intoView }
+  // The selector matters for the occupant case: the level is opened, but the row
+  // the eye lands on is the entity's own.
+  const queried = []
+  return { document: { querySelector: (sel) => { queried.push(sel); return row } }, scrolled, intoView, queried }
 }
 
 // ── 1. Locate expands the target, not just its ancestors ─────────────────
@@ -106,12 +111,43 @@ TREE.expandedNodes.value = {}
   ok('an empty id touches nothing', [TREE.expandedNodes.value, d.scrolled.length], [{}, 0])
 }
 
+// `expandToNode` is `scrollToNode` minus the scroll — the reveal needs the
+// expansion on its own, because the row it centres on may not exist until the
+// level opens.
+TREE.expandedNodes.value = {}
+{
+  const d = dom()
+  compile(d.document).expandToNode('cur')
+  await nextTick()
+  ok('expandToNode opens the chain and the target, and scrolls nothing',
+    [!!TREE.expandedNodes.value.u1, !!TREE.expandedNodes.value.a, TREE.expandedNodes.value.cur, d.scrolled.length, d.queried.length],
+    [true, true, true, 0, 0])
+}
+
 TREE.expandedNodes.value = {}
 {
   const d = dom()
   compile(d.document).scrollToNode('not-in-the-tree')
   await nextTick()
   ok('an off-tree id expands nothing but still scrolls', [TREE.expandedNodes.value, d.scrolled.length], [{}, 1])
+}
+
+// ── 1b. an occupant: the level is opened, the entity's own row is centred ──
+// A filter suggestion naming an entity is the one caller that passes a different
+// `targetId`: the entity is not a tree node, so its *level* is what gets opened
+// (which is what reveals the roster it lives in) while the scroll goes to the row.
+console.log('\nLocate — an occupant under its level\n')
+
+TREE.expandedNodes.value = {}
+{
+  const d = dom()
+  compile(d.document).scrollToNode('cur', { targetId: 'gmc-someone' })
+  await nextTick()
+  ok('the level it lives in is opened, so the roster renders',
+    TREE.expandedNodes.value.cur, true)
+  ok('the chain above it opens too', [!!TREE.expandedNodes.value.u1, !!TREE.expandedNodes.value.a], [true, true])
+  ok('and the scroll goes to the entity, not the level',
+    [d.queried.length, d.queried[0].includes('gmc-someone'), d.queried[0].includes('"cur"')], [1, true, false])
 }
 
 // ── 2. alignment: a couple of rows of context, children below ────────────
@@ -171,15 +207,17 @@ console.log('\nLocate — the watchers keep their centering\n')
 // Rebuild the pre-fix function — no target expansion, and a plain centering
 // scroll — and require it to reproduce both reported symptoms.
 console.log('\ncheck sensitivity\n')
+const oldExpand = expandBody.replace('  expanded[nodeId] = true\n', '')
 const oldLocate = locateBody
-  .replace('    expanded[nodeId] = true\n', '')
-  .replace("scrollLocationIntoView(nodeId, { align: 'top' })", 'scrollLocationIntoView(nodeId)')
-ok('the pre-fix body is a strict rewrite of the shipped one', oldLocate !== locateBody, true)
+  .replace("scrollLocationIntoView(targetId, { align: 'top' })", 'scrollLocationIntoView(nodeId)')
+ok('the pre-fix body is a strict rewrite of the shipped one',
+  [oldExpand !== expandBody, oldLocate !== locateBody], [true, true])
 
 const compileOld = (document) => new Function('deps', `
   const { expandedNodes, locationTree, findAncestorIds, nextTick, document } = deps
-  function scrollLocationIntoView(locationId, { align = 'center' } = {}) { ${scrollBody} }
-  function scrollToNode(nodeId) { ${oldLocate} }
+  function scrollLocationIntoView(locationId, { align = 'center', behavior = 'smooth' } = {}) { ${scrollBody} }
+  function expandToNode(nodeId) { ${oldExpand} }
+  function scrollToNode(nodeId, { targetId = nodeId } = {}) { ${oldLocate} }
   return { scrollToNode }
 `)({ expandedNodes: TREE.expandedNodes, locationTree: TREE.locationTree, findAncestorIds: TREE.findAncestorIds, nextTick, document })
 
@@ -191,6 +229,16 @@ TREE.expandedNodes.value = {}
   ok('pre-fix: the current location stayed collapsed (symptom 1)', TREE.expandedNodes.value.cur, undefined)
   ok('pre-fix: it centered instead of parking near the top (symptom 2)',
     [d.scrolled.length, d.intoView], [0, [{ block: 'center', behavior: 'smooth' }]])
+}
+TREE.expandedNodes.value = {}
+{
+  // Before `targetId`, an occupant could only be centred by scrolling to its
+  // level — the entity's own row was never asked for.
+  const d = dom()
+  compileOld(d.document).scrollToNode('cur', { targetId: 'gmc-someone' })
+  await nextTick()
+  ok('pre-fix: it scrolled to the level, leaving the entity off screen',
+    d.queried[0].includes('"cur"'), true)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

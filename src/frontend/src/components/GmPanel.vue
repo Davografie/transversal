@@ -67,7 +67,7 @@
               :class="{ 'is-highlighted': i === filterHighlighted }"
               role="option"
               :aria-selected="i === filterHighlighted ? 'true' : 'false'"
-              @mousedown.prevent="selectSuggestion(s)"
+              @mousedown.prevent="selectFilterSuggestion(s)"
               @mousemove="filterHighlighted = i"
             >
               <!-- A status chip has no entity type to badge. -->
@@ -229,11 +229,49 @@ function onFilterKeydown(e) {
     case 'Enter': {
       e.preventDefault()
       const i = filterHighlighted.value
-      if (i >= 0 && i < suggestions.value.length) selectSuggestion(suggestions.value[i])
+      if (i >= 0 && i < suggestions.value.length) selectFilterSuggestion(suggestions.value[i])
       break
     }
     case 'Escape': showSuggestions.value = false; break
   }
+}
+
+// Picking a suggestion does the two things it always did — add the chip, clear the
+// box — and, when the suggestion names one entity, a third: it takes the GM to
+// that entity. A chip alone only *scopes* the list; the human asked for the
+// suggestion to behave like "show me this" (2026-09-27).
+function selectFilterSuggestion(s) {
+  selectSuggestion(s)
+  if (s.entityId) revealEntity(s.entityId)
+}
+
+// Centre the tree on an entity and open it in a child panel.
+async function revealEntity(entityId) {
+  const entity = entities.value.find((e) => e.id === entityId)
+  if (!entity) return
+
+  // The tree is Prep's Places tab. Centring on something the GM cannot see is not
+  // centring on it, so the surface that owns the tree is brought forward first.
+  if (mode.value !== 'prep') mode.value = 'prep'
+  browseTab.value = 'tree'
+
+  // Open the panel from the same path a row click takes, so the selection
+  // highlight and the "already open" handling cannot drift from it.
+  onSelectEntity({ id: entityId })
+
+  // Let the chip and the tab render before measuring rows. Two ticks because
+  // switching *into* Prep also runs the panel's own recenter watcher, and the
+  // entity is what the GM just asked for — it has to win.
+  await nextTick()
+  await nextTick()
+
+  // A location is its own node. An occupant lives under one and only has a row
+  // once that level's roster is revealed, which `scrollToNode` does by opening
+  // the level; its `currentLocation` may also be a **universe** (the unplaced
+  // bucket), which is likewise a node the walk can open.
+  const levelId = entity.type === 'LOCATION' ? entityId : (entity.currentLocation || '')
+  if (levelId) expandToNode(levelId)
+  centreOn(entityId)
 }
 
 // Default the entity filter to the acted character so the tree focuses on
@@ -342,7 +380,7 @@ function expandPathTo(locationId) {
 //            where the point is to read the location's expanded children below.
 // (scrollIntoView with block:'start' was not enough: the row would sit flush
 // against the pinned chrome, which reads as "the list starts here".)
-function scrollLocationIntoView(locationId, { align = 'center' } = {}) {
+function scrollLocationIntoView(locationId, { align = 'center', behavior = 'smooth' } = {}) {
   nextTick(() => {
     const row = document.querySelector(`.gm-content [data-node-id="${locationId}"]`)
     if (!row) return
@@ -356,11 +394,11 @@ function scrollLocationIntoView(locationId, { align = 'center' } = {}) {
       const fromScrollportTop = row.getBoundingClientRect().top - zone.getBoundingClientRect().top
       zone.scrollTo({
         top: Math.max(0, zone.scrollTop + fromScrollportTop - rowH * contextRows),
-        behavior: 'smooth',
+        behavior,
       })
       return
     }
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    row.scrollIntoView({ block: 'center', behavior })
   })
 }
 
@@ -376,23 +414,90 @@ function collapseTree() {
 // Locate: make sure the target is on screen, its level open, and its own
 // children expanded, then park it near the top so the children below it are
 // what the eye lands on (with a row or two of context above).
-function scrollToNode(nodeId) {
+function scrollToNode(nodeId, { targetId = nodeId } = {}) {
   if (!nodeId) return
+  expandToNode(nodeId)
+  // `targetId` is what the eye should land on: usually the level itself, but an
+  // occupant lives *under* its level, so the level is opened for it and the
+  // scroll goes to the row.
+  scrollLocationIntoView(targetId, { align: 'top' })
+}
+
+// Open the path to a node — its ancestors and the node itself — without scrolling.
+// Extracted because a *reveal* (below) wants the expansion on its own: the row it
+// is centring on may not exist until the level opens.
+//
+// Opening the chain is what reveals a level's **roster** too, which is how an
+// occupant gets a row at all.
+function expandToNode(nodeId) {
   const expanded = { ...expandedNodes.value }
   const path = []
-  if (findAncestorIds(locationTree.value, nodeId, path)) {
-    // Open the whole chain down to the target. Without this the jump was a
-    // silent no-op in the plain view — only the current universe renders open
-    // by default there, so the target row did not exist and the scroll found
-    // nothing (the acting-entity case, once its filter chip is removed).
-    path.filter((id) => id !== nodeId).forEach((id) => { expanded[id] = true })
-    // The target itself too. The button says "jump to the current location",
-    // and in that same plain view locations default *closed* — so centering a
-    // collapsed chevron was the whole complaint.
-    expanded[nodeId] = true
-    expandedNodes.value = expanded
+  if (!findAncestorIds(locationTree.value, nodeId, path)) return
+  // Open the whole chain down to the target. Without this a jump was a silent
+  // no-op in the plain view — only the current universe renders open by default
+  // there, so the target row did not exist and the scroll found nothing.
+  path.filter((id) => id !== nodeId).forEach((id) => { expanded[id] = true })
+  // The target itself too: in that same plain view locations default *closed*,
+  // so centering a collapsed chevron was the whole complaint.
+  expanded[nodeId] = true
+  expandedNodes.value = expanded
+}
+
+// ── Revealing one row (the filter's entity suggestions) ─────────────────
+// The tree does not settle when the click returns: the chip lands, the chain opens,
+// and rows above the target keep shifting for roughly half a second. A single
+// measured scroll issued in that window is computed from a layout that no longer
+// exists — measured live in Firefox, a smooth scroll left the row **624px below the
+// fold** while it stopped at `scrollTop: 52`, which is why "centre on it" looked
+// like it did nothing.
+//
+// So the reveal waits for the row's *own* position to hold still for two frames and
+// then scrolls once, instantly. That needs no timing guess and no retry heuristic —
+// stable is stable — and the loop is bounded so a row that never appears, or a tree
+// that never stops moving, cannot spin.
+async function centreOn(id) {
+  if (!id) return
+  // A timer, not `requestAnimationFrame`: rAF is throttled or stopped outright when
+  // a tab is not being painted, which turned this into a no-op in one headless
+  // engine. 16ms is a frame in a foreground tab and always fires.
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 16))
+
+  // Wait until the row's *own* position stops changing.
+  async function settle() {
+    let last = null
+    let stable = 0
+    for (let frame = 0; frame < 30; frame++) {   // ≈0.5s at 60fps
+      await tick()
+      const top = rowOffset(id)
+      if (top == null) continue
+      if (top === last) {
+        stable += 1
+        if (stable >= 2) return
+      } else {
+        stable = 0
+        last = top
+      }
+    }
   }
-  scrollLocationIntoView(nodeId, { align: 'top' })
+
+  // Settle, scroll, repeat. Deliberately **not** "scroll until the row is visible":
+  // an interim layout can put the row on screen and then shift it back out, and
+  // taking that as done is what left chromium at `scrollTop: 48` with the row 600px
+  // below the fold. Re-scrolling from a *settled* layout each time is what converges.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await settle()
+    // Instant: a smooth scroll animates toward a position while the layout under it
+    // is still free to move.
+    scrollLocationIntoView(id, { align: 'top', behavior: 'auto' })
+  }
+}
+
+/** The row's top relative to its own scroller, or null when it has no row yet. */
+function rowOffset(id) {
+  const row = document.querySelector(`.gm-content [data-node-id="${id}"]`)
+  const zone = row?.closest('.browse-zone')
+  if (!row || !zone) return null
+  return Math.round(row.getBoundingClientRect().top - zone.getBoundingClientRect().top)
 }
 
 watch(
