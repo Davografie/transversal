@@ -18,8 +18,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { usePanel } from '@/composables/usePanel.js'
+import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import Button from '@/components/ui/Button.vue'
 import GmPathEditPanel from './GmPathEditPanel.vue'
 
@@ -39,16 +40,52 @@ const props = defineProps({
   booleanTerminal: { type: Boolean, default: false },
 })
 
-// `resolve` is forwarded from the builder inside the child panel: an effect that
-// means different things at different destinations reads it (a rating die can be
-// timed, a pool die cannot), so it must keep arriving after the move.
+// `resolve` says which element the path lands on — an effect that means different
+// things at different destinations reads it (a rating die can be timed, a pool die
+// cannot). This row traces it, and the builder inside the child panel forwards its
+// own after an edit, so it keeps arriving after the move.
 const emit = defineEmits(['update:modelValue', 'resolve'])
+
+// The element a path lands on is resolvable **here**, from the steps this row is
+// already summarising — it must not wait for the child panel to be opened. Reading
+// it only from the builder left the parent guessing until someone pressed *Edit
+// path*, and a guess of "we don't know" reads as "not applicable": an effect with a
+// stored duration showed the *leftover* explanation and, on save, dropped a timer the
+// form could not see (`EffectForm` emits a duration only where it is offered).
+// Same trace the builder runs, so the two cannot disagree.
+const { traceSpec } = useTargetCatalog()
 
 const panel = usePanel()
 
 const steps = computed(() =>
   (props.modelValue && Array.isArray(props.modelValue.steps) ? props.modelValue.steps : []))
+
+const trace = ref({ types: [], errors: [], valid: false })
+let traceTimer = null
+
 const stepCount = computed(() => steps.value.length)
+
+async function runTrace() {
+  const res = await traceSpec(steps.value, props.destination, props.sourceElement || null, props.variables || null)
+  if (res) trace.value = res
+}
+
+function scheduleTrace() {
+  if (traceTimer) clearTimeout(traceTimer)
+  traceTimer = setTimeout(runTrace, 150)
+}
+
+watch(trace, (t) => {
+  const last = t?.types?.[t.types.length - 1]
+  emit('resolve', last?.element || '')
+})
+
+// On mount rather than debounced, so the destination is known before anything can
+// act on it; later edits arrive through the child panel and are debounced like the
+// builder's own.
+onMounted(runTrace)
+watch(steps, scheduleTrace, { deep: true })
+watch(() => [props.destination, props.sourceElement, props.variables], () => scheduleTrace(), { deep: true })
 
 // Handed to the child panel through the spec's `context` (see `GmPathEditPanel`).
 const pathBinding = {

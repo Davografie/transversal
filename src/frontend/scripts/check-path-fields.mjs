@@ -154,6 +154,19 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   ok('…with the two explanations alternating on "offered"',
     /<p v-if="durationOffered" class="ee-help">/.test(form) && /<p v-else class="ee-help">/.test(form), true)
 
+  // …and "offered" must be knowable without opening the path's child panel. It turns on
+  // the element the path lands on, and reading that only from the builder inside the
+  // panel made an unknown read as "not applicable": a stored timer showed the *leftover*
+  // explanation and save dropped it (`duration: durationOffered ? … : null`).
+  const pathField = read(find('components/gm/PathField.vue'))
+  ok('a path reports its destination without opening the child panel',
+    /const \{ traceSpec \} = useTargetCatalog\(\)/.test(pathField)
+      && /^onMounted\(runTrace\)$/m.test(pathField), true)
+  ok('…traced from the same steps the row summarises',
+    /^\s*const res = await traceSpec\(steps\.value, props\.destination, props\.sourceElement \|\| null, props\.variables \|\| null\)$/m.test(pathField), true)
+  ok('…and re-traced when the path changes',
+    /^watch\(steps, scheduleTrace, \{ deep: true \}\)$/m.test(pathField), true)
+
   const panel = read(find('components/gm/GmSfxEditPanel.vue'))
   ok('the SFX panel calls the rule duration what the Active rail calls it',
     /<label>Duration<\/label>/.test(panel), true)

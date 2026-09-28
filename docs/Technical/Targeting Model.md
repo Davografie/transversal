@@ -133,7 +133,7 @@ The index comes **first** in the rating reference because a traitsetting id cont
 
 An action declares the destinations it accepts as a **set** (`EffectActionMeta.path_element`, served as `pathElements`): the whole family accepts both, and `reroll_die` accepts only `die`, because rerolling a *result* needs a result and a rating die has none. The trace refuses a spec reaching neither, naming each type that would have worked ("not die/one or rating_die/one").
 
-A duration is offered only where it means something (`duration_elements`): the editor reads the element the path resolved to and shows the timer builder only for a rating die. A timer on a pool die would be a field that lies — the pool it changed no longer exists.
+A duration is offered only where it means something (`duration_elements`): the editor reads the element the path resolved to and shows the timer builder only for a rating die. A timer on a pool die would be a field that lies — the pool it changed no longer exists. **The path reports that element itself** (`PathField` traces its own steps), rather than only from the builder inside the child edit panel: a locus that is merely *unknown* must not read as *inapplicable*, or a stored timer shows as left over and is dropped on save.
 
 `aggregate` is how a *specific* die is chosen from either home: `bottom field=rating` is the lowest die of a rating, `top field=rating` the highest, and `random` samples. That is why `Reroll Highest` is expressed as `reroll_die` over `aggregate top field=rating`, and why the two must not be confused with `min`/`max`, which give the *value* rather than the die.
 
