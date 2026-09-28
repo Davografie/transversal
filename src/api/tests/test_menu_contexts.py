@@ -40,7 +40,10 @@ def test_unknown_menu_context_is_empty():
 
 def test_trigger_variables_for_contests():
     assert "effect_die" in _names(trigger_variables("on_contest_win"))
-    assert trigger_variables("on_roll") == []
+    # The margin is declared on every trigger that names a roll *outcome* — the
+    # relative reading ("beat it by 5") sits beside the absolute tier.
+    assert "margin" in _names(trigger_variables("on_contest_win"))
+    assert _names(trigger_variables("on_roll")) == ["margin"]
 
 
 def test_trigger_variables_for_state_events():
@@ -58,12 +61,14 @@ def test_on_character_create_exposes_created_entity():
 
 def test_on_set_exposes_total_and_effect_die():
     vs = trigger_variables("on_set")
-    assert {v.name: v.type for v in vs} == {"effect_die": "die", "total": "number"}
+    assert {v.name: v.type for v in vs} == {
+        "effect_die": "die", "total": "number", "margin": "number"}
 
 
 def test_on_result_exposes_total_and_effect_die():
     vs = trigger_variables("on_result")
-    assert {v.name: v.type for v in vs} == {"effect_die": "die", "total": "number"}
+    assert {v.name: v.type for v in vs} == {
+        "effect_die": "die", "total": "number", "margin": "number"}
 
 
 def test_beat_and_scene_triggers_are_declared():
@@ -140,7 +145,9 @@ def test_state_fire_sites_populate_declared_variables(monkeypatch):
         "on_push": {"pushed": True},
         "on_taken_out": {"taken_out": True, "contest_entity_opponent": "x"},
         "on_prevent_taken_out": {"prevented": True, "effect_die": "d6"},
-        "on_set": {"effect_die": "d6", "total": 11},
+        # The caller of `fire_state_sfx` owns this context, and the real one
+        # (`resolve_pool`) now passes the margin it computed from the difficulty.
+        "on_set": {"effect_die": "d6", "total": 11, "margin": 3},
     }
 
     from types import SimpleNamespace

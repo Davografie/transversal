@@ -251,6 +251,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
     opposition_roll = None
     opposition_rolls: list[DieRoll] = []
     opposition_total: Optional[int] = None
+    margin: Optional[int] = None
     challenge_result = None
 
     if request.opposition:
@@ -260,6 +261,10 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
             opposition_rolls = opp_rolls
             if opp_rolls:
                 opposition_roll = max(opp_rolls, key=lambda r: r.result)
+                # A simplified side is compared by its highest (the contest layer
+                # stores that in ``total``), so this *is* the margin — even though
+                # ``opposition_total`` stays unset here, as it always has.
+                margin = highest - opposition_roll.result
 
         elif request.opposition.type == "challenge" and request.opposition.challenge_die:
             opp_die = _roll_die(DieSpec(die=request.opposition.challenge_die, source_kind="challenge", label="challenge"))
@@ -268,6 +273,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
 
             # The player's highest must beat the challenge roll's result
             diff = highest - opp_die.result
+            margin = diff
 
             if diff <= 0:
                 success = False
@@ -292,6 +298,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
 
         elif request.opposition.type == "static_difficulty" and request.opposition.static_difficulty is not None:
             opposition_total = request.opposition.static_difficulty
+            margin = highest - opposition_total
 
     return SimplifiedResult(
         kind=request.kind,
@@ -305,6 +312,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
         opposition_total=opposition_total,
         challenge_result=challenge_result,
         hitches_count=hitches_count,
+        margin=margin,
     )
 
 
@@ -360,6 +368,7 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
     # Opposition
     opposition_rolls: list[DieRoll] = []
     opposition_total: Optional[int] = None
+    margin: Optional[int] = None
     challenge_result = None
 
     if request.opposition:
@@ -387,6 +396,12 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
         elif request.opposition.type == "static_difficulty" and request.opposition.static_difficulty is not None:
             opposition_total = request.opposition.static_difficulty
 
+        # One rule for all three kinds: the margin is this total against whatever
+        # the opposition turned out to be (a GMC's two highest, a challenge die, a
+        # set difficulty). No opposition → nothing to beat → no margin.
+        if opposition_total is not None:
+            margin = total - opposition_total
+
     return PoolResult(
         kind=request.kind,
         rolls=all_rolls,
@@ -404,6 +419,7 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
         opposition_total=opposition_total,
         challenge_result=challenge_result,
         hitches_count=hitches_count,
+        margin=margin,
     )
 
 

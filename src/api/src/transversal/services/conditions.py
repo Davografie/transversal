@@ -101,6 +101,20 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         wanted = (condition.target or "").strip()
         return bool(wanted) and (context or {}).get("arrival_kind") == wanted
 
+    if condition.type == ConditionType.MARGIN:
+        # The signed distance this roll beat its opposition by — the relative
+        # reading the books use for *heroic* / *extraordinary* success, sitting
+        # beside the absolute ``ROLL_TIER`` rather than replacing it. No
+        # opposition on the roll means no margin, and the gate does not pass.
+        margin = (context or {}).get("margin")
+        if margin is None or not condition.value:
+            return False
+        try:
+            threshold = int(condition.value)
+        except (TypeError, ValueError):
+            return False
+        return _compare(int(margin), condition.operator or ">=", threshold)
+
     if condition.type == ConditionType.ROLL_TIER:
         from transversal.domain import OutcomeTier
 
@@ -505,6 +519,8 @@ def condition_context_keys(condition: Condition) -> frozenset[str]:
         return frozenset({"contest_winner"})
     if ctype in (ConditionType.ROLL_TIER, ConditionType.TEST_OUTCOME):
         return frozenset({"tier"})
+    if ctype == ConditionType.MARGIN:
+        return frozenset({"margin"})
     if ctype == ConditionType.PHASE:
         return frozenset({"phase"})
     if ctype == ConditionType.HIGH_STAKES:
@@ -583,6 +599,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
                      group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.ARRIVAL_KIND.name, "Arrival kind", needs_target=True, target_placeholder="arrival", target_options=("transversal", "hierarchy", "move", "effect"), requires_context_any_of=("arrival_kind",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<"), requires_context_any_of=("tier",), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.MARGIN.name, "Margin", value_kind="number", operators=("<", "<=", "==", "!=", ">=", ">"), requires_context_any_of=("margin",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail"), requires_context_any_of=("tier",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), requires_source_elements=("traitsetting",), group=GROUP_RULE),
     ConditionTypeDef(ConditionType.TARGET_PATH.name, "Targeting path", uses_spec=True, group=GROUP_RULE),

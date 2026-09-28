@@ -372,6 +372,18 @@ def fire_session_end() -> None:
     fire_global_state_sfx("on_session_end")
 
 
+def _signed_margin(margin: int | None, contest_winner: str) -> int | None:
+    """The winner's margin, read from the side this event is for.
+
+    ``contest_winner`` is ``"player"`` for the side this context belongs to, so
+    the loser's copy is negated. Signing it here means every rule can say
+    ``{margin} >= 5`` and mean "I am ahead by five".
+    """
+    if margin is None:
+        return None
+    return margin if contest_winner == "player" else -margin
+
+
 def fire_contest_outcome_sfx(
     winner_id: str,
     loser_id: str,
@@ -380,6 +392,7 @@ def fire_contest_outcome_sfx(
     high_stakes: bool = False,
     taken_out: bool = False,
     own_effect_dice: dict[str, str | None] | None = None,
+    margin: int | None = None,
 ) -> None:
     """Fire on_contest_win / on_contest_loss for a resolved manual contest.
 
@@ -393,6 +406,11 @@ def fire_contest_outcome_sfx(
     each side's context carries it twice: as ``{own_effect_die}`` and, read from
     the other side, as ``{opponent_effect_die}``. A side that has no committed
     effect die resolves to ``None``, the same as ``contest_projection_opponent``.
+
+    ``margin`` is the **winner's** margin (positive), and each side is given it
+    signed from its own point of view — the winner reads it positive, the loser
+    negative — so ``{margin} >= 5`` means "I won by five" on either side's rule and
+    never "somebody won by five".
     """
     from transversal.main import _get_engine, _get_repo
     from transversal.services.effects_engine import GameEvent
@@ -428,6 +446,7 @@ def fire_contest_outcome_sfx(
                 "effect_die": effect_die,
                 "own_effect_die": own_effect_dice.get(entity_id),
                 "opponent_effect_die": own_effect_dice.get(opponent_id),
+                "margin": _signed_margin(margin, contest_winner),
                 "high_stakes": high_stakes,
                 "taken_out": taken_out,
             },

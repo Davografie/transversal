@@ -286,14 +286,18 @@ async def resolve_pool(location_id: str, entity_id: str):
     effect_die = effect.get("die") if effect else None
     difficulty = store.get_difficulty(location_id)
     tier = None
+    margin = None
     if difficulty is not None:
         tier = "success" if total > difficulty else "fail"
+        # Signed, and only this caller can say it: the difficulty is not on the dice.
+        margin = total - difficulty
 
     from transversal.main import _get_repo
     entity = _get_repo().get_entity(entity_id)
     universe = entity.current_universe if entity else ""
 
-    roll_context = {"effect_die": effect_die, "total": total, "tier": tier, "rolls": dice}
+    roll_context = {"effect_die": effect_die, "total": total, "tier": tier,
+                    "margin": margin, "rolls": dice}
     # Whether the contest in play is high-stakes, so a roll-timed effect can gate
     # on it (B97). Read from the tracker: the resolve call carries no stakes.
     from transversal.services.contest_tracker import get_contest_tracker
@@ -306,7 +310,8 @@ async def resolve_pool(location_id: str, entity_id: str):
     fire_armed(entity_id, "on_result", universe, roll_context)
 
     from transversal.services.state_events import fire_state_sfx
-    fire_state_sfx(entity_id, universe, "on_set", {"effect_die": effect_die, "total": total})
+    fire_state_sfx(entity_id, universe, "on_set",
+                   {"effect_die": effect_die, "total": total, "margin": margin})
 
     # This is the *test* path — a contest commits through the tracker's own
     # `/set`. Record which one it was while the flow is known: a challenge made
@@ -316,7 +321,8 @@ async def resolve_pool(location_id: str, entity_id: str):
     get_contest_tracker().mark_kind(location_id, entity_id, RollKind.TEST)
 
     from transversal.services.roll_orchestrator import fire_result_sfx
-    fire_result_sfx(entity_id, universe, dice, effect_die=effect_die, total=total)
+    fire_result_sfx(entity_id, universe, dice, effect_die=effect_die, total=total,
+                    margin=margin)
 
     # A test is a Blue Book entry too ([[B177]]): the roller's own dice on the
     # left, the difficulty it was rolled against on the right. Recorded here —

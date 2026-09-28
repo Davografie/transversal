@@ -99,6 +99,13 @@ class SimplifiedResult(BaseModel):
     opposition_total: Optional[int] = None
     challenge_result: Optional[ChallengeResult] = None
     hitches_count: int = 0
+    #: How far this roll beat its opposition by, **signed from the roller's point
+    #: of view** — positive is ahead, negative is behind, ``None`` when there was
+    #: nothing to beat. It lives *beside* :attr:`tier` rather than replacing it:
+    #: the tier is absolute (a face on the dice) and the margin is relative (the
+    #: books' *heroic* / *extraordinary* success is "beat it by 5"), and the
+    #: published SFX use both readings.
+    margin: Optional[int] = None
 
 class PoolResult(BaseModel):
     pipeline: str = "pool"
@@ -118,6 +125,8 @@ class PoolResult(BaseModel):
     opposition_total: Optional[int] = None
     challenge_result: Optional[ChallengeResult] = None
     hitches_count: int = 0
+    #: See :attr:`SimplifiedResult.margin` — signed, from the roller's point of view.
+    margin: Optional[int] = None
 
 RollResult = SimplifiedResult | PoolResult
 

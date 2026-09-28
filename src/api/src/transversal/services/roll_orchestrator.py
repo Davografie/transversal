@@ -169,6 +169,10 @@ def fire_roll_sfx(
     tier = getattr(roll_result, "tier", None)
     if tier is not None:
         roll_context["tier"] = getattr(tier, "value", tier)
+    # The margin lands here too, so the outcome triggers matched off this event
+    # (`on_success` / `on_failure`) can gate on *how far* the roll got, not only
+    # on the tier.
+    roll_context["margin"] = getattr(roll_result, "margin", None)
     event = GameEvent(
         type="on_roll",
         entity_id=entity_id,
@@ -194,6 +198,7 @@ def fire_result_sfx(
     rolls: list[dict],
     effect_die: str | None = None,
     total: int | None = None,
+    margin: int | None = None,
 ) -> list:
     """Fire automatic ``on_result`` SFX with the finalized roll state in context.
 
@@ -215,6 +220,7 @@ def fire_result_sfx(
         context={
             "effect_die": effect_die,
             "total": total,
+            "margin": margin,
             "rolls": rolls,
         },
     )

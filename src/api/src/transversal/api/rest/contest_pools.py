@@ -41,6 +41,23 @@ class PreventTakenOutRequest(BaseModel):
     effect_die: Optional[str] = None
 
 
+def _winner_margin(result: ContestOutcome) -> Optional[int]:
+    """How far the winning side beat the losing side's committed total by.
+
+    Read off the outcome's own sides rather than the caller's ids: ``challenger``
+    and ``defendant`` are the *seats*, so which of them won is ``result.winner``'s
+    business. ``None`` when either side never committed (a give-in before rolling),
+    because a margin against a total nobody set is not a number worth inventing.
+    """
+    challenger = result.challenger.total if result.challenger else None
+    defendant = result.defendant.total if result.defendant else None
+    if challenger is None or defendant is None:
+        return None
+    if result.winner == ContestWinner.PLAYER:
+        return challenger - defendant
+    return defendant - challenger
+
+
 def _committed_effect_die(committed: Optional[CommittedResult]) -> Optional[str]:
     """One side's **own** committed effect die, or None if it never committed.
 
@@ -200,6 +217,8 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
                 challenger_id: _committed_effect_die(result.challenger),
                 defendant_id: _committed_effect_die(result.defendant),
             },
+            # The winner's margin; `fire_contest_outcome_sfx` signs it per side.
+            margin=_winner_margin(result),
         )
         # One entry per participant's book, each from its own side ([[B177]]).
         contest_history.record_contest_outcome(location_id, challenger, defendant, result)

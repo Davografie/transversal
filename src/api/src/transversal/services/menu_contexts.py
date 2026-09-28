@@ -152,15 +152,25 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     # once). No `on_` prefix: `derive_placement` reads `on_*` as event-driven
     # and everything else as the menu, which is exactly right here.
     TriggerDef("menu", "Post-roll menu (player picks)", group="manual"),
-    TriggerDef("on_roll", "On Roll", group="dicepool"),
+    TriggerDef("on_roll", "On Roll", (
+        Variable("margin", "number"),
+    ), group="dicepool"),
     TriggerDef("on_result", "On Result", (
         Variable("effect_die", "die"),
         Variable("total", "number"),
+        Variable("margin", "number"),
     ), group="dicepool"),
     TriggerDef("on_complication", "On Complication (hitch)", group="dicepool"),
     TriggerDef("on_botch", "On Botch", group="dicepool"),
-    TriggerDef("on_success", "On Success", group="dicepool"),
-    TriggerDef("on_failure", "On Failure", group="dicepool"),
+    # Success and failure name a *degree* as often as an outcome — the books'
+    # "on a heroic success" is "beat it by 5" — so the margin is declared here
+    # beside them, not only on the set/result pair.
+    TriggerDef("on_success", "On Success", (
+        Variable("margin", "number"),
+    ), group="dicepool"),
+    TriggerDef("on_failure", "On Failure", (
+        Variable("margin", "number"),
+    ), group="dicepool"),
     # ``effect_die`` is the **effective complication die** — the winner's, as it
     # lands on the loser — and it is the same value for both sides, which is why
     # a rule could never say *"use your opponent's effect die"*. ``own_effect_die``
@@ -173,6 +183,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("effect_die", "die"),
         Variable("own_effect_die", "die"),
         Variable("opponent_effect_die", "die"),
+        Variable("margin", "number"),
         Variable("high_stakes", "boolean"),
         Variable("taken_out", "boolean"),
     ), group="dicepool"),
@@ -182,6 +193,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("effect_die", "die"),
         Variable("own_effect_die", "die"),
         Variable("opponent_effect_die", "die"),
+        Variable("margin", "number"),
         Variable("high_stakes", "boolean"),
         Variable("taken_out", "boolean"),
     ), group="dicepool"),
@@ -256,6 +268,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     TriggerDef("on_set", "On Set", (
         Variable("effect_die", "die"),
         Variable("total", "number"),
+        Variable("margin", "number"),
     ), group="dicepool"),
     TriggerDef("on_beat", "On Beat Advance", group="auto"),
     TriggerDef("on_scene", "On Scene Advance", group="auto"),
