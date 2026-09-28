@@ -6,7 +6,7 @@ without a live ArangoDB.
 
 from types import SimpleNamespace
 
-from transversal.domain import Condition, ConditionType, EntityType, Timer
+from transversal.domain import Condition, ConditionType, Entity, EntityType, Timer
 from transversal.services.sfx_owner import (
     backfill_trait_default_sfx,
     ensure_give_in_sfx,
@@ -2065,3 +2065,72 @@ def test_the_reach_index_ages_out_on_the_record_ttl(monkeypatch):
     clock["t"] += sfo._SFX_CACHE_TTL + 1
     assert sfo.granted_sfx_by_owner(repo) == {"owner-2": ("sfx-reach",)}
     assert calls["n"] == 2, "the TTL must force a rebuild"
+
+
+# ── The sheet's granted surfaces: one read, every owner kind ──────
+
+def test_granted_sfx_ids_for_is_one_lookup_and_nothing_more():
+    """The per-row read behind every granted surface. All four owner kinds go through
+    it, so they cannot drift; it is a dict hit, not a path walk."""
+    from transversal.services.sfx_owner import granted_sfx_ids_for, invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = _reach_world(_reach_rule("granted"))
+    assert granted_sfx_ids_for(repo, "ts-1") == ["sfx-reach"]
+    assert granted_sfx_ids_for(repo, "someone-else") == []
+    assert granted_sfx_ids_for(repo, "") == []
+
+
+def test_every_granted_owner_kind_exposes_the_field():
+    """A granted rule attaches nothing, so a surface that only renders `sfxIds` can
+    never show it. All four owner kinds a granted declaration can select need the
+    read on their GraphQL type, or the rule is available and invisible."""
+    from transversal.api.graphql.type_defs.entities import Entity as GqlEntity
+    from transversal.api.graphql.type_defs.entities import Projection as GqlProjection
+    from transversal.api.graphql.type_defs.traits import TraitSetSetting as GqlTraitSetSetting
+    from transversal.api.graphql.type_defs.traits import TraitSetting as GqlTraitSetting
+
+    for gql_type in (GqlEntity, GqlProjection, GqlTraitSetting, GqlTraitSetSetting):
+        names = {f.python_name for f in gql_type.__strawberry_definition__.fields}
+        assert "granted_sfx_ids" in names, f"{gql_type.__name__} has no grantedSfxIds"
+
+
+def test_the_sheet_can_read_what_an_entity_is_granted():
+    """End to end over the real schema, because that is what the sheet's query does.
+
+    `sfx-reveal-entity` is granted to a hidden GMC, and this is the only field that
+    can tell a sheet so — `sfxIds` is attachment-only and `availableSfxIds` answers
+    yes/no about a card that is already listed.
+    """
+    import asyncio
+
+    from transversal.api.graphql.schema import schema
+    from transversal.domain import ReachDeclaration, ReachFlavour
+    from transversal.services.target_spec import LiteralStep, TargetSpec
+
+    rule = SimpleNamespace(
+        id="sfx-entity-grant", trigger="manual", source_kind="entity", conditions=[],
+        reach=[ReachDeclaration(
+            spec=TargetSpec(steps=[LiteralStep(element="entity", value="e1")]),
+            flavour=ReachFlavour("granted"),
+        )],
+    )
+    # `_reach_world` is what points `get_all_sfxs` at the rule — the double returns
+    # `[]` by default, so a hand-rolled repo silently yields no reach at all.
+    repo = _reach_world(rule)
+    # …and a real domain Entity, because the `entity` query converts through
+    # `_entity_to_gql` and a stub cannot carry that.
+    repo.entity = Entity(id="e1", type=EntityType.GMC, name="Lin",
+                         current_universe="three_realms", current_location="loc-1")
+
+    from transversal.services.entity_manager import EntityManager
+
+    em = EntityManager(repository=repo)
+    result = asyncio.run(schema.execute(
+        '{ entity(id: "e1") { id grantedSfxIds sfxIds } }',
+        context_value={"entity_manager": em},
+    ))
+    assert result.errors is None, result.errors
+    entity = result.data["entity"]
+    assert entity["grantedSfxIds"] == ["sfx-entity-grant"]
+    assert entity["sfxIds"] == [], "granted is never folded into what is attached"

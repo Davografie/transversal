@@ -275,11 +275,11 @@ class TraitSetting:
         merging the two would materialise reach onto the instance the first time
         anything saved a trait.
         """
-        from transversal.services.sfx_owner import granted_sfx_by_owner
+        from transversal.services.sfx_owner import granted_sfx_ids_for
 
         repo = info.context["entity_manager"].repo
         return [strawberry.ID(sfx_id)
-                for sfx_id in granted_sfx_by_owner(repo).get(str(self.id), ())]
+                for sfx_id in granted_sfx_ids_for(repo, str(self.id))]
 
     @strawberry.field
     def ego(self, info: strawberry.Info) -> bool:
@@ -561,3 +561,17 @@ class TraitSetSetting:
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     limit: Optional[int] = None
+
+    @strawberry.field
+    def granted_sfx_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
+        """Rules this set-as-a-unit simply **has**, from a granted reach declaration.
+
+        The fourth owner kind a granted declaration can select, and it had no surface
+        either — the sheet renders the set's ``sfxIds``, which is what is *attached*.
+        Kept separate from it for the same reason as the entity and trait fields: that
+        list is written back wholesale, so merging would materialise a live grant.
+        """
+        from transversal.services.sfx_owner import granted_sfx_ids_for
+
+        repo = info.context["entity_manager"].repo
+        return [strawberry.ID(sfx_id) for sfx_id in granted_sfx_ids_for(repo, str(self.id))]

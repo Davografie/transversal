@@ -911,6 +911,19 @@ def granted_sfx_by_owner(repo) -> dict[str, tuple[str, ...]]:
     return _GRANTED_BY_OWNER_CACHE
 
 
+def granted_sfx_ids_for(repo, owner_id: str) -> list[str]:
+    """The rules **granted** to one owner id — the per-row read behind the sheet's surfaces.
+
+    One definition for every owner kind a granted declaration can select (an entity, a
+    projection, a trait instance, a trait-set setting), so the four reads cannot drift:
+    they are all this lookup. A dict hit per row, never a path walk — the index is built
+    once per cache fill.
+    """
+    if not owner_id:
+        return []
+    return list(granted_sfx_by_owner(repo).get(str(owner_id), ()))
+
+
 def _load_sfx(repo, sfx_id: str):
     """An SFX record, cache-first (see the cache notes above).
 

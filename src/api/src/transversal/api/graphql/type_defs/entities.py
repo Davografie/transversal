@@ -34,6 +34,19 @@ class Projection:
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
 
     @strawberry.field
+    def granted_sfx_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
+        """Rules this body simply **has**, from a granted reach declaration.
+
+        A projection is one of the four owner kinds a granted declaration can select
+        (see ``Entity.grantedSfxIds``), so it needs the same read — otherwise a rule
+        granted to the body is available and invisible.
+        """
+        from transversal.services.sfx_owner import granted_sfx_ids_for
+
+        repo = info.context["entity_manager"].repo
+        return [strawberry.ID(sfx_id) for sfx_id in granted_sfx_ids_for(repo, str(self.id))]
+
+    @strawberry.field
     def sheet_image(self, info: strawberry.Info) -> Optional[str]:
         """This body's sheet role image (with entity-level fallback)."""
         em = info.context["entity_manager"]
@@ -95,6 +108,27 @@ class Entity:
     support_eligible: bool = False
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+
+    @strawberry.field
+    def granted_sfx_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
+        """Rules this entity simply **has** without carrying them ([[Dynamic SFX Reach]]).
+
+        A **granted** reach declaration that yields this entity as an owner makes the
+        rule available from it — resolved against the live world at read time, with
+        nothing written onto the entity. The counterpart of ``TraitSetting.grantedSfxIds``,
+        and here for the same surface reason: without it a rule granted to an entity is
+        usable and **invisible**, since the sheet renders only what is attached
+        (``sfxIds``) while ``availableSfxIds`` answers yes/no about a card already listed.
+
+        Deliberately separate from ``sfxIds``: that list is what is *attached*, and the
+        entity editor writes it back wholesale, so merging would materialise reach onto
+        the entity the first time anything saved one.
+        """
+        from transversal.services.sfx_owner import granted_sfx_ids_for
+
+        repo = info.context["entity_manager"].repo
+        return [strawberry.ID(sfx_id) for sfx_id in granted_sfx_ids_for(repo, str(self.id))]
+
     _background_image: strawberry.Private[Optional[str]] = None
     _sheet_portrait: strawberry.Private[Optional[str]] = None
     zones: list[Zone] = strawberry.field(default_factory=list)

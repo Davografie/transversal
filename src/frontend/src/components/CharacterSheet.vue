@@ -2670,11 +2670,17 @@ const QUERY = `
       sheetPortrait
       sheetPortraitTransparent
       sfxIds
+      # What this entity *has* without carrying it ([[Dynamic SFX Reach]]): a granted
+      # reach declaration yields it as an owner, and nothing is attached, so sfxIds
+      # alone can never show such a rule. Requested here so the plumbing is ready;
+      # how the sheet draws it is the sheet's call. (No backticks in here: this is a
+      # JS template literal, and one would end the query.)
+      grantedSfxIds
       projections {
-        id originUniverse universe name sheetImage sheetImageTransparent currentLocation transversalType sfxIds
+        id originUniverse universe name sheetImage sheetImageTransparent currentLocation transversalType sfxIds grantedSfxIds
       }
       traitSetSettings {
-        id traitsetId sfxIds
+        id traitsetId sfxIds grantedSfxIds
       }
       traitSettings {
         ...TraitNode
