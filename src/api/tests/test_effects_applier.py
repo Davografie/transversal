@@ -3147,32 +3147,43 @@ def test_reroll_highest_is_retired_in_favour_of_a_path():
 
 
 # ── Learning (fog of war, B121) ──────────────
+#
+# `known_to` is an **audience**: A holding B means *B knows A*. So "A learns about
+# B" is written on **B**, naming A. These three read that way round; the author
+# settled the direction on 2026-09-27 (before that both the write and the read
+# were the other way, matching a reading of the field as "what this entity knows").
 
 def test_learn_unions_into_known_to_without_clobbering():
-    """A GM assuming a hidden occupant must not wipe what it already knew, so the
+    """A GM assuming a hidden occupant must not wipe who already knew them, so the
     action unions rather than writes."""
     from transversal.domain import EntityType
     actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
-    actor.known_to = ["char-old"]
-    other = _entity(id="char-2", name="Bystander")
-    repo = FakeRepo(entities=[other])
+    hidden = _entity(id="char-2", name="Bystander")
+    hidden.known_to = ["char-old"]
+    repo = FakeRepo(entities=[hidden])
     result = apply_effects(actor, [_effect("entity", "learn", "char-2")], repo)
-    assert actor.known_to == ["char-old", "char-2"]
-    assert "learns char-2" in result.applied[0].summary
+
+    assert hidden.known_to == ["char-old", "gmc-1"], "the audience gains the learner"
+    assert actor.known_to == [], "…and the learner keeps no list of its own"
+    assert "learns Bystander" in result.applied[0].summary
 
 
 def test_learning_someone_already_known_changes_nothing():
     actor = _entity(id="gmc-1", current_location="loc-1")
-    actor.known_to = ["char-2"]
-    repo = FakeRepo(entities=[_entity(id="char-2")])
+    hidden = _entity(id="char-2", name="Bystander")
+    hidden.known_to = ["gmc-1"]
+    repo = FakeRepo(entities=[hidden])
     result = apply_effects(actor, [_effect("entity", "learn", "char-2")], repo)
-    assert actor.known_to == ["char-2"]
-    assert "already knows char-2" in result.applied[0].summary
+
+    assert hidden.known_to == ["gmc-1"]
+    assert "already knows" in result.applied[0].summary
 
 
 def test_an_entity_is_not_made_known_to_itself():
     actor = _entity(id="gmc-1", current_location="loc-1")
-    result = apply_effects(actor, [_effect("entity", "learn", "gmc-1")], FakeRepo())
+    itself = _entity(id="gmc-1", current_location="loc-1")
+    result = apply_effects(actor, [_effect("entity", "learn", "gmc-1")], FakeRepo(entities=[itself]))
+    assert itself.known_to == []
     assert actor.known_to == []
     assert "already knows itself" in result.applied[0].summary
 
@@ -3667,11 +3678,12 @@ def test_a_subject_choose_with_no_channel_behaves_as_before():
 
 # ── Learning names both halves (who learns, and what they learn about) ──
 
-def test_learn_declares_who_learns_apart_from_what_they_learn_about():
-    """Two questions, so two declarations: the `learner` reference says *who*
-    learns, the target says *which entity* they learn about. Before the
-    reference the action asked only the second, and the learner was whichever
-    entity the effect happened to land on."""
+def test_learn_writes_who_knows_it_onto_the_entity_learned_about():
+    """`known_to` is an **audience**: A having B in its list means *B knows A*.
+
+    So "B learns about A" is written on **A**, naming B — not on B naming A. The
+    author settled the direction on 2026-09-27; before that the write was the other
+    way round, matching a reading of the field as "what this entity knows"."""
     actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
     knower = _entity(id="char-2", name="Bystander")
     hidden = _entity(id="gmc-9", name="Hidden One")
@@ -3681,90 +3693,114 @@ def test_learn_declares_who_learns_apart_from_what_they_learn_about():
     eff.refs = {"learner": TargetRef(value="char-2")}
     result = apply_effects(actor, [eff], repo)
 
-    assert knower.known_to == ["gmc-9"]
-    assert actor.known_to == []                      # the subject does not learn
-    assert "Bystander learns gmc-9" in result.applied[0].summary
+    assert hidden.known_to == ["char-2"], "the one learned about carries the audience"
+    assert knower.known_to == [], "…and the learner's own list is untouched"
+    assert "Bystander learns Hidden One" in result.applied[0].summary
 
 
 def test_a_learner_path_resolves_for_a_direct_entry_point():
     """`apply_effects` — the entry a life path or a roll-table entry uses — does
-    not run `resolve_refs`, so the handler resolves the spec itself. A spec left
-    to it would otherwise be silently ignored, and the subject would learn
-    instead of the person the path named."""
+    not run `resolve_refs`, so the handler resolves the spec itself. A spec left to
+    it would otherwise be silently ignored, and the subject would learn instead of
+    the person the path named."""
     from transversal.services.target_spec import LiteralStep
 
     actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
     knower = _entity(id="char-2", name="Bystander")
-    repo = FakeRepo(entities=[knower, _entity(id="gmc-9", name="Hidden One")])
+    hidden = _entity(id="gmc-9", name="Hidden One")
+    repo = FakeRepo(entities=[knower, hidden])
 
     eff = _effect("entity", "learn", "gmc-9")
     eff.refs = {"learner": TargetRef(spec=TargetSpec(steps=[LiteralStep(element="entity", value="char-2")]))}
     apply_effects(actor, [eff], repo)
 
-    assert knower.known_to == ["gmc-9"]
-    assert actor.known_to == []
+    assert hidden.known_to == ["char-2"]
+    assert knower.known_to == []
 
 
-def test_a_learner_who_is_not_the_subject_is_tracked_for_persistence():
+def test_the_entity_learned_about_is_the_one_tracked_for_persistence():
     """`commit_effects` writes the primary entity plus `entities_to_update` and
-    nothing else, so a cross-entity learner that is not tracked would be mutated
-    in memory and silently never saved."""
+    nothing else. The write lands on the entity being learned about, so *that* is
+    what has to be tracked — an untracked write is mutated in memory and silently
+    never saved."""
     actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
     knower = _entity(id="char-2", name="Bystander")
-    repo = FakeRepo(entities=[knower, _entity(id="gmc-9", name="Hidden One")])
+    hidden = _entity(id="gmc-9", name="Hidden One")
+    repo = FakeRepo(entities=[knower, hidden])
 
     eff = _effect("entity", "learn", "gmc-9")
     eff.refs = {"learner": TargetRef(value="char-2")}
     result = apply_effects(actor, [eff], repo)
 
-    assert knower in result.entities_to_update
+    assert hidden in result.entities_to_update
 
 
 def test_learning_with_no_learner_declared_still_teaches_the_subject():
     """The reading this had before the reference existed, kept: an empty learner
     means the entity the effect lands on (`select self` is where a path starts)."""
     actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
-    repo = FakeRepo(entities=[_entity(id="gmc-9", name="Hidden One")])
+    hidden = _entity(id="gmc-9", name="Hidden One")
+    repo = FakeRepo(entities=[hidden])
     result = apply_effects(actor, [_effect("entity", "learn", "gmc-9")], repo)
-    assert actor.known_to == ["gmc-9"]
-    assert "learns gmc-9" in result.applied[0].summary
+
+    assert hidden.known_to == ["gmc-1"], "the subject is the default learner"
+    assert actor.known_to == []
+    assert "learns" in result.applied[0].summary
 
 
 def test_an_entity_is_never_made_known_to_itself_even_as_the_learner():
     actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
-    repo = FakeRepo(entities=[_entity(id="char-2", name="Knows Itself")])
+    itself = _entity(id="char-2", name="Knows Itself")
+    repo = FakeRepo(entities=[itself])
     eff = _effect("entity", "learn", "char-2")          # learns about itself
     eff.refs = {"learner": TargetRef(value="char-2")}
     result = apply_effects(actor, [eff], repo)
+
+    assert itself.known_to == []
     assert result.applied[0].summary.endswith("already knows itself")
 
 
 def test_a_learner_that_does_not_exist_is_reported_rather_than_silently_skipped():
     """Before the reference the learner was always the subject, so this could not
-    happen; now a path can name an entity that resolves to nothing."""
+    happen; now a path can name an entity that resolves to nothing — and writing it
+    would leave a dangling id in the list."""
     actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
-    repo = FakeRepo(entities=[_entity(id="gmc-9", name="Hidden One")])
+    hidden = _entity(id="gmc-9", name="Hidden One")
+    repo = FakeRepo(entities=[hidden])
     eff = _effect("entity", "learn", "gmc-9")
     eff.refs = {"learner": TargetRef(value="char-missing")}
     result = apply_effects(actor, [eff], repo)
-    assert actor.known_to == []
+
+    assert hidden.known_to == []
     assert "no entity char-missing" in result.applied[0].summary
 
 
-def test_every_learner_of_several_is_taught():
-    """A literal is one id, but the handler is given a list — the engine fans a
-    multi-value path out before dispatch, and the direct entry point can name
-    several. Both routes must teach each one."""
+def test_every_learner_of_several_is_added_to_the_audience():
     actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
     a = _entity(id="char-a", name="A")
     b = _entity(id="char-b", name="B")
-    repo = FakeRepo(entities=[a, b, _entity(id="gmc-9", name="Hidden One")])
+    hidden = _entity(id="gmc-9", name="Hidden One")
+    repo = FakeRepo(entities=[a, b, hidden])
+
+    for who in ("char-a", "char-b"):
+        eff = _effect("entity", "learn", "gmc-9")
+        eff.refs = {"learner": TargetRef(value=who)}
+        apply_effects(actor, [eff], repo)
+
+    assert hidden.known_to == ["char-a", "char-b"]
+
+
+def test_teaching_someone_who_already_knows_is_a_no_op():
+    """Monotonic: a rule firing twice must not duplicate the entry."""
+    actor = _entity(id="gmc-1", type=EntityType.GMC, current_location="loc-1")
+    knower = _entity(id="char-2", name="Bystander")
+    hidden = _entity(id="gmc-9", name="Hidden One")
+    hidden.known_to = ["char-2"]
+    repo = FakeRepo(entities=[knower, hidden])
 
     eff = _effect("entity", "learn", "gmc-9")
-    eff.refs = {"learner": TargetRef(value="char-a")}
-    apply_effects(actor, [eff], repo)
-    eff2 = _effect("entity", "learn", "gmc-9")
-    eff2.refs = {"learner": TargetRef(value="char-b")}
-    apply_effects(actor, [eff2], repo)
+    eff.refs = {"learner": TargetRef(value="char-2")}
+    result = apply_effects(actor, [eff], repo)
 
-    assert a.known_to == ["gmc-9"] and b.known_to == ["gmc-9"]
+    assert hidden.known_to == ["char-2"]
+    assert "already knows" in result.applied[0].summary

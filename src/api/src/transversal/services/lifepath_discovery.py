@@ -44,9 +44,14 @@ def check_discovery(
 
     # ── knows_entity ─────────────────────────────────────
     if discovery.knows_entity:
-        entity = repo.get_entity(entity_id)
-        if entity and set(discovery.knows_entity) & set(entity.known_to):
-            return True
+        # `known_to` is an **audience**: X's list names who knows X, not what X
+        # knows (the author, 2026-09-27). So "this character knows that one" is
+        # that one's list containing *this character* — the reverse lookup, and
+        # the direction the index on `known_to[*]` exists for.
+        for known_id in discovery.knows_entity:
+            known = repo.get_entity(known_id)
+            if known and entity_id in (getattr(known, "known_to", None) or []):
+                return True
 
     # ── possesses_trait ──────────────────────────────────
     if discovery.possesses_trait:

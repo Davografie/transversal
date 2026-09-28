@@ -106,10 +106,21 @@ class TestDiscoveryBlock:
         assert check_discovery("e1", discovery, repo) is False
 
     # 5. knows_entity matches → True
+    #
+    # `known_to` is an **audience**: "e1 knows npc-elder" means *npc-elder's* list
+    # names e1 — the reverse lookup (the author, 2026-09-27).
     def test_knows_entity_match(self, repo):
-        repo.add_entity(_entity("e1", known_to=["npc-elder"]))
+        repo.add_entity(_entity("e1"))
+        repo.add_entity(_entity("npc-elder", known_to=["e1"]))
         discovery = DiscoveryBlock(knows_entity=["npc-elder"])
         assert check_discovery("e1", discovery, repo) is True
+
+    def test_knows_entity_is_not_the_other_direction(self, repo):
+        """e1 holding npc-elder means *npc-elder knows e1*, not that e1 knows it."""
+        repo.add_entity(_entity("e1", known_to=["npc-elder"]))
+        repo.add_entity(_entity("npc-elder"))
+        discovery = DiscoveryBlock(knows_entity=["npc-elder"])
+        assert check_discovery("e1", discovery, repo) is False
 
     # 6. possesses_trait matches → True
     def test_possesses_trait_match(self, repo):

@@ -45,11 +45,15 @@ ACTIONS: list[EffectActionMeta] = [
         inverse=("entity", "remove_targeting_ban"),
     ),
     # ── Knowledge (fog of war) ─────────────────────────
-    # "Who is here?" as an effect: the subject's `known_to` gains the resolved
-    # targets. It **unions** and never replaces — the whole point of [[B121]],
-    # where a GM assuming a hidden occupant must not wipe what that occupant
-    # already knew. A path fans out, so "every occupant of my location" arrives
-    # one id at a time and the dedupe is the membership check.
+    # "Who knows this?" as an effect: the **learned-about** entity's `known_to`
+    # gains the learner. The list is an *audience* — who knows it — not a memory of
+    # what it knows (the author, 2026-09-27); writing it the other way round is the
+    # correction that made this action match the trait field.
+    #
+    # It **unions** and never replaces — the whole point of [[B121]], where a GM
+    # assuming a hidden occupant must not wipe who already knew them. A path fans
+    # out, so "everyone here" arrives one id at a time and the dedupe is the
+    # membership check.
     #
     # No inverse: forgetting is not the undo of learning. A rule that should
     # unlearn something has to say what it forgets.
@@ -57,8 +61,8 @@ ACTIONS: list[EffectActionMeta] = [
         action_id="learn_entities",
         label="Learn",
         description=(
-            "Someone learns about the resolved entity: its id joins their known_to "
-            "list, deduped, without disturbing what they already know"
+            "Someone learns about the resolved entity: they join its known_to "
+            "list, deduped, without disturbing who already knew it"
         ),
         category="benefit",
         effect_type="entity",

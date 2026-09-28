@@ -48,7 +48,7 @@ A LifePath has an optional `discovery` block. If absent, the path is always visi
 | Condition | Checks | Data accessed |
 |-----------|--------|---------------|
 | `at_location` | entity.current_location in [...] | `entities` doc, zero joins |
-| `knows_entity` | entity.known_to ∩ [...] non-empty | `entities` doc, zero joins |
+| `knows_entity` | entity_id ∈ that entity's `known_to` — the **reverse** lookup | `entities` doc, indexed on `known_to[*]` |
 | `possesses_trait` | traitsetting with matching trait_id exists | `traitsettings` edge, indexed on entity_id |
 | `has_trait_rating` | traitsetting matching trait_id AND dice ≥ threshold | `traitsettings` edge, indexed on entity_id |
 | `has_relationship` | relationship edge between entity pairs exists | `relationships` edge, indexed on _from |
@@ -106,7 +106,9 @@ life_paths/
 
   discovery:             # null or absent → always visible; any one condition met → discovered
     at_location: [str]           # must be at one of these location entity IDs
-    knows_entity: [str]          # one of these entity IDs must be in known_to
+    knows_entity: [str]          # this entity must know one of these — i.e. its id is
+                                 # in *that* entity's known_to, which is an audience
+                                 # list: X holding Y means Y knows X, not X knows Y
     possesses_trait: [str]       # must have a traitsetting for one of these trait IDs
     has_trait_rating: {str: DieType}  # trait_id → minimum die (e.g. "trait-cultivation": "d10")
     has_relationship: [str]      # must have a relationship edge to one of these entity IDs

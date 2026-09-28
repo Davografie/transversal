@@ -468,52 +468,68 @@ def _apply_clear_destination(entity, effect, repo, result):
 
 
 def _apply_learn(entity, effect, repo, result):
-    """The learner learns the effect's target ([[B121]]).
+    """Someone learns about the effect's target ([[B121]]).
+
+    **`known_to` is an audience, not a memory.** The author, 2026-09-27: *"If entity
+    A has entity B in its known_to, that means that entity B knows entity A, not
+    necessarily that entity A knows entity B."* So the id is written on the entity
+    being **learned about**, naming who now knows it — the same direction the trait
+    field has always had, and the same direction the persistent index on
+    ``known_to[*]`` is for. The earlier reading (the learner's own list, "what I
+    know") was the other way round and is corrected here.
 
     A **union**, never a replace: the id joins ``known_to`` only if it is not
     already there, so a rule that fires twice — or a second rule that teaches
     something adjacent — cannot wipe the list. That is the whole reason this is
-    an action rather than a field write: `known_to` is monotonic knowledge, and
-    the GM assuming a hidden occupant must not forget what that occupant already
-    knew.
+    an action rather than a field write: knowledge is monotonic, and the GM
+    assuming a hidden occupant must not forget who already knew them.
 
     **Two questions, so two declarations:** *who learns* is the ``learner``
     reference — a targeting path, so "everyone with him" is sayable — and *which
     entity they learn about* is the target. An empty learner means the entity the
-    effect lands on (the subject), which is the only reading this had before the
-    reference existed. A path fans out before it reaches here, so "every occupant
-    of my location" arrives as one call per entity and the membership check does
-    the dedupe. An entity is never made known to itself.
+    effect lands on (the subject). A path fans out before it reaches here, so
+    "every occupant of my location" arrives as one call per person and the
+    membership check does the dedupe. An entity is never made known to itself.
     """
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
         return
     _track_subject(result, entity, subject)
 
-    target = _resolve_target(subject, effect, result, repo)
-    if not target:
-        result.applied.append(AppliedEffect(effect, "no one named to learn"))
+    learned_id = _resolve_target(subject, effect, result, repo)
+    if not learned_id:
+        result.applied.append(AppliedEffect(effect, "no entity named to learn about"))
         return
+    learned = subject if learned_id == subject.id else (
+        repo.get_entity(learned_id) if repo is not None else None)
+    if learned is None:
+        result.applied.append(AppliedEffect(effect, f"no entity {learned_id} to learn about"))
+        return
+    # It is the *learned-about* entity that is written, so it is the one that has
+    # to be tracked: `commit_effects` persists the primary entity plus everything
+    # in `entities_to_update`, and nothing else. An untracked write here would be
+    # mutated in memory and silently never saved.
+    _track_subject(result, entity, learned)
+    learned_label = learned.name or learned.id
 
-    # The learner may be someone other than the subject, so each one is tracked
-    # for persistence — `commit_effects` writes the primary entity plus every
-    # entity in `entities_to_update`, and nothing else.
     for learner_id in _resolve_learners(entity, effect, repo, result, default=[subject.id]):
+        # The subject is already in hand and need not be in the repo — the default
+        # learner is usually the acting entity, which a test's fake repo may not hold.
         learner = subject if learner_id == subject.id else (
             repo.get_entity(learner_id) if repo is not None else None)
         if learner is None:
             result.applied.append(AppliedEffect(effect, f"no entity {learner_id} to learn it"))
             continue
-        _track_subject(result, entity, learner)
-        if learner.id == target:
+        learner_label = learner.name or learner.id
+        if learner_id == learned.id:
             result.applied.append(AppliedEffect(
-                effect, f"{learner.name or learner.id} already knows itself"))
+                effect, f"{learner_label} already knows itself"))
             continue
-        known = list(getattr(learner, "known_to", None) or [])
-        if target in known:
+        known = list(getattr(learned, "known_to", None) or [])
+        if learner_id in known:
             result.applied.append(AppliedEffect(
-                effect, f"{learner.name or learner.id} already knows {target}"))
+                effect, f"{learner_label} already knows {learned_label}"))
             continue
-        learner.known_to = [*known, target]
+        learned.known_to = [*known, learner_id]
         result.applied.append(AppliedEffect(
-            effect, f"{learner.name or learner.id} learns {target}"))
+            effect, f"{learner_label} learns {learned_label}"))
