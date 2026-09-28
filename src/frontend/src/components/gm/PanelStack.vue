@@ -9,38 +9,50 @@
     @click="onToggleClick"
   >🛠</button>
 
-  <div v-if="show" class="panel-viewport">
-    <Panel
-      :anchor="anchorRect"
-      :direction="direction"
-      :min-visible-depth="minVisibleDepth"
-      :body-scroll="props.rootPanel?.bodyScroll !== false"
-      :title="props.rootPanel?.title"
-      :id="props.rootPanel?.id"
-      :spec="props.rootPanel"
-      :window-id="'root'"
-      :collapsed="rootCollapsed"
-      closable
-      @close="show = false"
-      @toggle-collapse="rootCollapsed = !rootCollapsed"
-    >
-      <template v-if="props.rootPanel" #default>
-        <component :is="props.rootPanel.component" v-bind="props.rootPanel.props || {}" v-on="props.rootPanel.listeners || {}" />
-      </template>
-    </Panel>
-  </div>
+  <!-- One layer for every GM panel unit: the chain, and each floating window.
+       They are siblings in one stacking context and each unit's wrapper carries
+       its `z` rank, so a click can lift any of them above the rest — which is
+       what makes a detached window (parked exactly where its panel was) and the
+       chain it came from reorderable. The layer itself is a fixed rank, so the
+       units reorder among themselves *under* the 🛠 toggle and every modal. -->
+  <div v-if="show || windows.length" class="panel-viewport">
+    <div v-if="show" class="panel-unit" data-panel-unit="root" :style="{ zIndex: rootZ }">
+      <Panel
+        :anchor="anchorRect"
+        :direction="direction"
+        :min-visible-depth="minVisibleDepth"
+        :body-scroll="props.rootPanel?.bodyScroll !== false"
+        :title="props.rootPanel?.title"
+        :id="props.rootPanel?.id"
+        :spec="props.rootPanel"
+        :window-id="'root'"
+        :collapsed="rootCollapsed"
+        closable
+        @close="show = false"
+        @toggle-collapse="rootCollapsed = !rootCollapsed"
+      >
+        <template v-if="props.rootPanel" #default>
+          <component :is="props.rootPanel.component" v-bind="props.rootPanel.props || {}" v-on="props.rootPanel.listeners || {}" />
+        </template>
+      </Panel>
+    </div>
 
-  <!-- Floating windows are independent of the stack: switching the 🛠 off hides
-       the chain, not the windows. -->
-  <div v-if="windows.length" class="panel-viewport">
-    <PanelWindow
+    <!-- Floating windows are independent of the stack: switching the 🛠 off hides
+         the chain, not the windows. -->
+    <div
       v-for="w in windows"
       :key="w.id"
-      :win="w"
-      :dockable="isDockable(w)"
-      @close="closeWindow(w.id)"
-      @dock="dockWindow(w.id)"
-    />
+      class="panel-unit"
+      :data-panel-unit="w.id"
+      :style="{ zIndex: w.z }"
+    >
+      <PanelWindow
+        :win="w"
+        :dockable="isDockable(w)"
+        @close="closeWindow(w.id)"
+        @dock="dockWindow(w.id)"
+      />
+    </div>
   </div>
 </template>
 
@@ -58,7 +70,7 @@ const props = defineProps({
   rootPanel: { type: Object, default: null },
 })
 
-const { windows, close: closeWindow } = usePanelWindows()
+const { windows, close: closeWindow, raise, rootZ } = usePanelWindows()
 const { direction, resolveAnchor, deriveDirection, snapToEdge, setAnchor } = usePanelAnchor()
 
 const show = ref(false)
@@ -131,6 +143,22 @@ const toggleStyle = computed(() => ({
   left: (anchorCenter.value.x - TOGGLE_SIZE / 2) + 'px',
   top: (anchorCenter.value.y - TOGGLE_SIZE / 2) + 'px',
 }))
+
+// ── Raising a unit on click ───────────────────────────
+// Capture-phase on the window rather than a handler on each unit, because a panel
+// is full of controls that stop propagation (`@pointerdown.stop` on the badge and
+// on the collapsed chip's buttons) — any of them would otherwise be a dead spot
+// for "bring this panel forward". Capture runs before all of them. The nearest
+// `[data-panel-unit]` ancestor is the unit to raise, so a click on a *child* panel
+// raises the window (or chain) that child belongs to.
+//
+// (`[data-panel-window]` would be the wrong thing to read: it is on every
+// `.panel-node`, and a child panel currently inherits the default `root` id from
+// Panel.vue, so the innermost node is not a reliable unit.)
+function raiseOnPointerDown(e) {
+  const unit = e.target?.closest?.('[data-panel-unit]')
+  if (unit) raise(unit.dataset.panelUnit)
+}
 
 // ── Dragging the anchor ───────────────────────────────
 // Pointer-driven; the anchor follows and the panels re-derive, so the chain
@@ -346,6 +374,7 @@ function debouncedResize() {
 
 onMounted(() => {
   window.addEventListener('resize', debouncedResize)
+  window.addEventListener('pointerdown', raiseOnPointerDown, true)
   nextTick(() => logToggleAnchor('mount'))
 })
 // Log the toggle's rect when it reappears after the panels close.
@@ -354,6 +383,7 @@ watch(show, (v) => {
 })
 onUnmounted(() => {
   window.removeEventListener('resize', debouncedResize)
+  window.removeEventListener('pointerdown', raiseOnPointerDown, true)
 })
 </script>
 
@@ -376,6 +406,17 @@ onUnmounted(() => {
    otherwise create a containing block for fixed descendants). */
 .panel-viewport {
   position: fixed; inset: 0; z-index: 25;
+  pointer-events: none;
+}
+
+/* One panel unit — the chain, or a floating window — carrying its stacking rank.
+   Being a positioned box that spans the viewport, it keeps the panel coordinates
+   the same as before (each `.panel-node` is absolute against the nearest
+   positioned ancestor, which is now this wrapper rather than the layer), and
+   being a stacking context it also holds the *unit's* own popovers in rank: a
+   chip-input dropdown must not float above a unit that is in front of it. */
+.panel-unit {
+  position: absolute; inset: 0;
   pointer-events: none;
 }
 </style>

@@ -81,6 +81,12 @@ export function serializeWindows(windows, nameOf) {
  *
  * `id` is deliberately not restored: it is a per-session handle (`gm-win-N`) that
  * nothing outside the registry refers to, so the caller assigns fresh ones.
+ *
+ * The stacking ranks come back **renormalised into a dense 1..N run**, in rank
+ * order. `z` is a ranking (highest paints on top), and a record written before
+ * stacking existed carries the spawn index instead — whose first value is 0, which
+ * would tie with the chain and land that window *behind* it. Renormalising also
+ * keeps a rank from climbing without bound in storage.
  */
 export function deserializeWindows(records, lookup) {
   const out = []
@@ -106,5 +112,9 @@ export function deserializeWindows(records, lookup) {
       z: rec.z ?? 0,
     })
   }
+  // Ascending, so the array order *is* the stacking order (and `sort` is stable,
+  // so records sharing a rank keep the order they were written in).
+  out.sort((a, b) => a.z - b.z)
+  out.forEach((w, i) => { w.z = i + 1 })
   return out
 }

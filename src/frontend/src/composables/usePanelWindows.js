@@ -17,11 +17,25 @@ import {
 // one source of truth:
 //   { id, spec, dock, collapsed, x, y, direction, sourceParentKey, z }
 //
-// `spec` is the same shape used everywhere: `{ component, title, id, props, listeners, context, badge }`.
-// The windows are remembered per device — see *Persistence* below.
+// `z` is a **stacking rank**, not a pixel value: the unit holding the highest
+// rank paints on top (see *Stacking* below). The windows are remembered per
+// device — see *Persistence* below.
+
+// The stack root's unit id. The chain is not a window — its spec is a prop of
+// PanelStack — so it has no record to keep its rank in.
+const ROOT_ID = 'root'
 
 const windows = ref([])
 let seq = 0
+
+// The highest rank handed out so far. Ranks are handed out one at a time and
+// never reused, so "the top" is simply "the highest rank" and raising is a bump.
+// It is re-derived from the restored windows on load, or a window spawned after a
+// reload would be ranked underneath the ones that came back.
+let zSeq = 0
+
+// The chain's own rank, beside the counter for the same reason.
+const rootZ = ref(0)
 
 function normalizeSpec(spec) {
   // markRaw the component so Vue doesn't try to make the definition reactive
@@ -51,7 +65,11 @@ function loadStoredWindows() {
       return c ? markRaw(c) : null
     })
     // Fresh per-session handles: nothing outside the registry refers to them.
-    return restored.map((w) => ({ ...w, id: `gm-win-${++seq}` }))
+    restored.forEach((w) => { w.id = `gm-win-${++seq}` })
+    // `deserializeWindows` renormalises the restored ranks into a dense run, so
+    // the highest one is where the next rank starts.
+    zSeq = restored.reduce((max, w) => Math.max(max, w.z), 0)
+    return restored
   } catch {
     return []
   }
@@ -105,7 +123,9 @@ function spawn(spec, opts = {}) {
       // Dock-back looks up a live panel with that identity, so a parent that was
       // closed and re-opened accepts the window again.
       sourceParentKey: opts.sourceParentKey ?? null,
-      z: windows.value.length,
+      // A new window lands on top — it was just opened, and a detach parks it
+      // exactly where the panel it came from still is.
+      z: ++zSeq,
     },
   ]
   return id
@@ -146,6 +166,28 @@ function setDirection(id, direction) {
   if (w && w.direction !== direction) w.direction = direction
 }
 
+// ── Stacking (dynamic z-index) ────────────────────────
+// Clicking anywhere in a panel raises its whole **unit** — the chain, or one
+// floating window — above every other unit. Unit, not panel: a unit is one
+// chain whose panels are laid out side by side, so the thing you clicked to
+// bring forward is the chain. Two units genuinely do overlap — a detached
+// window parks exactly where its panel was — which is what this orders.
+//
+// The rank is applied to the unit's wrapper in PanelStack, and that wrapper is a
+// stacking context, so ranks are local to the panel layer: the units reorder
+// freely among themselves while the layer stays under the 🛠 toggle (26) and
+// under every modal, however often you click.
+function raise(id) {
+  if (!id) return
+  if (id === ROOT_ID) {
+    // Already the top — don't burn a rank (and a storage write) on a no-op.
+    if (rootZ.value < zSeq) rootZ.value = ++zSeq
+    return
+  }
+  const w = windows.value.find((x) => x.id === id)
+  if (w && w.z < zSeq) w.z = ++zSeq
+}
+
 export function usePanelWindows() {
-  return { windows, spawn, close, replace, toggleCollapse, setDock, move, setDirection }
+  return { windows, spawn, close, replace, toggleCollapse, setDock, move, setDirection, raise, rootZ }
 }
