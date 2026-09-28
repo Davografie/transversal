@@ -1,4 +1,4 @@
-import { onScopeDispose, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { PALETTE_VARS, paletteFor, paletteVars, unknownKnobs } from '@/assets/universePalette.js'
 
 /**
@@ -26,6 +26,23 @@ import { PALETTE_VARS, paletteFor, paletteVars, unknownKnobs } from '@/assets/un
 
 /** One fetch per session: the palette map changes only when a GM authors one. */
 let cache = null
+
+/**
+ * A palette being **edited**, painted as if it were the one in play.
+ *
+ * The GM palette panel needs the chrome to move while a GM picks colours, or they
+ * are authoring blind. It is module-level because that editor lives deep in the GM
+ * panel stack, with no prop path from the app shell — but the *composable* stays
+ * the only writer of these `:root` properties (it watches this and re-applies), so
+ * the single-writer rule that makes clearing correct still holds.
+ *
+ * `setPalettePreview(null)` ends it: on save, on revert, and on unmount.
+ */
+const preview = ref(null)
+
+export function setPalettePreview(universeKey, palette) {
+  preview.value = universeKey && palette ? { universeKey, palette } : null
+}
 
 export function useUniverseTheme({ graphql, universe, isLight, diag = () => {} }) {
   const palettes = ref(cache || {})
@@ -55,7 +72,13 @@ export function useUniverseTheme({ graphql, universe, isLight, diag = () => {} }
   }
 
   function apply() {
-    const palette = paletteFor(palettes.value, universe.value)
+    // A preview paints the *edited* palette, whatever universe is in play: the
+    // author is looking at what they are making, not at where they are standing.
+    const key = preview.value?.universeKey || universe.value
+    const map = preview.value
+      ? { ...palettes.value, [preview.value.universeKey]: preview.value.palette }
+      : palettes.value
+    const palette = paletteFor(map, key)
     const root = document.documentElement
 
     clear()
@@ -70,20 +93,20 @@ export function useUniverseTheme({ graphql, universe, isLight, diag = () => {} }
     // Inspection hook: which palette is painting, and which half of it. Nothing
     // styles off this attribute — it is here so a browser can answer "why does
     // this look like that" without reading the entity.
-    root.dataset.universe = universe.value || ''
+    root.dataset.universe = key || ''
 
     const unknown = unknownKnobs(palette)
     if (unknown.length) {
-      console.warn(`[universe-theme] ${universe.value}: unknown palette knob(s) ignored:`, unknown.join(', '))
+      console.warn(`[universe-theme] ${key}: unknown palette knob(s) ignored:`, unknown.join(', '))
     }
   }
 
-  watch([universe, isLight, palettes], apply, { immediate: true })
+  watch([universe, isLight, palettes, preview], apply, { immediate: true })
   onScopeDispose(() => { clear(); delete document.documentElement.dataset.universe })
 
   // The palette is fetched here rather than left to the host: a host that
   // forgot would render the app's default look with no error anywhere.
   load().catch((e) => console.warn('[universe-theme] palette fetch failed:', e?.message || e))
 
-  return { palettes, load, apply }
+  return { palettes, load, apply, isPreviewing: computed(() => !!preview.value) }
 }

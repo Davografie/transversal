@@ -21,14 +21,17 @@
  */
 import { readFileSync } from 'node:fs'
 import {
-  KNOWN_KNOBS, PALETTE_VARS, paletteFor, paletteVars, unknownKnobs,
+  KNOWN_KNOBS, PALETTE_VARS, cleanPalette, paletteContrastWarnings, paletteFor, paletteVars, unknownKnobs,
 } from '../src/assets/universePalette.js'
 
 let pass = 0, fail = 0
+/** `bad` is the list of problems; empty means pass. */
 const ok = (name, bad) => {
   bad.length ? fail++ : pass++
   console.log(`  ${bad.length ? 'FAIL' : 'PASS'}  ${name}${bad.length ? `\n         ${bad.join('\n         ')}` : ''}`)
 }
+/** For a plain boolean: the problem is the value that failed the claim. */
+const yes = (name, cond, got = '') => ok(name, cond ? [] : [String(got)])
 
 // ── the tokens the stylesheet actually declares ─────────────────────────────
 const css = readFileSync('src/assets/styles.css', 'utf8')
@@ -122,6 +125,53 @@ console.log('\nuniverse palettes — the mapping table\n')
   if (paletteFor(null, 'earth') !== null) bad.push('no map did not return null')
   if (paletteFor(map, '') !== null) bad.push('empty key did not return null')
   ok('paletteFor returns the palette or null, never undefined', bad)
+}
+
+// ── 7. the authoring half ───────────────────────────────────────────────────
+// The editor must write through the *same* vocabulary the runtime reads, and it
+// must not become a second source of truth for the mapping. Its two quiet
+// failure modes: saving empty strings as if they were values (an omitted knob is
+// how the runtime falls back), and naming a CSS property itself.
+console.log('\nthe authoring panel\n')
+{
+  const clean = cleanPalette({
+    font: { ui: 'Georgia, serif', display: '' },
+    radius: '0px',
+    dark: { accent: '#ff0000', border: '', nope: '#123456' },
+    light: {},
+    extra: 'dropped',
+  })
+  const want = { font: { ui: 'Georgia, serif' }, radius: '0px', dark: { accent: '#ff0000' } }
+  yes('blank fields are dropped, not saved as empty strings',
+    JSON.stringify(clean) === JSON.stringify(want), JSON.stringify(clean))
+  yes('an empty palette is exactly {}',
+    JSON.stringify(cleanPalette({ dark: { accent: '' } })) === '{}',
+    JSON.stringify(cleanPalette({ dark: { accent: '' } })))
+  yes('unknown keys cannot be saved',
+    !('extra' in cleanPalette({ extra: 1, radius: '4px' })))
+
+  const warned = paletteContrastWarnings({ dark: { bgPanelSolid: '#f4f1e2', textDim: '#f0efe8', text: '#1c2620' } }, 'dark')
+  yes('an unreadable pair is flagged, on the text knob',
+    warned.length === 1 && warned[0].knob === 'textDim', JSON.stringify(warned))
+  yes('…with the ratio and the surface it was measured against',
+    warned[0] && warned[0].ratio < 3 && warned[0].against === 'bgPanelSolid')
+  yes('a readable pair is not flagged',
+    paletteContrastWarnings({ dark: { bgPanelSolid: '#f4f1e2', text: '#1c2620' } }, 'dark').length === 0)
+  yes('translucent values are not guessed at',
+    paletteContrastWarnings({ dark: { bgPanelSolid: 'rgba(240,240,240,0.9)', textDim: '#ffffff' } }, 'dark').length === 0)
+
+  const panel = readFileSync('src/components/gm/GmPalettePanel.vue', 'utf8')
+  yes('the panel saves through the shared cleaning + vocabulary',
+    /cleanPalette/.test(panel) && /KNOWN_KNOBS/.test(panel))
+  yes('…previews through the single writer of the :root properties',
+    /setPalettePreview/.test(panel))
+  yes('…and names no CSS custom property itself (one mapping table)',
+    !/--[a-z-]+:/.test(panel.replace(/<!--[\s\S]*?-->/g, '')))
+  yes('…it never silently no-ops a save',
+    /still loading — nothing was saved/.test(panel))
+
+  const gm = readFileSync('src/components/GmPanel.vue', 'utf8')
+  yes('the GM panel opens it as a Prep tool', /openPalettePanel/.test(gm) && /GmPalettePanel/.test(gm))
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

@@ -1078,12 +1078,48 @@ wiring, in a browser: the palette reaches `:root` for the universe in play, a
 live theme flip repaints the other half without a reload, and a different
 palette clears what the last one set).
 
-**Adding a palette** — in order: write the JSON on the universe entity (the GM
-panel's palette field, an MCP `update_entity`, or a new example in
-`db/universe_palettes.py` plus the backfill); keep both `dark` and `light`
-readable (the palette test is the floor); check it in the app in both themes.
-Nothing in the frontend changes, and a universe without one keeps the app's
-default look.
+**Authoring it: the GM palette panel** (Prep → *Universe Style*, landed 2026-09-26).
+A dedicated panel rather than a block inside the universe entity's editor, for the
+same reason traitsets and SFX have their own: a universe's look is a cross-cutting
+concern, and a GM looks for it among the authoring tools rather than by hunting for
+the universe entity first. It opens on the universe **in play** and can switch
+universe from the top.
+
+- **The vocabulary is the mapper's, not a second list.** The panel is built from
+  `KNOWN_KNOBS` and saves through `cleanPalette`, so it cannot author a knob the
+  runtime would ignore, and it names **no CSS property itself** — `paletteVars`
+  stays the only knob → token table (`check-universe-theme.mjs` fails on a `--`
+  property in the panel's template).
+- **Blank means unset, not empty.** An omitted knob is how the runtime keeps the
+  app's own value, so `cleanPalette` drops blank fields and empty groups, and a
+  palette with nothing left is saved as `""` — the resolver's "clear it". Writing
+  `""` into a knob would paint an invalid value instead of falling back.
+- **Live preview, through the one writer.** `setPalettePreview` hands the
+  in-progress palette to `useUniverseTheme`, which still owns the `:root`
+  properties; the panel touches no style. A preview paints the **edited** palette
+  whatever universe is in play (an author is looking at what they are making), and
+  it is released on save, on revert, and when the panel unmounts — an unsaved
+  experiment must not keep painting once the panel is gone.
+- **It never silently no-ops a save.** The editable rows do not exist until the
+  universe list has loaded, precisely so a keystroke cannot land in a form that is
+  about to be replaced by `adopt()` — which is what happened before the load state
+  existed: a Save that did nothing, then the typed value wiped.
+- **The visibility floor is shown where it applies.** A palette can be unreadable,
+  and the person authoring it is the one who can fix it, so any of `text` /
+  `textDim` / `accent` below 3:1 against its own theme's `bgPanelSolid` is flagged
+  **in that row**, with the ratio and the surface it was measured against
+  (`paletteContrastWarnings`; the same floor the API test applies to the shipped
+  examples, and the same reason translucent values are skipped rather than guessed
+  at).
+- **Buttons:** Save (loading state, implies disabled), Revert (re-read from the
+  entity), Clear (back to the app's default look — `backfill_universe_palettes.py`
+  can put a shipped example back, since it fills a *blank* palette).
+
+**Adding a palette without the panel** — write the JSON on the universe entity (an
+MCP `update_entity`, or a new example in `db/universe_palettes.py` plus the
+backfill); keep both `dark` and `light` readable; check it in the app in both
+themes. Nothing in the frontend changes, and a universe without one keeps the
+app's default look.
 
 ## Razmerit
 
