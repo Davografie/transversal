@@ -1,16 +1,15 @@
 // Serializing floating GM windows to client storage, and back.
 //
-// No imports here on purpose: the rules are the part that can be wrong, so they
-// are plain functions the check script runs directly rather than a restatement
-// of them.
+// The rules are the part that can be wrong, so they are plain functions the check
+// script runs directly rather than a restatement of them. They use Vue's public
+// `isRef`/`isReactive`/`toRaw` predicates and nothing else.
 //
 // What a window is *not* allowed to carry into storage is the interesting part.
 // A spec's `component` is a Vue object, `listeners` are closures and `context`
-// holds refs and instances — none survives `JSON.stringify` in a usable form. A
-// `props` value that is a ref would serialize to `{}` or `{"_value": …}` and come
-// back subtly wrong, and a class instance would come back as a plain object. So
-// props are **checked** and a window whose props cannot be stored is simply not
-// persisted, rather than persisted into something that would restore broken.
+// holds refs and instances — none survives `JSON.stringify` in a usable form. So
+// props are **checked**, and a window whose props cannot be stored is not
+// persisted at all rather than persisted into something that would restore wrong.
+import { isRef, isReactive, isReadonly, toRaw } from 'vue'
 
 export const WINDOW_STORAGE_KEY = 'gmPanelWindows'
 
@@ -20,8 +19,14 @@ function isStorableValue(v) {
   if (t === 'string' || t === 'number' || t === 'boolean' || t === 'undefined') return true
   if (t === 'function' || t === 'symbol' || t === 'bigint') return false
   if (t !== 'object') return false
-  // A ref or a reactive proxy serializes to its guts, not its value.
-  if (v.__v_isRef || v.__v_isReactive || v.__v_isReadonly) return false
+  // A **ref is a live handle**: it serializes to its internals, and a restored
+  // plain value would not be the ref the panel expects. Refuse it.
+  if (isRef(v)) return false
+  // A reactive/readonly proxy is only *decorated* — snapshot the raw object, which
+  // is what `JSON.stringify` writes anyway. Refusing these made a panel
+  // unrestorable for no good reason: the SFX editor is opened with a record taken
+  // straight out of the shared store, so its props are proxies by construction.
+  if (isReactive(v) || isReadonly(v)) return isStorableValue(toRaw(v))
   // A DOM node, a component definition, a class instance — only plain objects and
   // arrays are safe. (Arrays are checked before the prototype test.)
   if (Array.isArray(v)) return v.every(isStorableValue)

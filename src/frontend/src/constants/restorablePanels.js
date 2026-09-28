@@ -56,14 +56,23 @@ export const RESTORABLE_PANELS = {
   ImageViewer,
 }
 
-// Matched by **component identity**, not by `component.__name`: the name is a
-// build artefact, while identity is what `panel.open` actually passed.
+// Matched by **component identity**, falling back to the compiled `__name`.
+//
+// Identity alone is not enough, and this is not theoretical: the Vite dev server
+// serves a module it has invalidated (HMR) under `<path>?t=<stamp>`, so the same
+// SFC can exist as two different objects — the one the opener passed and the one
+// this registry holds. Identity then silently misses and *nothing* persists,
+// which is exactly how the first cut of this failed at `:3000`
+// (`usePanelWindows.js?t=…` in the page's resource list). `__name` is the SFC
+// filename and survives that. `panelIdentityKey` already relies on it for
+// dock-back, so it is a dependency this surface already has, not a new one.
 export function restorableNameOf(component) {
   if (!component) return null
   for (const [name, c] of Object.entries(RESTORABLE_PANELS)) {
     if (c === component) return name
   }
-  return null
+  const byName = component.__name || component.name
+  return byName && byName in RESTORABLE_PANELS ? byName : null
 }
 
 export function restorableComponent(name) {

@@ -25,6 +25,7 @@
  * run here directly rather than being restated.
  */
 import { readFileSync } from 'node:fs'
+import { reactive, readonly, ref } from 'vue'
 
 let pass = 0, fail = 0
 const ok = (name, got, want) => {
@@ -40,9 +41,26 @@ const { serializeWindow, serializeWindows, deserializeWindows, propsAreStorable 
 const REGISTRY = read('../src/constants/restorablePanels.js')
 const WINDOWS = read('../src/composables/usePanelWindows.js')
 
+// The shipped `restorableNameOf`, lifted out of the registry module — which
+// imports ten `.vue` files and so cannot be imported here. Its body is one small
+// function over `RESTORABLE_PANELS`, which is passed in.
+function between(src, from, to) {
+  const i = src.indexOf(from)
+  if (i < 0) throw new Error(`not found: ${from}`)
+  const j = src.indexOf(to, i)
+  if (j < 0) throw new Error(`not found: ${to}`)
+  return src.slice(i, j)
+}
+
 const COMP = { name: 'GmEntityEditPanel' }
 const OTHER = { name: 'GmTraitEditPanel' }
 const nameOf = (c) => (c === COMP ? 'GmEntityEditPanel' : c === OTHER ? 'GmTraitEditPanel' : null)
+
+const REGISTRY_OBJECT = { GmEntityEditPanel: COMP, GmTraitEditPanel: OTHER }
+const restorableNameOf = new Function('RESTORABLE_PANELS',
+  `${between(REGISTRY, 'export function restorableNameOf(', '\nexport function restorableComponent')
+    .replace('export function', 'function')}
+   return restorableNameOf`)(REGISTRY_OBJECT)
 const win = (spec, layout = {}) => ({
   id: 'gm-win-1',
   spec,
@@ -94,16 +112,57 @@ console.log('\nprops that would restore wrong are refused\n')
 
 ok('plain data is fine', propsAreStorable({ a: 1, b: 'x', c: null, d: [1, { e: true }] }), true)
 ok('a function is not', propsAreStorable({ onChange: () => {} }), false)
-ok('a ref is not — it would serialize to its guts',
-  propsAreStorable({ draft: { __v_isRef: true, value: 1 } }), false)
-ok('a reactive proxy is not', propsAreStorable({ draft: { __v_isReactive: true } }), false)
-ok('a class instance is not — it would come back a plain object',
+ok('a real ref is not — it would serialize to its guts',
+  propsAreStorable({ draft: ref(1) }), false)
+ok('a nested ref is not either', propsAreStorable({ a: { b: ref('x') } }), false)
+ok('a real class instance is not — it would come back a plain object',
   propsAreStorable({ editor: new (class { constructor() { this.x = 1 } })() }), false)
 ok('a nested function is not', propsAreStorable({ nested: { deep: { fn: () => {} } } }), false)
 ok('an array of functions is not', propsAreStorable({ list: [() => {}] }), false)
 ok('and such a window is refused rather than stored broken',
   serializeWindow(win({ component: COMP, props: { onSave: () => {} } }), nameOf), null)
 ok('a window with no props is storable', !!serializeWindow(win({ component: COMP }), nameOf), true)
+
+// A reactive proxy is only *decorated*, so it is snapshotted rather than refused.
+// This is not a nicety: the SFX editor is opened with a record straight out of the
+// shared store, so its props are proxies by construction — refusing them is what
+// made it unrestorable.
+{
+  const sfx = reactive({ id: 'sfx-reveal-entity', name: 'Reveal Entity', trigger: 'manual' })
+  ok('a reactive prop is storable', propsAreStorable({ sfx }), true)
+  const rec = serializeWindow(win({ component: COMP, props: { sfx, owner: { ownerType: 'LOCATION', ownerId: 'loc-1' } } }), nameOf)
+  ok('and it is snapshotted as plain data, not internals',
+    JSON.parse(JSON.stringify(rec)).props, { sfx: { id: 'sfx-reveal-entity', name: 'Reveal Entity', trigger: 'manual' }, owner: { ownerType: 'LOCATION', ownerId: 'loc-1' } })
+  ok('a readonly proxy is snapshotted too', propsAreStorable({ x: readonly(reactive({ n: 1 })) }), true)
+  // …but a ref *inside* a reactive object is still a live handle.
+  ok('a ref nested in a reactive object is still refused',
+    propsAreStorable({ obj: reactive({ inner: ref(1) }) }), false)
+}
+
+// ── 2b. finding a panel's registry name ─────────────────────────────────
+// This is the bug the first cut shipped, and it is why detached panels vanished
+// on refresh: the Vite dev server serves a module it has invalidated (HMR) under
+// `<path>?t=<stamp>`, so the same SFC can exist as two objects — the one the
+// opener passed and the one the registry holds. Identity alone missed it, the
+// window serialized to nothing, and the store was then rewritten empty.
+console.log('\nwhich registry name a component gets\n')
+
+ok('an identity match resolves', restorableNameOf(COMP), 'GmEntityEditPanel')
+const lookalike = { __name: 'GmEntityEditPanel' }   // a second module instance
+ok('a second instance of the same SFC resolves, by __name',
+  restorableNameOf(lookalike), 'GmEntityEditPanel')
+ok('a component the registry does not hold is not named',
+  restorableNameOf({ __name: 'GmUnknown' }), null)
+ok('no component is no name', restorableNameOf(null), null)
+ok('a component with neither identity nor name is not named',
+  restorableNameOf({}), null)
+
+const preFixNameOf = (reg, c) => {
+  for (const [n, x] of Object.entries(reg)) if (x === c) return n
+  return null
+}
+ok('pre-fix: identity alone missed the second instance', preFixNameOf(REGISTRY_OBJECT, lookalike), null)
+ok('shipped: the same component resolves', restorableNameOf(lookalike), 'GmEntityEditPanel')
 
 // ── 3. restoring ────────────────────────────────────────────────────────
 console.log('\nrestoring a stored window\n')
