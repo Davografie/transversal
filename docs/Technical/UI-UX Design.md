@@ -1117,6 +1117,53 @@ the entity, the surface is separate.)
   entity), Clear (back to the app's default look — `backfill_universe_palettes.py`
   can put a shipped example back, since it fills a *blank* palette).
 
+**Element CSS: a universe styles shapes, not only colours.** A palette's
+`styles` map names an **element** and carries a block of CSS **declarations** for
+it — no selector — so a universe can make its rows bamboo slats (the Three Realms
+example: a vertical gradient of the roll's shading) without a release and without
+the author knowing a class name. The vocabulary is fixed (`STYLE_TARGETS` in
+`assets/universePalette.js`): the character sheet panel, trait rows, choice-table
+rows — adding another is one line there, plus the mirror in `db/universe_palettes.py`.
+
+- **The runtime supplies the selector, scoped to the universe**:
+  `html[data-universe="three_realms"] .trait-row { … }`. That prefix is not only
+  the scope — it is the **precedence**: a component's own scoped rule is 0-2-0
+  (`.trait-row[data-v-…]`) and the prefixed one is 0-2-1, so an ordinary
+  declaration restyles a row without `!important`. A *state* variant (a trait in
+  the pool, the row a roll found, `:hover`) still wins on purpose, so state reads
+  through the styling; `!important` is the escape hatch inside a declaration when
+  a universe disagrees.
+- **One block per element, both themes.** There is no per-theme split — an element
+  is declared once — so a theme-aware treatment uses `light-dark(a, b)` (the app
+  sets `color-scheme` per theme, so it resolves by itself) or the palette's own
+  tokens, which already flip. The bamboo example does the former.
+- **The composable owns the stylesheet**, exactly as it owns the `:root`
+  properties: one `<style id="universe-style">`, written with `textContent` (so
+  authored CSS is never parsed as markup), cleared with the vars so a universe
+  change cannot leave rules behind, and removed on teardown. Declarations cannot
+  escape their rule, which is why the vocabulary is declarations rather than raw
+  CSS.
+- **It previews like everything else** — `styles` rides in the palette object, so
+  the panel's live preview (below) shows the slats while they are typed.
+
+**The colour picker is a library** (`vanilla-colorful`, MIT, no dependencies,
+~15KB): a hue/saturation area with an **alpha** slider, rendered as one
+`<hex-alpha-color-picker>` per open swatch, in the row it is editing rather than a
+popover that could clip inside the panel. It speaks hex with an alpha byte while
+the palette stores what CSS wants — opaque as `#rrggbb`, translucent as
+`rgba(…)`, which is what the surfaces already use — so `toPickerColor` /
+`fromPickerColor` convert at the boundary and a stored colour survives
+picker → palette → picker. Vue's compiler is told it is a custom element
+(`vite.config.js`), or it would be resolved as a component and render nothing.
+
+> [!note] Adding a frontend dependency is an image change
+> `src/frontend/Dockerfile` runs `npm install` at *image* build time, and the dev
+> containers mount only `src/`, `public/` and `vite.config.js`. So a new
+> dependency needs `docker build -t transversal2-frontend:latest src/frontend`
+> **and** a running dev server that can resolve it — either recreated, or given
+> the package with `docker exec tv2_frontend npm install <pkg>` (which is what
+> landed here, so `:3000` never stopped serving).
+
 **Adding a palette without the panel** — write the JSON on the universe entity (an
 MCP `update_entity`, or a new example in `db/universe_palettes.py` plus the
 backfill); keep both `dark` and `light` readable; check it in the app in both

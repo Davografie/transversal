@@ -1,5 +1,5 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
-import { PALETTE_VARS, paletteFor, paletteVars, unknownKnobs } from '@/assets/universePalette.js'
+import { PALETTE_VARS, paletteFor, paletteVars, universeStyleCss, unknownKnobs } from '@/assets/universePalette.js'
 
 /**
  * Per-universe styling: the universe in play repaints the app's tokens.
@@ -69,7 +69,15 @@ export function useUniverseTheme({ graphql, universe, isLight, diag = () => {} }
 
   function clear() {
     for (const name of PALETTE_VARS) document.documentElement.style.removeProperty(name)
+    universeStyle.textContent = ''
   }
+
+  // One stylesheet, owned here like the `:root` properties are: `palette.styles`
+  // becomes scoped rules (see `universeStyleCss`). Written via `textContent`, so
+  // authored CSS is never parsed as markup.
+  const universeStyle = document.createElement('style')
+  universeStyle.id = 'universe-style'
+  document.head.appendChild(universeStyle)
 
   function apply() {
     // A preview paints the *edited* palette, whatever universe is in play: the
@@ -95,6 +103,8 @@ export function useUniverseTheme({ graphql, universe, isLight, diag = () => {} }
     // this look like that" without reading the entity.
     root.dataset.universe = key || ''
 
+    universeStyle.textContent = universeStyleCss(key, palette)
+
     const unknown = unknownKnobs(palette)
     if (unknown.length) {
       console.warn(`[universe-theme] ${key}: unknown palette knob(s) ignored:`, unknown.join(', '))
@@ -102,7 +112,7 @@ export function useUniverseTheme({ graphql, universe, isLight, diag = () => {} }
   }
 
   watch([universe, isLight, palettes, preview], apply, { immediate: true })
-  onScopeDispose(() => { clear(); delete document.documentElement.dataset.universe })
+  onScopeDispose(() => { clear(); universeStyle.remove(); delete document.documentElement.dataset.universe })
 
   // The palette is fetched here rather than left to the host: a host that
   // forgot would render the app's default look with no error anywhere.

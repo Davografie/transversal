@@ -172,6 +172,67 @@ test('unsetting a knob drops it, and Clear empties the palette', async ({ page }
   await expect(page.locator('.gp-root .gp-value').first()).toHaveValue('')
 })
 
+test('element CSS previews as a rule scoped to the universe', async ({ page }) => {
+  const extras = {}
+  await stubSave(page, extras)
+  await openPanel(page)
+
+  const css = 'background: linear-gradient(180deg, #ff0000, #0000ff); border-radius: 2px;'
+  await page.locator('.gp-style', { hasText: 'Trait rows' }).locator('.gp-css').fill(css)
+
+  // Preview, not save: the injected stylesheet is live while Save is still pending.
+  const rule = await page.evaluate(() => {
+    const sheet = document.getElementById('universe-style')?.sheet
+    const r = sheet && [...sheet.cssRules].find((x) => x.selectorText?.includes('.trait-row'))
+    return r ? { selector: r.selectorText, background: r.style.getPropertyValue('background-image'), radius: r.style.borderRadius } : null
+  })
+  // Scoped to the universe — which is also what outranks the component's own
+  // scoped rules, so an ordinary declaration is enough.
+  expect(rule?.selector).toBe('html[data-universe="earth"] .trait-row')
+  expect(rule?.background).toContain('linear-gradient')
+  expect(rule?.radius).toBe('2px')
+  await expect(page.locator('.gp-actions button', { hasText: 'Save' })).toBeEnabled()
+
+  // …and it lands in the saved palette, still as declarations.
+  await page.locator('.gp-actions button', { hasText: 'Save' }).click()
+  await expect.poll(() => extras.saved?.palette).toBeTruthy()
+  expect(JSON.parse(extras.saved.palette).styles.traitRow).toBe(css)
+
+  // Clearing the box takes the rule away with it.
+  await page.locator('.gp-style', { hasText: 'Trait rows' }).locator('.gp-css').fill('')
+  await expect.poll(async () => page.evaluate(() => {
+    const sheet = document.getElementById('universe-style')?.sheet
+    return sheet ? [...sheet.cssRules].some((x) => x.selectorText?.includes('.trait-row')) : false
+  })).toBe(false)
+})
+
+test('the picker is the library, and its colour becomes a palette value', async ({ page }) => {
+  const extras = {}
+  await stubSave(page, extras)
+  await openPanel(page)
+
+  // It renders as a real component (a shadow root), not as an unknown element.
+  await page.locator('.gp-row', { hasText: 'accent' }).first().locator('.gp-swatch').click()
+  const picker = page.locator('hex-alpha-color-picker')
+  await expect(picker).toBeVisible()
+  expect(await picker.evaluate((el) => !!el.shadowRoot)).toBe(true)
+
+  const accentValue = page.locator('.gp-row', { hasText: 'accent' }).first().locator('.gp-value')
+  // Opaque: the palette stores hex. Translucent: it stores rgba, which is what the
+  // surfaces already use — the picker's alpha byte is not lost.
+  await picker.evaluate((el) => el.dispatchEvent(new CustomEvent('color-changed', { detail: { value: '#00ff00' }, bubbles: true })))
+  await expect(accentValue).toHaveValue('#00ff00')
+  await picker.evaluate((el) => el.dispatchEvent(new CustomEvent('color-changed', { detail: { value: '#00ff0080' }, bubbles: true })))
+  await expect(accentValue).toHaveValue('rgba(0, 255, 0, 0.5)')
+  // …and the live preview followed it.
+  await expect.poll(() => cssVar(page, '--accent')).toBe('rgba(0, 255, 0, 0.5)')
+
+  // The picker closes on the same control; typing in the field stays authoritative.
+  await page.locator('.gp-row', { hasText: 'accent' }).first().locator('.gp-swatch').click()
+  await expect(picker).toHaveCount(0)
+  await expect(accentValue).toHaveValue('rgba(0, 255, 0, 0.5)')
+})
+
 test('an unreadable pair is flagged in the row it applies to', async ({ page }) => {
   const extras = {}
   await stubSave(page, extras)

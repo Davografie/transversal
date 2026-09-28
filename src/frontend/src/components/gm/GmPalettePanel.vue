@@ -30,13 +30,14 @@
         <div v-for="group in GROUPS" :key="group.title" class="gp-group">
           <div class="gp-group-title">{{ group.title }}</div>
           <div v-for="knob in group.knobs" :key="knob" class="gp-row" :class="{ 'is-warn': warningFor(theme, knob) }">
-            <input
+            <button
+              type="button"
               class="gp-swatch"
-              type="color"
-              :value="hexOf(theme, knob)"
+              :class="{ open: isPicking(theme, knob), empty: !valueOf(theme, knob) }"
+              :style="valueOf(theme, knob) ? { background: toPickerColor(valueOf(theme, knob)) } : null"
               :title="`Pick ${knob}`"
               :aria-label="`${group.title} ${knob}`"
-              @input="setKnob(theme, knob, $event.target.value)"
+              @click="togglePicker(theme, knob)"
             />
             <span class="gp-knob">{{ knob }}</span>
             <input
@@ -57,6 +58,15 @@
             >×</Button>
             <span v-if="warningFor(theme, knob)" class="gp-warn">
               {{ warningFor(theme, knob).ratio.toFixed(1) }}:1 on {{ warningFor(theme, knob).against }} — below the 3:1 floor
+            </span>
+            <!-- One picker instance, in the row it is editing: no popover to
+                 clip, and the value beside it stays visible while picking. -->
+            <span v-if="isPicking(theme, knob)" class="gp-picker">
+              <hex-alpha-color-picker
+                :color.prop="toPickerColor(valueOf(theme, knob)) || '#808080'"
+                @color-changed="(e) => setKnob(theme, knob, fromPickerColor(e.detail.value))"
+              />
+              <Button variant="neutral" size="sm" @click="togglePicker(theme, knob)">Done</Button>
             </span>
           </div>
         </div>
@@ -82,6 +92,32 @@
         </div>
       </div>
 
+      <div class="gp-section">
+        <div class="gp-section-head"><span class="gp-section-title">Element CSS</span></div>
+        <p class="gp-hint">
+          Declarations only — no selector. Each box is applied to that element in this
+          universe, in <strong>both</strong> themes: use
+          <code>light-dark(a, b)</code> or the palette's own tokens
+          (<code>var(--bg-panel-raised)</code>) where the themes should differ. The rule is
+          scoped to the universe and outranks the component's own styles, so an ordinary
+          declaration is enough.
+        </p>
+        <div v-for="(spec, target) in STYLE_TARGETS" :key="target" class="gp-style">
+          <div class="gp-style-head">
+            <span class="gp-style-label">{{ spec.label }}</span>
+            <span class="gp-selector">{{ spec.selector }}</span>
+          </div>
+          <textarea
+            class="gp-css"
+            rows="2"
+            spellcheck="false"
+            :placeholder="STYLE_PLACEHOLDERS[target] || ''"
+            :value="form.styles?.[target] || ''"
+            @input="setStyle(target, $event.target.value)"
+          />
+        </div>
+      </div>
+
       <div class="gp-actions">
         <Button variant="success" solid :loading="saving" :disabled="!dirty" @click="save">
           {{ saving ? 'Saving…' : 'Save' }}
@@ -100,7 +136,13 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import Button from '@/components/ui/Button.vue'
 import SearchDropdown from '@/components/ui/SearchDropdown.vue'
 import { useApi } from '@/composables/useApi.js'
-import { KNOWN_KNOBS, THEMES as PALETTE_THEMES, cleanPalette, paletteContrastWarnings } from '@/assets/universePalette.js'
+import {
+  KNOWN_KNOBS, STYLE_TARGETS, THEMES as PALETTE_THEMES,
+  cleanPalette, fromPickerColor, paletteContrastWarnings, toPickerColor,
+} from '@/assets/universePalette.js'
+// Registers `<hex-alpha-color-picker>` (MIT, no dependencies). Hex + alpha is the
+// dialect the palette stores: opaque as `#rrggbb`, translucent as `rgba(…)`.
+import 'vanilla-colorful/hex-alpha-color-picker.js'
 import { setPalettePreview } from '@/composables/useUniverseTheme.js'
 
 // The authoring half of per-universe styling ([[UI-UX Design#The universe
@@ -193,6 +235,26 @@ function setFont(slot, value) {
 function setRadius(value) {
   form.value = { ...form.value, radius: value }
   dirty.value = true
+}
+
+function setStyle(target, css) {
+  form.value = { ...form.value, styles: { ...(form.value.styles || {}), [target]: css } }
+  dirty.value = true
+}
+
+// One picker at a time, identified by the row it belongs to.
+const picking = ref(null)
+const isPicking = (theme, knob) => picking.value?.theme === theme && picking.value?.knob === knob
+function togglePicker(theme, knob) {
+  picking.value = isPicking(theme, knob) ? null : { theme, knob }
+}
+
+// A hint per element, drawn from what the element *is* — a blank box should still
+// teach the shape of the answer.
+const STYLE_PLACEHOLDERS = {
+  sheet: 'background: var(--bg-panel-solid);',
+  traitRow: 'background: linear-gradient(180deg, light-dark(#f7f4e4, #16241f), light-dark(#d8cfa4, #0f1a16));',
+  choiceRow: 'background: linear-gradient(180deg, light-dark(#f7f4e4, #16241f), light-dark(#d8cfa4, #0f1a16));',
 }
 
 async function loadUniverses() {
@@ -334,6 +396,27 @@ loadUniverses().then(adopt)
 /* The floor, in the row it applies to — an authored palette can be unreadable,
    and the warning is where the value is, not in a summary line. */
 .gp-warn { flex-basis: 100%; font-size: 9px; color: var(--danger-bright); }
+
+/* The picker rides *in* the row it edits, under the inputs: no popover to clip
+   inside a scrolling panel, and the values stay beside it while picking. */
+.gp-picker { flex-basis: 100%; display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 4px; }
+.gp-swatch.empty {
+  background-image: linear-gradient(45deg, var(--overlay-20) 25%, transparent 25%, transparent 75%, var(--overlay-20) 75%),
+                    linear-gradient(45deg, var(--overlay-20) 25%, transparent 25%, transparent 75%, var(--overlay-20) 75%);
+  background-size: 8px 8px; background-position: 0 0, 4px 4px;
+}
+.gp-swatch.open { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.gp-style { display: flex; flex-direction: column; gap: 2px; }
+.gp-style-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.gp-style-label { font-size: 10px; color: var(--text); }
+.gp-selector { font-family: monospace; font-size: 9px; color: var(--text-dim); }
+.gp-css {
+  width: 100%; box-sizing: border-box; resize: vertical; font-family: monospace;
+  font-size: 10px; line-height: 1.4; padding: 4px 6px;
+  background: var(--overlay-6); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+}
 
 .gp-actions { display: flex; gap: 6px; align-items: center; }
 .gp-error { font-size: 10px; color: var(--danger-bright); }
