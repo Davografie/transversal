@@ -294,6 +294,7 @@
     </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
       <Button class="section-btn" variant="neutral" @click="openLoraConfig">🖼 LoRA Configuration</Button>
+      <Button class="section-btn" variant="neutral" @click="openPalettePanel">🎨 Universe Style</Button>
       <Button class="section-btn" variant="neutral" @click="openRollTables">🎲 Roll Tables</Button>
     </div>
     <div class="danger-zone">
@@ -344,6 +345,7 @@ import Button from '@/components/ui/Button.vue'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
+import GmPalettePanel from '@/components/gm/GmPalettePanel.vue'
 import GmRollTablesPanel from '@/components/gm/GmRollTablesPanel.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
@@ -560,6 +562,20 @@ watch(panelActive, (active) => {
 }, { immediate: true })
 
 // ── Sub-panel openers ───────────────────────────────
+/** The universe's look ([[UI-UX Design#The universe palette]]). It hangs off the
+ *  universe entity because that is where the palette lives — the same doorway the
+ *  LoRA config and the roll tables use. */
+function openPalettePanel() {
+  panel.open({
+    component: GmPalettePanel,
+    title: 'Universe Style',
+    badge: 'STYLE',
+    // A universe entity's `current_universe` *is* the key the palette is looked
+    // up by (the entity ids are separate synthetic keys).
+    props: { universe: form.value?.current_universe || '' },
+  })
+}
+
 function openLoraConfig() {
   panel.open({
     component: GmLoRAConfigPanel,

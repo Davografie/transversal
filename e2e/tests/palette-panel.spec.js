@@ -71,10 +71,17 @@ async function openPanel(page) {
   // budget and reports as "the button does not exist".
   await page.locator('.gm-toggle').click()
   await page.locator('.mode-tabs').waitFor({ state: 'visible', timeout: 20000 })
-  // Prep holds the authoring tools; Universe Style is one of them.
+  // Prep holds the Places tree (Play shows the scene instead), and the palette is
+  // reached the way it *lives*: from the universe entity's own editor.
   await page.locator('.mode-tabs button', { hasText: 'Prep' }).click()
-  const tool = page.locator('.gm-tools button', { hasText: 'Universe Style' })
+  const row = page.locator('.entity-row.tree-row', { hasText: 'Earth' }).first()
+  await row.waitFor({ state: 'visible', timeout: 20000 })
+  await row.click()
+  const tool = page.locator('.section-btn', { hasText: 'Universe Style' })
   await tool.waitFor({ state: 'visible', timeout: 20000 })
+  if (process.env.PALETTE_SHOTS) {
+    await page.screenshot({ path: `${process.env.PALETTE_SHOTS}/palette-entity.png` })
+  }
   await tool.click()
   await expect(page.locator('.gp-root')).toBeVisible({ timeout: 20000 })
 }
