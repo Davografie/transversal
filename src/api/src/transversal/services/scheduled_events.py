@@ -245,21 +245,68 @@ def _advance_event(event: ScheduledEvent, event_type: str) -> bool:
 
 
 def _apply_event(repo, event: ScheduledEvent) -> int:
-    """Resolve the target and apply the event's effect; return 1 if applied."""
+    """Resolve the target and apply the event's effect; return 1 if applied.
+
+    A delayed part of a rule arriving is **its own moment**, so it reports its own
+    ``effects_changed`` note ([[B229]] item 2): the effects that happen *immediately*
+    share one splash, and each later arrival is an intermediate update. The context
+    carried here is the notes sink that makes that possible — it was empty, so a
+    deferred effect applied and said nothing anywhere.
+    """
     from transversal.services.effects_applier import effect_registry
+    from transversal.services.effects_applier.datatypes import EFFECT_NOTES_CONTEXT_KEY
+
+    notes: list[dict] = []
+    context = {EFFECT_NOTES_CONTEXT_KEY: notes}
 
     if event.target_type == "trait_setting":
         ts = repo.get_traitsetting(event.target_id)
         if ts is None:
             return 0  # orphan (target deleted)
-        effect_registry.apply(event.effect, ts.entity_id, "", {})
-        return 1
+        effect_registry.apply(event.effect, ts.entity_id, "", context)
+        owner_id = ts.entity_id
+    else:
+        entity = repo.get_entity(event.target_id)
+        if entity is None:
+            return 0  # orphan (target deleted)
+        effect_registry.apply(event.effect, entity.id, entity.current_universe, context)
+        owner_id = entity.id
 
-    entity = repo.get_entity(event.target_id)
-    if entity is None:
-        return 0  # orphan (target deleted)
-    effect_registry.apply(event.effect, entity.id, entity.current_universe, {})
+    _report_delayed_change(repo, owner_id, event, notes)
     return 1
+
+
+def _report_delayed_change(repo, owner_id: str, event: ScheduledEvent,
+                           notes: list[dict]) -> None:
+    """Announce a delayed part of a rule, at the moment it lands.
+
+    The audience is the entity it happened to — or, when the change is to a
+    **place**, everyone standing there: that is what the contract's ``location_id``
+    is for, and what ``entity_id`` deliberately is not (it addresses one character's
+    screen). ``kind="change"`` is the brief banner, as against a rule's ``summary``.
+
+    ``title`` is the rule's name when the row remembers one; a row with no rule
+    behind it (an authored timer) leaves it blank and the surface names it.
+    """
+    from transversal.services.effects_engine import _emit_effects_changed, _note_lines
+
+    lines = _note_lines(notes)
+    if not lines or not owner_id:
+        return
+    owner = repo.get_entity(owner_id)
+    kind = getattr(getattr(owner, "type", None), "value", None)
+    is_place = kind == "location"
+    title = ""
+    if event.source_sfx_id:
+        sfx = repo.get_sfx(event.source_sfx_id)
+        title = getattr(sfx, "name", "") if sfx is not None else ""
+    _emit_effects_changed(
+        entity_id="" if is_place else owner_id,
+        location_id=owner_id if is_place else "",
+        title=title,
+        kind="change",
+        lines=lines,
+    )
 
 
 def end_event(repo, event: ScheduledEvent) -> int:
