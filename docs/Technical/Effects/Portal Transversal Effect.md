@@ -12,10 +12,20 @@ tags:
 aliases:
   - Travel Effect
   - Portal Effect
-status: working
+status: partly implemented
 ---
 
 # Portal Transversal Effect
+
+> [!warning] Read this before the body — the section that matters most is superseded
+> **The portal-scoped destination variable does not exist.** `{location:transversal_target}` / `{universe:transversal_target}` and the whole `target_scope` / `{choose_*}` / `{random:*}` placeholder machinery were **deleted on 2026-09-17 by `6c1b03ae`** ("refactor(targeting): delete the flat target form"), which moved a runtime pick into a `choose` **step in the target path**. The variable is still described below under *Locked decisions* and *The five axes*, and **it cannot be authored**. Present-day facts this doc predates, all measured 2026-09-28:
+>
+> - **The replacement is unwired.** `Effect.targetSpec` exists and the `choose` step has real semantics ([[Choose and Random Resolution]]), but the edge's endpoint is bound to nothing — a portal effect cannot reference the edge it sits on, and **nothing stops an authored effect contradicting its own endpoint** (it happens: the only portal carrying effects offers two cities that are not its endpoint).
+> - **No portal destination resolves.** Firing the one authored portal returns `status: pending` with a pending choice of kind `location` **and no candidates** — the low-level applier entry point cannot carry the pool, so the traveller does not move.
+> - **`context.preview` was never built** — zero hits for `preview` in the effects layer, so *Remaining* below reads emptier than the truth.
+> - **The feature is unexercised:** **343 `transversal` edges, 0 carrying effects.**
+>
+> For the intended product behaviour — the Floating Vagabond's stairs, the airport exit menu, and what a portal's endpoint means — see **[[Hubs and Exits]]**.
 
 > [!note] Status
 > Agreed design, pre-implementation. Generalises the existing `travel` effect into a portal with five independently controllable axes. See [[SFX and Effects]], [[System Architecture]], and [[Data Model]].
@@ -26,8 +36,8 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 
 ## Current state
 
-- The `travel` effect (`effects_registry.py`, key `("travel", "move")`) exposes `entity` (subject) + `target` (location) + `context.transversal_type` (`inapposite` | `consciousness`).
-- Its handler (`effects_applier.py::_apply_travel`) resolves the subject, destination location, mechanism, and body policy directly. `EntityManager.travel()` and `fire_portal`'s no-effects fallback both synthesize a travel effect and run it through `commit_effects`, so there is one travel path (no separate `inapposite_travel`/`consciousness_travel`).
+- The `travel` effect (`services/effects_registry/actions_world.py`, key `("travel", "move")`) exposes `entity` (subject) + `target` (location) + `context.transversal_type` (`inapposite` | `consciousness`).
+- Its handler (`services/effects_applier/handlers_world.py::_apply_travel`) resolves the subject, destination location, mechanism, and body policy directly. `EntityManager.travel()` and `fire_portal`'s no-effects fallback both synthesize a travel effect and run it through `commit_effects`, so there is one travel path (no separate `inapposite_travel`/`consciousness_travel`).
 - Target kinds today: `location`, `occupant`, `entity`, `trait`, `rating_die`, `life_path`, `roll_table`. No `universe` or `projection` kind.
 - Scopes: `universe`, `location`, `subtree`, `faction`, `traitset` — the `prefix:value` value is a literal id; no placeholder/variable in the value position.
 - `Effect.entity` (subject) exists; `{choose_*}` / `{random:*}` placeholders resolve through `resolve_candidates(kind, scope, entity, repo)`.
@@ -65,7 +75,7 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 - The scope value can itself be a variable (extension above).
 - `{new_projection}` = spawn a fresh body (clone), not reuse.
 - `{random_projection}` = random among the entity's bodies in the destination universe.
-- **Portal destination is a scope variable** — a travel effect on a transversal edge references the edge's `_to` through exactly one portal-scoped variable, matching the target's type: `{location:transversal_target}` (location `_to`, resolved to `location:<id>` — the location plus its zones) or `{universe:transversal_target}` (universe `_to`, resolved to `universe:<key>`). `fire_portal` resolves the variable in `target_scope` before applying; `target` is a location picked within that scope.
+- ~~**Portal destination is a scope variable** (deleted 2026-09-17, `6c1b03ae` — see the note at the top)** — a travel effect on a transversal edge references the edge's `_to` through exactly one portal-scoped variable, matching the target's type: `{location:transversal_target}` (location `_to`, resolved to `location:<id>` — the location plus its zones) or `{universe:transversal_target}` (universe `_to`, resolved to `universe:<key>`). `fire_portal` resolves the variable in `target_scope` before applying; `target` is a location picked within that scope. **The intent survives and is still right — a portal effect should be able to reach the edge it sits on — but no present-day mechanism binds the edge.** The destination is now a `choose`/`random` step in `Effect.targetSpec`, whose candidate set the author supplies by hand; **whether a portal destination should even be a `choose` is open on [[Hubs and Exits]]**, which carries the product model.
 
 ## Examples
 
@@ -101,7 +111,8 @@ Requires one new primitive: a **pending-confirmation** state that splits *resolv
 
 ## Remaining
 
-- **Preview phase** — the pending-confirmation state (resolve → preview → confirm/refuse) described above.
+- **Preview phase** — the pending-confirmation state (resolve → preview → confirm/refuse) described above. **Never built**, and the note below calls it planned; nothing in the effects layer reads a `preview` flag today.
+- **The destination half, which this doc treats as solved and is not.** No present-day mechanism binds a portal effect to its own edge, no portal destination resolves (the fire stops at a `choose` whose candidate pool the low-level applier entry point cannot carry), and no portal effect is authorable through MCP. See [[Hubs and Exits]] and [[B242]].
 
 ## Done
 
