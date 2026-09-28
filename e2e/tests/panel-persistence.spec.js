@@ -23,7 +23,10 @@ import { gql } from '../helpers/sheet.js'
 
 const TEST_CHARACTER = 'character-kael-drift-e555ccde'
 const DETACH = '[title="Detach into a floating window"]'
-const WINDOWS = '[data-panel-window]'
+// Both the chain and the floating windows render inside a `.panel-viewport`, and
+// both are `.panel-node[data-panel-window]` — the root panel is the one whose
+// window id is `root`, the floats are `gm-win-N`.
+const WINDOWS = '[data-panel-window]:not([data-panel-window="root"])'
 const STORE = 'gmPanelWindows'
 
 let character
@@ -33,6 +36,11 @@ test.beforeAll(async ({ request }) => {
   if (!owner) throw new Error(`no player mains ${TEST_CHARACTER} — cannot reach the testing character`)
   character = { playerId: owner.id, playerName: owner.name, entityId: TEST_CHARACTER }
 })
+
+async function openStack(page) {
+  await page.locator('button', { hasText: '🛠' }).first().click()
+  await page.waitForTimeout(1000)
+}
 
 async function bootGmPanel(page) {
   await asArchitect(page)
@@ -44,8 +52,7 @@ async function bootGmPanel(page) {
   }, [character.playerId, character.entityId, character.playerName])
   await page.goto('/')
   await page.waitForTimeout(2500)
-  await page.locator('button', { hasText: '🛠' }).first().click()
-  await page.waitForTimeout(1000)
+  await openStack(page)
 }
 
 const stored = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), STORE)
@@ -102,4 +109,52 @@ test('an SFX panel: detach, reload, still floating', async ({ page }) => {
   await page.waitForTimeout(3000)
   await expect(page.locator(WINDOWS), 'the window came back').toHaveCount(1)
   expect((await stored(page))[0].name).toBe('GmSfxEditPanel')
+})
+
+// A Panel's collapse is `props.collapsed ?? localCollapsed`: pass the prop and the
+// state belongs to the caller (and so can be stored), leave it off and the Panel
+// keeps it privately — which is why a reload used to come back expanded however
+// the window had been left.
+test('a collapsed window comes back collapsed', async ({ page }) => {
+  await bootGmPanel(page)
+  const prep = page.locator('.mode-tabs button, .tab-btn', { hasText: 'Prep' })
+  if (await prep.count()) { await prep.first().click(); await page.waitForTimeout(1000) }
+
+  await page.locator('.tree-row').first().click()
+  await page.waitForTimeout(1400)
+  await page.locator(DETACH).last().click()
+  await page.waitForTimeout(900)
+  await expect(page.locator(WINDOWS)).toHaveCount(1)
+
+  // Collapse the window through its own rail, then confirm it is the *stored*
+  // state that changed rather than a local one.
+  await page.locator(`${WINDOWS} [title="Collapse"]`).first().click()
+  await page.waitForTimeout(900)
+  expect((await stored(page))[0].collapsed, 'the collapse was written').toBe(true)
+
+  await page.reload()
+  await page.waitForTimeout(3000)
+  await expect(page.locator(WINDOWS), 'the window came back').toHaveCount(1)
+  await expect(page.locator(`${WINDOWS} .panel.is-collapsed`), 'and still collapsed').toHaveCount(1)
+  // Collapsed means the chip header, which is where its expand/close controls
+  // live while the rail is hidden.
+  await expect(page.locator(`${WINDOWS} .panel-header`), 'still a chip, not a hole').toHaveCount(1)
+})
+
+test('a collapsed stack root comes back collapsed', async ({ page }) => {
+  await bootGmPanel(page)
+  const root = page.locator('[data-panel-window="root"]')
+  await expect(root.locator('.panel'), 'the root starts expanded').not.toHaveClass(/is-collapsed/)
+
+  await root.locator('[title="Collapse"]').first().click()
+  await page.waitForTimeout(600)
+  expect(await page.evaluate(() => localStorage.getItem('gmPanelStackCollapsed'))).toBe('true')
+
+  // The stack's own open/closed state is *not* persisted (that is the 🛠, not a
+  // collapse), so the root has to be switched back on before it can be read.
+  await page.reload()
+  await page.waitForTimeout(3000)
+  await openStack(page)
+  await expect(page.locator('[data-panel-window="root"] .panel.is-collapsed'),
+    'the root came back collapsed').toHaveCount(1)
 })

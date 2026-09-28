@@ -9,10 +9,12 @@
     :spec="win.spec"
     :window-id="win.id"
     :can-dock="dockable"
+    :collapsed="!!win.collapsed"
     :on-size="(w, h) => { panelSize.w = w; panelSize.h = h }"
     closable
     @close="$emit('close')"
     @dock="$emit('dock')"
+    @toggle-collapse="toggleCollapsed"
   >
     <template v-if="win.spec" #default>
       <PanelScope :context="win.spec.context">
@@ -53,7 +55,15 @@ const props = defineProps({
 
 defineEmits(['close', 'dock'])
 
-const { move: moveWindow, setDirection: setWindowDirection } = usePanelWindows()
+const { move: moveWindow, setDirection: setWindowDirection, toggleCollapse } = usePanelWindows()
+
+// The window's collapsed state lives in the registry, not in the Panel, so it is
+// stored with the window and survives a reload. (It is `win.collapsed` that
+// `panelWindowPersistence` writes; a Panel left uncontrolled would keep the state
+// to itself and lose it.)
+function toggleCollapsed() {
+  toggleCollapse(props.win.id)
+}
 
 const viewportWidth = ref(window.innerWidth)
 const viewportHeight = ref(window.innerHeight)

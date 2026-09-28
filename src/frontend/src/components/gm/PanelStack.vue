@@ -19,8 +19,10 @@
       :id="props.rootPanel?.id"
       :spec="props.rootPanel"
       :window-id="'root'"
+      :collapsed="rootCollapsed"
       closable
       @close="show = false"
+      @toggle-collapse="rootCollapsed = !rootCollapsed"
     >
       <template v-if="props.rootPanel" #default>
         <component :is="props.rootPanel.component" v-bind="props.rootPanel.props || {}" v-on="props.rootPanel.listeners || {}" />
@@ -48,6 +50,7 @@ import Panel from './Panel.vue'
 import PanelWindow from './PanelWindow.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
 import { usePanelAnchor } from '@/composables/usePanelAnchor.js'
+import { usePersistedRef } from '@/composables/usePersistedState.js'
 import { lookupPanelIdentity } from '@/composables/usePanel.js'
 import { dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
 
@@ -59,6 +62,11 @@ const { windows, close: closeWindow } = usePanelWindows()
 const { direction, resolveAnchor, deriveDirection, snapToEdge, setAnchor } = usePanelAnchor()
 
 const show = ref(false)
+// The root panel's collapsed chip state is remembered per device, like the anchor
+// it hangs from. It used to live only in the `Panel`, so a reload always came back
+// expanded. Passing it makes the Panel *controlled* — without the binding its
+// toggle is local and there is nothing to store.
+const rootCollapsed = usePersistedRef('gmPanelStackCollapsed', false)
 
 // ── Floating windows ─────────────────────────────────
 // A window docks back into the panel it was detached from — matched by what
