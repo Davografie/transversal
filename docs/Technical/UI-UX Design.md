@@ -1078,12 +1078,14 @@ wiring, in a browser: the palette reaches `:root` for the universe in play, a
 live theme flip repaints the other half without a reload, and a different
 palette clears what the last one set).
 
-**Authoring it: the GM palette panel** (Prep → *Universe Style*, landed 2026-09-26).
-A dedicated panel rather than a block inside the universe entity's editor, for the
-same reason traitsets and SFX have their own: a universe's look is a cross-cutting
-concern, and a GM looks for it among the authoring tools rather than by hunting for
-the universe entity first. It opens on the universe **in play** and can switch
-universe from the top.
+**Authoring it: the universe palette panel** (a universe entity's editor → *🎨
+Universe Style*, landed 2026-09-26). It hangs off the **universe entity**, beside
+*LoRA Configuration* and *Roll Tables*, because that is where the palette lives: a
+universe's look is a field of the universe, and whoever is editing that universe is
+already in its editor. It opens on that universe — the editor hands it the key —
+and a picker at the top can switch, so two universes can be compared without going
+back. (It is still its own panel rather than a block in the form: the doorway is
+the entity, the surface is separate.)
 
 - **The vocabulary is the mapper's, not a second list.** The panel is built from
   `KNOWN_KNOBS` and saves through `cleanPalette`, so it cannot author a knob the
