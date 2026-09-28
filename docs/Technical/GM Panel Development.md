@@ -22,9 +22,10 @@ renderers that wire composable state to the DOM.**
 
 ## Architecture
 
-- `src/components/gm/PanelStack.vue` — the stack: the 🛠 toggle, the root
-  `Panel`, and the floating-window layer. Owns the stack anchor's drag and the
-  depth-hiding fit loop.
+- `src/components/gm/PanelStack.vue` — the stack: the 🛠 toggle, and the one
+  panel layer holding a `.panel-unit` per window (the chain, and each float).
+  Owns the stack anchor's drag, the depth-hiding fit loop, and the
+  raise-on-click listener — see *Panel stacking*.
 - `src/components/gm/Panel.vue` — self-referential wrapper. Provides the
   `panelKey` navigation context to its slot content, renders nested child
   `Panel`s (tab-group: one active + a chip strip), and carries the per-panel
@@ -35,9 +36,10 @@ renderers that wire composable state to the DOM.**
   per device as `gmPanelAnchor`), edge snap, direction derivation, viewport
   clamps.
 - `src/composables/usePanelWindows.js` — the window registry (`spawn/close/
-  replace/toggleCollapse/setDock/move/setDirection`), each window carrying
-  `{ id, spec, dock, collapsed, x, y, direction, sourceParentKey, z }`. It also
-  **restores and stores** the windows per device — see *Panel persistence*.
+  replace/toggleCollapse/setDock/move/setDirection/raise`), each window carrying
+  `{ id, spec, dock, collapsed, x, y, direction, sourceParentKey, z }`. `z` is the
+  window's **stacking rank** — see *Panel stacking*. It also **restores and
+  stores** the windows per device — see *Panel persistence*.
 - `src/composables/panelWindowPersistence.js` — the storage rules for a window
   (pure functions), and `src/constants/restorablePanels.js` — the allow-list of
   panels a reload may bring back, with every exclusion and its reason.
@@ -69,7 +71,8 @@ down), are clamped inside the viewport, slide along their parents' edges, and
 each rail hugs **its own** panel's edge. Any child panel can detach (`⤢`) into a
 floating window, which keeps its own anchor and direction and docks back (`⤓`)
 into the panel it came from, matched by `component + spec.id`. See
-[[GM Panel Positioning Plan]].
+[[GM Panel Positioning Plan]]. Overlap between a window and the chain it came from
+is resolved by *Panel stacking* below — clicking either brings it to the front.
 
 ## Panel persistence (per device)
 
@@ -104,6 +107,44 @@ Three properties worth keeping when touching this:
 - **The stack's 🛠 open/closed state is not a collapse** and is deliberately not
   persisted ([[GM Panel Positioning Plan]]: closing the 🛠 hides the chain, not
   the windows).
+
+## Panel stacking (dynamic z-index)
+
+Clicking anywhere in a panel brings it to the front. The unit of stacking is a
+**unit**, not a panel: the chain is one (its panels are laid out side by side and
+so never overlap each other) and each floating window is one. Units genuinely do
+overlap — a detached window parks exactly on the box its panel occupied, and the
+next child opened there lands underneath it — which is what has to reorder.
+
+Four properties carry this, and each is load-bearing:
+
+- **One layer, one wrapper per unit.** `PanelStack` renders a single
+  `.panel-viewport` (fixed, `z-index: 25`) containing a `.panel-unit` per unit;
+  the unit's `z-index` is its rank. This replaced two sibling layers at the same
+  `z-index`, where the order was DOM order — the floats were *always* over the
+  chain and clicking the chain could not change it. A unit is a **stacking
+  context**, so a unit's own popovers (a chip-input dropdown) stay within it,
+  and the ranks stay local: a unit can never climb over the 🛠 toggle or a modal,
+  however often you click.
+- **A rank, not a pixel value.** `usePanelWindows` hands out `++zSeq`, so "the
+  top" is "the highest rank" and raising is a bump. `raise(id)` skips a no-op
+  (already the top), which also keeps a click from writing storage. The chain has
+  **no window record** — its spec is a prop of `PanelStack` — so its rank lives in
+  the registry (`rootZ`) and starts at the back on a fresh load.
+- **Capture-phase `pointerdown` on `window`.** Not a handler per unit: a panel is
+  full of controls that stop propagation (`@pointerdown.stop` on the badge and on
+  the collapsed chip's buttons), and any of them would be a dead spot. Capture
+  runs before all of them, and the nearest `[data-panel-unit]` ancestor is the
+  unit to raise — so a click on a *child* panel raises the window it belongs to.
+  (Do **not** read `[data-panel-window]` for this: it is on every `.panel-node`,
+  and a child panel currently inherits the default `root` id from `Panel.vue`, so
+  the innermost node does not name the unit.)
+- **The order of the floats is remembered, renormalised.** `z` is stored with the
+  window and `deserializeWindows` compacts the restored ranks into a dense 1..N
+  run — which also repairs records written before stacking existed (their `z` is
+  the spawn index, whose first value is 0 and would tie with the chain and land
+  that window *behind* it). The chain's rank is not stored, so the sequence in
+  storage has gaps; the **order** is the promise, not the numbers.
 
 ## Rule 1 — Data and mutations live in composables
 Each domain owns its queries, mutations, and state in a composable under
@@ -346,13 +387,13 @@ An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
 
 There is no frontend test runner: checks are plain `node` scripts in
 `src/frontend/scripts/check-*.mjs`, run against the `transversal2-frontend:latest`
-image (build the same way, in Docker). **29 suites exist** (the count was 14 when
+image (build the same way, in Docker). **30 suites exist** (the count was 14 when
 the shared table component was handed over) and a shared primitive can move
 several — `check-theme-tokens`, `check-combobox`, `check-trait-tree`,
 `check-panel-close`, `check-panel-placement`, `check-panel-persistence`,
-`check-player-filter`, `check-tree-expand/order/locate`, `check-place-filter`,
-`check-trait-explanations`, `check-sheet-profile`, `check-sheet-api`,
-`check-landing`, `check-auth-gate`, `check-entity-create`. **Ping [[gm-panels]]
+`check-panel-stacking`, `check-player-filter`, `check-tree-expand/order/locate`,
+`check-place-filter`, `check-trait-explanations`, `check-sheet-profile`,
+`check-sheet-api`, `check-landing`, `check-auth-gate`, `check-entity-create`. **Ping [[gm-panels]]
 when the component lands** and I will re-run them and migrate my 17 call sites —
 tell me whether you want that migration or will take it, and once the API is
 chosen, which of the eight capabilities above it covers.
