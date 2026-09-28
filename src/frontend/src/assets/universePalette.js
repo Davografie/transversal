@@ -125,3 +125,96 @@ export function unknownKnobs(palette) {
 export function paletteFor(palettes, universeKey) {
   return (palettes && universeKey && palettes[universeKey]) || null
 }
+
+/**
+ * What an editor may safely save: known knobs only, and **no empty values**.
+ *
+ * An empty string is not "unset but present" in this vocabulary — a palette
+ * *omits* a knob to leave the app's own value in place (see `paletteVars`), so an
+ * editor's blank fields have to be dropped rather than written. Empty groups go
+ * too, and a palette with nothing left is `{}` — which the editor sends as `""`,
+ * the value the resolver reads as "clear it".
+ *
+ * @returns {object} a palette safe to `JSON.stringify` into the entity field
+ */
+export function cleanPalette(palette) {
+  const out = {}
+  if (!palette || typeof palette !== 'object') return out
+
+  const font = {}
+  for (const slot of Object.keys(FONT_SLOTS)) {
+    const v = palette.font?.[slot]
+    if (isValue(v)) font[slot] = v.trim()
+  }
+  if (Object.keys(font).length) out.font = font
+  if (isValue(palette.radius)) out.radius = palette.radius.trim()
+
+  for (const theme of THEMES) {
+    const group = {}
+    for (const knob of KNOWN_KNOBS.color) {
+      const v = palette[theme]?.[knob]
+      if (isValue(v)) group[knob] = v.trim()
+    }
+    if (Object.keys(group).length) out[theme] = group
+  }
+  return out
+}
+
+// ── the visibility floor, for an editor's own warning ───────────────────────
+// The same 3:1 floor the API test applies to the shipped examples and
+// `check-theme-tokens.mjs` applies to the stylesheet, here as a hint while a GM
+// types: an authored palette *can* be unreadable, and whoever is authoring it is
+// the one who can fix it. Translucent or mixed values are skipped rather than
+// guessed at, exactly as the other two do.
+export const MIN_CONTRAST = 3
+
+const rgbOf = (value) => {
+  if (typeof value !== 'string') return null
+  const v = value.trim()
+  const hex = v.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (hex) {
+    const h = hex[1].length === 3 ? hex[1].split('').map((c) => c + c).join('') : hex[1]
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
+  }
+  const fn = v.match(/^rgba?\(([^)]+)\)$/i)
+  if (fn) {
+    const parts = fn[1].split(',').map((s) => parseFloat(s.trim()))
+    if (parts.length < 3 || (parts.length === 4 && parts[3] < 1)) return null
+    return parts.slice(0, 3)
+  }
+  return null
+}
+
+const luminance = ([r, g, b]) => {
+  const f = (c) => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4 }
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+}
+
+export function contrastRatio(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/** The knobs a palette may repaint that are read as *text* on the panel. */
+export const TEXT_KNOBS = ['text', 'textDim', 'accent']
+const SURFACE_KNOB = 'bgPanelSolid'
+
+/**
+ * Knobs in one theme whose text would be hard to read on that theme's own panel.
+ * Worst first; empty when either value is translucent (it cannot be judged
+ * without compositing).
+ *
+ * @returns {{knob: string, ratio: number, against: string}[]}
+ */
+export function paletteContrastWarnings(palette, theme) {
+  const group = palette?.[theme]
+  const surface = rgbOf(group?.[SURFACE_KNOB])
+  if (!surface) return []
+  return TEXT_KNOBS
+    .map((knob) => {
+      const fg = rgbOf(group?.[knob])
+      return fg ? { knob, ratio: contrastRatio(fg, surface), against: SURFACE_KNOB } : null
+    })
+    .filter((w) => w && w.ratio < MIN_CONTRAST)
+    .sort((a, b) => a.ratio - b.ratio)
+}
