@@ -9,6 +9,9 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_roll", "play_as_rating"): "play {target} as {result}",
     ("modify_roll", "double_die"): "double {target}",
     ("modify_roll", "split_die"): "split {target}",
+    # The merge takes a second die, which the target cannot name — the card has to
+    # say so or "consolidate the highest die" reads as a one-die operation.
+    ("modify_roll", "consolidate_dice"): "merge {target} with another die of its size",
     ("modify_roll", "reroll_die"): "reroll {target}",
     ("modify_roll", "set_die"): "set {target} to {result}",
     # The step-die pair needs its target on the card: an effect that names a die

@@ -18,7 +18,8 @@ def test_the_change_die_family_accepts_either_locus():
     A die is not a *picker* kind (there is no die picker), so these actions declare
     no `target_kind`; the two questions were one field before."""
     for action_id in ("set_die", "step_up_die", "step_down_die",
-                      "double_die", "split_die", "remove_die"):
+                      "double_die", "split_die", "remove_die",
+                      "consolidate_dice"):
         meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
         assert meta.target_kind is None, action_id
         assert set(meta.path_element) == {"die", "rating_die"}, action_id
@@ -30,7 +31,8 @@ def test_a_change_to_a_rating_can_be_timed_but_a_pool_die_cannot():
     lies; a rating is a fact about the character, so a duration there is real.
     The declaration names the one element a duration is offered for."""
     for action_id in ("set_die", "step_up_die", "step_down_die",
-                      "double_die", "split_die", "remove_die"):
+                      "double_die", "split_die", "remove_die",
+                      "consolidate_dice"):
         meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
         assert meta.supports_duration is True, action_id
         assert meta.duration_elements == ("rating_die",), action_id
@@ -59,7 +61,9 @@ def test_the_family_takes_a_count_where_it_needs_one():
         count = next(f for f in meta.context_fields if f.name == "count")
         assert count.field_type == "number", action_id
         assert count.default == "1", action_id
-    for action_id in ("set_die", "remove_die"):
+    # Consolidate names a *size* by naming one die of it, like set and remove —
+    # the second die is found by size, not counted.
+    for action_id in ("set_die", "remove_die", "consolidate_dice"):
         meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
         assert "count" not in [f.name for f in meta.context_fields], action_id
 
@@ -69,7 +73,8 @@ def test_the_change_die_family_reads_as_one_group():
     editor optgroups by. The two effect-die comparisons belong here too — the
     effect die is their reference instead of a number."""
     for action_id in ("set_die", "step_up_die", "step_down_die",
-                      "double_die", "split_die", "remove_die", "reroll_die",
+                      "double_die", "split_die", "remove_die", "consolidate_dice",
+                      "reroll_die",
                       "reduce_by_effect_die", "increase_by_effect_die"):
         meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
         assert meta.group == "Change a Die", action_id

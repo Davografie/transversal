@@ -23,6 +23,7 @@ from transversal.services.effects_applier.handlers_change_die import (
     _apply_reroll_die,
     _apply_restore_die,
     _apply_change_set,
+    _apply_change_consolidate,
     _apply_change_split,
     _apply_change_step_down,
     _apply_change_step_up,
@@ -139,6 +140,7 @@ _MUTATION_HANDLERS = {
     ("modify_roll", "step_down_die"): _apply_change_step_down,
     ("modify_roll", "double_die"): _apply_change_double,
     ("modify_roll", "split_die"): _apply_change_split,
+    ("modify_roll", "consolidate_dice"): _apply_change_consolidate,
     ("modify_roll", "remove_die"): _apply_change_remove,
     # Playing a trait at another size for the roll: the rating is temporarily that
     # die, so the pooled dice follow their trait.

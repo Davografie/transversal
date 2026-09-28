@@ -44,6 +44,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "set_die": "Change a Die", "step_up_die": "Change a Die",
     "step_down_die": "Change a Die", "double_die": "Change a Die",
     "split_die": "Change a Die", "remove_die": "Change a Die",
+    "consolidate_dice": "Change a Die",
     "reroll_die": "Change a Die",
     # The two comparison verbs change a die too — the effect die is their
     # reference instead of a number — so they sit with the family rather than

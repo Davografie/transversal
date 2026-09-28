@@ -51,10 +51,16 @@ class DieChange:
 
     ``copies`` is how many dice the result is: 1 for a resize, N+1 for a double or
     a split (the verb's count plus the die it came from), 0 for a removal.
+
+    ``consume`` is how ``consolidate`` reaches past its target: the merge is the
+    target *plus* one other die of the size named here, so a home has to drop two
+    dice and keep one. Every other verb leaves it ``None`` and touches only the die
+    it was pointed at.
     """
     die: DieType | None
     copies: int = 1
     note: str = ""
+    consume: DieType | None = None
 
 
 def _plan_change(die: DieType | None, verb: str, effect: Effect,
@@ -95,6 +101,14 @@ def _plan_change(die: DieType | None, verb: str, effect: Effect,
         if smaller is None:
             return None, f"a {die.value} is already the smallest die and cannot be split"
         return DieChange(smaller, count + 1, f"{die.value} → {count + 1}{smaller.value}"), ""
+    if verb == "consolidate":
+        # Split's inverse: two of a size become one a step larger (2d8 → d10). The
+        # target names the *size* — a home looks for its partner — so the refusal
+        # when there is no partner has to come from the home, not from here.
+        merged = step_die(die, 1)
+        if merged == die:
+            return None, f"a {die.value} is already the largest die and cannot be consolidated"
+        return DieChange(merged, 1, f"2{die.value} → {merged.value}", consume=die), ""
     if verb == "remove":
         return DieChange(None, 0, f"removed {die.value}"), ""
     if verb in ("raise_by_effect", "lower_by_effect"):
@@ -180,7 +194,20 @@ def _apply_rating_change(entity, effect: Effect, repo, result, index: int,
         result.applied.append(AppliedEffect(effect, reason))
         return
     before = [d.value for d in dice]
-    if change.copies == 0:
+    if change.consume is not None:
+        # Consolidation takes a **sibling** too, so the list is rebuilt rather than
+        # patched at one index. The merged die keeps the target's place; the
+        # partner is the first other die of the same size.
+        partner = next(
+            (j for j, d in enumerate(dice) if j != index and d == change.consume), None
+        )
+        if partner is None:
+            result.applied.append(AppliedEffect(
+                effect, f"no second {change.consume.value} in {ts_id}'s rating to merge"))
+            return
+        dice[index] = change.die
+        dice.pop(partner)
+    elif change.copies == 0:
         dice.pop(index)
     elif change.copies > 1:
         dice[index:index + 1] = [change.die] * change.copies
@@ -226,7 +253,21 @@ def _apply_pool_change(entity, effect: Effect, repo, result, target: str, verb: 
         return
 
     template = pool[index]
-    if change.copies == 0:
+    if change.consume is not None:
+        # The partner is the first *other* die of the same size. Its provenance
+        # (source_id/label) goes with it — the survivor keeps the target's.
+        partner = next(
+            (j for j, d in enumerate(pool)
+             if j != index and _die_opt(d.get("die") or "") == change.consume), None
+        )
+        if partner is None:
+            result.applied.append(AppliedEffect(
+                effect, f"no second {change.consume.value} in {owner_id}'s pool to merge"))
+            return
+        merged = {**template, "die": change.die.value}
+        rebuilt = [d for j, d in enumerate(pool) if j not in (index, partner)]
+        rebuilt.insert(min(index, len(rebuilt)), merged)
+    elif change.copies == 0:
         rebuilt = pool[:index] + pool[index + 1:]
     else:
         rebuilt = (pool[:index]
@@ -239,7 +280,13 @@ def _apply_pool_change(entity, effect: Effect, repo, result, target: str, verb: 
     # opponent's die, reached by a path) must not dissolve on the actor's roll.
     owner = _owner_entity(repo, owner_id)
     if owner is not None:
-        _queue_entity_revert(repo, owner, effect, context_extra={"prior_rating": before})
+        # A merge moves *two* dice, so one prior size cannot undo it — the whole
+        # pool is recorded, the way a rating records its whole dice list.
+        if change.consume is not None:
+            _queue_entity_revert(repo, owner, effect,
+                                 context_extra={"prior_pool": [dict(d) for d in pool]})
+        else:
+            _queue_entity_revert(repo, owner, effect, context_extra={"prior_rating": before})
 
 
 def _owner_entity(repo, owner_id: str):
@@ -284,7 +331,8 @@ def _apply_restore_die(entity, effect: Effect, repo, result) -> None:
         return
 
     prior = context.get("prior_rating")
-    if prior is None:
+    prior_pool = context.get("prior_pool")
+    if prior is None and prior_pool is None:
         result.applied.append(AppliedEffect(effect, "nothing recorded to restore"))
         return
     from transversal.services.contest_tracker import broadcast_pool_change
@@ -296,6 +344,13 @@ def _apply_restore_die(entity, effect: Effect, repo, result) -> None:
         return
     location_id, owner_id, index = ref
     store = get_scene_store()
+    if prior_pool is not None:
+        # A merge restored whole: it removed two dice and added one, so the
+        # recorded pool is the only faithful undo (the indices have moved).
+        store.save_pool(location_id, owner_id, [dict(d) for d in prior_pool])
+        broadcast_pool_change(location_id, owner_id, dice=list(prior_pool), phase="adding")
+        result.applied.append(AppliedEffect(effect, f"restored {owner_id}'s pool"))
+        return
     pool = store.get_pool(location_id, owner_id)
     if index < 0 or index >= len(pool):
         result.applied.append(AppliedEffect(effect, f"no die at {effect.target} to restore"))
@@ -330,6 +385,10 @@ def _apply_change_split(entity, effect, repo, result):
 
 def _apply_change_remove(entity, effect, repo, result):
     _apply_change(entity, effect, repo, result, "remove")
+
+
+def _apply_change_consolidate(entity, effect, repo, result):
+    _apply_change(entity, effect, repo, result, "consolidate")
 
 
 # ── Reroll Die ────────────────────────────────────────────────

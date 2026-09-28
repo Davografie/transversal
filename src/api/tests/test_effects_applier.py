@@ -1451,6 +1451,154 @@ def test_resolve_pool_targets():
     assert _resolve_pool("nope", entity, repo2) == ("", "")
 
 
+# ── Consolidate Dice (Split Die's inverse) ──────────
+#
+# "Replace two dice of the same size with a single die one size higher" — Cortex
+# Prime and MHR *Focus*, ToX *Cosmopolitan* and *Earth Focus*, TorchLite *Skill
+# Focus*. The target names the *size* (one die of it); the partner is found beside
+# it, which is why the refusals matter as much as the merge.
+
+def _consolidate(target="rating:0:char-1:trait-x", **overrides):
+    kwargs = dict(timing=EffectTiming.IMMEDIATE, type="modify_roll",
+                  action="consolidate_dice", target=target)
+    kwargs.update(overrides)
+    return Effect(**kwargs)
+
+
+def test_consolidate_merges_two_rating_dice_of_the_same_size():
+    repo = FakeRepo()
+    entity = _entity()
+    ts = _ts("trait-x", ["d8", "d8", "d6"])
+    repo.traitsettings = [ts]
+    result = apply_effects(entity, [_consolidate()], repo)
+    assert [d.value for d in ts.dice] == ["d10", "d6"]
+    assert result.applied[0].summary == "2d8 → d10 in char-1:trait-x's rating"
+
+
+def test_consolidate_keeps_the_merged_die_where_the_target_was():
+    """Order is the author's list, so the survivor takes the target's place."""
+    repo = FakeRepo()
+    entity = _entity()
+    ts = _ts("trait-x", ["d6", "d8", "d8"])
+    repo.traitsettings = [ts]
+    apply_effects(entity, [_consolidate(target="rating:1:char-1:trait-x")], repo)
+    assert [d.value for d in ts.dice] == ["d6", "d10"]
+
+
+def test_consolidate_refuses_without_a_partner_and_leaves_the_rating_alone():
+    """The reason is reported, not guessed at: a lone d8 has nothing to merge."""
+    repo = FakeRepo()
+    entity = _entity()
+    ts = _ts("trait-x", ["d8", "d6"])
+    repo.traitsettings = [ts]
+    result = apply_effects(entity, [_consolidate()], repo)
+    assert [d.value for d in ts.dice] == ["d8", "d6"]
+    assert result.applied[0].summary == "no second d8 in char-1:trait-x's rating to merge"
+
+
+def test_consolidate_refuses_at_the_top_of_the_ladder():
+    repo = FakeRepo()
+    entity = _entity()
+    ts = _ts("trait-x", ["d12", "d12"])
+    repo.traitsettings = [ts]
+    result = apply_effects(entity, [_consolidate()], repo)
+    assert [d.value for d in ts.dice] == ["d12", "d12"]
+    assert result.applied[0].summary == (
+        "a d12 is already the largest die and cannot be consolidated")
+
+
+def test_consolidate_revert_restores_the_whole_prior_rating():
+    """Two dice moved, so the undo is the recorded list — not one size."""
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    repo = FakeRepo()
+    entity = _entity()
+    ts = _ts("trait-x", ["d8", "d8", "d6"])
+    repo.traitsettings = [ts]
+    apply_effects(entity, [_consolidate(
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)],
+                                combine=TimerCombine.FIRST_TO_FIRE),
+    )], repo)
+    assert [d.value for d in ts.dice] == ["d10", "d6"]
+    revert = repo.scheduled_events[0].effect
+    assert revert.action == "restore_die"
+    assert revert.context["prior_dice"] == ["d8", "d8", "d6"]
+
+
+def test_consolidate_merges_two_pool_dice():
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "char-1", [
+        {"die": "d8", "source_kind": "trait", "source_id": "a", "label": "a", "ts_id": None},
+        {"die": "d6", "source_kind": "trait", "source_id": "b", "label": "b", "ts_id": None},
+        {"die": "d8", "source_kind": "trait", "source_id": "c", "label": "c", "ts_id": None},
+    ])
+    repo = FakeRepo(entities=[_entity()])
+    result = apply_effects(_entity(), [
+        _consolidate(target="die:loc-1:char-1:0"),
+    ], repo)
+    pool = store.get_pool("loc-1", "char-1")
+    assert [d["die"] for d in pool] == ["d10", "d6"]
+    # The survivor keeps the *target's* provenance; the partner's goes with it.
+    assert pool[0]["source_id"] == "a"
+    assert result.applied[0].summary == "2d8 → d10 in char-1's pool"
+    store.clear_all()
+
+
+def test_consolidate_refuses_a_pool_without_a_partner():
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "char-1", [
+        {"die": "d8", "source_kind": "trait", "source_id": "a", "label": "a", "ts_id": None},
+    ])
+    repo = FakeRepo(entities=[_entity()])
+    result = apply_effects(_entity(), [
+        _consolidate(target="die:loc-1:char-1:0"),
+    ], repo)
+    assert [d["die"] for d in store.get_pool("loc-1", "char-1")] == ["d8"]
+    assert result.applied[0].summary == "no second d8 in char-1's pool to merge"
+    store.clear_all()
+
+
+def test_consolidate_pool_revert_restores_the_whole_pool():
+    """One prior size cannot undo a merge, so the whole pool is recorded.
+
+    Needs a duration: with none, the undo is a *hold* — booked only inside a
+    cancelable activation, per ``schedule_revert``.
+    """
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "char-1", [
+        {"die": "d8", "source_kind": "trait", "source_id": "a", "label": "a", "ts_id": None},
+        {"die": "d8", "source_kind": "trait", "source_id": "c", "label": "c", "ts_id": None},
+    ])
+    repo = FakeRepo(entities=[_entity()])
+    apply_effects(_entity(), [_consolidate(
+        target="die:loc-1:char-1:0",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)],
+                                combine=TimerCombine.FIRST_TO_FIRE),
+    )], repo)
+    assert [d["die"] for d in store.get_pool("loc-1", "char-1")] == ["d10"]
+    revert = repo.scheduled_events[0].effect
+    assert revert.action == "restore_die"
+    assert [d["die"] for d in revert.context["prior_pool"]] == ["d8", "d8"]
+    store.clear_all()
+
+
+def test_consolidate_card_names_the_partner():
+    """"consolidate the highest die" would read as a one-die operation."""
+    from transversal.services.sfx_text import effect_text
+
+    assert effect_text(_consolidate(target="")) == (
+        "merge the target with another die of its size")
+
+
 def test_add_dice_to_difficulty_pool():
     from transversal.services.scene_state import get_scene_store
 

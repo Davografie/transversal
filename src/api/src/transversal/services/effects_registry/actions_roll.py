@@ -147,6 +147,30 @@ ACTIONS: list[EffectActionMeta] = [
         inverse_captures_prior=True,
     ),
     EffectActionMeta(
+        action_id="consolidate_dice",
+        label="Consolidate Dice",
+        description=(
+            "Merge two dice of the same size into one die a step larger (2d8 → d10) — "
+            "Split Die's inverse. On a die in the pool this lasts the roll; on a die of "
+            "a trait's rating it changes the trait. Refused when the named die has no "
+            "same-size partner, or is already a d12"
+        ),
+        # A trade rather than a gain — one fewer die for a bigger one — so whether it
+        # helps depends on what you are keeping.
+        category="either",
+        effect_type="modify_roll",
+        effect_action="consolidate_dice",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+        ],
+        path_element=("die", "rating_die"),
+        supports_duration=True,
+        duration_elements=("rating_die",),
+        inverse=("modify_roll", "restore_die"),
+        inverse_captures_prior=True,
+    ),
+    EffectActionMeta(
         action_id="remove_die",
         label="Remove Die",
         description=(
