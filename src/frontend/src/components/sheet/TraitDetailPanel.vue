@@ -238,13 +238,8 @@ const tagRows = computed(() => {
 }
 .detail-tag-inherited { opacity: 0.6; border-style: dashed; }
 .detail-section { padding: 10px 0; border-top: 1px solid var(--overlay-8); }
-/* A rule the trait **has** rather than carries ([[Dynamic SFX Reach]]): granted by
-   another rule's reach, read-time, nothing on the instance to detach. Readable and
-   activatable — never dimmed (B189) — so it is marked with a dashed edge only. */
-.sfx-granted {
-  outline: 1px dashed var(--accent-dim);
-  outline-offset: -1px;
-}
+/* The granted card's dashed edge is shared — see `.sfx-granted` in
+   assets/styles.css, beside the other card styles. */
 .detail-section-head {
   display: flex;
   align-items: baseline;

@@ -1243,6 +1243,21 @@ select option {
   margin-top: 4px;
 }
 
+/* A rule **granted** by another rule's reach rather than attached to the owner it
+   shows on ([[Dynamic SFX Reach]]) — read-time, with nothing written on the owner
+   to detach, and it can stop applying when the world changes. Readable and
+   activatable like any other card, never dimmed (that is the B189 mistake), so the
+   only difference is a dashed edge: "not one of your attached rules".
+   Here rather than in each component because **four** surfaces draw one — the trait
+   row, the trait detail, and the entity / projection / trait-set strips on the
+   sheet — and a treatment shared by that many is a convention, not a local choice.
+   (It lived duplicated in `TraitRow` and `TraitDetailPanel` until the sheet's
+   surfaces needed it, which is exactly how a convention drifts.) */
+.sfx-granted {
+  outline: 1px dashed var(--accent-dim);
+  outline-offset: -1px;
+}
+
 .trait-disabled-badge {
   font-size: 9px;
   text-transform: uppercase;

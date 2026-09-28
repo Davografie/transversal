@@ -147,11 +147,34 @@
             <Button v-if="isForeignSheet && !relationship && viewerEntityId" variant="ghost" size="icon" title="Add relationship" @click.stop="createImmediateRelationship()">+</Button>
           </div>
         </div>
-        <div v-if="entitySfxIds.length || projectionSfxIds.length" class="entity-sfx-cards">
+        <div v-if="entitySfxIds.length || projectionSfxIds.length || entityGrantedSfxIds.length || projectionGrantedSfxIds.length" class="entity-sfx-cards">
           <SfxCard v-for="sfxId in entitySfxIds" :key="'e-' + sfxId" v-bind="sfxCardModel(sfxId)"
                    @activate="activateSfx(sfxId, entity.id)" />
+          <!-- Granted to the *entity* rather than attached: read-time, so there is
+               nothing here to detach, and the rule can stop applying when the world
+               changes (a GMC that stops being hidden, say). `sfx-reveal-entity` is
+               the live example — it reaches every hidden GMC and, before this, was
+               available and drawn nowhere. -->
+          <SfxCard
+            v-for="sfxId in entityGrantedSfxIds"
+            :key="'eg-' + sfxId"
+            class="sfx-granted"
+            v-bind="sfxCardModel(sfxId)"
+            title="Always on: granted to this entity by a rule's reach — not attached, so there is nothing to take"
+            @activate="activateSfx(sfxId, entity.id)"
+          />
           <SfxCard v-for="sfxId in projectionSfxIds" :key="'p-' + sfxId" v-bind="sfxCardModel(sfxId)"
                    @activate="activateSfx(sfxId, activeProjection.id)" />
+          <!-- The same, for the body: a projection is one of the four owner kinds a
+               granted declaration can select. -->
+          <SfxCard
+            v-for="sfxId in projectionGrantedSfxIds"
+            :key="'pg-' + sfxId"
+            class="sfx-granted"
+            v-bind="sfxCardModel(sfxId)"
+            title="Always on: granted to this body by a rule's reach — not attached, so there is nothing to take"
+            @activate="activateSfx(sfxId, activeProjection.id)"
+          />
         </div>
         <!-- Rules lent by the place you are standing in. Not attached to you:
              they reach you because you're here, and leave when you do. -->
@@ -390,9 +413,18 @@
                 :hide-contact="entry.continuations.has(t.id)"
               />
             </div>
-            <div v-if="traitsetSfxIds(entry.ts).length" class="sfx-cards">
+            <div v-if="traitsetSfxIds(entry.ts).length || traitsetGrantedSfxIds(entry.ts).length" class="sfx-cards">
               <SfxCard v-for="sfxId in traitsetSfxIds(entry.ts)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
                        @activate="activateSfx(sfxId, traitsetSettingSourceId(entry.ts))" />
+              <!-- Granted to the set as a unit rather than attached to it. -->
+              <SfxCard
+                v-for="sfxId in traitsetGrantedSfxIds(entry.ts)"
+                :key="'tsg-' + sfxId"
+                class="sfx-granted"
+                v-bind="sfxCardModel(sfxId)"
+                title="Always on: granted to this set by a rule's reach — not attached, so there is nothing to take"
+                @activate="activateSfx(sfxId, traitsetSettingSourceId(entry.ts))"
+              />
             </div>
           </div>
         </div>
@@ -410,9 +442,17 @@
                 <span v-for="i in ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(ts) }">{{ i <= inPoolCount(ts) ? '●' : '○' }}</span>
               </span>
             </h4>
-            <div v-if="traitsetSfxIds(ts).length" class="sfx-cards">
+            <div v-if="traitsetSfxIds(ts).length || traitsetGrantedSfxIds(ts).length" class="sfx-cards">
               <SfxCard v-for="sfxId in traitsetSfxIds(ts)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
                        @activate="activateSfx(sfxId, traitsetSettingSourceId(ts))" />
+              <SfxCard
+                v-for="sfxId in traitsetGrantedSfxIds(ts)"
+                :key="'tsg-' + sfxId"
+                class="sfx-granted"
+                v-bind="sfxCardModel(sfxId)"
+                title="Always on: granted to this set by a rule's reach — not attached, so there is nothing to take"
+                @activate="activateSfx(sfxId, traitsetSettingSourceId(ts))"
+              />
             </div>
           </div>
         </div>
@@ -689,6 +729,15 @@ const sheetPortraitTransparent = computed(() => {
 //   - trait-set-as-unit (traitSetSettings[].sfxIds)
 const entitySfxIds = computed(() => entity.value?.sfxIds || [])
 const projectionSfxIds = computed(() => activeProjection.value?.sfxIds || [])
+// Rules this entity — or the body it is wearing — simply **has**, from a granted
+// reach declaration ([[Dynamic SFX Reach]]). `sfxIds` is what is *attached*, and a
+// granted rule attaches nothing, so the attached lists alone can never show one:
+// the rule is available and invisible. Read-time like the trait rows'
+// `grantedSfxIds`, and separate from `sfxIds` for the same reason — the entity
+// editor writes that list back wholesale, so folding would materialise the grant
+// on the first save.
+const entityGrantedSfxIds = computed(() => entity.value?.grantedSfxIds || [])
+const projectionGrantedSfxIds = computed(() => activeProjection.value?.grantedSfxIds || [])
 // traitsetId → [{ id, sfxIds }] for the trait-set-as-unit grants.
 const traitSetSettingsByTraitsetId = computed(() => {
   const m = {}
@@ -701,6 +750,12 @@ const traitSetSettingsByTraitsetId = computed(() => {
 function traitsetSfxIds(ts) {
   const tss = traitSetSettingsByTraitsetId.value[ts.traitsetId]
   return (tss && tss.sfxIds) || []
+}
+
+/** The set's rules that are *granted* to it rather than attached — see above. */
+function traitsetGrantedSfxIds(ts) {
+  const tss = traitSetSettingsByTraitsetId.value[ts.traitsetId]
+  return (tss && tss.grantedSfxIds) || []
 }
 
 function traitsetSettingSourceId(ts) {

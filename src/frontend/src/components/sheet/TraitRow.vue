@@ -759,15 +759,9 @@ function onRowClick() {
   opacity: 0.75;
 }
 
-/* A rule the trait **has** rather than carries ([[Dynamic SFX Reach]]): granted to
-   it by another rule's reach, so there is nothing on the instance to detach. Fully
-   readable and activatable — dimming a rule to look like a disabled button is the
-   mistake B189 records — so the only difference is a dashed edge, which says "not
-   one of your attached rules" without making it harder to read. */
-.sfx-granted {
-  outline: 1px dashed var(--accent-dim);
-  outline-offset: -1px;
-}
+/* The granted card's dashed edge is a shared treatment now — see `.sfx-granted` in
+   assets/styles.css, where it lives so the sheet's entity, projection and trait-set
+   strips cannot drift from this row. */
 .sub-trait-right {
   flex-shrink: 0;
   display: flex;
