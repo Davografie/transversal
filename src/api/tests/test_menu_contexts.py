@@ -180,6 +180,66 @@ def test_contest_fire_site_populates_declared_variables(monkeypatch):
         assert not missing, f"contest: declared {sorted(missing)} but fire site did not populate them"
 
 
+def test_contest_fire_site_gives_each_side_its_own_and_the_others_effect_die(monkeypatch):
+    """``{own_effect_die}`` / ``{opponent_effect_die}``, per side ([[B232]]).
+
+    Drives the real fire site through two sides with **different** committed
+    effect dice, because the failure this pins is a shared value: before B232 the
+    context carried one ``effect_die`` for both sides, so "your opponent's effect
+    die" was unreadable. Asserting only that the keys exist would pass on exactly
+    that bug, so both directions are read back.
+    """
+    from types import SimpleNamespace
+
+    from transversal.services import state_events
+
+    captured = _fake_fire(
+        monkeypatch,
+        lambda eid: SimpleNamespace(razmerit=0, current_universe="earth", current_projection=None),
+    )
+    state_events.fire_contest_outcome_sfx(
+        "winner", "loser", "earth",
+        effect_die="d4",
+        own_effect_dice={"winner": "d10", "loser": "d6"},
+    )
+
+    by_entity = {e.entity_id: e.context for e in captured}
+    assert by_entity["winner"]["own_effect_die"] == "d10"
+    assert by_entity["winner"]["opponent_effect_die"] == "d6"
+    assert by_entity["loser"]["own_effect_die"] == "d6"
+    assert by_entity["loser"]["opponent_effect_die"] == "d10"
+    # The shared value keeps its own meaning — the effective complication die.
+    assert by_entity["winner"]["effect_die"] == "d4"
+    assert by_entity["loser"]["effect_die"] == "d4"
+
+
+def test_contest_own_effect_dice_defaults_to_empty(monkeypatch):
+    """A side with no committed effect die reads as empty, not as a stale number."""
+    from types import SimpleNamespace
+
+    from transversal.services import state_events
+
+    captured = _fake_fire(
+        monkeypatch,
+        lambda eid: SimpleNamespace(razmerit=0, current_universe="earth", current_projection=None),
+    )
+    state_events.fire_contest_outcome_sfx("winner", "loser", "earth", effect_die="d6")
+
+    for event in captured:
+        assert event.context["own_effect_die"] is None
+        assert event.context["opponent_effect_die"] is None
+
+
+def test_committed_effect_die_reads_a_side_and_tolerates_absence():
+    """The caller's bridge from ``CommittedResult`` ([[B232]])."""
+    from transversal.api.rest.contest_pools import _committed_effect_die
+    from transversal.domain import CommittedResult, DieType
+
+    assert _committed_effect_die(CommittedResult(total=9, effect_die=DieType.D8)) == "d8"
+    assert _committed_effect_die(CommittedResult(total=9, effect_die=None)) is None
+    assert _committed_effect_die(None) is None
+
+
 def test_fire_projection_created_populates_context(monkeypatch):
     """The shared projection-created fire site populates its declared variables."""
     from types import SimpleNamespace

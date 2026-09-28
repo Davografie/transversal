@@ -379,11 +379,20 @@ def fire_contest_outcome_sfx(
     effect_die: str | None = None,
     high_stakes: bool = False,
     taken_out: bool = False,
+    own_effect_dice: dict[str, str | None] | None = None,
 ) -> None:
     """Fire on_contest_win / on_contest_loss for a resolved manual contest.
 
     The seeded table SFX can use ``{effect_die}`` in its result; the effects
     engine substitutes it from the event context before applying.
+
+    ``effect_die`` is the **effective complication die** — the one the loser
+    takes — and it is the same number for both sides, which is why a rule could
+    never say *"use your opponent's effect die"*. ``own_effect_dice`` maps each
+    side's id to the effect die **that side itself committed** ([[B232]]), and
+    each side's context carries it twice: as ``{own_effect_die}`` and, read from
+    the other side, as ``{opponent_effect_die}``. A side that has no committed
+    effect die resolves to ``None``, the same as ``contest_projection_opponent``.
     """
     from transversal.main import _get_engine, _get_repo
     from transversal.services.effects_engine import GameEvent
@@ -392,6 +401,7 @@ def fire_contest_outcome_sfx(
 
     engine = _get_engine()
     repo = _get_repo()
+    own_effect_dice = own_effect_dice or {}
     for entity_id, contest_winner, opponent_id in (
         (winner_id, "player", loser_id),
         (loser_id, "opponent", winner_id),
@@ -416,6 +426,8 @@ def fire_contest_outcome_sfx(
                 "contest_entity_opponent": opponent_id,
                 "contest_projection_opponent": opponent_projection,
                 "effect_die": effect_die,
+                "own_effect_die": own_effect_dice.get(entity_id),
+                "opponent_effect_die": own_effect_dice.get(opponent_id),
                 "high_stakes": high_stakes,
                 "taken_out": taken_out,
             },

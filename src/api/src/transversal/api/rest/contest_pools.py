@@ -41,6 +41,17 @@ class PreventTakenOutRequest(BaseModel):
     effect_die: Optional[str] = None
 
 
+def _committed_effect_die(committed: Optional[CommittedResult]) -> Optional[str]:
+    """One side's **own** committed effect die, or None if it never committed.
+
+    The reaction SFX class turns on this number — *"convert your opponent's
+    effect die"* — and it is not the same as the contest's shared ``effect_die``
+    (the effective complication die the loser takes), which is what the event
+    context carried before [[B232]].
+    """
+    return committed.effect_die.value if committed and committed.effect_die else None
+
+
 def _broadcast(event: str, location_id: str, entity_id: str, data: dict) -> None:
     """Publish a contest SSE event to all active sessions."""
     from transversal.api.sse.bus import StreamEvent, event_bus
@@ -175,6 +186,9 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
         loser_id = defendant_id if result.winner == ContestWinner.PLAYER else challenger_id
         universe = challenger.universe if challenger else ""
         from transversal.services.state_events import fire_contest_outcome_sfx
+        # Each side's **own** committed effect die, so a reaction can read the
+        # other side's ([[B232]]) — the shared ``effect_die`` above is only the
+        # effective complication die for the loser.
         fire_contest_outcome_sfx(
             winner_id or "",
             loser_id or "",
@@ -182,6 +196,10 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
             effect_die=result.effect_die.value if result.effect_die else None,
             high_stakes=result.high_stakes,
             taken_out=result.taken_out,
+            own_effect_dice={
+                challenger_id: _committed_effect_die(result.challenger),
+                defendant_id: _committed_effect_die(result.defendant),
+            },
         )
         # One entry per participant's book, each from its own side ([[B177]]).
         contest_history.record_contest_outcome(location_id, challenger, defendant, result)

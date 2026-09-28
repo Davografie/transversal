@@ -161,10 +161,18 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     TriggerDef("on_botch", "On Botch", group="dicepool"),
     TriggerDef("on_success", "On Success", group="dicepool"),
     TriggerDef("on_failure", "On Failure", group="dicepool"),
+    # ``effect_die`` is the **effective complication die** — the winner's, as it
+    # lands on the loser — and it is the same value for both sides, which is why
+    # a rule could never say *"use your opponent's effect die"*. ``own_effect_die``
+    # and ``opponent_effect_die`` are each side's **own committed** effect die
+    # ([[B232]]), which is what the reaction SFX turn on ("convert your opponent's
+    # effect die into a stunt"). Either may be empty.
     TriggerDef("on_contest_win", "On Contest Win", (
         Variable("contest_entity_opponent", "entity"),
         Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
+        Variable("own_effect_die", "die"),
+        Variable("opponent_effect_die", "die"),
         Variable("high_stakes", "boolean"),
         Variable("taken_out", "boolean"),
     ), group="dicepool"),
@@ -172,6 +180,8 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("contest_entity_opponent", "entity"),
         Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
+        Variable("own_effect_die", "die"),
+        Variable("opponent_effect_die", "die"),
         Variable("high_stakes", "boolean"),
         Variable("taken_out", "boolean"),
     ), group="dicepool"),
