@@ -12,7 +12,10 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
   },
   plugins: [
-    vue(),
+    // `vanilla-colorful` ships custom elements, so the compiler must leave them
+    // alone instead of resolving them as Vue components (which logs a warning and
+    // renders nothing).
+    vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === 'hex-alpha-color-picker' } } }),
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {

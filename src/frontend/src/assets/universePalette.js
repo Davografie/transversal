@@ -42,6 +42,32 @@ const COLOR_VARS = {
 
 export const THEMES = ['dark', 'light']
 
+/**
+ * The **elements** a palette may style, as named targets.
+ *
+ * A palette's `styles` is a map of target → **declarations** (not selectors): the
+ * author writes `background: linear-gradient(…)` and the runtime puts it in a rule
+ * for the selector below, prefixed with the universe. Two reasons it is a fixed
+ * vocabulary rather than raw CSS:
+ *
+ *   1. **Scoping and precedence.** The injected rule is
+ *      `html[data-universe="…"] .trait-row { … }`, which both confines it to the
+ *      universe in play *and* outranks the components' own scoped rules
+ *      (`.trait-row[data-v-…]` is 0-2-0; the prefixed selector is 0-2-1). Raw CSS
+ *      from a textarea would have to solve that itself, differently in each place.
+ *   2. **A GM can't break the page.** Declarations cannot escape their rule, and
+ *      there is no selector to typo into something else's rules.
+ *
+ * A target's declarations apply in **both themes**; be theme-aware with
+ * `light-dark(a, b)` (the app sets `color-scheme` per theme) or by referencing the
+ * palette's own tokens, which already flip.
+ */
+export const STYLE_TARGETS = {
+  sheet: { label: 'Character sheet panel', selector: '.sheet-embedded' },
+  traitRow: { label: 'Trait rows', selector: '.trait-row' },
+  choiceRow: { label: 'Choice table rows', selector: '.ct-row' },
+}
+
 /** Every knob the mapper knows — the check reports authored drift against this. */
 export const KNOWN_KNOBS = {
   shape: [...Object.keys(FONT_SLOTS).map((s) => `font.${s}`), 'radius'],
@@ -105,13 +131,16 @@ export function paletteVars(palette, theme = 'dark') {
 export function unknownKnobs(palette) {
   if (!palette || typeof palette !== 'object') return []
   const bad = []
-  const groups = ['font', 'radius', ...THEMES]
+  const groups = ['font', 'radius', 'styles', ...THEMES]
 
   for (const key of Object.keys(palette)) {
     if (!groups.includes(key)) bad.push(key)
   }
   for (const slot of Object.keys(palette.font || {})) {
     if (!(slot in FONT_SLOTS)) bad.push(`font.${slot}`)
+  }
+  for (const target of Object.keys(palette.styles || {})) {
+    if (!(target in STYLE_TARGETS)) bad.push(`styles.${target}`)
   }
   for (const theme of THEMES) {
     for (const knob of Object.keys(palette[theme] || {})) {
@@ -124,6 +153,74 @@ export function unknownKnobs(palette) {
 /** The palette for a universe key, from a `{ key: palette }` map. */
 export function paletteFor(palettes, universeKey) {
   return (palettes && universeKey && palettes[universeKey]) || null
+}
+
+/**
+ * The stylesheet a palette's `styles` becomes: one rule per target, scoped to the
+ * universe and carrying its declarations verbatim.
+ *
+ * The rules are **not** applied by this module — `useUniverseTheme` owns the single
+ * `<style>` element, the same way it owns the `:root` properties — but building the
+ * text is pure, so a check can assert the scoping without a browser.
+ *
+ * @returns {string} the CSS, or '' when nothing is styled
+ */
+export function universeStyleCss(universeKey, palette) {
+  if (!universeKey) return ''
+  const rules = []
+  for (const [target, spec] of Object.entries(STYLE_TARGETS)) {
+    const css = palette?.styles?.[target]
+    if (!isValue(css)) continue
+    // The universe attribute is the scope *and* the specificity: it lifts these
+    // above the components' own scoped rules (0-2-1 beats 0-2-0), so an author
+    // does not have to fight `!important` to restyle a row.
+    rules.push(`html[data-universe="${universeKey}"] ${spec.selector} { ${css.trim()} }`)
+  }
+  return rules.join('\n')
+}
+
+// ── the colour picker's dialect ─────────────────────────────────────────────
+// The palette stores what CSS wants (`#rrggbb`, or `rgba(…)` where a surface is
+// translucent); the picker speaks hex with an optional alpha byte. These convert
+// both ways, and a picker edit only changes the *form* when alpha is in play.
+const clamp255 = (n) => Math.max(0, Math.min(255, Math.round(n)))
+
+/** `value` → `#rrggbb` / `#rrggbbaa`, for the picker. Null when unreadable. */
+export function toPickerColor(value) {
+  if (!isValue(value)) return null
+  const v = value.trim()
+  const hex = v.match(/^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i)
+  if (hex) {
+    let h = hex[1]
+    if (h.length <= 4) h = h.split('').map((c) => c + c).join('')
+    return '#' + h.toLowerCase()
+  }
+  const fn = v.match(/^rgba?\(([^)]+)\)$/i)
+  if (fn) {
+    const parts = fn[1].split(',').map((x) => parseFloat(x.trim()))
+    if (parts.length < 3 || parts.some((n, i) => i < 3 && !Number.isFinite(n))) return null
+    const [r, g, b] = parts.slice(0, 3).map(clamp255)
+    const a = parts.length === 4 && Number.isFinite(parts[3]) ? clamp255(parts[3] * 255) : 255
+    const hexParts = [r, g, b, a].map((n) => n.toString(16).padStart(2, '0')).join('')
+    return '#' + (a === 255 ? hexParts.slice(0, 6) : hexParts)
+  }
+  return null
+}
+
+/** The picker's hex → the value the palette stores. */
+export function fromPickerColor(hex) {
+  if (!isValue(hex)) return ''
+  const h = String(hex).replace('#', '').toLowerCase()
+  if (h.length === 6) return '#' + h
+  if (h.length === 8) {
+    const [r, g, b, a] = [0, 2, 4, 6].map((i) => parseInt(h.slice(i, i + 2), 16))
+    // Alpha is what makes the difference: keep hex while it is opaque, and speak
+    // rgba the moment it is not — which is what the tokens already use.
+    if (a === 255) return '#' + h.slice(0, 6)
+    const alpha = Math.round((a / 255) * 100) / 100
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+  return ''
 }
 
 /**
@@ -140,6 +237,11 @@ export function paletteFor(palettes, universeKey) {
 export function cleanPalette(palette) {
   const out = {}
   if (!palette || typeof palette !== 'object') return out
+
+  for (const target of Object.keys(STYLE_TARGETS)) {
+    const css = palette.styles?.[target]
+    if (isValue(css)) (out.styles ||= {})[target] = css.trim()
+  }
 
   const font = {}
   for (const slot of Object.keys(FONT_SLOTS)) {

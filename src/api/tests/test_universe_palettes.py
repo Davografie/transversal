@@ -24,6 +24,7 @@ import pytest
 from transversal.db.universe_palettes import (
     COLOR_KNOBS,
     PALETTES,
+    STYLE_TARGETS,
     THEMES,
     TOP_LEVEL_KEYS,
     palette_for,
@@ -134,6 +135,31 @@ def test_the_floor_condemns_a_palette_that_cannot_be_read():
 
 
 # ── 3. the examples themselves ──────────────────────────────────────────────
+
+def test_style_targets_are_a_known_vocabulary():
+    """Per-element CSS: the keys are a fixed vocabulary, the values are declarations."""
+    for key in sorted(PALETTES):
+        styles = PALETTES[key].get("styles") or {}
+        unknown = set(styles) - STYLE_TARGETS
+        assert not unknown, f"{key}: unknown style target(s): {sorted(unknown)}"
+        for target, css in styles.items():
+            assert isinstance(css, str) and css.strip(), f"{key}/styles.{target}: empty"
+            # A declaration block, not a selector: the runtime wraps it in a rule of
+            # its own. A stray brace would end that rule early and spill the rest of
+            # the declarations into the stylesheet.
+            assert "{" not in css and "}" not in css, f"{key}/styles.{target}: not declarations"
+
+
+def test_the_bamboo_slats_are_theme_aware():
+    """The author's example: rows as slats. One block serves both themes, so it has
+    to carry the difference itself (`light-dark()`), or the dark theme gets bamboo
+    paper."""
+    styles = PALETTES["three_realms"]["styles"]
+    for target in ("traitRow", "choiceRow"):
+        css = styles[target]
+        assert "linear-gradient(180deg" in css, f"{target}: expected a vertical gradient"
+        assert "light-dark(" in css, f"{target}: expected a per-theme value"
+
 
 def test_the_seeded_universes_have_examples():
     for key in ("earth", "three_realms"):

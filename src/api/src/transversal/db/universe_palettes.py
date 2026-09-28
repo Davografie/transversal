@@ -12,9 +12,17 @@ Shape (every key optional except the colour groups you want to change)::
     {
       "font":   {"ui": "<stack>", "display": "<stack>"},
       "radius": "<length>",
+      "styles": {"traitRow": "<declarations>", "choiceRow": "<declarations>", ...},
       "dark":   { "<knob>": "<css value>", ... },
       "light":  { "<knob>": "<css value>", ... }
     }
+
+``styles`` is the per-**element** half: each key is a named element (see
+``STYLE_TARGETS`` in ``src/frontend/src/assets/universePalette.js`` for the
+vocabulary and the selector each one means) and each value is a block of CSS
+**declarations** — no selector, because the runtime supplies one, scoped to the
+universe. It is how a universe styles *shapes* rather than colours: the Three
+Realms rows below are bamboo slats, a vertical gradient of the roll's shading.
 
 The colour knobs are **semantic, not token names** — one knob per decision a
 palette makes, mapped to the CSS custom properties in
@@ -57,7 +65,11 @@ from __future__ import annotations
 # mapping table (`src/frontend/src/assets/universePalette.js`) is the mirror of
 # this list — a knob here with no entry there is ignored, and its own check
 # fails on an unknown knob rather than letting a typo do nothing.
-TOP_LEVEL_KEYS = frozenset({"font", "radius", "dark", "light"})
+TOP_LEVEL_KEYS = frozenset({"font", "radius", "styles", "dark", "light"})
+# The named elements a palette may style. Mirrors `STYLE_TARGETS` in
+# `src/frontend/src/assets/universePalette.js` — that table owns the selector each
+# key means, this one only says which keys exist.
+STYLE_TARGETS = frozenset({"sheet", "traitRow", "choiceRow"})
 THEMES = ("dark", "light")
 COLOR_KNOBS = frozenset({
     "accent", "accentDim", "accentActive",
@@ -149,6 +161,44 @@ THREE_REALMS_PALETTE = {
         "border": "rgba(28, 60, 45, 0.30)",
         "borderSoft": "rgba(28, 60, 45, 0.15)",
         "borderStrong": "rgba(28, 60, 45, 0.50)",
+    },
+    # ── Element CSS: the rows as bamboo slats ───────────────────────────────
+    # What the author asked for by name: "style the Three Realms rows as bamboo
+    # slats of a bamboo scroll". A slat is a vertical gradient (the roll's
+    # shading: a highlight just under the top edge, deepening to a darker belly),
+    # a thin dark seam at the bottom, and square-ish ends.
+    #
+    # `light-dark()` is what makes one block work in both themes — bamboo paper
+    # in the light theme, a night-garden slat in the dark one — and the runtime
+    # sets `color-scheme` per theme, so it resolves by itself.
+    #
+    # These are *declarations*, not selectors: the runtime wraps each in a rule
+    # scoped to the universe (`html[data-universe="three_realms"] .trait-row`),
+    # which is also what lets an ordinary declaration outrank the component's own
+    # scoped styles. A *state* (a trait in the pool, a row the dice found, hover)
+    # still wins on purpose, so state reads through the styling; `!important` is
+    # the escape hatch if a universe wants the slat to survive even that.
+    "styles": {
+        "traitRow": (
+            "background: linear-gradient(180deg,"
+            " light-dark(#fbf8e8, #1b2a23) 0%,"
+            " light-dark(#ece3c2, #16241e) 45%,"
+            " light-dark(#d9cf9f, #111d18) 100%);"
+            " border: 1px solid light-dark(rgba(120, 105, 60, 0.45), rgba(120, 200, 170, 0.22));"
+            " border-radius: 5px;"
+            " box-shadow: inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.06)),"
+            " inset 0 -1px 0 light-dark(rgba(90, 75, 40, 0.28), rgba(0, 0, 0, 0.35));"
+        ),
+        "choiceRow": (
+            "background: linear-gradient(180deg,"
+            " light-dark(#fbf8e8, #1b2a23) 0%,"
+            " light-dark(#ece3c2, #16241e) 45%,"
+            " light-dark(#d9cf9f, #111d18) 100%);"
+            " border: 1px solid light-dark(rgba(120, 105, 60, 0.45), rgba(120, 200, 170, 0.22));"
+            " border-radius: 5px;"
+            " box-shadow: inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.06)),"
+            " inset 0 -1px 0 light-dark(rgba(90, 75, 40, 0.28), rgba(0, 0, 0, 0.35));"
+        ),
     },
 }
 
