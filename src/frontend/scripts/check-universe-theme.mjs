@@ -170,8 +170,14 @@ console.log('\nthe authoring panel\n')
   yes('…it never silently no-ops a save',
     /still loading — nothing was saved/.test(panel))
 
-  const gm = readFileSync('src/components/GmPanel.vue', 'utf8')
-  yes('the GM panel opens it as a Prep tool', /openPalettePanel/.test(gm) && /GmPalettePanel/.test(gm))
+  // The doorway is the universe entity's own editor, beside the LoRA config and
+  // the roll tables — where the palette lives — and *only* there, so there is one
+  // place a GM can be told to look.
+  const editor = readFileSync('src/components/gm/GmEntityEditPanel.vue', 'utf8')
+  yes('the universe entity editor opens it, for a universe only',
+    /v-if="form\.type === 'UNIVERSE'"/.test(editor) && /openPalettePanel/.test(editor) && /GmPalettePanel/.test(editor))
+  yes('…and the Prep tools no longer carry a second doorway',
+    !/GmPalettePanel/.test(readFileSync('src/components/GmPanel.vue', 'utf8')))
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

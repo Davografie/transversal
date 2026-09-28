@@ -30,7 +30,6 @@
       <div class="gm-tools">
         <Button class="create-btn" variant="secondary" block @click="openTraitsConfig">Manage Traits</Button>
         <Button class="create-btn" variant="secondary" block @click="openSfxManager">Manage SFX</Button>
-        <Button class="create-btn" variant="secondary" block @click="openPalettePanel">Universe Style</Button>
       </div>
 
       <!-- Focus: shapes what the Places tree and the Factions list show. -->
@@ -148,7 +147,6 @@ import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmList from '@/components/ui/GmList.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
 import GmSfxManagementPanel from '@/components/gm/GmSfxManagementPanel.vue'
-import GmPalettePanel from '@/components/gm/GmPalettePanel.vue'
 import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
@@ -586,19 +584,6 @@ async function openTraitsConfig() {
     component: GmTraitsetsPanel,
     title: 'Traitsets',
     props: {},
-  })
-}
-
-/** Per-universe styling ([[UI-UX Design#The universe palette]]) — a tool, not a
- *  field of the universe entity: it is a cross-cutting look, and it opens on the
- *  universe already in play. */
-function openPalettePanel() {
-  editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
-  panel.open({
-    component: GmPalettePanel,
-    title: 'Universe Style',
-    badge: 'STYLE',
-    props: { universe: props.universe },
   })
 }
 
