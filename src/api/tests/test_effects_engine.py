@@ -848,3 +848,44 @@ def test_a_multi_select_ref_fans_out_to_one_effect_per_pick():
         "one effect per pick, each with a concrete learner"
     assert all(e.refs["learner"].spec is None for e in applied), \
         "…and no path left for the handler to read instead"
+
+
+def test_a_multi_select_subject_fans_out_to_one_effect_per_pick():
+    """The other half of the author's ask: once a multi-choose *asks*, the answer
+    must reach **everyone** picked — one effect per selection, each with a concrete
+    subject. Before, the silent shortcut answered with the first candidate and the
+    rest were lost; now the fan-out is what carries them."""
+    from types import SimpleNamespace as NS
+
+    from transversal.domain import Effect
+    from transversal.services.effects_engine.refs import resolve_effect_spec_choices
+    from transversal.services.target_spec import (
+        ChooseStep, SelectStep, TargetSpec,
+    )
+
+    class _Repo:
+        def __init__(self):
+            self.here = NS(id="e1", current_location="loc-1")
+            self.a = NS(id="e2", current_location="loc-1")
+            self.b = NS(id="e3", current_location="loc-1")
+
+        def get_entity(self, eid):
+            return {"e1": self.here, "e2": self.a, "e3": self.b}.get(eid)
+
+        def list_entities_by_location(self, _loc):
+            return [self.here, self.a, self.b]
+
+    repo = _Repo()
+    effect = Effect(
+        type="modify_trait", action="move",
+        entity_spec=TargetSpec(steps=[
+            SelectStep(collection="occupants"), ChooseStep(count=None)]),
+    )
+
+    applied, pending = resolve_effect_spec_choices(
+        effect, "entity", {1: ["e2", "e3"]}, repo.here, repo)
+
+    assert pending == []
+    assert sorted(e.entity for e in applied) == ["e2", "e3"], \
+        "one effect per pick, each with a concrete subject"
+    assert all(e.entity_spec is None for e in applied)

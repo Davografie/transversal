@@ -26,7 +26,7 @@
           <span v-if="c.rating" class="etw-cand-sub etw-cand-rating"><DieIcon :die="c.rating" /></span>
           <span v-else-if="c.subtitle" class="etw-cand-sub">{{ c.subtitle }}</span>
         </button>
-        <div v-if="current.count > 1" class="etw-multi-hint">Select up to {{ current.count }}.</div>
+        <div v-if="isMultiple" class="etw-multi-hint">{{ multiHint }}</div>
       </div>
       <div v-else-if="isLoop" class="etw-loop">
         <div class="etw-loop-q">
@@ -109,7 +109,19 @@ const isLast = computed(() => stepIndex.value >= props.pendingChoices.length - 1
 // Picking a candidate *is* the choice on a single-choice step, so the wizard
 // commits and moves on without a separate confirm. Multi-select steps keep the
 // explicit Next/Apply — nothing is committed there until the user says so.
-const needsConfirm = computed(() => (current.value?.count || 1) > 1)
+//
+// `count` is 1 or **null**, and null means "as many as they like" — so a null
+// must read as multiple, not as the falsy/zero case. (`null > 1` is false, which
+// is exactly how a nullable count would silently become a single pick.)
+const isMultiple = computed(() => {
+  const n = current.value?.count
+  return n == null || n > 1
+})
+const needsConfirm = computed(() => isMultiple.value)
+const multiHint = computed(() => {
+  const n = current.value?.count
+  return (n == null) ? 'Select any number.' : `Select up to ${n}.`
+})
 
 // Resolve candidates against the effect's own subject entity (e.g. {buying_entity}
 // for an opportunity, {hitch_entity} for a GM hitch), falling back to the roller.
@@ -131,7 +143,7 @@ function isSelected(id) {
 
 function pick(c) {
   const idx = current.value.index
-  if (current.value.count > 1) {
+  if (isMultiple.value) {
     const arr = Array.isArray(targets.value[idx]) ? targets.value[idx] : []
     targets.value[idx] = arr.includes(c.id) ? arr.filter((x) => x !== c.id) : [...arr, c.id]
     return

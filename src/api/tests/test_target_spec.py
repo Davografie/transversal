@@ -390,7 +390,18 @@ def test_choose_collapses_many_to_one():
     assert types[-1] == ValueType("die", "one")
 
 
-def test_choose_count_many_keeps_many():
+def test_choose_multiple_keeps_many():
+    """``count=None`` is **choose multiple** — as many as the user likes. It is the
+    mode the wizard's toggle writes, so the trace must read it as many; a nullable
+    count that fell through to the single-pick branch would silently collapse it."""
+    s = spec(SelectStep(collection="rolled_dice"), ChooseStep(count=None))
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("die", "many")
+
+
+def test_choose_count_many_still_reads_as_many():
+    """A number above 1 is legacy content (and still means 'more than one')."""
     s = spec(SelectStep(collection="rolled_dice"), ChooseStep(count=3))
     types, errors = trace(s)
     assert errors == []

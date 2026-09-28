@@ -134,7 +134,8 @@ function stepText(s) {
     case 'aggregate':
       return `aggregate ${s.fn || '…'}${s.field ? ` ${s.field}` : ''}`
     case 'choose':
-      return `choose ${s.count || 1}`
+      // `null` is "as many as they like", so it must not read as the falsy 1.
+      return s.count == null ? 'choose any' : `choose ${s.count}`
     case 'evaluate':
       return `evaluate ${s.field || ''} ${s.operator || ''} ${valueText(s.value)}`.trim()
     default:

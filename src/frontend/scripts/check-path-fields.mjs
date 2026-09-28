@@ -172,24 +172,42 @@ const find = (name) => VUE.find((p) => rel(p) === name)
     /<label>Duration<\/label>/.test(panel), true)
 }
 
-// ── A step's count asks for a number ──────────────────────────────
+// ── How many they pick: a toggle for `choose`, a number for `random` ──
 //
 // The author, 2026-09-27: *"when I enter 'N' into the choose.pick input, it sets
-// it to '1' instead. I want multiple choice for the user."* The input is a number
-// input and always was — the **hint** said "N = multi-select", inviting the letter,
-// which the browser refused, and `onCount` fell back to 1. Multi-select itself
-// worked the whole time. Copy is the defect, so copy is what is pinned.
+// it to '1' instead"*, then *"change the amount choice to toggle between 'choose
+// one' and 'choose multiple'"*. The number never capped anything — it only chose
+// single-pick vs multi-select — so a `choose` now says which of the two it is, and
+// `null` is the multiple side rather than a magic number. The **aggregate** row's
+// pick is genuinely numeric (an exact sample size) and keeps its number input.
 {
   const b = read(find('components/gm/TargetSpecBuilder.vue'))
-  // Read the *hints*, not the file: the comment explaining this fix quotes the old
-  // copy, so a whole-file regex matches the explanation and fails on correct code.
+  // Read the *hints*, not the file: comments explaining these fixes quote the old
+  // copy, so a whole-file regex matches an explanation and fails on correct code.
   const hints = [...b.matchAll(/<em>(.*?)<\/em>/g)].map((m) => m[1]).join(' | ')
-  ok('a count hint names a number, never a bare N',
-    /2 or more = multi-select/.test(hints) && /2 or more = subset/.test(hints), true)
-  ok('…and no hint invites the letter', /\bN = (multi-select|subset)/.test(hints), false)
-  ok('the count input is a number input', /<input type="number" min="1" :value="step\.count \?\? 1"/.test(b), true)
+  ok('the sample-size hint names a number, never a bare N',
+    /2 or more = subset/.test(hints) && /\bN = (multi-select|subset)/.test(hints), false)
+  ok('the aggregate count input is still a number input',
+    /<input type="number" min="1" :value="step\.count \?\? 1"/.test(b), true)
   ok('an unusable value falls back to one rather than to nothing',
     /Number\.isFinite\(n\) && n >= 1 \? n : 1/.test(b), true)
+
+  // A `choose` is a one/multiple toggle, and its multiple side is `null`.
+  ok('a choose step is a one/multiple toggle',
+    /<div v-else-if="step\.kind === 'choose'"[\s\S]{0,600}<SegmentedControl/.test(b)
+      && /label: 'Choose one'/.test(b) && /label: 'Choose multiple'/.test(b), true)
+  ok('…whose multiple side is null, not a magic number',
+    /const MULTI = null/.test(b) && /step\.count == null \? MULTI : ONE/.test(b), true)
+  ok('…written straight through, so the stored count is 1 or null',
+    /step\.count = \(mode == null \? null : Number\(mode\)\)/.test(b), true)
+
+  const wiz = read(find('components/gm/EffectTargetWizard.vue'))
+  // A nullable count must be read as *multiple*: `null > 1` is false in JS, which
+  // is exactly how a null would silently become a single pick.
+  ok('the wizard reads a null count as multiple, not as a single pick',
+    /const isMultiple = computed/.test(wiz) && /n == null \|\| n > 1/.test(wiz), true)
+  ok('…and says "any number" rather than naming a cap it does not enforce',
+    /'Select any number\.'/.test(wiz), true)
 
   // A list-valued field (`known_to`, `tags`, `universes`) is matched with
   // `contains`: a pick that set `==` or `in` would write a step the resolver

@@ -202,12 +202,12 @@ class PendingTargetChoice:
 
     ``element`` is the catalog element type of the candidates; ``candidates``
     holds the resolved candidate objects (before serialization); ``count`` is
-    how many the user should select (1 = single, >1 = subset). ``step_index``
-    is where the ``choose`` was hit in the path.
+    how many the user should select (1 = one, ``None`` = as many as they like).
+    ``step_index`` is where the ``choose`` was hit in the path.
     """
     element: str
     candidates: list[Any] = field(default_factory=list)
-    count: int = 1
+    count: int | None = 1
     step_index: int = 0
 
 
@@ -960,8 +960,8 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
             if current_type is None:
                 errors.append(TraceError(i, "choose has no collection to pick from"))
                 values, current_type = [], None
-            elif step.count < 1:
-                errors.append(TraceError(i, "choose count must be >= 1"))
+            elif step.count is not None and step.count < 1:
+                errors.append(TraceError(i, "choose count must be >= 1 or null"))
                 values, current_type = [], None
             elif current_type.cardinality != "many":
                 errors.append(TraceError(i, "choose requires a many-cardinality collection"))

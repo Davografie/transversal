@@ -181,14 +181,16 @@
 
         <!-- choose: interactive collapse of the current collection -->
         <div v-else-if="step.kind === 'choose'" class="tsb-config tsb-choose">
-          <label class="tsb-check">
-            <span>pick</span>
-            <input type="number" min="1" :value="step.count ?? 1" @input="onCount(i, $event)" />
-            <!-- "N = multi-select" invited the *letter* N, which a number input
-                 refuses — so the field snapped back to 1 and multi-select looked
-                 broken. It is a count: say the number. -->
-            <em>1 = single pick · 2 or more = multi-select</em>
-          </label>
+          <!-- A one/multiple **toggle**, not a number: the count only ever decided
+               single-pick vs multi-select, so a number read as a cap it never
+               enforced. `null` is "as many as they like". -->
+          <SegmentedControl
+            class="tsb-choose-mode"
+            :model-value="step.count == null ? MULTI : ONE"
+            :options="CHOOSE_MODES"
+            aria-label="How many they pick"
+            @update:model-value="onChooseMode(i, $event)"
+          />
         </div>
 
         <!-- evaluate: terminal boolean test (exists / comparison) -->
@@ -271,6 +273,7 @@ import TagInput from '@/components/ui/TagInput.vue'
 import DiePicker from '../DiePicker.vue'
 import GmList from '@/components/ui/GmList.vue'
 import Button from '@/components/ui/Button.vue'
+import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ steps: [] }) },
@@ -449,6 +452,15 @@ const STEP_KINDS = [
 const KIND_BLOCKED_REASON = 'a condition is a filter — choose needs someone to answer'
 
 const OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'contains']
+// A `choose` step's two modes, stored in `count`: 1, or `null` for "as many as
+// they like". Numbers above 1 are no longer written — they only ever meant
+// "more than one", and reading them as a cap was the lie the toggle removes.
+const ONE = 1
+const MULTI = null
+const CHOOSE_MODES = [
+  { value: ONE, label: 'Choose one' },
+  { value: MULTI, label: 'Choose multiple', title: 'As many as they like — no limit' },
+]
 // The operators that only mean something for a *list* field. A pick must land in
 // this family but must not overwrite a deliberate choice within it — picking a
 // value for "nobody knows this" is still that rule.
@@ -773,6 +785,11 @@ function evalValueIsNumber(i) {
 function onCount(i, e) {
   const n = Math.trunc(Number(e.target.value))
   steps.value[i].count = Number.isFinite(n) && n >= 1 ? n : 1
+}
+
+function onChooseMode(i, mode) {
+  const step = steps.value[i]
+  if (step) step.count = (mode == null ? null : Number(mode))
 }
 
 function toggleOutput(i) {

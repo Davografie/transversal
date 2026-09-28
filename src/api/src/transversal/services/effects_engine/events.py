@@ -43,12 +43,12 @@ class StructuredChoice:
 
     ``element`` is the catalog element type; ``candidates`` are serialized
     display records (``id``/``name``/``subtitle``/``element``); ``count`` is how
-    many to pick; ``field`` names where the result lands on the effect
-    (``target`` | ``entity`` | ``refs.<name>``).
+    many to pick (1 = one, ``None`` = as many as they like); ``field`` names where
+    the result lands on the effect (``target`` | ``entity`` | ``refs.<name>``).
     """
     element: str
     candidates: list
-    count: int
+    count: int | None
     field: str
     effect: Effect
     sfx_name: str = ""

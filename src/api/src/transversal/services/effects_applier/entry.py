@@ -498,10 +498,11 @@ def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict,
 
     A ``choose`` step stops the path *before* it names anyone — it returns a
     question and an empty value list. Two things follow, and both used to be
-    wrong here: **nothing to choose between is not a question** (one candidate, or
-    exactly as many as the step wants, is simply taken), and a real decision is
-    **reported** through ``pending_out`` rather than dropped, so its caller can put
-    it to the table instead of applying the effect to nobody.
+    wrong here: **nothing to choose between is not a question** (one candidate is
+    simply taken — and *only* one, so the shortcut can never pick for the table),
+    and a real decision is **reported** through ``pending_out`` rather than
+    dropped, so its caller can put it to the table instead of applying the effect
+    to nobody.
     """
     from transversal.services.target_resolver import TargetContext, resolve
 
@@ -512,12 +513,16 @@ def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict,
                       source=source, source_element=source_element),
     )
     if resolution.pending_choices:
-        if all(len(pc.candidates) <= pc.count for pc in resolution.pending_choices):
-            for pc in resolution.pending_choices:
-                for candidate in pc.candidates:
-                    rid = _spec_value_id(candidate)
-                    if rid:
-                        return effect.model_copy(update={"entity": rid, "entity_spec": None})
+        if all(len(pc.candidates) == 1 for pc in resolution.pending_choices):
+            # **Nothing to choose between** is *one* candidate — not "no more than
+            # the step asked for". The wider reading silently returned the first of
+            # several candidates and dropped the rest, so `choose 3` over exactly
+            # three people applied to one of them; a step with a real choice now
+            # asks, and its answer fans the effect out over everyone picked.
+            candidate = resolution.pending_choices[0].candidates[0]
+            rid = _spec_value_id(candidate)
+            if rid:
+                return effect.model_copy(update={"entity": rid, "entity_spec": None})
         if pending_out is not None:
             pending_out.extend(resolution.pending_choices)
         # No channel to ask through (an older caller): leave the effect as authored

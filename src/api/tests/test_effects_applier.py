@@ -3804,3 +3804,50 @@ def test_teaching_someone_who_already_knows_is_a_no_op():
 
     assert hidden.known_to == ["char-2"]
     assert "already knows" in result.applied[0].summary
+
+
+def _occupant_spec_count(count):
+    from transversal.services.target_spec import ChooseStep, SelectStep, TargetSpec
+
+    return TargetSpec(steps=[SelectStep(collection="occupants"), ChooseStep(count=count)])
+
+
+def test_a_multi_choose_over_exactly_as_many_candidates_still_asks():
+    """The bug: the "nothing to choose between" shortcut fired on
+    ``candidates <= count``, so `choose 2` over exactly two people matched it and
+    returned the **first**, silently dropping the other — and `choose 3` over three
+    did the same. It now fires only on a single candidate, so a real choice reaches
+    the table and its answer fans out."""
+    from transversal.domain import Effect
+    from transversal.services.effects_applier.entry import _resolve_entity_spec
+
+    here = NS(id="e1", current_location="loc-1")
+    repo = _subject_choice_repo([NS(id="e2", current_location="loc-1"),
+                                 NS(id="e3", current_location="loc-1")])
+
+    for count in (2, None):
+        pending: list = []
+        out = _resolve_entity_spec(
+            Effect(type="modify_trait", action="move", entity_spec=_occupant_spec_count(count)),
+            here, repo, {}, pending_out=pending)
+
+        assert out is None, f"count={count}: nobody may be picked for the table"
+        assert len(pending) == 1, f"count={count}: the choice must be reported"
+        assert len(pending[0].candidates) == 2
+
+
+def test_choose_multiple_over_one_candidate_is_still_taken():
+    """`None` is 'as many as they like' — and one candidate is still nothing to
+    choose between (the same shortcut, now the only case that reaches it)."""
+    from transversal.domain import Effect
+    from transversal.services.effects_applier.entry import _resolve_entity_spec
+
+    here = NS(id="e1", current_location="loc-1")
+    repo = _subject_choice_repo([NS(id="e2", current_location="loc-1")])
+    pending: list = []
+    out = _resolve_entity_spec(
+        Effect(type="modify_trait", action="move", entity_spec=_occupant_spec_count(None)),
+        here, repo, {}, pending_out=pending)
+
+    assert pending == []
+    assert out is not None and out.entity == "e2" and out.entity_spec is None
