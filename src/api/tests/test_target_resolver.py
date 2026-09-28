@@ -1117,3 +1117,41 @@ def test_a_list_field_is_asked_about_with_contains():
     assert run(["gmc-9", "gmc-2"]) == ["kael"], "several means any of"
     assert run(["gmc-8", "gmc-9"]) == [], "…none of them means no"
     assert run("gmc-1", operator="==") == [], "a list never equals a string"
+
+
+def test_not_contains_is_the_negation_over_a_list():
+    """`known_to` is an audience list, so "nobody knows this one" is a *negated*
+    membership test: `not contains`. Several values mean *none of* (De Morgan's
+    other half of "any of"), and an absent list contains nothing — which is the
+    case the author actually needs, since most entities know nobody."""
+    kael = NS(id="kael", type="character", known_to=["gmc-1", "gmc-2"])
+    empty = NS(id="gmc-empty", type="gmc")          # no known_to at all
+    repo = FakeRepo(entities={"kael": kael, "gmc-empty": empty})
+
+    def run(subject, value, operator="not contains"):
+        s = spec(SelectStep(collection="self"),
+                 FilterStep(field="known_to", operator=operator, value=value))
+        r = resolve(s, TargetContext(subject=subject, repo=repo))
+        assert r.errors == []
+        return [v.id for v in r.values]
+
+    assert run(kael, "gmc-1") == [], "it is on the list, so it is not 'not on it'"
+    assert run(kael, "gmc-9") == ["kael"], "and something absent is"
+    assert run(kael, ["gmc-3", "gmc-4"]) == ["kael"], "several means none of them"
+    assert run(kael, ["gmc-9", "gmc-1"]) == [], "…so one present defeats it"
+    assert run(empty, "gmc-1") == ["gmc-empty"], "an absent list contains nobody"
+
+
+def test_a_stored_not_contains_spec_parses():
+    """The operator is a `Literal` on `FilterStep`, so a spelling that is not
+    declared there fails at *parse* time — the whole rule would refuse to load,
+    which is a much worse failure than the filter not matching."""
+    from transversal.services.target_spec import TargetSpec
+    parsed = TargetSpec.model_validate({
+        "steps": [
+            {"kind": "select", "collection": "entities"},
+            {"kind": "filter", "field": "known_to", "operator": "not contains",
+             "value": "gmc-1"},
+        ]
+    })
+    assert parsed.steps[1].operator == "not contains"

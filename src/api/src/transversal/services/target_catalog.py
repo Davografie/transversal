@@ -341,16 +341,16 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         # An **audience**: X's list names who knows X, not what X knows (the
         # author, 2026-09-27 — the same direction the trait field has always had,
         # and what the persistent index on `known_to[*]` is for). So
-        # `filter known_to contains <me>` reads "entities that <me> knows about".
-        # It is a **list** of entity ids, so it is matched with `contains` — never
-        # `==`, which a list can never satisfy (`["a"] == "a"` is false), so
-        # `==`/`!=` are deliberately *not* offered here even though `tags` lists
-        # them. One pick means *is on the list*, several mean *any of*, per the
-        # resolver's one-or-several rule; `references` gives the wizard a picker,
-        # because ids are not typeable. **Negation is not expressible** — there is
-        # no `not contains`, so "nobody knows this one" cannot be said yet.
+        # `known_to contains <me>` reads "entities that <me> knows about". It is a
+        # **list** of entity ids, so it is matched with `contains` — never `==`,
+        # which a list can never satisfy (`["a"] == "a"` is false), so `==`/`!=` are
+        # deliberately *not* offered here even though `tags` lists them. One pick
+        # means *is on the list*, several mean *any of*, per the resolver's
+        # one-or-several rule; `references` gives the wizard a picker, because ids
+        # are not typeable. **`not contains`** is the other half and the one that
+        # says *nobody knows this* — with several picks it reads *none of*.
         "known_to": ScalarField("entity", "known_to", "string",
-                                operators=("contains",),
+                                operators=("contains", "not contains"),
                                 references="entity", label="known to"),
         "type": ScalarField("entity", "type", "string", ("character", "location", "faction", "asset", "gmc", "universe", "subtrait", "relation")),
         "current_location": ScalarField("entity", "current_location", "string", references="location"),

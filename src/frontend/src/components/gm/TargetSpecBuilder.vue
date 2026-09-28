@@ -406,8 +406,9 @@ function onTagsChange(i, values) {
   step.value = list.length === 0 ? '' : (list.length === 1 ? list[0] : list)
   // `==` against a tags list can never pass for a single tag, so naming the
   // first tag lands on the operator the catalogue offers first for this field.
-  // A deliberate choice is left alone afterwards — this only fires on a fill-in.
-  if (!had && list.length && step.operator !== 'contains') step.operator = 'contains'
+  // A deliberate choice is left alone afterwards — this only fires on a fill-in,
+  // and a deliberate `not contains` is a choice like any other.
+  if (!had && list.length && !LIST_OPERATORS.includes(step.operator)) step.operator = 'contains'
 }
 
 function fieldSuggest(i) {
@@ -448,6 +449,10 @@ const STEP_KINDS = [
 const KIND_BLOCKED_REASON = 'a condition is a filter — choose needs someone to answer'
 
 const OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'contains']
+// The operators that only mean something for a *list* field. A pick must land in
+// this family but must not overwrite a deliberate choice within it — picking a
+// value for "nobody knows this" is still that rule.
+const LIST_OPERATORS = ['contains', 'not contains']
 const EVALUATE_OPERATORS = ['exists', '==', '!=', '>', '>=', '<', '<=']
 
 const steps = computed({
@@ -594,11 +599,12 @@ function onReferenceValue(i, val) {
   step.value = values.length > 1 ? values : (values[0] || '')
   if (isListField(i)) {
     // A field that declares `contains` and not `in` is a list, and a list is only
-    // ever matched by `contains` — one pick means *is on the list*, several mean
-    // *any of* (the resolver reads both). Forcing `in` here wrote a step the
-    // resolver evaluates as "the whole list equals one of these", which can never
-    // be true, so the filter looked authored and matched nothing.
-    step.operator = 'contains'
+    // ever matched by `contains`/`not contains` — one pick means *is on the list*
+    // (or *is not*), several mean *any of* (or *none of*), which is what the
+    // resolver reads. Forcing `in` here wrote a step the resolver evaluates as "the
+    // whole list equals one of these", which can never be true, so the filter
+    // looked authored and matched nothing. A deliberate `not contains` stays.
+    if (!LIST_OPERATORS.includes(step.operator)) step.operator = 'contains'
   } else if (values.length > 1) {
     step.operator = 'in'
   } else if (step.operator === 'in') {

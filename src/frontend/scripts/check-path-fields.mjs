@@ -196,9 +196,17 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   // evaluates against the whole list, which is never true.
   ok('a pick on a list field sets contains, not an operator that cannot match',
     /function isListField\(i\)/.test(b)
-      && /if \(isListField\(i\)\) \{[\s\S]{0,500}?step\.operator = 'contains'/.test(b), true)
+      && /if \(isListField\(i\)\) \{[\s\S]*?step\.operator = 'contains'/.test(b), true)
   ok('…and list-ness is read from the field\'s declared operators',
     /return ops\.includes\('contains'\) && !ops\.includes\('in'\)/.test(b), true)
+
+  // Filling in a value must land in the list family without overwriting a
+  // deliberate choice *within* it: picking a value for "nobody knows this" has to
+  // stay a `not contains`. Both fill-in sites (the tags editor and the id picker)
+  // go through the same guard.
+  ok('a pick keeps a deliberate "not contains" instead of resetting it',
+    /const LIST_OPERATORS = \['contains', 'not contains'\]/.test(b)
+      && (b.match(/!LIST_OPERATORS\.includes\(step\.operator\)/g) || []).length === 2, true)
 }
 
 // ── A choice table appears where the question was raised ──────────

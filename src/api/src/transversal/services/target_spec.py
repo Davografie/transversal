@@ -38,7 +38,7 @@ class SelectStep(BaseModel):
 class FilterStep(BaseModel):
     kind: Literal["filter"] = "filter"
     field: str
-    operator: Literal["==", "!=", ">", ">=", "<", "<=", "in", "not in", "contains"] = "=="
+    operator: Literal["==", "!=", ">", ">=", "<", "<=", "in", "not in", "contains", "not contains"] = "=="
     value: Any = None
     output: str | None = None
 

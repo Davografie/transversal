@@ -280,3 +280,12 @@ def test_known_to_is_filterable_as_a_list():
     assert "contains" in tc.operators_for(f)
     assert "==" not in tc.operators_for(f)
     assert "in" not in tc.operators_for(f), "`in` tests a list against a list and never hits"
+
+
+def test_known_to_offers_both_halves_of_membership():
+    """`contains` says *someone knows this*; `not contains` says *nobody does*.
+    Neither `==`/`!=` nor `in` can match a list, so they are still not offered."""
+    ops = tc.operators_for(tc.field("entity", "known_to"))
+    assert "contains" in ops
+    assert "not contains" in ops, "the author needs 'nobody knows this one'"
+    assert "==" not in ops and "!=" not in ops and "in" not in ops

@@ -488,13 +488,18 @@ def _match(element: Any, step: FilterStep, field_type: str | None = None,
         wanted = expected if isinstance(expected, list) else [expected]
         hit = actual in wanted
         return hit if op == "in" else not hit
-    if op == "contains":
+    if op in ("contains", "not contains"):
         # A list value means *any of* — the same one-or-several reading an enum
         # filter gets from `in`, for a field that is itself a list (a trait's
-        # tags: "tagged fire or water").
+        # tags: "tagged fire or water"). `not contains` is its negation, so several
+        # values there mean *none of* (De Morgan), and an absent list contains
+        # nothing — which is what makes "nobody knows this one" sayable.
+        actual_list = actual or []
         if isinstance(expected, list):
-            return any(item in (actual or []) for item in expected)
-        return expected in actual
+            hit = any(item in actual_list for item in expected)
+        else:
+            hit = expected in actual_list
+        return hit if op == "contains" else not hit
     return False
 
 

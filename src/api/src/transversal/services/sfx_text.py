@@ -77,6 +77,7 @@ _OP_WORDS = {
     "<=": "at most",
     "in": "in",
     "contains": "including",
+    "not contains": "not including",
 }
 
 # A `contains` filter on a list-valued label field reads as membership of the
