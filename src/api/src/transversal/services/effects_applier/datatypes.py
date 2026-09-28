@@ -21,6 +21,17 @@ BINDINGS_CONTEXT_KEY = "_bindings"
 #: rule, and a *manual* activation's untimed undos are booked as holds.
 ACTIVATION_CONTEXT_KEY = "_activation"
 
+#: What each applied effect *did*, or why it did nothing — one
+#: ``{"type", "action", "target", "note"}`` per record, accumulated on the
+#: activation's context while its effects run ([[B236]]).
+#:
+#: The reason lives on ``AppliedEffect.summary`` and was already written for every
+#: refusal; what was missing was anywhere to put it. Reaching the client mattered
+#: because **a refusal is recorded exactly like a success** — `{"applied": true,
+#: "effects_applied": 2}` for one real effect and one silent no-op — so a reader
+#: could not tell "it worked" from "it did nothing, and here is why".
+EFFECT_NOTES_CONTEXT_KEY = "_effect_notes"
+
 #: Where a gained trait is *anchored*, when that is not the plain entity: the
 #: The catalog element the ``owner_spec`` path landed on — ``relationship``,
 #: ``traitsetting``, ``entity`` or ``projection``. Written by

@@ -239,6 +239,14 @@ class EffectsEngine:
         """
         outcome = EventOutcome()
         change = _change_key(event)
+        # One sink per outcome, shared by reference through every ``effect_context``
+        # spread below (and through ``bind_source``, which copies keys). Each
+        # committed effect appends what it did; the outcome carries the list
+        # ([[B236]]). Seeded here rather than per dispatch so a *refusal* in the
+        # middle of a rule is as visible as a success.
+        notes: list[dict] = []
+        if isinstance(event.context, dict):
+            event.context[_effects_applier.EFFECT_NOTES_CONTEXT_KEY] = notes
 
         for sfx_id in available_sfx_ids:
             sfx = self._sfx_registry.get(sfx_id)
@@ -546,6 +554,7 @@ class EffectsEngine:
                 from transversal.services import effects_engine as _pkg
                 _pkg._emit_sfx_triggered(event.entity_id, sfx)
 
+        outcome.notes = notes
         return outcome
 
     def _trigger_matches(self, sfx: SFX, event: GameEvent) -> bool:

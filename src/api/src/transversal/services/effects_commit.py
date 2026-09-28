@@ -11,6 +11,7 @@ from __future__ import annotations
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.domain import ArrivalKind, Effect, Entity, dice_list_to_rating
 from transversal.services.effects_applier import EffectsResult, apply_effects
+from transversal.services.effects_applier.datatypes import EFFECT_NOTES_CONTEXT_KEY
 from transversal.services.scene_state import resync_pool_dice_for_trait
 from transversal.services.session_manager import session_manager
 
@@ -85,6 +86,20 @@ def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | 
     old_effect_bonus = entity.effect_dice_bonus
     old_hitch_threshold = entity.hitch_threshold
     result = apply_effects(entity, effects, repo, context, source=source, source_element=source_element)
+
+    # What each effect did, or why it did nothing, onto the activation's sink when
+    # there is one ([[B236]]). Every refusal already carries a reason on
+    # ``AppliedEffect.summary``; without this it died here, one layer below the wire.
+    notes = context.get(EFFECT_NOTES_CONTEXT_KEY) if isinstance(context, dict) else None
+    if notes is not None:
+        for record in result.applied:
+            applied_effect = getattr(record, "effect", None)
+            notes.append({
+                "type": getattr(applied_effect, "type", ""),
+                "action": getattr(applied_effect, "action", ""),
+                "target": getattr(applied_effect, "target", ""),
+                "note": getattr(record, "summary", ""),
+            })
 
     # Other entities mutated (e.g. razmerit transfer recipient).
     for other in result.entities_to_update:

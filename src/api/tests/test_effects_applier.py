@@ -91,6 +91,12 @@ class FakeRepo:
     def get_entity(self, entity_id):
         return self.entities.get(entity_id)
 
+    def update_entity(self, entity):
+        # `commit_effects` persists the primary entity; an in-memory double just
+        # keeps the object it was handed.
+        self.entities[entity.id] = entity
+        return entity
+
     def get_projection(self, projection_id):
         for p in self.projections:
             if p.id == projection_id:
@@ -105,6 +111,18 @@ class FakeRepo:
             if ts.id == ts_id:
                 return ts
         return None
+
+    def create_traitsetting(self, ts):
+        self.traitsettings.append(ts)
+        return ts
+
+    def update_traitsetting(self, ts):
+        for i, existing in enumerate(self.traitsettings):
+            if existing.id == ts.id:
+                self.traitsettings[i] = ts
+                return ts
+        self.traitsettings.append(ts)
+        return ts
 
     def create_scheduled_event(self, event):
         self.scheduled_events.append(event)
@@ -1589,6 +1607,114 @@ def test_consolidate_pool_revert_restores_the_whole_pool():
     assert revert.action == "restore_die"
     assert [d["die"] for d in revert.context["prior_pool"]] == ["d8", "d8"]
     store.clear_all()
+
+
+# ── What an effect did, on the activation's sink ([[B236]]) ──
+
+def test_a_committed_effect_records_what_it_did():
+    """The reason reaches the sink, so the client can tell success from no-op.
+
+    This is the bug that started [[B229]]: `{"applied": true, "effects_applied": 2}`
+    for one real effect and one silent no-op, because a refusal is recorded exactly
+    like a success. ``AppliedEffect.summary`` always said why; nothing carried it
+    out of this layer.
+    """
+    from transversal.services.effects_applier.datatypes import EFFECT_NOTES_CONTEXT_KEY
+    from transversal.services.effects_commit import commit_effects
+
+    repo = FakeRepo()
+    entity = _entity()
+    ts = _ts("trait-x", ["d8", "d8"])
+    repo.traitsettings = [ts]
+    context = {EFFECT_NOTES_CONTEXT_KEY: []}
+
+    commit_effects(entity, [_consolidate()], repo, context)
+
+    notes = context[EFFECT_NOTES_CONTEXT_KEY]
+    assert len(notes) == 1
+    assert notes[0]["type"] == "modify_roll"
+    assert notes[0]["action"] == "consolidate_dice"
+    assert notes[0]["note"] == "2d8 → d10 in char-1:trait-x's rating"
+
+
+def test_a_refused_effect_records_why_it_did_nothing():
+    """The half that matters most: a refusal says so, in the same place."""
+    from transversal.services.effects_applier.datatypes import EFFECT_NOTES_CONTEXT_KEY
+    from transversal.services.effects_commit import commit_effects
+
+    repo = FakeRepo()
+    entity = _entity()
+    repo.traitsettings = [_ts("trait-x", ["d8"])]  # no partner to merge with
+    context = {EFFECT_NOTES_CONTEXT_KEY: []}
+
+    commit_effects(entity, [_consolidate()], repo, context)
+
+    note = context[EFFECT_NOTES_CONTEXT_KEY][0]["note"]
+    assert note == "no second d8 in char-1:trait-x's rating to merge"
+
+
+def test_commit_without_a_sink_is_unchanged():
+    """The sink is optional: every existing caller commits with no notes list."""
+    from transversal.services.effects_commit import commit_effects
+
+    repo = FakeRepo()
+    entity = _entity()
+    repo.traitsettings = [_ts("trait-x", ["d8", "d8"])]
+    commit_effects(entity, [_consolidate()], repo, {})  # no sink — must not raise
+    assert [d.value for d in repo.traitsettings[0].dice] == ["d10"]
+
+
+def test_the_rest_shape_joins_each_note_to_its_effect():
+    from types import SimpleNamespace
+
+    from transversal.api.rest.effects import _with_notes
+
+    applied = [SimpleNamespace(type="modify_roll", action="consolidate_dice", target="rating:0:x"),
+               SimpleNamespace(type="transfer_razmerit", action="earn", target="")]
+    notes = [{"note": "2d8 → d10"}]
+
+    out = _with_notes(applied, notes)
+    assert out[0]["note"] == "2d8 → d10"
+    # An effect that never reached the commit path keeps the bare shape.
+    assert "note" not in out[1]
+    assert out[1] == {"type": "transfer_razmerit", "action": "earn", "target": ""}
+
+
+def test_the_engine_returns_the_notes_on_its_outcome():
+    """Seeded once per outcome and shared by reference through every effect_context
+    spread — which is what makes the engine's many dispatch branches accumulate
+    into one list instead of each rebuilding its own."""
+    from transversal.services.effects_applier.datatypes import EFFECT_NOTES_CONTEXT_KEY
+    from transversal.domain import SFX
+    from transversal.services.effects_engine import EffectsEngine, GameEvent
+
+    engine = EffectsEngine()
+
+    class Recorder:
+        """Stands in for the applier registry, the way the engine calls it."""
+
+        def apply(self, action, entity_id, universe, context):
+            context[EFFECT_NOTES_CONTEXT_KEY].append(
+                {"type": action.type, "action": action.action,
+                 "target": action.target, "note": "did a thing"})
+
+    engine.register(SFX(
+        id="sfx-notes", name="Notes", trigger="manual",
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
+                        action="step_up_die", target="next")],
+    ))
+    event = GameEvent(type="manual", entity_id="char-1", universe="earth")
+    import transversal.services.effects_engine.engine as engine_module
+    original = engine_module._effects_applier.effect_registry
+    engine_module._effects_applier.effect_registry = Recorder()
+    try:
+        outcome = engine.process_event_outcome(event, ["sfx-notes"], 0, repo=FakeRepo())
+    finally:
+        engine_module._effects_applier.effect_registry = original
+
+    assert outcome.notes == [{"type": "modify_roll", "action": "step_up_die",
+                              "target": "next", "note": "did a thing"}]
+    assert len(outcome.applied) == 1
 
 
 def test_consolidate_card_names_the_partner():

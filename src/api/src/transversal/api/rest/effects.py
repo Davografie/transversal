@@ -22,6 +22,23 @@ class EndRequest(BaseModel):
     sfx_id: str
 
 
+def _with_notes(applied: list, notes: list[dict]) -> list[dict]:
+    """Each applied effect, joined to what it did.
+
+    Joined on the applied order: ``notes`` is appended by the commit as each effect
+    lands, so the nth note is the nth effect. Effects that never reach the commit
+    path (a razmerit transfer, a passthrough) simply have no note, and keep the
+    bare shape — an absent note is honest where an invented one is not.
+    """
+    out: list[dict] = []
+    for i, a in enumerate(applied):
+        entry = {"type": a.type, "action": a.action, "target": a.target}
+        if i < len(notes):
+            entry["note"] = notes[i].get("note", "")
+        out.append(entry)
+    return out
+
+
 @router.post("/end")
 async def end_sfx(req: EndRequest, request: Request):
     """Take back a manual activation that has not committed yet.
@@ -108,6 +125,11 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
     return {
         "applied": len(applied) > 0,
         "effects_applied": len(applied),
-        "effects": [{"type": a.type, "action": a.action, "target": a.target} for a in applied],
+        # What each effect did, or why it did nothing. `applied` says *which* ran;
+        # this says what happened to each, which is the difference the author could
+        # not see when Gift reported two effects for one real one and one no-op
+        # ([[B236]]). An effect with no recorded note keeps the bare shape rather
+        # than inventing one.
+        "effects": _with_notes(applied, outcome.notes),
         "pending": len(outcome.pending) + len(outcome.structured),
     }

@@ -23,6 +23,7 @@ from transversal.services.effects_applier.datatypes import (  # noqa: F401
     SOURCE_ELEMENT_CONTEXT_KEY,
     BINDINGS_CONTEXT_KEY,
     ACTIVATION_CONTEXT_KEY,
+    EFFECT_NOTES_CONTEXT_KEY,
 )
 
 

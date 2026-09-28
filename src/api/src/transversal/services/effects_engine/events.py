@@ -100,6 +100,11 @@ class EventOutcome:
     change they are already handling, offered to the table rather than recursed.
     """
     applied: list[Effect] = field(default_factory=list)
+    #: What each applied effect did, or why it did nothing — ``type``/``action``/
+    #: ``target``/``note`` per record ([[B236]]). ``applied`` says *which* effects
+    #: ran; this says what happened to each, which is the difference between
+    #: "it worked" and "it silently did nothing" that the author could not see.
+    notes: list[dict] = field(default_factory=list)
     pending: list[PendingSfxEffect] = field(default_factory=list)
     structured: list[StructuredChoice] = field(default_factory=list)
     loops: list[PendingSfxLoop] = field(default_factory=list)
