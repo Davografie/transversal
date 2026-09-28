@@ -102,6 +102,18 @@ must not be thirty labels. The words arrive when it opens.
   decodes — a sliver on first paint, and permanent if the file ever 404s. A collapsed
   chip also drops its padding and border, so its box — and therefore its click target
   — is the marker, not an invisible pill.
+- **A resting cutout is a map figure, not a thumbnail** (the human, 2026-09-26: *"much
+  bigger than it is now. Maybe 5x or so"*). The collapsed cutout box went **23×34 →
+  115×170**, five times the linear size, keeping the 512×758 aspect the cutouts are
+  stored at exactly. An opaque resting thumbnail is unchanged at 26×26 — the call was
+  about cutouts, which read as specks against the background art. Two consequences
+  worth knowing: the **click target** grows with it (the resting chip's box *is* the
+  marker), and a room of many placed cutouts is busier than it was, since the resting
+  marker is what a map mostly shows.
+- **The spec asserts the relation, not the size.** `chip-proximity.spec.js` used to pin
+  the resting chip to `width < 60`; that was really testing "no pill around it", so it
+  now asserts the chip **hugs** its marker (`chipBox − img < 4px`) — a 5× marker had to
+  be a deliberate change, not a test edit that silently moved the goalposts.
 
 `e2e/tests/chip-proximity.spec.js` pins all of it on both engines, with both reads
 mocked so the geometry is exact.

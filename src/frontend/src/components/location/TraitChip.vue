@@ -244,9 +244,12 @@ function traitDiceGroups(trait) {
   height: 26px;
 }
 .trait-chip:not(.expanded) .trait-chip-marker.transparent {
-  /* 34px tall at the 512×758 the cutouts are stored at. */
-  width: 23px;
-  height: 34px;
+  /* The human's call (2026-09-26): a resting cutout is a **map figure**, not a
+     thumbnail — 5× the old 23×34, which read as a speck against the background art.
+     The 512×758 aspect the cutouts are stored at is kept exactly (23:34 = 115:170),
+     and it stays an explicit box rather than `width: auto` for the reason above. */
+  width: 115px;
+  height: 170px;
 }
 .trait-chip:not(.expanded) .trait-chip-marker-img {
   position: static;

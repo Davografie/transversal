@@ -130,7 +130,11 @@ test('resting, a chip is only its marker — and unplaced traits are not on the 
   const img = await withImage.locator('img').boundingBox()
   const chipBox = await withImage.boundingBox()
   expect(img.height).toBeGreaterThan(20)            // a marker, not a sliver
-  expect(chipBox.width).toBeLessThan(60)            // and no pill around it
+  // "No pill around it" is a RELATION, not a size: the human enlarged the resting
+  // cutout 5× on 2026-09-26, so the chip still has to HUG its marker (this used to be
+  // an absolute `width < 60`, which pinned the old 23×34 rather than the rule).
+  expect(chipBox.width - img.width).toBeLessThan(4)
+  expect(chipBox.height - img.height).toBeLessThan(4)
 
   // Without one: the rating IS the marker, so the dice are there and the words are not.
   const ratingOnly = chip(RATING_ONLY)
