@@ -125,6 +125,7 @@ mutation($input: UpdateEntityInput!) {
     id name razmerit currentUniverse currentLocation hidden unpublished ownedBy
     supportEligible knownTo starterLocation navPositions
     backgroundImage overlay loraConfig promptSteering promptIncludeAncestors
+    palette
   }
 }
 """
@@ -146,7 +147,10 @@ mutation($input: DeleteRelationshipInput!) {
 
 _QUERY_ENTITY = """
 query($id: ID!) {
-  entity(id: $id) { id type name razmerit currentUniverse currentLocation hidden ownedBy }
+  entity(id: $id) {
+    id type name razmerit currentUniverse currentLocation hidden ownedBy
+    palette promptSteering promptIncludeAncestors
+  }
 }
 """
 
@@ -169,6 +173,7 @@ query($id: ID!) {
   entity(id: $id) {
     id name type razmerit currentUniverse currentLocation currentProjection
     hidden unpublished ownedBy knownTo
+    palette promptSteering promptIncludeAncestors
     projections { id universe transversalType currentLocation }
     traitSettings {
       %s
@@ -1103,6 +1108,12 @@ def create_trait(args: dict) -> dict:
     auditable: a setting whose trait is defined can be checked against it, and a
     trait with no explanation is how the generic placeholder gets used instead of
     a real definition.
+
+    ``display_names`` renames the trait per rating, so one trait reads as a
+    ladder: ``[{"name": "golden core", "universe": "three_realms",
+    "ratings": [["D8"]]}]``. ``ratings`` is a list of *rating lists* because a
+    trait may be rated with several dice, which is why it looks doubly nested;
+    dice are uppercase enums on the way in and read back lowercase.
     """
     input_ = {
         "id": args["id"],
@@ -1110,6 +1121,7 @@ def create_trait(args: dict) -> dict:
         "universes": args.get("universes", []),
         "traitsetId": args["traitset_id"],
         "explanation": args.get("explanation", ""),
+        "displayNames": args.get("display_names", []),
         "defaultDieType": args.get("default_die_type", "D6"),
         "defaultRatingType": args.get("default_rating_type", "STATIC"),
         "possibleSfxIds": args.get("possible_sfx_ids", []),
@@ -2048,7 +2060,8 @@ def character_build(args: dict) -> dict:
     )
     return {"entity": {k: entity.get(k) for k in
                        ("id", "name", "type", "razmerit", "currentUniverse", "currentLocation",
-                        "currentProjection", "hidden", "unpublished")},
+                        "currentProjection", "hidden", "unpublished",
+                        "palette", "promptSteering", "promptIncludeAncestors")},
             "projections": entity.get("projections") or [],
             "groups": groups, "ties": ties,
             "problems": {"unresolved": [{"id": t.get("id"), "trait_id": t.get("traitId")} for t in unresolved],
@@ -2189,12 +2202,17 @@ def update_trait(args: dict) -> dict:
     ``explanation`` is the trait's definition and the reason this tool matters:
     with it set, every setting of this trait can be audited against it, and the
     answer to "is this the right trait here?" stops being a matter of taste.
+
+    ``display_names`` renames the trait per rating, so one trait reads as a
+    ladder: ``[{"name": "golden core", "universe": "three_realms",
+    "ratings": [["D8"]]}]``. It is a replace, not a merge.
     """
     inp = {}
     for key, gql_key in (
         ("name", "name"),
         ("universes", "universes"),
         ("explanation", "explanation"),
+        ("display_names", "displayNames"),
         ("default_die_type", "defaultDieType"),
         ("default_rating_type", "defaultRatingType"),
         ("polarity", "polarity"),
@@ -2860,6 +2878,41 @@ def _dry_run_property() -> dict:
     return {"type": "boolean", "description": _DRY_RUN_HELP, "default": True}
 
 
+def _display_names_property() -> dict:
+    """The ``display_names`` schema, shared by the trait create and update tools.
+
+    One trait reads as a ladder by renaming itself per rating, which is how
+    ``cultivation stage`` becomes qi condensation → foundation building → golden
+    core → nascent soul → ascendant. ``ratings`` is a list of *rating lists*
+    because a trait may be rated with several dice, so a single-die entry is
+    ``[["D8"]]``.
+
+    Dice are **uppercase enums on the way in** (``D4``/``D6``/``D8``/``D10``/``D12``,
+    the same spelling ``default_die_type`` takes) and read back lowercase, so a
+    caller must not round-trip a value it read straight back into a write.
+    """
+    return {
+        "type": "array",
+        "description": "Rename the trait per rating, so one trait reads as a ladder. "
+                       "e.g. [{\"name\": \"golden core\", \"universe\": \"three_realms\", "
+                       "\"ratings\": [[\"D8\"]]}]. Replaces the whole list.",
+        "items": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "The name shown at these ratings."},
+                "universe": {"type": "string", "description": "Universe key this name applies in."},
+                "ratings": {
+                    "type": "array",
+                    "description": "Rating lists this name covers, e.g. [[\"D8\"]]. Dice are uppercase "
+                                   "(D4/D6/D8/D10/D12) on the way in and read back lowercase.",
+                    "items": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+            "required": ["name", "universe", "ratings"],
+        },
+    }
+
+
 TOOL_SCHEMAS = {
     "create_universe": {
         "name": "create_universe",
@@ -3319,6 +3372,7 @@ TOOL_SCHEMAS = {
                 "default_ego": {"type": "boolean"},
                 "tags": {"type": "array", "items": {"type": "string"},
                          "description": "Registry-level labels (B116); [] clears them"},
+                "display_names": _display_names_property(),
                 "dry_run": _dry_run_property(),
             },
             "required": ["id"],
@@ -3490,6 +3544,7 @@ TOOL_SCHEMAS = {
                 "default_ego": {"type": "boolean"},
                 "tags": {"type": "array", "items": {"type": "string"},
                          "description": "Registry-level labels a condition/target can match on (B116)"},
+                "display_names": _display_names_property(),
                 "dry_run": _dry_run_property(),
             },
             "required": ["id", "name", "traitset_id"],
