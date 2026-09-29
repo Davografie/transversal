@@ -35,8 +35,10 @@ The sibling design for the shared content surface is [[Content Registry]].
 | campaign ownership | **different people own different campaigns** — friends, and possibly paying architects |
 | who may invite | **any member** |
 | player registration | **local to the campaign** — no central user register |
-| invites | **pure authorization, not identity** — a **reusable admission window** (~30 min), one QR for the whole table, closable early |
-| sessions | **sliding 30-day signed cookie carrying the player**; revoking on that player's account kills its sessions |
+| the token | **admits to the campaign, not to a player** — reusable, ~30 min, one QR for the whole table, closable early |
+| the player | **taken after admission** — new or existing; there is no per-player secret |
+| sessions | **sliding 30-day signed cookie** carrying the campaign **and the player taken**; revoking that account ends its sessions |
+| architect accounts | **never takeable** — reached only through the recovery email link, so a member cannot promote themselves |
 | recovery | **email link only at first** — passkey and password are deliberate later additions |
 | creators/owners | a **central registry account** (the same one that holds recovery methods); players still have none |
 | GPU | **not** in the free tier — all four GPU operations gated ([[Content Registry]]) |
@@ -100,18 +102,24 @@ lives in that database's `players` collection with `id`, `name`, `role` and spot
 ownership of characters is resolved from `agency` edges. Nothing central is needed — "locally
 registered on the campaign" requires **no new entity at all**.
 
-An invite is **authorization, not identity**: it grants campaign access and proves nothing about
-who holds it. Accepting one creates the local player and issues a session. There is no
-per-player credential; the invite is the only secret involved, and it is a **shared admission
-window** rather than a per-person link (§4).
+The token is **authorization to the campaign, not to a player**: it proves nothing about who
+holds it, and it says nothing about which player the holder will be. Accepting it issues a
+campaign session; the **player is then taken** — a new record, or an existing one (§4). There is
+no per-player secret anywhere, and that is deliberate.
+
+The campaign is therefore the **only identity boundary**, and within it players are mutually
+trusted: taking a player account is how you assume that character, and nothing stops one member
+taking another's. See §5.1, §5.9 and the open question about [[B43]].
 
 What the cookie and the player record must carry:
 
-- The session is **signed** and carries `campaign + player + issued_at + epoch`. It must name the
-  campaign, because with a database per campaign the request has to be routed *before* anything
-  can be looked up — and it must name the **player**, which is what lets the architect act on
-  that account. The signature is what stops a client editing the cookie to become someone else:
-  an *unsigned* player id in a cookie is exactly SEC-3 again.
+- The session is **signed** and carries `campaign + player_taken + issued_at + epoch`. It must
+  name the campaign, because with a database per campaign the request has to be routed *before*
+  anything can be looked up — and it names the **player taken**, so the architect can act on that
+  account. The signature stops a client editing it; but because *taking* is free within a
+  campaign, the server must additionally refuse to take an **architect** account (§4). A signed
+  session naming one must never be issuable to a member — an unsigned player id in a cookie would
+  be exactly SEC-3 again.
 - A **sliding 30-day lifetime**, refreshed while the player keeps playing. Implementation note:
   refresh when the remaining life drops below a threshold, not on literally every request, or
   every API response carries a `Set-Cookie`.
@@ -119,17 +127,23 @@ What the cookie and the player record must carry:
   cannot be recalled, so this is the *only* way "remove this person" has an implementation:
   bumping the epoch kills every session that player holds.
 
-**Ejecting** a member is therefore **revoking on their player account** — an epoch bump that ends
-every session they hold. It deliberately does **not** delete the player: their characters are
-entities owned through `agency` edges, and deleting the record would orphan them. Revoking ends
-access; deleting is a separate, explicit act. Campaigns are sovereign, and there is deliberately
-no way to ban a person across campaigns.
+**Ejecting** a member is **revoking on their player account** — an epoch bump that ends every
+session bound to it. It deliberately does **not** delete the player: their characters are entities
+owned through `agency` edges, and deleting the record would orphan them. Revoking ends access;
+deleting is a separate, explicit act.
+
+But under campaign-level admission **eject is soft**. Revoking an account does not remove someone
+who still holds a valid token — they can take another account, or create one. It is revocation
+*plus* closing the token. And since any member can open a new token, an owner cannot permanently
+exclude anyone: a member can always re-admit them. That is the accepted cost of "any member may
+invite"; real exclusion would require per-person credentials, which this model deliberately has
+none of.
 
 ### The one central identity — for owners, not players
 
 Recovery credentials and authored content both need to know who you are *across* campaigns, so
 **owners and creators hold a central registry account**, and it is the same account that holds
-their recovery methods. This is **not** a contradiction of "no central user register" — that
+their recovery address. This is **not** a contradiction of "no central user register" — that
 decision was about *players*, and it stands. The model is two-tier: anonymous-ish campaign-local
 players, and account-holding owners/creators.
 
@@ -141,33 +155,31 @@ architect. The registry records campaign → database → recovery address; the 
 and bootstrapped on first use. Self-service is the intent, but throttling and payments are still
 open on the owner's side.
 
-### Admission — one QR for the whole table
-In the **Troupe** panel, **Admit players** opens an **admission window**: one token, shown as a QR
-and as a short readable code (for voice), valid for a short period — **~30 minutes** by default.
-Everyone scans the same one. There is no per-participant link to regenerate, and the window can
+### Admission — one token for the whole table
+In the **Troupe** panel, **Admit players** opens a **campaign join token**: one token, shown as a
+QR and as a short readable code (for voice), valid for a short period — **~30 minutes** by
+default. Everyone scans the same one. There is no per-participant link to regenerate, and it can
 be **closed early** without waiting for the clock.
 
-Each acceptance creates a **new local player** with a 30-day sliding session, **playing
-immediately** after typing a name. This preserves today's first-run feel, and it cannot collide:
-accepting an admission creates a player, it never adopts an existing one.
+The token grants **campaign access**. It is not a claim about who you are.
 
-**The window is the whole of the security bound.** Because the token is reusable for its
-lifetime, anyone who obtains it inside the window becomes a member. What keeps that acceptable is
-the **blast radius**: a leaked token admits a *new player* — it can never assume an existing one,
-so nobody's characters or role are reachable through it. The controls that follow are a short
-expiry, close-early, a high-entropy token, a cap on joins per window, and the roster being
-visible so an unexpected member is noticed and revocable.
+### Taking a player
+Once admitted, you **take a player**: type a name that does not exist and a new local player
+record is created, or take an **existing** player — which is exactly how a returning player gets
+back onto a new device, with their characters intact. You then hold a 30-day sliding session
+bound to that player.
 
-### Re-admitting an *existing* player — the gap, and how it closes
-A shared window admits **new** players, so by itself it cannot put an existing player back on a
-new device — and with no per-player credential there is otherwise no way in. The minimal fix
-reuses the same mechanism with a **target**: an admission window opened from that player's roster
-row is scoped to them, so accepting it binds the device to **that existing player** instead of
-creating one. Per-player windows are **single-use** and short; the bulk window stays reusable.
-One mechanism, two modes.
+That is the whole of re-admission, and it needs no architect action: any member opens a token,
+and the returning player takes their own account. *(An earlier draft of this section proposed a
+per-player "targeted window" for this; the owner's model makes it unnecessary.)*
 
-Without this, a returning player's only path would be to create a duplicate of themselves, which
-would orphan their characters (their `agency` edges point at the old record). See §8.
+**The token is the security bound, and the bound is campaign-shaped.** Anyone who obtains it
+inside its life is in the campaign and may take any player in it, so:
+
+- a leaked token admits an outsider **and hands them every player in the campaign** — the blast
+  radius is the campaign, not a player, unlike every earlier draft of this doc;
+- **architect accounts are the one exception and must not be takeable**, or a member could
+  promote themselves to owner. The architect enters through the recovery email link instead.
 
 ### Recovery — the owner's way back in
 *Recover campaign access* → enter the recovery address → a **single-use, short-lived email link**
@@ -185,24 +197,26 @@ Because the cookie names a campaign and the app needs a campaign in its URL (e.g
 re-authenticating. Two tabs, two campaigns, no re-login.
 
 ### The architect's controls (Troupe panel)
-Per member: **Admit this device · Revoke · Make architect** — where *Admit this device* opens a
-**targeted** admission window and *Revoke* is the epoch bump on that player's account. Campaign
-wide: the **open admission windows**, with close-early and close-all, and the recovery address.
-The last architect cannot demote themselves.
+Per member: **Revoke · Make architect** — *Revoke* is the epoch bump on that player's account.
+Campaign wide: **open a join token**, **close it / close all**, and the recovery address. The last
+architect cannot demote themselves, and **an architect account is never takeable**.
 
 ## 5. Security consequences — what this model *forces*
 
-1. **Invites are pure authorization and, with no central register, they are the whole of
-   admission control.** They cannot be bound to a person, because we never learn who the person
-   is. A **reusable** token therefore trades use-count for a short window: it admits everyone who
-   scans it until it expires or is closed. That is a deliberate trade for the table ritual — one
-   QR, no per-person links — and it is sound *because a leaked token can only mint a new member,
-   never assume an existing one*. What the owner still needs is visibility (who joined, which
-   windows are open) and a one-action way to close everything.
-2. **Any member can admit, so the owner needs visibility and eject.** A member can open a window
-   and admit someone the owner would not have. That is a legitimate table dynamic, but the owner
-   must be able to see the roster and the open windows, close them, and revoke a member —
-   otherwise whoever is paying cannot manage what they are paying for.
+1. **The token is the whole of admission control, and its blast radius is the campaign.** It
+   cannot be bound to a person — we never learn who the person is — and it does not name a
+   player, so a **reusable** token trades use-count for a short life: it admits everyone who scans
+   it until it expires or is closed, and each of them may then take **any** player in the
+   campaign. That is a deliberate trade for the table ritual (one QR, no per-person links), and
+   the accepted consequence is that a leaked token is full access to the campaign's play surface
+   for its lifetime. Hence: short expiry, close-early, high entropy, a join cap, a visible
+   roster, and **architect accounts excluded from taking**.
+2. **Any member can admit, so the owner needs visibility and eject — and eject is soft.** A
+   member can open a token and admit someone the owner would not have, and can equally re-admit
+   someone the owner ejected. The owner can see the roster and the open tokens, close them, and
+   revoke a member's account — but cannot permanently exclude anyone while any member can open a
+   new token. That is the price of "any member may invite", and it is worth knowing before
+   someone is paying for a campaign.
 3. **Recovery is the crown jewel, and the address must be verified at enrolment.** Recovery
    reconstitutes the architect's session, so an unverified address *is* a way in — a mistyped one
    sends the single link that hands the campaign to a stranger. This is the one place that
@@ -214,28 +228,32 @@ The last architect cannot demote themselves.
    plays what. Recovery sends are capped per address and per campaign.
 5. **Recovery replaces the session set rather than adding one** — the epoch bump is what makes a
    stolen or lost device stop working at the same moment.
-6. **Lockout is the residual risk, and it is why recovery is plural.** With several enrolled
-   methods, losing one device or one mailbox is survivable; losing *all* of them still leaves the
-   database, so server-side access is the honest fallback. Printable recovery codes would close
-   even that — see §8.
-7. **Admission tokens must be self-describing.** The link has to say *which campaign* before any
-   database can be opened, so the token carries a signed `campaign + window + mode + expiry`
-   payload — `mode` being bulk or a target player. The campaign database holds the window record,
-   so authenticity comes from the signature and liveness (open, unexpired, unclosed) from the
-   record. No global index is needed.
+6. **Lockout is the residual risk.** With email as the only method, losing the mailbox means the
+   campaign is unrecoverable through the app; the database still exists, so server-side access is
+   the honest fallback. A second method — or printable recovery codes — would close it. See §8.
+7. **The join token must be self-describing.** It has to say *which campaign* before any database
+   can be opened, so it carries a signed `campaign + token + expiry` payload. The campaign
+   database holds the token record, so authenticity comes from the signature and liveness (open,
+   unexpired, unclosed) from the record. No global index is needed.
 8. **The outbound-email surface is tiny — this is the model's quiet win.** Only recovery ever
    sends mail, and rarely. No per-player verification, no notifications, no digests. The SMTP
    provider is one secret and one dependency, and the abuse case (invite spam getting your domain
    blacklisted) largely disappears because nobody can trigger a send by inviting.
+9. **Player-level privacy is gone by construction — and that conflicts with [[B43]].** With no
+   per-player secret, a member can take another member's player account and see everything scoped
+   to it. [[B43]] asks the opposite: *"When player, shouldn't be able to see each others blue
+   book, should only see profile and traits."* That filtering is still implementable as the normal
+   UI behaviour, but it is a **convention, not a control** — it holds for honest use and is
+   bypassable by taking the account. Either B43 is reframed as UI policy, or player-level secrets
+   have to come back. See §8.
 
 ## 6. Machines: MCP and the e2e harness
 
 - **MCP** talks to the API over stdio and is unauthenticated today. Each campaign should carry a
   **service credential** for it, so its writes are attributable and it is not a browser session.
 - **The e2e harness** currently logs in by writing `localStorage.playerId` and never exercises
-  auth. It should use the **real** path — accept a **targeted** admission window for the
-  `DSH MCP` player in the test campaign — which keeps the suite working *and* makes it test what
-  it was skipping.
+  auth. It should use the **real** path — accept a join token for the test campaign and **take**
+  the `DSH MCP` player — which keeps the suite working *and* makes it test what it was skipping.
 
 ## 7. What this rejects
 
@@ -245,22 +263,23 @@ The last architect cannot demote themselves.
   matter** and do hold a central account (§3), because their recovery methods and authored
   content are theirs across campaigns.
 - **Email per player.** There is no player email at all. Only recovery ever sends mail.
-- **A per-player seat link for bulk admission.** The owner wants one QR for the table, and gets
-  it — the shared admission window. A per-player link survives only for the narrow *re-admission*
-  case, as a mode of the same window rather than a long-lived credential.
+- **Any per-player credential at all.** No seat link, no PIN, no targeted window — the token
+  admits to the campaign and the player is **taken** within it, which is what makes re-admission
+  work without architect action. The cost is player-level privacy; see §5.9.
 - **`universe` as the tenant.** See §2 and SEC-8.
-- **The old name-adoption flow.** Typing an existing player's name currently makes you that
-  player; it will create a *new* player instead, and never adopt an existing one. Character and
-  perspective switching are untouched — they are not identity claims.
-- **A shared static `ACCESS_TOKEN` as the door.** Superseded by per-campaign invites; the outer
-  perimeter survives only as the tailnet/LAN wall.
+- **Per-player isolation *inside* a campaign.** Taking an existing player is *how* you resume as
+  them, so it cannot simultaneously be forbidden. Character and perspective switching remain
+  untouched — they were never identity claims.
+- **A shared static `ACCESS_TOKEN` as the door.** Superseded by per-campaign join tokens; the
+  outer perimeter survives only as the tailnet/LAN wall.
 
 ## 8. Open items
 
-1. **Admission window length and join cap** — ~30 minutes is the working figure; how many joins
-   should one window allow before it closes itself?
-2. **The duplicate-player gap** (§4) — confirm the two-mode window is the right answer, or prefer
-   re-admitting from the roster as a separate explicit action.
+1. **Join token length and cap** — ~30 minutes is the working figure; how many joins should one
+   token allow before it closes itself?
+2. **The [[B43]] conflict** (§5.9) — player-level privacy versus free player-taking. Reframe B43
+   as UI policy, or reintroduce a per-player secret for the players who want one. **Also confirm
+   the rule that architect accounts are never takeable** (§4).
 3. **Second recovery method** — email-only is the v1 decision; a passkey is the natural next, and
    a password door needs rate limiting and lockout before it is worth offering.
 4. **Campaign in the URL** — `/c/<campaign>/…` with a switcher (recommended) versus routing
@@ -298,3 +317,13 @@ The last architect cannot demote themselves.
   it cannot re-admit an **existing** player to a new device — proposed a **targeted mode** of the
   same window (single-use, bound to one player) rather than a duplicate record that would orphan
   their characters.
+- 2026-09-26 — **fourth correction, from the owner, and it withdraws my fix rather than adding to
+  it.** The token grants **campaign access, not access to a player**, so an existing player is
+  re-admitted simply by **taking their account** — which removes the re-admission gap I had
+  raised, so the "targeted window" mode I proposed is dropped. What that costs, recorded plainly:
+  the blast radius of a leaked token becomes the **whole campaign** rather than a single new
+  member, and **player-level privacy is gone by construction**, which collides with the ticketed
+  ask [[B43]] (*"when player, shouldn't be able to see each others blue book"*). Also recorded:
+  **eject is soft** — revoking an account cannot remove someone who still holds a valid token,
+  and any member can re-admit them. One rule added as non-negotiable: **architect accounts are
+  never takeable**, or a member could promote themselves to owner.
