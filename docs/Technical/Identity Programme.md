@@ -23,12 +23,17 @@ The design for **SEC-3 / SEC-6 / SEC-8**, the tenant boundary, and the invitatio
 programme behind [[B88]] and the precondition for going online. Security-owned documentation.
 The sibling design for the shared content surface is [[Content Registry]].
 
-> [!success] SEC-3 is built — on the `security` branch, **unmerged**
-> The first slice (SEC-3 alone, against the current single database, no campaigns) is implemented
-> and tested: 2328 backend tests pass, including a flow test that drives the whole passage against
-> the real database, and the frontend builds. It is deliberately not merged — the owner picks the
-> moment, because **landing it invalidates every session and requires `ARCHITECT_TOKEN` in `.env`**
-> or nobody can enter. SEC-6 and SEC-8 (campaigns, the registry) are still design only.
+> [!success] SEC-3 is landed and live
+> The first slice (SEC-3 alone, against the current single database, no campaigns) is merged to
+> `release-build` and running. Backend: **2333 tests pass**, including a flow test that drives the
+> whole passage against the real database. Frontend builds and is rewired to ask the server who it
+> is. **Verified live** on the running stack: architect entry, opening a window, a device joining
+> with no player, claiming, an architect revoke ejecting that device from `/session` *and*
+> `/roster`, and a closed token refusing further entry.
+>
+> `ARCHITECT_TOKEN` is required in `.env` **and must be named in `docker-compose.yaml`** — compose
+> only passes the variables a service lists, so putting it in `.env` alone leaves the container
+> without it. SEC-6 and SEC-8 (campaigns, the registry) are still design only.
 
 ## 1. Decisions taken (2026-09-26)
 
