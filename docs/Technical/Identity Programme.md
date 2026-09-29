@@ -8,205 +8,226 @@ tags:
   - security
   - auth
   - authorization
+  - multi-tenancy
   - design
 aliases:
   - Identity Programme
   - Identity UX
-  - Seats
+  - Campaigns
 status: draft
 ---
 
 # Identity Programme
 
-The UX design for **SEC-3 / SEC-6 / SEC-8** — the one programme behind three findings in
-[[Security Posture]], and the precondition for [[B88]] and for going online. It is
-security-owned documentation.
+The design for **SEC-3 / SEC-6 / SEC-8**, the tenant boundary, and the invitation model — the
+one programme behind [[B88]] and the precondition for going online. Security-owned
+documentation.
 
-> [!warning] This is a design under review — nothing is implemented
-> Written 2026-09-26 at the owner's request: *"I'd like to know the UX of the identity
-> programme before you implement it."* The code still behaves exactly as **What exists
-> today** describes. Sections 5 and 10 are the decisions being asked for.
+> [!warning] Design under review — nothing is implemented
+> Rewritten 2026-09-26 to the owner's model. The code still behaves exactly as **§7 What this
+> rejects** describes. An earlier draft of this doc modelled a global account per player; the
+> owner rejected that, and **§3** is the corrected model.
 
-## 1. The problem in one paragraph
+## 1. Decisions taken (2026-09-26)
 
-The app has **three different things wearing one word**: the *device/session* (a cookie),
-the *player* (a person), and the *perspective* (the character you're driving). Only the
-third is a game concept. Today the cookie names nobody (SEC-5), the player is established
-by *typing a name* — so typing "Andy" makes you Andy (SEC-3) — and the API enforces
-nothing at all, so the boundary is the nginx edge or nothing (SEC-6). `role` is a field on
-the player record that any client can set to `architect` with one request. The fix is to
-give the *player* a real credential, check it server-side, and make `architect` something
-only an architect can grant.
+| decision | chosen |
+|---|---|
+| tenant boundary | **a separate ArangoDB database per campaign**, plus a small shared registry |
+| campaign ownership | **different people own different campaigns** — friends, and possibly paying architects |
+| who may invite | **any member** |
+| player registration | **local to the campaign** — no central user register |
+| email | **exactly one recovery address per campaign**, for access recovery only |
 
-## 2. What exists today (the four surfaces)
+## 2. The tenant is a *campaign*, not a `universe`
 
-1. **Entry.** The architect shows a QR encoding `/enter?t=<ACCESS_TOKEN>` — *one static
-   shared secret*. Scanning it sets a 30-day `tv2_session` cookie carrying a signed
-   **timestamp and nothing else**. Everyone past that door is trusted absolutely. A
-   device with no valid cookie gets `UnauthorizedNotice.vue`: *"The way is sealed … ask an
-   architect for a fresh link."*
-2. **Who are you?** The login overlay (`.name-entry`) asks you to **type a name**, with
-   live search over `GET /api/v1/players?q=`. If the name exists you become that player —
-   *"You've transversed before, Andy."* If not, you create it — *"New transverser detected.
-   Welcome, Andy."*
-3. **Switching.** The settings overlay (the `↩` button) shows your name as click-to-edit;
-   typing **anyone else's name** and confirming makes you them, previewing their
-   characters first. Separately — and legitimately — there is a **character** switch
-   (main ↔ GMC ↔ support character), which is the normal, frequent action.
-4. **Architect.** `Player.role` drives `gmMode` in the client (`App.vue` `loadPlayerRole`)
-   and the GM chrome. `PATCH /api/v1/players/{id}/role` sets it, unauthenticated. There is
-   **no UI** to set a role, and no rename path anywhere.
+This doc previously treated `universe` as the tenancy key. **It is not.** `UNIVERSE` is an
+entity type in the live DB — The Emberline, the Dreamlands, Valhalla, Chromotopia, One Piece,
+Ælor Cıtar, … — an entity holds `Projection`s into several of them, and `traits` is documented
+as a "trait registry **per universe**". A troupe *travels between* universes; that is the whole
+premise of the Transversal. Universes partition content **inside** a campaign.
 
-The `GmTroupeOverview` panel ("Troupe") already renders the player roster with presence —
-it is the natural home for the new controls, and today the architect has **no way at all**
-to hand out access or take it back.
+And there is **no campaign concept in the code at all** — `grep -i campaign` across
+`src/api/src` and `src/frontend/src` returns one unrelated `localStorage` comment. So the entire
+database is today one implicit campaign. See the corrected **SEC-8** in [[Security Posture]].
 
-## 3. The design problem, stated as UX
+### Why a database per campaign
 
-> A person must be able to become a *new* player with as little friction as today, must be
-> able to come back on a *new device*, and must **not** be able to become an *existing*
-> player (or an architect) without the architect's say-so.
+`_id` handles are **database-local**, and so are edges and graphs — `relationships` and
+`traitsettings` store `_from`/`_to` as `entities/loc-123`, meaningful only in their own
+database, and there is no cross-database AQL join. Sharing an authored universe between
+campaigns is therefore a **deep copy with every handle remapped**.
 
-Everything below is a way of answering three questions:
+That looks like the argument against this choice — until you notice **you need copy-on-acquire
+anyway**. If Margaret acquires Harold's Varenya, Harold's later edits must not silently mutate
+her live game; you want a version-pinned snapshot with an explicit "update available" pull.
+That is a publish/version mechanism in *either* architecture. So the shared-database
+alternative's sharing advantage largely evaporates, while its cost does not: isolation would
+rest entirely on every resolver, every query and every MCP tool filtering by campaign, in a
+codebase where SEC-1 was a raw AQL string interpolation. Arango has no row-level security.
 
-| question | today | must become |
-|---|---|---|
-| how do I become a new player? | type a new name | *(choose: keep, or architect-issued)* |
-| how do I get back in on a new device? | type my name | a credential the architect gave me |
-| how do I become an architect? | `PATCH …/role` | only an architect can say so |
+What structural isolation buys, concretely:
 
-## 4. The model: a **seat**
+- **A query bug cannot cross campaigns.** The database is the wall, not the discipline.
+- **Per-campaign export, backup and delete** — `drop_database`. With different owners and
+  possible payment, "delete my campaign" is a product requirement, not a nicety.
+- **Per-campaign resource limits.**
 
-Introduce one concept and the rest follows. A **seat at the table** is a player identity
-plus a credential the architect issued:
+What it costs:
 
-- The player record gains a **seat token** (stored hashed) and a **seat version**.
-- The session cookie becomes `player_id + seat_version + issued_at`, signed. The server
-  can now answer *who is calling* — which is what SEC-6 needs and SEC-8 is blocked on.
-- **Revoking** a seat bumps its version: every cookie for that player dies, and any
-  outstanding invite stops working. This is the control the architect has never had.
-- A seat carries a **role** (player/architect) and, later, a **universe** — the field
-  SEC-8 will need, carried from day one so it is not a retrofit.
+- The registry below, because "which campaigns exist?" has no home inside any campaign DB.
+- Migrations must enumerate every campaign database.
+- **Per-request database resolution** — today `get_db()` reads the database from env once per
+  process. Serving many campaigns means resolving campaign → database per request.
+- **`_db_cache` has no eviction** (`db/arango.py:94`). It holds one connection pool per
+  database for the process lifetime — correct for one campaign, unbounded at a thousand. It
+  needs an LRU bound.
+- The registry must not use `get_db()`: that path unconditionally creates all 18 campaign
+  collections and their indexes, which would litter the registry.
 
-## 5. The UX: three options
+The bootstrap is otherwise already on our side: `get_db()` creates the database and all 18
+collections on first connect, so a new campaign's schema appears by pointing at a new name.
 
-All three use the same seat machinery. They differ only in **who may create a seat**.
+**[[B88]] is jointly owned with [[backend-platform]]** — the boundary design is mine, the
+database plumbing (resolution, cache, migrations) is theirs.
 
-### Option A — "Take a new seat freely; re-entry needs the architect" · recommended
+## 3. Identity: local players, one recovery email
 
-The login overlay keeps its shape, but the *existing-name* branch changes:
+**Players are campaign-local and already were.** The `Player` document (`domain/players.py`)
+lives in that database's `players` collection with `id`, `name`, `role` and spotlight state;
+ownership of characters is resolved from `agency` edges. Nothing central is needed — "locally
+registered on the campaign" requires **no new entity at all**.
 
-| what you type | today | Option A |
-|---|---|---|
-| a **new** name | creates it, you're in | **unchanged** — creates it, you're in |
-| an **existing** name | **you become them** | *"That seat is taken. Ask your architect for your passage."* |
+Three things are added:
 
-The architect gets, in the **Troupe** panel, per player: **Show link/QR**, **Revoke**, and
-**Make architect**. Showing the link renders `/enter?s=<seat token>` as a QR *and* as a
-short typed code, so it works over voice for remote play. Opening it binds that device to
-that seat — no typing, and the character picker appears as usual.
+- A **seat credential** on the player record (stored hashed) plus a **seat version**.
+- The session cookie becomes signed `campaign + player + seat_version + issued_at` — it must
+  name the campaign, because with a database per campaign the request has to be routed
+  *before* anything can be looked up.
+- **One recovery email per campaign**, held in the registry, attached to the campaign's
+  architect. It is the only email address in the system and exists solely to get the owner back
+  in.
 
-- **First run unchanged.** A brand-new person types a name and is playing in one step; the
-  table ritual does not change for them.
-- **Impersonation closed.** Typing "Andy" no longer makes you Andy; it tells you to ask.
-- **Self-escalation closed.** The role control exists only in the architect's Troupe panel.
-- **Switching** in settings becomes *"Scan a seat link / enter a seat code"* rather than a
-  name search — you can still move a shared tablet between people, but only with the
-  credential. Character switching is untouched.
-- **Cost:** the architect issues a seat for every returning player's every new device.
-  Two clicks each; the one-time re-onboard of the existing troupe is the bulk of it.
+**Revoking** a seat bumps its version, killing every cookie for that player — the control the
+architect has never had. **Ejecting** a member is revoking their seat, which is the whole of it:
+campaigns are sovereign, and there is deliberately no way to ban a person across campaigns.
 
-### Option B — every seat is architect-issued (strictest)
+## 4. The UX
 
-No name typing at all: the login overlay becomes *"No seat on this device — ask your
-architect for your passage"* plus a code field. The architect mints every seat from a new
-**Players** screen and hands out the links.
+### Create a campaign
+The owner names the campaign, gives a **recovery email**, and proves it (a link). They are its
+architect. The registry records campaign → database → recovery email; the database is created
+and bootstrapped on first use.
 
-- **Pros:** the strongest posture; the troupe is exactly who the architect invited; no
-  accidental duplicate seats; nothing typed can collide.
-- **Cons:** every new person waits on the architect, including at a first session;
-  the architect is now the IT desk for the whole table.
-- Note B is **A with creation disabled** — the same code, one policy flag. Building A
-  yields B for free, so this is not an either/or to build twice.
+### Invite — any member
+In the **Troupe** panel, **Invite** produces a link and a QR *and* a short readable code, so it
+works over voice for remote play. Hand it over however you like — group chat, or held up at the
+table. **No email is sent and no account is created.**
 
-### Option C — name + PIN (self-service re-entry)
+### Accept an invite
+Open the link → you are in *that* campaign → type your name → you are a new local player and
+**playing immediately**. This preserves today's "type your name" first-run feel, and it cannot
+collide: accepting an invite creates a player, it never adopts one. (Adopting an existing player
+needs that player's own seat link — §7.)
 
-A returning player types their name and a short PIN they set the first time.
+### A returning player, new device
+Open the **seat link** the architect shows them (same Troupe row, *Show link*). Bound; no
+typing. A brand-new name typed at the door stays self-service as today.
 
-- **Pros:** the architect is not in the loop for re-entry; survives clearing site data.
-- **Cons:** another secret to remember and reset; PINs get shared and reused; name
-  collision still needs handling; and it does **not** remove the need for architect-granted
-  roles. It buys convenience at the cost of a second weak credential.
+### Recovery — the owner's way back in
+*Recover campaign access* → enter the recovery email → a single-use, short-lived link mints a
+**fresh architect seat and bumps the seat version**, so every old session dies. Losing a phone
+therefore costs a recovery round-trip, not the campaign.
 
-### Recommendation
+### Campaign switching
+Because the cookie names a campaign and the app needs a campaign in its URL (e.g.
+`/c/<campaign>/…`), a person in two campaigns switches with a **campaign switcher**, not by
+re-authenticating. Two tabs, two campaigns, no re-login.
 
-**Option A**, with **Option B available as a flag** and **C rejected** — a shared table
-does not need a second password, it needs the architect to be able to hand out and take
-back access. A keeps the current first-run feel exactly, closes both holes, and gives the
-architect the only new power the design actually requires.
+### The architect's controls (Troupe panel)
+Per member: **Show link · Revoke · Make architect**. Campaign-wide: the **outstanding invite
+list** with revoke, and the recovery email. The last architect cannot demote themselves.
 
-## 6. What each surface becomes
+## 5. Security consequences — what this model *forces*
 
-- **Entry (`/enter`).** `?t=<ACCESS_TOKEN>` stays as the **outer door** (the shared
-  perimeter is fine on a LAN/tailnet) and gains `?s=<seat token>` for a seat. The
-  architect's own seat is bootstrapped from the environment at startup — it is the one
-  seat that is not issued from the UI, so the troupe can never be locked out.
-- **Login overlay.** Unchanged for a new name; a new refusal line for a taken one.
-- **Settings.** Name search → *seat* action (scan/enter a code). Character switching
-  unchanged. This is a *removal* of a surface, not an addition to it.
-- **Troupe panel (`GmTroupeOverview`).** Grows **Show link**, **Revoke**, **Make
-  architect** per row, architect-only. The last architect cannot demote themselves.
-- **`UnauthorizedNotice`.** Largely unchanged — a stale cookie still means *"ask an
-  architect for a fresh link."*
-- **MCP / harness.** See §8 — deliberately not a special case in the UI.
+1. **Invites are bearer credentials, and with no central register they are the whole of
+   admission control.** An invite cannot be bound to a person, because we never learn who the
+   person is. So invites must be **expiring, single-use by default, revocable, and
+   campaign-scoped**, and the owner must be able to *see* them. This is the direct consequence
+   of "any member can invite" plus "locally registered", and it is the largest risk in the
+   model: a link pasted into the wrong chat is live membership until revoked.
+2. **Any member can invite, so the owner needs visibility and eject.** A member can admit
+   someone the owner would not have. That is a legitimate table dynamic, but the owner must be
+   able to see the roster and the outstanding invites, and revoke either — otherwise whoever is
+   paying cannot manage what they are paying for.
+3. **The recovery email must be verified, and it is the crown jewel.** If it is merely typed
+   in, a typo sends the one link that reconstitutes the architect's seat to a stranger. A click
+   to prove control is what makes recovery safe. This single address protects the whole
+   campaign, so it deserves the verification the players do not need.
+4. **The registry is the PII honeypot and the enumeration surface.** It is the only place
+   mapping email → campaign. Lookups must be rate-limited and must answer identically whether
+   or not an email has a campaign, or it becomes a directory of who plays what. Recovery sends
+   are capped per address and per campaign.
+5. **Recovery replaces the seat rather than adding one** — the version bump is what makes a
+   stolen or lost device stop working at the same moment.
+6. **Lockout is the residual risk.** One email, and if the owner loses their devices *and* the
+   mailbox, the campaign is unrecoverable through the app. The database still exists, so
+   server-side access is the honest fallback. A second recovery address or printable recovery
+   codes would close it — see §8.
+7. **Invite tokens must be self-describing.** The link has to say *which campaign* before any
+   database can be opened, so the token carries a signed `campaign + invite + expiry` payload.
+   The campaign database then holds the invite record, so authenticity comes from the signature
+   and liveness from the record — no global invite index is needed.
+8. **The outbound-email surface is tiny — this is the model's quiet win.** Only recovery sends,
+   rarely. No per-player verification mail, no notifications, no digests. The SMTP provider is
+   one secret and one dependency, and the abuse case (invite-spam getting your domain
+   blacklisted) largely disappears because nobody can trigger a send by inviting.
 
-## 7. Migration of the existing troupe
+## 6. Machines: MCP and the e2e harness
 
-The existing players have no seat, and every device's `localStorage` `playerId` becomes
-meaningless. On the day it lands, each device shows the no-seat screen once and the
-architect issues that player a seat. That is a **one-time re-onboard of the whole table**,
-done by the architect in a few minutes; there is no way to avoid it, because the whole
-point is that the old identity was never proven. No player data is touched — a seat is
-added to a player record, nothing is renamed or rewritten.
+- **MCP** talks to the API over stdio and is unauthenticated today. Each campaign should carry
+  a **service seat** for it, so its writes are attributable and it is not a browser credential.
+- **The e2e harness** currently logs in by writing `localStorage.playerId` and never exercises
+  auth. It should use the **real** path — accept a seat/invite for the `DSH MCP` player in the
+  test campaign — which keeps the suite working *and* makes it test what it was skipping.
 
-## 8. Machines: MCP and the e2e harness
+## 7. What this rejects
 
-- **MCP** talks to the API over stdio and is unauthenticated by design today. It should
-  present a **service token** (from the environment) that the API resolves to the
-  dedicated test player `DSH MCP` (`player-75a410`) — so its writes are attributable, and
-  the service token is not a seat that can be used through the browser.
-- **The e2e harness** currently logs in by writing `localStorage.playerId` and never
-  exercises auth. It should use the **real** path — `/enter?s=<the DSH MCP seat token>`
-  from the test environment — which both keeps the suite working and makes it test the
-  thing it was skipping.
+- **A global account per player / central user register.** Rejected by the owner: players are
+  campaign-local, and a player in two campaigns has two unrelated records. Correct — it also
+  means revoking someone from one campaign cannot touch another.
+- **Email per player.** There is exactly one address per campaign, for recovery. Notifications
+  and per-player verification are out of scope.
+- **`universe` as the tenant.** See §2 and SEC-8.
+- **The old name-adoption flow.** Typing an existing player's name currently makes you that
+  player. It will tell you the seat is taken and to ask for its link. Character/perspective
+  switching is untouched — it is not an identity claim.
+- **A shared static `ACCESS_TOKEN` as the door.** Superseded by per-campaign seats; the outer
+  perimeter survives only as the tailnet/LAN wall.
 
-## 9. What this does *not* change
+## 8. Open items
 
-- **The shared outer door.** `ACCESS_TOKEN` as a perimeter is a deliberate, coherent
-  choice for a trusted LAN/tailnet troupe; this programme does not replace it, it adds an
-  identity *behind* it. (Retiring or rotating it is a separate question.)
-- **Character/perspective switching.** Untouched — it is not an identity claim.
-- **The game domain.** Nothing here is dice, effects, contest or traits.
-- **One campaign.** With a single universe, SEC-8's scoping is invisible; the seat carries
-  a universe field so multi-campaign is a policy change, not a rewrite.
-
-## 10. Questions for the owner
-
-1. **Creation policy** — Option A (new names self-serve; re-entry needs a link) or Option
-   B (the architect issues every seat)?
-2. **Seat links** — reusable until revoked (fewer "my link stopped working" moments), or
-   one-time (a screenshot goes stale)? Recommendation: reusable + a visible Revoke.
-3. **Same-name collisions** — if a genuine second "Andy" arrives, what should happen?
-   There is no rename path today; do we add "rename player" to the Troupe panel, or push
-   people to distinguish at creation?
-4. **Shared device** — is a tablet passed around the table a real case (needs scan-to-switch
-   to be quick), or is it one device per person?
-5. **Seat/cookie lifetime** — 30 days today for the shared cookie. Keep, shorten, or make
-   the architect's Revoke the only expiry that matters?
-6. **Sequencing** — SEC-3 first, then SEC-6 (API-wide enforcement) and SEC-8 (universe)?
-   That order is my recommendation; SEC-6 is what makes SEC-8 mean anything.
+1. **Invite lifetime** — single-use with a short expiry (recommended, given bearer semantics),
+   or reusable-until-revoked for convenience? Recommendation: single-use, ~24h, revocable, with
+   the owner's invite list visible.
+2. **Lockout** — is one recovery address enough, or add a second address / printable recovery
+   codes?
+3. **Campaign in the URL** — `/c/<campaign>/…` with a switcher (recommended) versus routing
+   purely from the cookie.
+4. **Seat lifetime** — keep 30 days, shorten it, or make the architect's Revoke the only expiry
+   that matters?
+5. **Who creates campaigns** — self-service, or provisioned? This is the business half of
+   [[B88]] and it determines whether the registry needs a public entry point.
+6. **Sequencing** — SEC-3 (identity) first, then the campaign boundary (SEC-8), then SEC-6
+   (API-wide enforcement). SEC-6 is what makes the others mean anything, and the campaign
+   database boundary is what the marketplace ([[B114]]) is gated on.
 
 ## Log
 
-- 2026-09-26 — design written at the owner's request; **implementation deliberately not
-  started.** Recommends Option A, rejects C, notes B is A with creation disabled.
+- 2026-09-26 — first draft: player records + seat credentials, options for who may create a
+  seat. Recommended new-names-self-serve.
+- 2026-09-26 — **rewritten to the owner's model.** Owner rejected the global-account/central-
+  register approach: one recovery email per campaign, players local to the campaign, invites are
+  the only admission path. Tenancy decided as **database per campaign + shared registry**;
+  campaigns owned by different people; **any member may invite**. Corrected the doc's own error
+  — `universe` is a fictional world inside a campaign, not the tenant — and filed the same
+  correction against SEC-8 in [[Security Posture]]. Implementation **not** started.
