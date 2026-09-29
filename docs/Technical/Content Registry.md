@@ -56,7 +56,9 @@ content that happens to exist.
 
 "Create and manage their **own** content" requires knowing who you are **across** campaigns.
 That is a central account, and it is the same account [[Identity Programme]] §3 introduces for
-recovery methods — one identity holding your passkeys, your campaigns and your authored content.
+recovery — one identity holding your campaigns and your authored content. Recovery is
+**email-link only at first** (passkeys and passwords are deliberate later additions), so the
+address is the whole credential for now and is verified at enrolment.
 
 This does **not** contradict "no central user register": that decision governs **players**, who
 stay campaign-local and account-less. The model is two-tier, and deliberately so:
