@@ -125,6 +125,26 @@ is built in its own clean database, **no live document ever has to be classified
 **re-authored, not carved out of the playroom** — which is the cheaper gate, because it needs no
 provenance, no snapshot, and no archaeology on 1,011 entities.
 
+### And authoring can begin before any of this is built
+
+Worth stating plainly, because it is easy to assume the whole design is a prerequisite: **it is not.**
+A sandbox is an ordinary Transversal database, and both switches already exist.
+
+- `ARANGO_DATABASE` is already read — `db/arango.py:43`, defaulting to `transversal`. It is simply
+  **not set in `docker-compose.yaml`**, so the API defaults to the playroom.
+- `get_db()` **creates the database and every collection on first connect**
+  (`db/arango.py:87-88`: `if not sys_db.has_database(...): sys_db.create_database(...)`), so a new
+  name needs no bootstrap script and no migration.
+
+So a sandbox is **one environment variable and a second API instance** — no closure engine, no
+registry, no acquisition record, and no SEC-3. What this document specifies is the *second* stage:
+sharing between packages, and acquiring into a playroom. The first stage — authoring `Earth` and
+`Three Realms` in their own clean databases — is available today.
+
+Two caveats before that is treated as finished: **images are files, not rows** (§7), so a package
+shares the playroom's media namespace; and **nothing routes by campaign**, so two databases means two
+instances reached by port rather than one API serving both.
+
 ## 6. Copy or reference — the split
 
 The owner's instinct was **reference**: New York should exist once and both packages point at it. That
@@ -199,6 +219,21 @@ is a stable version marker; the local copy's `_rev` is a reliable "has anyone to
 record is one collection with one purpose, in place of a field on **19,685 documents across 19
 collections** (§9.3) — and it keeps the players' database out of the migration entirely.
 
+> [!warning] A gap found 2026-09-29: **images are not in the database**
+> `MEDIA_DIR = Path("/app/media")` (`api/rest/media.py:38`) and compose mounts it as
+> `./media:/app/media` — so every image is a **file on a shared volume**, and only the *rows* that
+> reference it live in Arango. Two consequences for this design, neither covered by the copy/reference
+> split above:
+> - **A package database is not self-contained.** Copying it copies references to files the playroom
+>   also sees, so a package and a playroom **share one image namespace** — the isolation is
+>   database-deep, not content-deep.
+> - **Dumping a package's database loses every image.** No export of a package is complete without the
+>   media it points at, which means a package needs a **media manifest** (the ids/files it owns) and a
+>   way to carry them — the same class of problem as the acquisition record, one layer out.
+>
+> This is `MEDIA_DIR`-specific and is recorded rather than designed. It is the strongest argument yet
+> that "pristine package" has to mean *content* rather than *a database dump*.
+
 ## 8. The two packages
 
 | package | contains | excludes |
@@ -261,21 +296,39 @@ Measured read-only against the live `transversal` database, 2026-09-29.
 3. **The reference map's completeness is unverifiable by construction** — a missed field produces a
    silently incomplete closure. It needs a test that walks every collection and asserts each
    reference-shaped field is either mapped or explicitly listed as not-a-reference.
-4. **Package dependency cycles** — Three Realms depends on Earth; can Earth ever depend on Three
+4. **Media does not travel with a database** (§7) — images are files on a shared volume, so a
+   package needs a **media manifest** and a way to carry it before "pristine package" can mean
+   *portable*. This is a hole in the design, not a detail of it.
+5. **Package dependency cycles** — Three Realms depends on Earth; can Earth ever depend on Three
    Realms? If yes, the closure needs cycle handling, and the "load both" case needs defining.
-5. **What an acquisition does about *removals*** — if `Earth v2` drops a document, does a pull delete
+6. **What an acquisition does about *removals*** — if `Earth v2` drops a document, does a pull delete
    the local copy, or leave it orphaned? Deletion is destructive and needs a policy.
-6. **Whether the two packages ship as `v1` content at all**, or whether this doc is only the
+7. **Whether the two packages ship as `v1` content at all**, or whether this doc is only the
    mechanism and the content follows. The owner's framing ("at the moment, I just want to be able to")
    suggests the mechanism is the gate.
-7. **Ownership** — see §11. The mechanism is unowned.
+8. **Ownership of the two residues** — placed 2026-09-29: the mechanism is [[backend-platform]]'s
+   ([[B251]]) with [[security]] reviewing. The **product** surface and the package **content** are
+   deliberately unowned; see [[Division of Labor]] § *Unassigned*.
 
 ## 11. Where this sits
 
-The work is currently **unowned**. It arrived as a hand-off from [[security]], which identified the
+**Placed 2026-09-29.** The work arrived as a hand-off from [[security]], which identified the
 pristine-universe split as a content/data question rather than application security and asked the
-[[Overseer]] to place it; [[B114]] (marketplace) is the adjacent product surface, also unassigned.
+[[Overseer]] to place it. The human's call was **not** to create an `architecture` role: the design is
+already written, so what remains is build — and the build is [[backend-platform]]'s craft, the same
+craft [[Identity Programme]] §2 already assigns to them. So **[[B88]]'s primary and [[B251]] both moved
+to [[backend-platform]]**, with [[security]] as reviewer and register-owner.
+
+Two things were deliberately **not** absorbed by that move, and are recorded as unowned in
+[[Division of Labor]] § *Unassigned*:
+
+- the tenancy **product** surface — registry browsing and curation, who may create campaigns, pricing,
+  throttling, and **moderation** of user-authored content, which [[Content Registry]] §6 calls a real
+  go-online gate that no amount of sandboxing answers;
+- the package **content** — the bridge list, and the two packages themselves.
+
 This design and the campaign boundary in [[Identity Programme]] are the two halves of [[B88]].
+[[B114]] (marketplace) sits on top of both, and remains deferred.
 
 > [!note] Naming
 > [[Content Registry]] already claims "Content Registry" and "Content Sandbox" as aliases. The three
@@ -296,3 +349,14 @@ This design and the campaign boundary in [[Identity Programme]] are the two halv
   the [[Overseer]]:** the acquisition record and `_rev`-based update detection (§7), and the
   observation that package-sized authoring **dissolves** the pristine-origin problem instead of
   solving it (§5). Measurements in §9 taken read-only. Nothing implemented.
+- 2026-09-29 — **placed, and two findings while placing it.** The [[Overseer]] put the mechanism on
+  [[backend-platform]] ([[B251]]), moving [[B88]]'s primary with it and correcting B88 off `deferred`
+  — the human's call was to re-own rather than create an `architecture` role, since the design is
+  already written and what remains is build. Two conditions attached: **B88 had to move with B251** (a
+  mechanism in one role and the boundary it builds on in another is how this went unowned), and **B88
+  could not sit `deferred`** while SEC-8 calls it a hard precondition for going online. Both residues
+  — the product surface and the package content — are recorded as deliberately unowned. Two things
+  found in the same pass and now in the doc: **authoring does not depend on this document** (§5 — with
+  `ARANGO_DATABASE` and `get_db()`'s bootstrap, a sandbox is one environment variable today), and
+  **images do not travel with a database** (§7 — `MEDIA_DIR` is a shared filesystem volume, so a
+  package dump loses its images, which is a hole in "portable pristine package" rather than a detail).
