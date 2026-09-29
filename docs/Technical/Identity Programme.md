@@ -23,9 +23,12 @@ The design for **SEC-3 / SEC-6 / SEC-8**, the tenant boundary, and the invitatio
 programme behind [[B88]] and the precondition for going online. Security-owned documentation.
 The sibling design for the shared content surface is [[Content Registry]].
 
-> [!warning] Design under review — nothing is implemented
-> Rewritten twice on 2026-09-26, both times because the owner corrected me. The code still
-> behaves exactly as **§7 What this rejects** describes.
+> [!success] SEC-3 is built — on the `security` branch, **unmerged**
+> The first slice (SEC-3 alone, against the current single database, no campaigns) is implemented
+> and tested: 2328 backend tests pass, including a flow test that drives the whole passage against
+> the real database, and the frontend builds. It is deliberately not merged — the owner picks the
+> moment, because **landing it invalidates every session and requires `ARCHITECT_TOKEN` in `.env`**
+> or nobody can enter. SEC-6 and SEC-8 (campaigns, the registry) are still design only.
 
 ## 1. Decisions taken (2026-09-26)
 
