@@ -1,18 +1,25 @@
-"""Signed, expiring admission tokens (SEC-3 groundwork).
+"""Signed, expiring tokens (SEC-3).
 
-An invite is **authorization, not identity**: it grants access to a campaign and
-proves nothing about who holds it. This module is the machinery for such a token
-and nothing else — it is deliberately **not wired into any flow yet**.
+One signed-token format, two audiences:
 
-A token is a base64url JSON payload plus an HMAC over it, signed with the same
-key as the session cookie and carrying its own ``exp``, so verification needs no
-storage. The signing key and the fail-closed rule are *borrowed from* ``auth``
-rather than duplicated: one key and one rule, or the two will drift apart.
+- ``AUD_JOIN``  — an admission token. Grants access to a campaign and proves
+  nothing about who holds it. Reusable within a short life, and closable early:
+  that liveness comes from the campaign database, not from the signature.
+- ``AUD_SESSION`` — the browser session. Carries which player the holder has
+  taken, plus the epoch it was issued under.
 
-Deliberately **not** here: revocability. A join token must be closable before it
-expires, and that liveness has to come from the campaign database rather than from
-the signature. This module proves only "we minted it" and "it has not expired" —
-see ``docs/Technical/Identity Programme.md`` §5.7.
+**The audience is not decoration.** Both are signed with the same key, so without
+an audience claim a join token would verify as a session cookie — handing a
+player's identity to anyone holding an invite — and a session cookie would verify
+as a join token, letting any admitted device mint admissions off its own session.
+``verify`` refuses a token whose ``aud`` is not the one asked for.
+
+A token is a base64url JSON payload plus an HMAC over it, carrying its own ``exp``
+so verification needs no storage. The signing key and the fail-closed rule are
+*borrowed from* ``auth`` rather than duplicated: one key and one rule, or the two
+drift apart.
+
+See ``docs/Technical/Identity Programme.md``.
 """
 
 from __future__ import annotations
@@ -23,6 +30,11 @@ import json
 import time
 
 from transversal.api import auth
+
+#: Admission to a campaign. Reusable within its life; closable early in the DB.
+AUD_JOIN = "join"
+#: The browser session, carrying the player taken and the epoch issued under.
+AUD_SESSION = "session"
 
 
 class TokenError(ValueError):
@@ -37,13 +49,15 @@ def _b64_decode(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
-def mint(payload: dict, ttl_seconds: int, now: float | None = None) -> str:
-    """Return a signed token carrying ``payload``, valid for ``ttl_seconds``.
+def mint(
+    payload: dict, ttl_seconds: int, audience: str, now: float | None = None
+) -> str:
+    """Return a signed token for ``audience``, valid for ``ttl_seconds``.
 
     Raises :class:`TokenError` when the signing key is unusable (fail *closed*,
-    loudly) or the lifetime is not positive. Any ``exp``/``iat`` in ``payload``
-    is overwritten, so a caller cannot mint itself a longer life than it asked
-    for.
+    loudly) or the lifetime is not positive. ``aud``/``iat``/``exp`` are written
+    after ``payload``, so a caller cannot mint outside the audience or lifetime it
+    asked for.
     """
     if not auth._secret_is_usable():
         raise TokenError("SESSION_SECRET is not usable; refusing to mint")
@@ -51,15 +65,15 @@ def mint(payload: dict, ttl_seconds: int, now: float | None = None) -> str:
         raise TokenError("ttl_seconds must be positive")
 
     issued = int(time.time() if now is None else now)
-    body = {**payload, "iat": issued, "exp": issued + int(ttl_seconds)}
+    body = {**payload, "aud": audience, "iat": issued, "exp": issued + int(ttl_seconds)}
     encoded = _b64_encode(
         json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
     )
     return f"{encoded}.{auth._sign(encoded)}"
 
 
-def verify(token: str, now: float | None = None) -> dict | None:
-    """Return the payload when the token is ours and unexpired, else ``None``.
+def verify(token: str, audience: str, now: float | None = None) -> dict | None:
+    """Return the payload when the token is ours, for ``audience``, and unexpired.
 
     Never raises: every failure is "not a valid token", because a caller that
     distinguishes them would leak which part was wrong.
@@ -74,6 +88,8 @@ def verify(token: str, now: float | None = None) -> dict | None:
     if not isinstance(payload, dict):
         return None
     if not hmac.compare_digest(auth._sign(encoded), signature):
+        return None
+    if payload.get("aud") != audience:
         return None
     try:
         expires = int(payload["exp"])
