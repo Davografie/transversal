@@ -161,6 +161,12 @@ Concretely:
 - rotation is architect-only, so a member cannot trigger it or flood the mailbox with it. Rate-limit
   it regardless, so a double-click cannot send twice.
 
+One hazard this creates, stated plainly: **a rotation is a one-way door if the recovery mailbox is
+dead.** By the time the mail is attempted, every session is already gone — so a *transient* send
+failure is recoverable through the manual flow, but an address nobody can reach leaves the campaign
+reachable only through server-side access. The address is verified at enrolment for exactly this
+reason, and the rotation confirmation should say so rather than let it be discovered afterwards.
+
 The rotation is only as strong as the distribution of the new token — anyone who receives it can
 take any account, which is the standing property of campaign-level admission.
 
