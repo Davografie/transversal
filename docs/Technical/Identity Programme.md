@@ -39,7 +39,7 @@ The sibling design for the shared content surface is [[Content Registry]].
 | the player | **taken after admission** — new or existing; there is no per-player secret |
 | sessions | **sliding 30-day signed cookie** carrying the campaign **and the player taken**; revoking that account ends its sessions |
 | architect accounts | **never takeable** — reached only through the recovery email link, so a member cannot promote themselves |
-| hard eject | **rotate the campaign's access** — revoke every session and mint a new token; everyone re-admits and re-takes their account |
+| hard eject | **rotate the campaign's access** — revoke every session and mint a new token; everyone re-admits and re-takes their account, and the **recovery link is auto-sent** to the architect |
 | recovery | **email link only at first** — passkey and password are deliberate later additions |
 | creators/owners | a **central registry account** (the same one that holds recovery methods); players still have none |
 | GPU | **not** in the free tier — all four GPU operations gated ([[Content Registry]]) |
@@ -139,11 +139,30 @@ hands the new token to the people they want to keep, and everyone **re-admits an
 own account**. The excluded person is simply not given it.
 
 That is a deliberately expensive act — the whole table re-onboards — which is exactly why it is the
-answer to "I need this person gone" rather than something that happens by accident. Two properties
-to preserve: **the architect must not lock themselves out of their own rotation** (their session is
-re-minted by the same action, or they re-enter through the recovery link), and the rotation is only
-as strong as the distribution of the new token — anyone who receives it can take any account, which
-is the standing property of campaign-level admission.
+answer to "I need this person gone" rather than something that happens by accident.
+
+**Rotating signs the architect out too, so the recovery link is auto-sent as part of the act.** This
+is the mechanism, not a convenience: the rotation kills every session including the one that
+triggered it, and the emailed link is how the architect gets back in. Two useful properties fall
+out of that. It proves the architect still controls the recovery mailbox at the moment they most
+need to, and it doubles as a notification — if someone else rotated the campaign, the owner finds
+out because a link arrives unprompted.
+
+Concretely:
+
+- the auto-send **is** the ordinary recovery flow, invoked automatically — one mechanism, one set of
+  controls (single-use, short-lived, rate-limited), and the manual path stays available as the
+  fallback if the send fails;
+- the architect re-enters **through that link only**. They must not use the new join token: architect
+  accounts are not takeable, so it would not admit them anyway;
+- the new join token is **not** bundled into the email. It is handed out separately, by QR or chat,
+  to the people the architect chooses. Putting campaign access inside the recovery mail would make
+  one intercepted message both the way in *and* the way in for everyone else;
+- rotation is architect-only, so a member cannot trigger it or flood the mailbox with it. Rate-limit
+  it regardless, so a double-click cannot send twice.
+
+The rotation is only as strong as the distribution of the new token — anyone who receives it can
+take any account, which is the standing property of campaign-level admission.
 
 ### The one central identity — for owners, not players
 
@@ -192,6 +211,10 @@ inside its life is in the campaign and may take any player in it, so:
 → a fresh architect session is minted while every old session dies (epoch bump). **Email is the
 only method for now**; passkeys and passwords are deliberate later additions (§8).
 
+The same flow fires **automatically when campaign access is rotated**, because rotation kills the
+architect's own session — see §3. That is the only other trigger, and it is why mail is no longer
+strictly "recovery only".
+
 The consequence to keep in view: with one method, **the mailbox is a single point of failure for
 the campaign**, and mailbox compromise is campaign compromise. So the address is verified at
 enrolment, links are single-use and short-lived, sends are rate-limited per address and per
@@ -205,7 +228,8 @@ re-authenticating. Two tabs, two campaigns, no re-login.
 ### The architect's controls (Troupe panel)
 Per member: **Revoke · Make architect** — *Revoke* is the epoch bump on that player's account.
 Campaign wide: **open a join token**, **close it / close all**, **rotate access** — the hard eject,
-behind a confirmation that spells out what it does to the whole table — and the recovery address.
+behind a confirmation that spells out what it does to the whole table *and* that it will sign the
+architect out and email them a link back in — and the recovery address.
 The last architect cannot demote themselves, and **an architect account is never takeable**.
 
 ## 5. Security consequences — what this model *forces*
@@ -243,10 +267,12 @@ The last architect cannot demote themselves, and **an architect account is never
    can be opened, so it carries a signed `campaign + token + expiry` payload. The campaign
    database holds the token record, so authenticity comes from the signature and liveness (open,
    unexpired, unclosed) from the record. No global index is needed.
-8. **The outbound-email surface is tiny — this is the model's quiet win.** Only recovery ever
-   sends mail, and rarely. No per-player verification, no notifications, no digests. The SMTP
-   provider is one secret and one dependency, and the abuse case (invite spam getting your domain
-   blacklisted) largely disappears because nobody can trigger a send by inviting.
+8. **The outbound-email surface is tiny — this is the model's quiet win.** Mail goes out on exactly
+   two triggers: a manual recovery request, and the automatic link after a rotation. Both are rare,
+   both are architect-scoped, and there is **no per-player mail at all** — no verification, no
+   notifications, no digests. The SMTP provider is one secret and one dependency, and the abuse case
+   (invite spam getting your domain blacklisted) largely disappears because nobody can trigger a
+   send by admitting someone.
 9. **Player-level privacy is gone by construction — and that conflicts with [[B43]].** With no
    per-player secret, a member can take another member's player account and see everything scoped
    to it. [[B43]] asks the opposite: *"When player, shouldn't be able to see each others blue
@@ -254,6 +280,12 @@ The last architect cannot demote themselves, and **an architect account is never
    UI behaviour, but it is a **convention, not a control** — it holds for honest use and is
    bypassable by taking the account. Either B43 is reframed as UI policy, or player-level secrets
    have to come back. See §8.
+10. **The auto-sent link is the same credential as a manual recovery, so it needs the same care plus
+   one more control.** It is single-use and short-lived like any recovery link, and — being sent
+   unprompted — rotations must be **rate-limited per campaign**, or an architect session someone
+   else has hold of could be used to flood the owner's mailbox. It must never carry the join token
+   (§3): the recovery mail is the crown jewel, and bundling campaign access into it would make one
+   intercepted message sufficient for the whole table.
 
 ## 6. Machines: MCP and the e2e harness
 
@@ -343,3 +375,13 @@ The last architect cannot demote themselves, and **an architect account is never
   lock themselves out of their own rotation, and the rotation is only as strong as the distribution
   of the new token. **[[B43]] remains unanswered** — this answer implies free taking stands, which
   would make B43 UI policy, but the owner did not say so and I have not assumed it.
+- 2026-09-26 — **the owner closed the rotation lockout I had flagged:** the recovery link is
+  **auto-sent** when campaign access is rotated. Recorded as the mechanism rather than a
+  convenience — rotation kills the architect's own session, so the emailed link *is* how they get
+  back in. Noted the two properties that fall out (it re-proves mailbox control at the critical
+  moment, and it doubles as a notification if someone else rotated), and the controls it needs: the
+  auto-send is the **ordinary recovery flow invoked automatically** (one mechanism, one set of
+  limits), the architect re-enters by that link **only** and must not use the join token, the new
+  token is **never bundled into the email**, and rotations are rate-limited so a double-click or a
+  stolen architect session cannot flood the mailbox. This makes mail fire on two triggers, so §5.8
+  was corrected from "recovery only".
