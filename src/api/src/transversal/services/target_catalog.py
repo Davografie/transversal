@@ -210,6 +210,12 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "rating_type": ScalarField("traitsetting", "rating_type", "string", ("static", "resource", "challenge", "empty")),
         "polarity": ScalarField("traitsetting", "polarity", "string", ("positive", "negative")),
         "trait_id": ScalarField("traitsetting", "trait_id", "string", references="trait", label="trait"),
+        # Which set this instance is in is a fact about its **registry trait**
+        # ([[B209]] removed the field from the setting, which could only drift), so
+        # this is read through the trait like `tags` below. It was declared here
+        # without that reader, which made the filter match nothing at all — and one
+        # live rule (`sfx-heal`, "a complication on the chosen occupant") had been
+        # authored against it and was silently doing nothing.
         "traitset_id": ScalarField("traitsetting", "traitset_id", "string", references="traitset", label="trait set"),
         "entity_id": ScalarField("traitsetting", "entity_id", "string", references="entity", label="entity"),
         "projection_id": ScalarField("traitsetting", "projection_id", "string", references="projection", label="projection"),
@@ -237,6 +243,15 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "tags": ScalarField("traitsetting", "tags", "string",
                             operators=("contains", "==", "!="), suggest="trait_tags",
                             label="tag"),
+        # The universes this instance is **available in** — its set's list
+        # intersected with its definition's, because a registry trait narrows the
+        # set it belongs to (assets is available in Earth and the Three Realms;
+        # *Radio* is not). Read through the trait, like `traitset_id` and `tags`
+        # above: an instance records neither side. A list, so it is matched with
+        # `contains` — `filter universes contains {world}` is how a path keeps only
+        # what the acting character could actually have here.
+        "universes": ScalarField("traitsetting", "universes", "string",
+                                 operators=("contains", "==", "!="), label="universe"),
     },
     "contest": {
         "location_id": ScalarField("contest", "location_id", "string",

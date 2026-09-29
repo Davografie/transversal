@@ -26,8 +26,12 @@ def _e(id, name="", universe=""):
     return SimpleNamespace(id=id, name=name or id, current_universe=universe)
 
 
-def _t(id, name="", universes=None):
-    return SimpleNamespace(id=id, name=name or id, universes=universes or [])
+def _t(id, name="", universes=None, traitset_id=""):
+    # `traitset_id` belongs on the **definition**: a setting has not recorded which
+    # set it is in since B209, and a fixture that put it on the instance is what
+    # let a dead `traitsetting.traitset_id` reader go unnoticed ([[B253]]).
+    return SimpleNamespace(id=id, name=name or id, universes=universes or [],
+                           traitset_id=traitset_id)
 
 
 def _n(id, name="", universe=""):
@@ -307,9 +311,10 @@ def test_traitset_scope_lists_traits():
 
 def test_traitset_scope_step_down_filters_to_owned():
     repo = TargetRepo()
-    repo.traits_traitset = {"ts-skills": [_t("medicine"), _t("surgery")]}
+    repo.traits_traitset = {"ts-skills": [_t("medicine", traitset_id="ts-skills"),
+                                          _t("surgery", traitset_id="ts-skills")]}
     repo.traitsettings_by_entity = {"char-1": [
-        SimpleNamespace(id="char-1:medicine", trait_id="medicine", traitset_id="ts-skills"),
+        SimpleNamespace(id="char-1:medicine", trait_id="medicine"),
     ]}
     out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo, action="step_down")
     assert _ids(out) == ["medicine"]
@@ -317,9 +322,10 @@ def test_traitset_scope_step_down_filters_to_owned():
 
 def test_traitset_scope_gain_lists_all_traits():
     repo = TargetRepo()
-    repo.traits_traitset = {"ts-skills": [_t("medicine"), _t("surgery")]}
+    repo.traits_traitset = {"ts-skills": [_t("medicine", traitset_id="ts-skills"),
+                                          _t("surgery", traitset_id="ts-skills")]}
     repo.traitsettings_by_entity = {"char-1": [
-        SimpleNamespace(id="char-1:medicine", trait_id="medicine", traitset_id="ts-skills"),
+        SimpleNamespace(id="char-1:medicine", trait_id="medicine"),
     ]}
     out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo, action="gain_or_step_up")
     assert _ids(out) == ["medicine", "surgery"]

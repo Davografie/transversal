@@ -190,6 +190,28 @@ def test_traitsetsetting_element_and_polarity_field_exist():
     assert pol.options == ("positive", "negative")
 
 
+def test_a_trait_instance_exposes_its_set_and_where_it_is_available():
+    """Both are facts about the **registry trait**, so both need a derived reader.
+
+    `traitset_id` was declared with none: the filter matched nothing whatever the
+    value, and a live rule (`sfx-heal`) had been authored against it. `universes`
+    is the set's list intersected with the trait's — the human's Radio case, where
+    assets spans Earth and the Three Realms but Radio does not.
+    """
+    from transversal.services import target_catalog as tc
+    from transversal.services.target_resolver import _DERIVED_FIELDS
+
+    set_field = tc.field("traitsetting", "traitset_id")
+    assert set_field is not None and set_field.references == "traitset"
+    assert ("traitsetting", "traitset_id") in _DERIVED_FIELDS, \
+        "a filterable field with no reader matches nothing, silently"
+
+    universe = tc.field("traitsetting", "universes")
+    assert universe is not None, "nothing can filter an instance by where it is available"
+    assert universe.operators == ("contains", "==", "!="), "a list needs `contains`"
+    assert ("traitsetting", "universes") in _DERIVED_FIELDS
+
+
 def test_a_set_setting_reaches_its_entity_and_a_body_reaches_its_world():
     """The two hops a set-level rule needs to know *who* it is acting for.
 

@@ -5,6 +5,8 @@ from types import SimpleNamespace as NS
 from transversal.services.target_resolver import (
     TargetContext,
     _traitsetting_tags,
+    _traitsetting_traitset_id,
+    _traitsetting_universes,
     register_edge,
     resolve,
     serialize_candidates,
@@ -69,6 +71,11 @@ class FakeRepo:
         # instances of the trait).
         return [ts for ts in self.traitsettings.values()
                 if getattr(ts, "trait_id", None) == tid]
+
+    def list_entities_by_type(self, entity_type):
+        want = getattr(entity_type, "value", entity_type)
+        return [e for e in self.entities.values()
+                if getattr(getattr(e, "type", None), "value", getattr(e, "type", None)) == want]
 
     def list_entities_by_location(self, lid):
         return [e for e in self.entities.values() if e.current_location == lid]
@@ -1005,6 +1012,77 @@ def test_instance_and_registry_tags_are_deduplicated():
     _, repo = _instance_tagged_world()
     ts = repo.traitsettings["kael:trait-calm"]
     assert _traitsetting_tags(ts, repo) == ["violent", "soothing", "calm"]
+
+
+# ── B253: what a trait instance is available in ──────────────
+
+def _availability_world(set_universes, trait_universes, registry=("earth", "three_realms")):
+    """One Asset trait, in the assets set, plus the universes registry.
+
+    The human's example: *assets* is available in Earth and the Three Realms,
+    while an individual Asset trait — Radio — is not.
+    """
+    assets = NS(id="ts-assets", name="assets", universes=list(set_universes))
+    radio = NS(id="trait-radio", name="radio", traitset_id="ts-assets",
+               universes=list(trait_universes))
+    kael = NS(id="kael", type="character", current_universe="three_realms")
+    ts = NS(id="kael:trait-radio", entity_id="kael", trait_id="trait-radio",
+            from_type="entity", tags=[])
+    universes = {u: NS(id=f"universe-{u}", type="universe", current_universe=u,
+                       name=u.title()) for u in registry}
+    repo = FakeRepo(
+        entities={"kael": kael, **universes},
+        traitsettings={ts.id: ts},
+        traits={"trait-radio": radio},
+        traitsets={"ts-assets": assets},
+    )
+    return kael, repo, ts
+
+
+def test_availability_is_the_set_intersected_with_the_trait():
+    """The Radio case, end to end through `resolve`: assets spans Earth and the
+    Three Realms, Radio does not — so standing in the Three Realms it is not
+    offered, and standing in Earth it is."""
+    kael, repo, ts = _availability_world(["earth", "three_realms"], ["earth"])
+    assert _traitsetting_universes(ts, repo) == ["earth"]
+
+    here = spec(SelectStep(collection="self_traitsettings"),
+                FilterStep(field="universes", operator="contains", value="three_realms"))
+    assert resolve(here, TargetContext(subject=kael, repo=repo)).values == []
+
+    home = spec(SelectStep(collection="self_traitsettings"),
+                FilterStep(field="universes", operator="contains", value="earth"))
+    assert [v.id for v in resolve(home, TargetContext(subject=kael, repo=repo)).values] == [ts.id]
+
+
+def test_a_side_that_declares_no_universes_restricts_nothing():
+    """An unrestricted side must not be read as the *empty* list: `contains` on
+    nothing is false, which would make a universal set reject every world."""
+    _, repo, ts = _availability_world([], ["earth"])
+    assert _traitsetting_universes(ts, repo) == ["earth"]
+
+    _, repo, ts = _availability_world(["three_realms"], [])
+    assert _traitsetting_universes(ts, repo) == ["three_realms"]
+
+
+def test_both_sides_unrestricted_means_every_registered_universe():
+    """Neither side names a universe, so the trait is available in all of them —
+    materialised from the registry, because the filter compares against a list."""
+    _, repo, ts = _availability_world([], [])
+    assert sorted(_traitsetting_universes(ts, repo)) == ["earth", "three_realms"]
+
+
+def test_an_instances_set_is_read_through_its_trait():
+    """[[B209]] removed the copy from the setting, so the field has to read the
+    trait — declared without this reader it matched nothing, whatever the value,
+    and one live rule had been authored against it."""
+    _, repo, ts = _availability_world(["earth"], ["earth"])
+    assert _traitsetting_traitset_id(ts, repo) == "ts-assets"
+
+    lonely = NS(id="kael:trait-gone", entity_id="kael", trait_id="trait-gone",
+                from_type="entity", tags=[])
+    assert _traitsetting_traitset_id(lonely, repo) == ""
+    assert _traitsetting_universes(lonely, repo) == []
 
 
 # ── B130: filtering `enabled`, ordering by `order` ───────────

@@ -1194,6 +1194,61 @@ def _traitsetting_tags(ts: Any, repo) -> list[str]:
     return own + [t for t in inherited if t not in own]
 
 
+def _traitsetting_traitset_id(ts: Any, repo) -> str:
+    """The set this instance is in, read through its **registry trait** ([[B209]]).
+
+    The setting used to carry a copy, which could only drift the moment a trait
+    moved between sets; the copy went and the *reader* was never written, so the
+    catalog advertised a filter that matched nothing whatever the value. One live
+    rule had been authored against it (`sfx-heal`: "a complication on the chosen
+    occupant") and had been silently doing nothing.
+    """
+    if repo is None:
+        return ""
+    trait_id = _get_field(ts, "trait_id")
+    trait = repo.get_trait(trait_id) if trait_id else None
+    return getattr(trait, "traitset_id", "") or ""
+
+
+def _all_universe_handles(repo) -> list[str]:
+    """Every universe handle in the registry — what "no universes declared" means."""
+    if repo is None:
+        return []
+    from transversal.domain import EntityType
+
+    getter = getattr(repo, "list_entities_by_type", None)
+    if not callable(getter):
+        return []
+    return [_universe_handle(u) for u in getter(EntityType.UNIVERSE)]
+
+
+def _traitsetting_universes(ts: Any, repo) -> list[str]:
+    """The universes a trait *instance* is available in: its set ∩ its definition.
+
+    A registry trait **narrows** the set it belongs to — assets is available in
+    Earth and the Three Realms, *Radio* is not — and an instance records neither
+    side, so both are read through ``trait_id``, the same route
+    ``traitsetting → traitset`` takes ([[B209]]).
+
+    A side that declares **no** universes is *unrestricted*, and that is
+    materialised as every universe rather than returned as the empty list: an
+    empty list contains nothing, so ``filter universes contains {world}`` would
+    reject a universal set — the opposite of what "no restriction" says.
+    """
+    if repo is None:
+        return []
+    trait_id = _get_field(ts, "trait_id")
+    trait = repo.get_trait(trait_id) if trait_id else None
+    if trait is None:
+        return []
+    traitset = repo.get_traitset_by_id(getattr(trait, "traitset_id", "") or "")
+    of_set = [u for u in (getattr(traitset, "universes", None) or []) if u]
+    of_trait = [u for u in (getattr(trait, "universes", None) or []) if u]
+    if of_set and of_trait:
+        return [u for u in of_set if u in of_trait]
+    return of_trait or of_set or _all_universe_handles(repo)
+
+
 def _die_rating(die: Any, repo) -> Any:
     """A die's own size.
 
@@ -1489,6 +1544,12 @@ def _projection_name(p: Any, repo) -> str:
 
 def register_default_fields() -> None:
     register_derived_field("traitsetting", "tags", _traitsetting_tags)
+    # The two facts an instance does not record: the set it is in ([[B209]]) and
+    # the universes it is available in. Both live on the registry trait, so both
+    # are read through it — see `_traitsetting_universes` for why "no universes
+    # declared" has to come back as *every* universe rather than an empty list.
+    register_derived_field("traitsetting", "traitset_id", _traitsetting_traitset_id)
+    register_derived_field("traitsetting", "universes", _traitsetting_universes)
     register_derived_field("die", "rating", _die_rating)
     register_derived_field("location", "universe", _location_universe)
     # A contest's *phase* belongs to the dice pool, not to the contest record: the
