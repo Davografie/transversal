@@ -676,6 +676,7 @@ select option {
   max-width: 320px;
   width: 100%;
   align-self: center;
+  justify-content: center;
 }
 .settings-empty {
   gap: 4px;
@@ -1284,3 +1285,18 @@ select option {
 .other-mains-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 .other-main-row { flex: 0 1 200px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-lg); background: var(--overlay-6); border: 1px solid var(--overlay-8); }
 .support-create-inline { width: auto; flex: 0 0 auto; font-size: 11px; padding: 5px 10px; }
+
+/* ── SEC-3 admission block, and the settings panel's hint measure ──────────
+   `.name-hint` is capped at 280px, which suits the centred login card. Inside
+   the settings panel — 520px wide — the same cap reads as a narrow ragged
+   column, so hints there use the column they are actually in. */
+.settings-section .name-hint,
+.admit-block .name-hint {
+  max-width: none;
+}
+.admit-block {
+  width: min(520px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

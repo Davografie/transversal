@@ -1,4 +1,23 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { defineConfig, devices } from '@playwright/test'
+
+// SEC-3: the suite obtains *real* sessions, so it needs the architect key. Read it
+// from the repo's `.env` when the environment does not already carry it, so
+// `npm test` works without a preamble. An explicit ARCHITECT_TOKEN still wins,
+// which is what a run against a remote (tailnet) server needs — its key is not
+// necessarily the one in a local checkout.
+const repoEnv = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.env')
+if (fs.existsSync(repoEnv)) {
+  for (const line of fs.readFileSync(repoEnv, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/)
+    if (m && !process.env[m[1]]) {
+      process.env[m[1]] = m[2].replace(/^["']|["']$/g, '')
+    }
+  }
+}
 
 // Where the app under test lives.
 //
