@@ -75,12 +75,15 @@ export default defineConfig({
       // against a browser without touching the :3000 tree.
       '/api': API_TARGET,
       '/media': API_TARGET,
-      // SEC-3: in production the nginx edge serves `/enter` (the passage-link
-      // endpoint). The dev server has no nginx, so without this a passage link
-      // falls through to the SPA, returns index.html, and sets no session — which
-      // is indistinguishable from a broken token. Same origin as the app, so the
-      // cookie lands where the app reads it.
-      '/enter': API_TARGET
+      // SEC-3: in production the nginx edge serves `/enter` and *rewrites* it to
+      // the API route. The dev server has no nginx, so without this a passage link
+      // falls through to the SPA, returns index.html and sets no session — which is
+      // indistinguishable from a bad token. Same origin as the app, so the cookie
+      // lands where the app reads it.
+      '/enter': {
+        target: API_TARGET,
+        rewrite: (path) => path.replace(/^\/enter/, '/api/v1/auth/enter'),
+      }
     }
   }
 })
