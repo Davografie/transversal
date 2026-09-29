@@ -61,6 +61,23 @@ def parse_traitsetsetting_id(value: str) -> Optional[tuple[str, str]]:
     return entity_id, traitset_id
 
 
+def default_for(entity_id: str, traitset_id: str) -> TraitSetSetting:
+    """The setting a pair has when **nothing is stored** — the shape, not a read.
+
+    Split out for callers that already know no document exists (or are merging a
+    batch) and would otherwise pay a lookup per pair just to be told so. It mints
+    the derived id, so the shape stays defined in exactly one place.
+    """
+    return TraitSetSetting(
+        id=traitsetsetting_id(entity_id, traitset_id),
+        entity_id=entity_id,
+        traitset_id=traitset_id,
+        from_type="entity",
+        sfx_ids=[],
+        limit=None,
+    )
+
+
 def resolve(repo, entity_id: str, traitset_id: str) -> TraitSetSetting:
     """The pair's setting: the stored one, else the default it would have.
 
@@ -73,14 +90,7 @@ def resolve(repo, entity_id: str, traitset_id: str) -> TraitSetSetting:
     stored = repo.get_traitsetsetting(traitsetsetting_id(entity_id, traitset_id))
     if stored is not None:
         return stored
-    return TraitSetSetting(
-        id=traitsetsetting_id(entity_id, traitset_id),
-        entity_id=entity_id,
-        traitset_id=traitset_id,
-        from_type="entity",
-        sfx_ids=[],
-        limit=None,
-    )
+    return default_for(entity_id, traitset_id)
 
 
 def resolve_stored_or_default(repo, setting_id: str) -> Optional[TraitSetSetting]:
