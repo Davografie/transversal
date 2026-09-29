@@ -42,8 +42,12 @@ test('a GM can open an admission window and is shown the link', async ({ page, r
   // offered — asserting that is the point of the next line, and it is why this
   // closes the window directly instead.
   await expect(page.getByRole('button', { name: /close all windows/i })).toBeHidden()
-  const open = page.locator('.char-item', { hasText: 'close' }).first()
-  await expect(open).toBeVisible()
-  await open.click()
-  await expect(page.locator('.char-item', { hasText: 'close' })).toHaveCount(0)
+  const rows = page.locator('.char-item', { hasText: 'close' })
+  const before = await rows.count()
+  expect(before).toBeGreaterThan(0)
+  await rows.first().click()
+  // One fewer than before, not zero: other windows may be open (a previous run
+  // that failed mid-way leaves its own behind), and this spec closes *its* window
+  // rather than everyone's — close-all is architect-only and this identity is not.
+  await expect(rows).toHaveCount(before - 1)
 })
