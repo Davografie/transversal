@@ -65,7 +65,17 @@ export function usePlayerIdentity({
       admitted.value = true
       applyPlayer(data.player || null)
       diag('session-loaded', { player: data.player })
-      if (!data.player) await loadRoster()
+      if (data.player) {
+        // Booting into a session is an identity arrival like any other: the role,
+        // the owned characters and the location all have to be loaded *from* it.
+        // The old composable did this in `ensurePlayer`; dropping it left the app
+        // holding a player id and fetching none of them — no `gmMode`, no
+        // characters, no map — which from the outside reads as panels simply not
+        // existing. Found by running the GM specs, not by reading the code.
+        await onIdentityChanged()
+      } else {
+        await loadRoster()
+      }
     } catch (e) {
       identityError.value = 'could not reach the archive'
       diag('session-error', { error: e.message })
