@@ -1728,8 +1728,11 @@ def _get_owner_sfx_ids(repo, owner_type: str, owner_id: str) -> list[str] | None
         ts = repo.get_traitsetting(owner_id)
         return list(ts.sfx_ids or []) if ts else None
     if owner_type == "trait_set":
-        tss = repo.get_traitsetsetting(owner_id)
-        return list(tss.sfx_ids or []) if tss else None
+        # A pair nothing has overridden yet answers "no rules yet" — not None —
+        # so the first attach is allowed to be the write that creates it.
+        from transversal.services.traitset_settings import resolve_stored_or_default
+        setting = resolve_stored_or_default(repo, owner_id)
+        return list(setting.sfx_ids or []) if setting is not None else None
     return None
 
 
@@ -1772,11 +1775,20 @@ def _set_owner_sfx_ids(repo, owner_type: str, owner_id: str, sfx_ids: list[str])
         repo.update_traitsetting(ts)
         return True
     if owner_type == "trait_set":
-        tss = repo.get_traitsetsetting(owner_id)
-        if tss is None:
+        # The owner id **is** the pair, so the pair is read from the id rather than
+        # from the document: a set-level attach is routinely the write that creates
+        # the row, and a row that does not exist yet has no fields to read.
+        # Stored-or-default, then upsert — refusing here is what made a set-level
+        # rule unattachable for every entity without a row, which was all but 92 of
+        # them, none of which carried an SFX. See `services/traitset_settings`.
+        from transversal.services.traitset_settings import (
+            parse_traitsetsetting_id, resolve_stored_or_default, upsert)
+        if resolve_stored_or_default(repo, owner_id) is None:
             return False
-        tss.sfx_ids = list(sfx_ids)
-        repo.update_traitsetsetting(tss)
+        pair = parse_traitsetsetting_id(owner_id)
+        if pair is None:
+            return False
+        upsert(repo, pair[0], pair[1], sfx_ids=sfx_ids)
         return True
     return False
 

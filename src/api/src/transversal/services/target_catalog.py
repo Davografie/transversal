@@ -271,6 +271,14 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "projection_id": ScalarField("traitsetsetting", "projection_id", "string", references="projection"),
         "from_type": ScalarField("traitsetsetting", "from_type", "string", ("entity", "projection")),
         "limit": ScalarField("traitsetsetting", "limit", "int"),
+        # The rules this set carries *as a unit* (not per trait). A list, so it is
+        # matched with `contains` — the same shape as a trait instance's `tags`,
+        # and the field a reach selector reads when it asks "the sets that already
+        # carry this rule". Was absent from the catalog, so the one field a set
+        # setting exists to hold could not be filtered on at all.
+        "sfx_ids": ScalarField("traitsetsetting", "sfx_ids", "string",
+                              operators=("contains", "==", "!="),
+                              references="sfx", label="rule"),
     },
     "trait": {
         # The registry identity. `references` is what makes a filter offer the
@@ -509,6 +517,26 @@ EDGES: tuple[Edge, ...] = (
     Edge("traitset", "traitsetting", ("traitset",), "one", "Trait set"),
     Edge("entity", "traitsetting", ("entity",), "one", "Owning entity", noun="owner"),
     Edge("projection", "traitsetting", ("projection",), "one", "Owning projection"),
+
+    # traitsetting → the *set-level* setting that governs the set its trait is in.
+    # One hop, and it resolves whether or not a document exists: a trait-set
+    # setting is an **override**, so its absence means "nothing overridden yet",
+    # not "no such thing" (see `services/traitset_settings`). Reached through the
+    # trait because the set belongs to the definition rather than to the instance
+    # — the `traitsetting → traitset` hop above makes the same point.
+    Edge("traitsetsetting", "traitsetting", ("traitsetsetting",), "one",
+         "Trait set instance", noun="trait set instance"),
+
+    # ...and the two ends of the pair it is *about*, so a spec can range over one
+    # set's overrides or one entity's (`traitset → traitsetsettings`,
+    # `entity → traitsetsettings`). Stored rows only, deliberately: the defaults
+    # are addressable but not enumerated, because enumerating them would be one
+    # row per (entity, set) pair that *could* exist — 7,260 universe-aware pairs
+    # live — whose entire content is "nothing".
+    Edge("traitsetsettings", "entity", ("traitsetsetting",), "many",
+         "Trait set instances", noun="trait set instance", plural="trait set instances"),
+    Edge("traitsetsettings", "traitset", ("traitsetsetting",), "many",
+         "Trait set instances", noun="trait set instance", plural="trait set instances"),
 
     # traitsetting → the instance it is nested *under*. The upward half of
     # `subtraits`: a portent that just completed has to reach the container that
@@ -805,6 +833,13 @@ COLLECTIONS: tuple[Collection, ...] = (
     Collection("universes", "universe", "All universes", noun="universe"),
     Collection("self_traitsettings", "traitsetting", "The acting entity's trait instances",
                noun="trait instance", possessive=True),
+    # The set-level sibling of the seed above: the acting entity's overrides, one
+    # per set it has actually touched. A set-level rule ("this whole set is
+    # suppressed here") has no surface of its own otherwise, so without a seed the
+    # only way to reach one is the `traitsetting → traitsetsetting` hop.
+    Collection("self_traitsetsettings", "traitsetsetting",
+               "The acting entity's trait set instances",
+               noun="trait set instance", possessive=True),
     Collection("sfxs", "sfx", "Rules in the registry", noun="rule"),
     # The registry seeds, for a path that ranges over definitions rather than over
     # what one entity holds (`traitsets`/`life_paths`/`roll_tables`).

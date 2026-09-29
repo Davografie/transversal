@@ -706,6 +706,7 @@ class DispatchRepo:
         self.traits = {}
         self.traitsettings = {}
         self.traitsetsettings = {}
+        self.traitsets = {}
 
     def get_sfx_owner(self, oid): return self.owners.get(oid)
     def update_sfx_owner(self, o): self.owners[o.id] = o
@@ -721,6 +722,10 @@ class DispatchRepo:
         return [s for s in self.traitsettings.values() if getattr(s, "trait_id", None) == tid]
     def get_traitsetsetting(self, sid): return self.traitsetsettings.get(sid)
     def update_traitsetsetting(self, s): self.traitsetsettings[s.id] = s
+    def create_traitsetsetting(self, s):
+        self.traitsetsettings[s.id] = s
+        return s
+    def get_traitset_by_id(self, tsid): return self.traitsets.get(tsid)
 
 
 def test_add_remove_dispatcher_across_surfaces():
@@ -732,7 +737,9 @@ def test_add_remove_dispatcher_across_surfaces():
     repo.projections["proj-1"] = SimpleNamespace(id="proj-1", sfx_ids=[])
     repo.traits["trait-1"] = SimpleNamespace(id="trait-1", default_sfx_ids=[])
     repo.traitsettings["ts-1"] = SimpleNamespace(id="ts-1", sfx_ids=[])
-    repo.traitsetsettings["tss-1"] = SimpleNamespace(id="tss-1", sfx_ids=[])
+    repo.traitsetsettings["char-1:ts-motivations"] = SimpleNamespace(
+        id="char-1:ts-motivations", entity_id="char-1", traitset_id="ts-motivations",
+        sfx_ids=[])
 
     for owner_type, owner_id in [
         ("table", "table"),
@@ -740,7 +747,7 @@ def test_add_remove_dispatcher_across_surfaces():
         ("projection", "proj-1"),
         ("trait", "trait-1"),
         ("trait_instance", "ts-1"),
-        ("trait_set", "tss-1"),
+        ("trait_set", "char-1:ts-motivations"),
     ]:
         assert add_sfx_to_owner(repo, owner_type, owner_id, "sfx-x") is True
 
@@ -749,7 +756,7 @@ def test_add_remove_dispatcher_across_surfaces():
     assert repo.projections["proj-1"].sfx_ids == ["sfx-x"]
     assert repo.traits["trait-1"].default_sfx_ids == ["sfx-x"]
     assert repo.traitsettings["ts-1"].sfx_ids == ["sfx-x"]
-    assert repo.traitsetsettings["tss-1"].sfx_ids == ["sfx-x"]
+    assert repo.traitsetsettings["char-1:ts-motivations"].sfx_ids == ["sfx-x"]
 
     # Idempotent add + remove.
     assert add_sfx_to_owner(repo, "entity", "char-1", "sfx-x") is True
@@ -760,6 +767,31 @@ def test_add_remove_dispatcher_across_surfaces():
     # Missing owner returns False without error.
     assert add_sfx_to_owner(repo, "entity", "ghost", "sfx-x") is False
     assert remove_sfx_from_owner(repo, "entity", "ghost", "sfx-x") is False
+
+
+def test_a_set_level_rule_creates_the_setting_it_attaches_to():
+    """A trait-set setting is an *override*, so "no row" means "nothing overridden
+    yet" — not "no such owner". Refusing there was the dead end: **0 live rows
+    carry an SFX**, because no row existed to carry one and only one effect action
+    could create one."""
+    from transversal.services.sfx_owner import add_sfx_to_owner, remove_sfx_from_owner
+
+    repo = DispatchRepo()
+    repo.entities["char-1"] = SimpleNamespace(id="char-1", sfx_ids=[])
+    repo.traitsets["ts-motivations"] = SimpleNamespace(id="ts-motivations")
+
+    assert add_sfx_to_owner(repo, "trait_set", "char-1:ts-motivations", "sfx-x") is True
+    created = repo.traitsetsettings["char-1:ts-motivations"]
+    assert created.sfx_ids == ["sfx-x"]
+    assert created.entity_id == "char-1" and created.traitset_id == "ts-motivations"
+
+    assert remove_sfx_from_owner(repo, "trait_set", "char-1:ts-motivations", "sfx-x") is True
+    assert repo.traitsetsettings["char-1:ts-motivations"].sfx_ids == []
+
+    # A pair whose ends do not exist is still refused, without error.
+    assert add_sfx_to_owner(repo, "trait_set", "char-1:ts-nope", "sfx-x") is False
+    assert add_sfx_to_owner(repo, "trait_set", "ghost:ts-motivations", "sfx-x") is False
+    assert add_sfx_to_owner(repo, "trait_set", "not-a-pair", "sfx-x") is False
 
 
 def test_add_sfx_to_owner_enforces_source_kind():

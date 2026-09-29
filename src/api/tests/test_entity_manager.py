@@ -257,6 +257,18 @@ class InMemoryRepository(EntityRepository):
     def create_traitsetsetting(self, tss: TraitSetSetting) -> TraitSetSetting:
         self._store(self._traitsetsettings, tss.id, tss.model_dump())
         return tss
+    def get_traitsetsetting(self, tss_id: str) -> TraitSetSetting | None:
+        """Without this the double falls through to the Arango implementation, and
+        the set-setting hop (which resolves a *derived* id before anything has
+        written one) reports every real pair as unresolved."""
+        d = self._traitsetsettings.get(tss_id)
+        return TraitSetSetting.model_validate(d) if d else None
+    def get_traitsetsettings_for_traitset(self, traitset_id: str) -> list[TraitSetSetting]:
+        return [
+            TraitSetSetting.model_validate(d)
+            for d in self._traitsetsettings.values()
+            if d["traitset_id"] == traitset_id
+        ]
     def get_traitsetsettings_for_entity(self, eid: str) -> list[TraitSetSetting]:
         return [
             TraitSetSetting.model_validate(d)

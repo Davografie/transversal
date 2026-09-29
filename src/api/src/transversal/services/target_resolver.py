@@ -246,7 +246,11 @@ def resolve_source(source_kind: str, source_id: str | None, repo) -> tuple[Any, 
         obj = repo.get_traitsetting(source_id)
         return (obj, element) if obj is not None else None
     if element == "traitsetsetting":
-        obj = repo.get_traitsetsetting(source_id)
+        # Resolves **stored-or-default** for the same reason a literal does: an
+        # authored source may name a set-level setting that nothing has written
+        # yet, and the pair is real either way (`services/traitset_settings`).
+        from transversal.services.traitset_settings import resolve_stored_or_default
+        obj = resolve_stored_or_default(repo, source_id)
         return (obj, element) if obj is not None else None
     if element == "entity":
         obj = repo.get_entity(source_id)
@@ -630,6 +634,10 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
         if ctx.subject is None:
             return []
         return list(ctx.repo.get_traitsettings_for_entity(ctx.subject.id))
+    if name == "self_traitsetsettings":
+        if ctx.subject is None:
+            return []
+        return list(ctx.repo.get_traitsetsettings_for_entity(ctx.subject.id))
     if name == "locations":
         from transversal.domain import EntityType
         return list(ctx.repo.list_entities_by_type(EntityType.LOCATION))
@@ -1030,6 +1038,13 @@ def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:
         return _maybe(repo.get_trait(value))
     if element == "traitsetting":
         return _maybe(repo.get_traitsetting(value))
+    if element == "traitsetsetting":
+        # Addressed by the **derived** pair id (`{entity}:{traitset}`), so a
+        # literal naming a set-level setting resolves before anything has written
+        # one — a setting is an override, and its absence means "nothing
+        # overridden", not "no such target" (`services/traitset_settings`).
+        from transversal.services.traitset_settings import resolve_stored_or_default
+        return _maybe(resolve_stored_or_default(repo, value))
     if element == "traitset":
         return _maybe(repo.get_traitset_by_id(value))
     if element == "projection":
@@ -1603,6 +1618,28 @@ def _location_contests(location: Any, ctx: TargetContext) -> list[Any]:
     return out
 
 
+def _traitsetting_traitsetsetting(ts, ctx) -> list[Any]:
+    """The set-level setting governing this instance's set, for its own entity.
+
+    The set belongs to the *definition*, so it is read through the trait — the
+    same route the ``traitsetting → traitset`` hop uses. **Stored-or-default**:
+    the pair is real whether or not anything has been written against it, and this
+    is the hop that lets a rule land on a set nobody has overridden yet.
+    """
+    from transversal.services.traitset_settings import resolve
+
+    trait = ctx.repo.get_trait(getattr(ts, "trait_id", ""))
+    traitset_id = getattr(trait, "traitset_id", "") if trait is not None else ""
+    if not traitset_id:
+        return []
+    return [resolve(ctx.repo, ts.entity_id, traitset_id)]
+
+
+def _traitset_traitsetsettings(ts, ctx) -> list[Any]:
+    """A set's **stored** overrides, across the entities that have one."""
+    return list(ctx.repo.get_traitsetsettings_for_traitset(ts.id))
+
+
 def register_default_edges() -> None:
     # A contest is reached from the two things that know about one: a *pool* (the
     # dice being assembled — the shortest route, and the one that speaks the
@@ -1627,6 +1664,16 @@ def register_default_edges() -> None:
     register_edge("traitsetting", "entity", lambda ts, ctx: _maybe(ctx.repo.get_entity(ts.entity_id)))
     register_edge("traitsetting", "projection",
                   lambda ts, ctx: _maybe(ctx.repo.get_projection(ts.projection_id)) if ts.projection_id else [])
+    # The set-level setting: one hop from an instance to the override governing
+    # its set, plus the two ends of the pair it is *about*. The singular hop
+    # resolves stored-or-default (a set-level rule is routinely the first thing to
+    # touch a pair); the plural hops are stored rows only, because the defaults
+    # are addressable but enumerating them would be thousands of rows whose
+    # content is "nothing". See `services/traitset_settings`.
+    register_edge("traitsetting", "traitsetsetting", _traitsetting_traitsetsetting)
+    register_edge("entity", "traitsetsettings",
+                  lambda e, ctx: list(ctx.repo.get_traitsetsettings_for_entity(e.id)))
+    register_edge("traitset", "traitsetsettings", _traitset_traitsetsettings)
     # The instances nested under this one (elemental roots under Spiritual Power).
     # One repo read: sub-traits share the traitsettings collection, anchored to
     # the parent and marked `from_type == 'traitsetting'`.

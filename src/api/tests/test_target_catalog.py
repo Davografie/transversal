@@ -27,7 +27,36 @@ def test_die_edges():
 def test_traitsetting_edges():
     names = [e.name for e in tc.edges_from("traitsetting")]
     assert names == ["rating_dice", "capacity_dice", "trait", "traitset", "entity",
-                     "projection", "parent", "subtraits", "relationship"]
+                     "projection", "traitsetsetting", "parent", "subtraits", "relationship"]
+
+
+def test_the_set_setting_pair_is_reachable_from_both_ends_and_from_an_instance():
+    """The three hops B228 asks for: a set-level setting is reachable from the
+    instance it governs, from the entity that holds it, and from the set it is an
+    override for."""
+    pairs = {(e.source, e.name): e for e in tc.EDGES}
+    assert pairs[("traitsetting", "traitsetsetting")].target == ("traitsetsetting",)
+    assert pairs[("traitsetting", "traitsetsetting")].cardinality == "one"
+    assert pairs[("entity", "traitsetsettings")].target == ("traitsetsetting",)
+    assert pairs[("entity", "traitsetsettings")].cardinality == "many"
+    assert pairs[("traitset", "traitsetsettings")].target == ("traitsetsetting",)
+    assert pairs[("traitset", "traitsetsettings")].cardinality == "many"
+
+
+def test_a_set_setting_exposes_the_sfx_list_it_exists_to_hold():
+    """`sfx_ids` was missing from the field map, so the one field a set-level
+    setting carries could not be filtered on. A list, so it matches `contains`."""
+    f = tc.field("traitsetsetting", "sfx_ids")
+    assert f is not None
+    assert f.references == "sfx"
+    assert "contains" in f.operators
+
+
+def test_the_acting_entitys_set_settings_are_a_seed():
+    c = tc.collection("self_traitsetsettings")
+    assert c is not None
+    assert c.element == "traitsetsetting"
+    assert c.possessive is True
 
 
 def test_the_sub_trait_edge_reaches_nested_instances():

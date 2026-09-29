@@ -56,6 +56,24 @@ class RepositoryTraitsetSettings:
             grouped.setdefault(tss.entity_id, []).append(tss)
         return grouped
 
+    def get_traitsetsettings_for_traitset(self, traitset_id: str) -> list[TraitSetSetting]:
+        """Every stored override for one trait set — the ``traitset → setting`` hop.
+
+        Documents only, deliberately: the pair is *addressable* without one (see
+        ``services/traitset_settings``), but enumerating the defaults for a set
+        would mean one row per entity that could hold it, which is thousands of
+        rows whose content is "nothing".
+        """
+        query = f"""
+            FOR tss IN {TRAITSETSETTINGS}
+            FILTER tss.traitset_id == @tsid
+            RETURN tss
+        """
+        return [
+            TraitSetSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars={"tsid": traitset_id})
+        ]
+
     def list_all_traitsetsettings(self) -> list[TraitSetSetting]:
         """Return every trait set setting (entity↔traitset edge)."""
         query = f"""
