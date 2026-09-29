@@ -23,14 +23,17 @@
       <p class="name-hint settings-hint">Player settings</p>
 
 
-      <div v-if="!rosterPicking" class="settings-section">
-        <label class="settings-label">You are</label>
-        <button class="continue-btn" :disabled="busy" @click="beginSwitch">
-          {{ playerName }} — switch player
-        </button>
-        <p class="name-hint">
-          Taking another name is deliberate; architect accounts are never takeable.
-        </p>
+      <!-- Who you are: the name plate it has always been — click it to change.
+           SEC-3 changed what the click *does* (the roster, not a name box), and the
+           name plate is all that survives of that block's styling. The rule it
+           enforces rides in the tooltip rather than as a paragraph on a panel
+           someone opened to change their theme. -->
+      <div
+        v-if="!rosterPicking"
+        class="search-wrapper settings-name-wrapper"
+        title="Switch player — taking another name is deliberate; architect accounts are never takeable"
+      >
+        <div class="settings-name-static" @click="beginSwitch">{{ playerName }}</div>
       </div>
 
       <template v-else>
