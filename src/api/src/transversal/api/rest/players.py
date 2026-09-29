@@ -14,7 +14,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from transversal.api.auth import require_architect, require_player, require_session
+from transversal.api.auth import require_owner, require_player, require_session
 from transversal.services.player_manager import player_manager
 
 logger = logging.getLogger("transversal.players")
@@ -59,8 +59,13 @@ async def get_player(player_id: str, request: Request) -> dict | None:
 
 @router.patch("/{player_id}/role")
 async def set_player_role(player_id: str, request: Request, req: dict | None = None) -> dict:
-    """Set a player's role. Architect-only: the escape SEC-3 was about."""
-    await require_architect(request)
+    """Set **your own** role — player or architect.
+
+    Self-service on purpose: `role` is a UI mode, and the app's GM toggle has always
+    written it back here. It is not a privilege boundary — ownership is — so the only
+    thing that must be true is that you are setting your own.
+    """
+    await _self(request, player_id)
     role = (req or {}).get("role", "player")
     ok = player_manager.set_role(player_id, role)
     logger.info("[authz] set_player_role id=%s role=%s updated=%s", player_id, role, ok)
@@ -75,16 +80,12 @@ async def revoke_player(player_id: str, request: Request) -> dict:
     through ``agency`` edges, so removing the record would orphan them. Architect
     only, and an architect cannot revoke themselves out of the last seat.
     """
-    me = await require_architect(request)
+    me = await require_owner(request)
     target = player_manager.get(player_id)
     if not target:
         raise HTTPException(status_code=404, detail="no such player")
-    if target.role == "architect":
-        architects = [p for p in player_manager.list_all() if p.role == "architect"]
-        if len(architects) <= 1:
-            raise HTTPException(
-                status_code=409, detail="the last architect cannot be revoked"
-            )
+    # No last-architect guard any more: a role is self-service, so nobody can be
+    # locked out of the GM panels by a revoke. The owner re-enters with their token.
     epoch = player_manager.revoke_sessions(player_id)
     logger.warning("[authz] %s revoked sessions for %s (epoch %s)", me.id, player_id, epoch)
     return {"player_id": player_id, "epoch": epoch}

@@ -171,7 +171,7 @@ def test_a_second_device_can_take_an_existing_player(client, repo, cleanup):
     ).json()["player"]["id"] == player["id"]
 
 
-def test_an_architect_account_is_not_in_the_roster_and_cannot_be_taken(client, repo, cleanup):
+def test_an_architect_account_is_takeable_and_in_the_roster(client, repo, cleanup):
     arch = _architect(client, cleanup)
     token = _open_window(client, arch, cleanup)
     device = _cookie(
@@ -180,10 +180,15 @@ def test_an_architect_account_is_not_in_the_roster_and_cannot_be_taken(client, r
 
     arch_id = client.get("/api/v1/auth/session", cookies=_auth(arch)).json()["player"]["id"]
     roster = client.get("/api/v1/auth/roster", cookies=_auth(device)).json()
-    assert arch_id not in [row["id"] for row in roster]
+    # Everyone is listed, architects included: a role is a UI mode, not a boundary.
+    assert arch_id in [row["id"] for row in roster]
 
-    refused = client.post(f"/api/v1/auth/take/{arch_id}", cookies=_auth(device))
-    assert refused.status_code == 403
+    taken = client.post(f"/api/v1/auth/take/{arch_id}", cookies=_auth(device))
+    assert taken.status_code == 200
+    # ...and taking it grants no ownership.
+    who = client.get("/api/v1/auth/session", cookies=_auth(_cookie(taken))).json()
+    assert who["player"]["id"] == arch_id
+    assert who["player"]["is_owner"] is False
 
 
 def test_revoking_a_player_kills_their_sessions(client, repo, cleanup):
@@ -212,7 +217,7 @@ def test_revoking_a_player_kills_their_sessions(client, repo, cleanup):
     assert client.get("/api/v1/auth/roster", cookies=_auth(bound)).status_code == 401
 
 
-def test_a_plain_member_cannot_revoke_or_grant_roles(client, repo, cleanup):
+def test_a_plain_member_cannot_revoke_but_may_set_their_own_role(client, repo, cleanup):
     arch = _architect(client, cleanup)
     token = _open_window(client, arch, cleanup)
     device = _cookie(
@@ -229,13 +234,24 @@ def test_a_plain_member_cannot_revoke_or_grant_roles(client, repo, cleanup):
         client.post(f"/api/v1/players/{player['id']}/revoke", cookies=_auth(bound.cookies.get(COOKIE_NAME))).status_code
         == 403
     )
+    # A role is self-service: the app's GM toggle has always written it back, and
+    # it is not what guards anything.
     assert (
         client.patch(
             f"/api/v1/players/{player['id']}/role",
             json={"role": "architect"},
             cookies=_auth(bound.cookies.get(COOKIE_NAME)),
         ).status_code
-        == 403
+        == 200
+    )
+    # ...but not someone else's.
+    assert (
+        client.patch(
+            f"/api/v1/players/{player['id']}-other/role",
+            json={"role": "architect"},
+            cookies=_auth(bound.cookies.get(COOKIE_NAME)),
+        ).status_code
+        in (403, 404)
     )
 
 

@@ -3,22 +3,15 @@
        included, because moving the architect line requires seeing who holds it. -->
   <div class="admin-block">
     <label class="settings-label">Players ({{ players.length }})</label>
+    <p class="name-hint">
+      Anyone may take any name here, and anyone may switch their own GM mode — a role
+      is a UI mode, not a rank. Only the owner may revoke: ending someone's sessions is
+      the one act that is not self-service.
+    </p>
     <div class="admin-list">
       <div v-for="p in players" :key="p.id" class="admin-row">
         <span class="admin-name">{{ p.name || p.id }}</span>
         <span class="admin-role" :class="{ arch: p.role === 'architect' }">{{ p.role }}</span>
-        <button
-          v-if="p.role !== 'architect'"
-          class="admin-btn"
-          :disabled="busy"
-          @click="$emit('set-role', p.id, 'architect')"
-        >Make architect</button>
-        <button
-          v-else
-          class="admin-btn"
-          :disabled="busy"
-          @click="$emit('set-role', p.id, 'player')"
-        >Demote</button>
         <!-- Two-step: revoking ends their sessions, which is not something to do
              by mis-click while a game is running. -->
         <button
@@ -50,7 +43,7 @@ defineProps({
   notice: { type: String, default: '' },
 })
 
-defineEmits(['revoke', 'set-role'])
+defineEmits(['revoke'])
 
 const confirmId = ref('')
 </script>

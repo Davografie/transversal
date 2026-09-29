@@ -144,13 +144,34 @@ async def test_a_deleted_player_is_refused(monkeypatch):
     assert exc.value.status_code == 401
 
 
-async def test_require_architect_refuses_a_plain_player(monkeypatch):
+async def test_require_owner_refuses_a_plain_session(monkeypatch):
+    """Ownership is what guards a destructive act — not the role."""
     monkeypatch.setattr(auth.player_manager, "get", lambda pid: _player(pid))
     with pytest.raises(HTTPException) as exc:
-        await auth.require_architect(
+        await auth.require_owner(
             _Request(cookies={auth.COOKIE_NAME: auth.mint_session("player-abc", 0)})
         )
     assert exc.value.status_code == 403
+
+
+async def test_require_owner_refuses_an_architect_role_without_ownership(monkeypatch):
+    """The separation this design turns on: an architect role grants nothing here."""
+    monkeypatch.setattr(
+        auth.player_manager, "get", lambda pid: _player(pid, role="architect")
+    )
+    with pytest.raises(HTTPException) as exc:
+        await auth.require_owner(
+            _Request(cookies={auth.COOKIE_NAME: auth.mint_session("player-abc", 0)})
+        )
+    assert exc.value.status_code == 403
+
+
+async def test_require_owner_admits_an_owner_session(monkeypatch):
+    monkeypatch.setattr(auth.player_manager, "get", lambda pid: _player(pid))
+    player = await auth.require_owner(
+        _Request(cookies={auth.COOKIE_NAME: auth.mint_session("player-abc", 0, owner=True)})
+    )
+    assert player.id == "player-abc"
 
 
 # ── /enter ────────────────────────────────────────────────────────────
@@ -193,7 +214,7 @@ async def test_enter_rejects_a_wrong_architect_key():
 
 async def test_enter_accepts_the_architect_key_and_binds_its_seat(monkeypatch):
     monkeypatch.setattr(
-        auth, "ensure_architect", lambda: _player("player-arch", role="architect")
+        auth, "ensure_owner", lambda: _player("player-arch", role="architect")
     )
     resp = await auth.enter(_Request(), a=GOOD_ARCHITECT_KEY)
     assert resp.status_code == 302
@@ -231,13 +252,21 @@ async def test_enter_leaves_cookie_insecure_on_plain_http(monkeypatch):
 # ── Taking a player ───────────────────────────────────────────────────
 
 
-async def test_an_architect_account_cannot_be_taken(monkeypatch):
+async def test_an_architect_account_can_be_taken(monkeypatch):
+    """A role is not a boundary, so taking an architect is just playing someone else.
+
+    What it must NOT do is grant ownership — that is established out of band, and
+    `require_owner` is what enforces it, not this route.
+    """
     monkeypatch.setattr(
         auth.player_manager, "get", lambda pid: _player(pid, role="architect")
     )
-    with pytest.raises(HTTPException) as exc:
-        await auth.take("player-arch", _Request(cookies={auth.COOKIE_NAME: auth.mint_session(None, 0)}))
-    assert exc.value.status_code == 403
+    resp = await auth.take(
+        "player-arch", _Request(cookies={auth.COOKIE_NAME: auth.mint_session(None, 0)})
+    )
+    assert resp.status_code == 200
+    value = resp.headers["set-cookie"].split(f"{auth.COOKIE_NAME}=", 1)[1].split(";", 1)[0]
+    assert auth.session_payload(value)["player"] == "player-arch"
 
 
 async def test_taking_a_player_binds_the_session(monkeypatch):

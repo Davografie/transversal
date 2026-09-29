@@ -15,7 +15,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request
 
-from transversal.api.auth import require_architect, require_player
+from transversal.api.auth import require_owner, require_player
 from transversal.db.repository import EntityRepository
 from transversal.services import join_tokens
 
@@ -75,8 +75,8 @@ async def close_token(token_id: str, request: Request) -> dict:
 
 @router.post("/tokens/close-all")
 async def close_all_tokens(request: Request) -> dict:
-    """Shut every open window at once — the one-action off switch."""
-    me = await require_architect(request)
+    """Shut every open window at once — the one-action off switch, and the owner's."""
+    me = await require_owner(request)
     closed = _repo().close_all_join_tokens(closed_by=me.id)
     logger.warning("[authz] %s closed all admission tokens (%d)", me.id, closed)
     return {"closed": closed}

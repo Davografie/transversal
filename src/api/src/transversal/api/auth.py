@@ -68,9 +68,17 @@ def _is_https(request: Request) -> bool:
 # ── The session cookie ────────────────────────────────────────────────
 
 
-def mint_session(player_id: str | None, epoch: int) -> str:
-    """A session for ``player_id``, or an admitted-but-unclaimed session."""
+def mint_session(player_id: str | None, epoch: int, owner: bool = False) -> str:
+    """A session for ``player_id``, or an admitted-but-unclaimed session.
+
+    ``owner`` marks a session that came through the architect-token path. It lives
+    **on the session, not on the player**, and that distinction is the whole point:
+    an owner flag on a player record would be handed over by taking that player,
+    which is precisely what must not happen.
+    """
     payload: dict = {"epoch": int(epoch)}
+    if owner:
+        payload["owner"] = True
     if player_id:
         payload["player"] = player_id
     return access_tokens.mint(payload, COOKIE_MAX_AGE, access_tokens.AUD_SESSION)
@@ -92,11 +100,11 @@ def session_is_valid(value: str | None) -> bool:
 
 
 def _set_session_cookie(
-    response, request: Request, player_id: str | None, epoch: int
+    response, request: Request, player_id: str | None, epoch: int, owner: bool = False
 ) -> None:
     response.set_cookie(
         COOKIE_NAME,
-        mint_session(player_id, epoch),
+        mint_session(player_id, epoch, owner=owner),
         max_age=COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
@@ -179,24 +187,35 @@ async def require_player(request: Request):
     return player
 
 
-async def require_architect(request: Request):
+async def require_owner(request: Request):
+    """The campaign's owner — read off the **session**, never off a player.
+
+    `role` is not a boundary: it is a UI mode any player may switch for themselves.
+    Ownership is not self-service either — it is established out of band, by the
+    architect-token path. Reading it from the session rather than the player is what
+    stops "take the owner's player" from being "become the owner".
+    """
     player = await require_player(request)
-    if player.role != "architect":
-        raise HTTPException(status_code=403, detail="architect only")
+    if not (current_session(request) or {}).get("owner"):
+        raise HTTPException(status_code=403, detail="owner only")
     return player
 
 
 # ── The architect seat ────────────────────────────────────────────────
 
 
-def ensure_architect():
-    """The one seat never issued from the UI, so a troupe cannot lock itself out.
+def ensure_owner():
+    """The seat reached only through ``/enter?a=<ARCHITECT_TOKEN>``.
 
-    Created from the environment when the campaign has no architect at all.
+    It writes nothing: ownership is conveyed by the *session* it issues, so there is
+    no flag on a player record for anyone to take. Returns the seat to bind to —
+    the first architect, or a freshly created one — so a troupe cannot lock itself
+    out of its own campaign.
     """
-    for player in player_manager.list_all():
-        if player.role == "architect":
-            return player
+    players = player_manager.list_all()
+    existing = next((p for p in players if p.role == "architect"), None)
+    if existing:
+        return existing
     name = os.getenv("ARCHITECT_NAME", "Architect")
     player = player_manager.create(name=name)
     player_manager.set_role(player.id, "architect")
@@ -230,14 +249,14 @@ async def enter(request: Request, s: str = "", a: str = ""):
         expected = os.getenv("ARCHITECT_TOKEN", "")
         if not expected or not hmac.compare_digest(a, expected):
             return JSONResponse({"detail": "not the architect key"}, status_code=401)
-        architect = ensure_architect()
-        if not architect:
+        owner = ensure_owner()
+        if not owner:
             return JSONResponse(
-                {"detail": "no architect seat could be established"}, status_code=503
+                {"detail": "no owner seat could be established"}, status_code=503
             )
         response = RedirectResponse(url="/", status_code=302)
-        _set_session_cookie(response, request, architect.id, architect.epoch)
-        logger.info("architect entered as %s", architect.id)
+        _set_session_cookie(response, request, owner.id, owner.epoch, owner=True)
+        logger.info("owner entered as %s", owner.id)
         return response
 
     return JSONResponse({"detail": "a passage token is required"}, status_code=401)
@@ -251,6 +270,16 @@ async def check(request: Request):
     return JSONResponse({"detail": "unauthorized"}, status_code=401)
 
 
+def _who(player, request: Request) -> dict:
+    """The player, plus whether *this session* is the owner's."""
+    return {
+        "id": player.id,
+        "name": player.name,
+        "role": player.role,
+        "is_owner": bool((current_session(request) or {}).get("owner")),
+    }
+
+
 @router.get("/session")
 async def whoami(request: Request):
     """Who is calling? The frontend's first question on boot."""
@@ -262,19 +291,15 @@ async def whoami(request: Request):
         return {"admitted": True, "player": None}
     return {
         "admitted": True,
-        "player": {"id": player.id, "name": player.name, "role": player.role},
+        "player": _who(player, request),
     }
 
 
 @router.get("/roster")
 async def roster(request: Request):
-    """Who may be taken. Architect accounts are the one thing that may not be."""
+    """Everyone who may be taken. That is everyone: see the note on `role` below."""
     await require_session(request)
-    return [
-        {"id": p.id, "name": p.name}
-        for p in player_manager.list_all()
-        if p.role != "architect"
-    ]
+    return [{"id": p.id, "name": p.name, "role": p.role} for p in player_manager.list_all()]
 
 
 @router.post("/take/{player_id}")
@@ -284,14 +309,11 @@ async def take(player_id: str, request: Request):
     player = player_manager.get(player_id)
     if not player:
         raise HTTPException(status_code=404, detail="no such player")
-    if player.role == "architect":
-        raise HTTPException(
-            status_code=403, detail="an architect account cannot be taken"
-        )
-    response = JSONResponse(
-        {"player": {"id": player.id, "name": player.name, "role": player.role}}
+    response = JSONResponse({"player": _who(player, request)})
+    _set_session_cookie(
+        response, request, player.id, player.epoch,
+        owner=bool((current_session(request) or {}).get("owner")),
     )
-    _set_session_cookie(response, request, player.id, player.epoch)
     logger.info("player taken: %s", player.id)
     return response
 
@@ -309,9 +331,10 @@ async def claim(request: Request, body: dict | None = None):
             detail="that name is already at this table — pick it from the roster",
         )
     player = player_manager.create(name=name)
-    response = JSONResponse(
-        {"player": {"id": player.id, "name": player.name, "role": player.role}}
+    response = JSONResponse({"player": _who(player, request)})
+    _set_session_cookie(
+        response, request, player.id, player.epoch,
+        owner=bool((current_session(request) or {}).get("owner")),
     )
-    _set_session_cookie(response, request, player.id, player.epoch)
     logger.info("player created: %s (%r)", player.id, name)
     return response

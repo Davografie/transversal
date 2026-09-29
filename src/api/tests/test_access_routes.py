@@ -57,8 +57,10 @@ def _player(pid="player-abc", role="player", epoch=0):
     return SimpleNamespace(id=pid, name="Andy", role=role, epoch=epoch)
 
 
-def _as(player_id, epoch=0):
-    return _Request(cookies={auth.COOKIE_NAME: auth.mint_session(player_id, epoch)})
+def _as(player_id, epoch=0, owner=False):
+    return _Request(
+        cookies={auth.COOKIE_NAME: auth.mint_session(player_id, epoch, owner=owner)}
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -83,13 +85,14 @@ def as_player(monkeypatch):
 
 
 @pytest.fixture
-def as_architect(monkeypatch):
+def as_owner(monkeypatch):
+    """The owner. Deliberately NOT an architect: ownership is not the role, and
+    these tests would pass either way if it were — which is exactly the bug this
+    separation exists to prevent."""
     monkeypatch.setattr(
-        players_mod.player_manager, "get", lambda pid: _player(pid, role="architect", epoch=0)
+        players_mod.player_manager, "get", lambda pid: _player(pid, epoch=0)
     )
-    monkeypatch.setattr(
-        players_mod.player_manager, "list_all", lambda: [_player("player-arch", "architect")]
-    )
+    monkeypatch.setattr(players_mod.player_manager, "list_all", lambda: [_player()])
 
 
 # ── Opening a window ──────────────────────────────────────────────────
@@ -161,14 +164,14 @@ async def test_closing_twice_is_a_404_not_a_crash(repo, as_player):
 async def test_a_plain_member_cannot_close_everything(repo, as_player):
     await access.open_token(_as("player-abc"))
     with pytest.raises(HTTPException) as exc:
-        await access.close_all_tokens(_as("player-abc"))
+        await access.close_all_tokens(_as("player-abc", owner=False))
     assert exc.value.status_code == 403
 
 
-async def test_an_architect_can_close_everything(repo, as_architect):
+async def test_the_owner_can_close_everything(repo, as_owner):
     await access.open_token(_as("player-arch"))
     await access.open_token(_as("player-arch"))
-    assert (await access.close_all_tokens(_as("player-arch")))["closed"] == 2
+    assert (await access.close_all_tokens(_as("player-arch", owner=True)))["closed"] == 2
     assert await access.list_tokens(_as("player-arch")) == []
 
 
@@ -184,7 +187,7 @@ async def test_a_plain_member_cannot_revoke(monkeypatch):
     assert exc.value.status_code == 403
 
 
-async def test_an_architect_revoking_another_player_bumps_their_epoch(monkeypatch):
+async def test_the_owner_revoking_another_player_bumps_their_epoch(monkeypatch):
     calls = {}
 
     def _revoke(pid):
@@ -194,10 +197,10 @@ async def test_an_architect_revoking_another_player_bumps_their_epoch(monkeypatc
     monkeypatch.setattr(
         players_mod.player_manager,
         "get",
-        lambda pid: _player(pid, role="architect" if pid == "player-arch" else "player"),
+        lambda pid: _player(pid),
     )
     monkeypatch.setattr(players_mod.player_manager, "revoke_sessions", _revoke)
-    result = await players_mod.revoke_player("player-abc", _as("player-arch"))
+    result = await players_mod.revoke_player("player-abc", _as("player-arch", owner=True))
     assert result == {"player_id": "player-abc", "epoch": 1}
     assert calls["pid"] == "player-abc"
 
@@ -206,27 +209,13 @@ async def test_revoking_an_unknown_player_is_a_404(monkeypatch):
     monkeypatch.setattr(
         players_mod.player_manager,
         "get",
-        lambda pid: _player(pid, role="architect") if pid == "player-arch" else None,
+        lambda pid: _player(pid) if pid == "player-arch" else None,
     )
     with pytest.raises(HTTPException) as exc:
-        await players_mod.revoke_player("player-ghost", _as("player-arch"))
+        await players_mod.revoke_player("player-ghost", _as("player-arch", owner=True))
     assert exc.value.status_code == 404
 
 
-async def test_the_last_architect_cannot_be_revoked(monkeypatch):
-    monkeypatch.setattr(
-        players_mod.player_manager,
-        "get",
-        lambda pid: _player(pid, role="architect"),
-    )
-    monkeypatch.setattr(
-        players_mod.player_manager,
-        "list_all",
-        lambda: [_player("player-arch", role="architect")],
-    )
-    with pytest.raises(HTTPException) as exc:
-        await players_mod.revoke_player("player-arch", _as("player-arch"))
-    assert exc.value.status_code == 409
 
 
 # ── Identity cannot be asserted through a path ────────────────────────

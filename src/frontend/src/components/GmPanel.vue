@@ -120,7 +120,6 @@
             :error="adminError"
             :notice="adminNotice"
             @revoke="revokePlayer"
-            @set-role="setPlayerRole"
           />
         </template>
         <template v-else>
@@ -221,9 +220,9 @@ const viewSceneSummary = ref(true)
 const browseTab = ref('tree')
 
 // SEC-3 authorization lives here rather than in the player settings overlay: it is
-// the owner's work, and this is the owner's panel. `canAdmin` is read from the
-// *session*, because the server decides who may do this — the client's gmMode is a
-// UI hint and must not be what offers an action the server will refuse.
+// the owner's work, and this is the owner's panel. `canAdmin` is **ownership**, read
+// from the session — not the architect role, which any player may switch for
+// themselves, and not the client's gmMode, which is only a hint. The server decides.
 const {
   windows: admissionWindows, joining: admissionJoining, busy: admissionBusy,
   error: admissionError, refresh: refreshAdmission, open: admissionOpen,
@@ -231,7 +230,7 @@ const {
 } = useAdmission()
 const {
   players: adminPlayers, busy: adminBusy, error: adminError, notice: adminNotice,
-  refresh: refreshAdmin, revoke: revokePlayer, setRole: setPlayerRole,
+  refresh: refreshAdmin, revoke: revokePlayer,
 } = usePlayerAdmin()
 const canAdmin = ref(false)
 
@@ -271,7 +270,7 @@ function showInvitation() {
 async function loadAccessTab() {
   try {
     const r = await fetch('/api/v1/auth/session')
-    if (r.ok) canAdmin.value = (await r.json())?.player?.role === 'architect'
+    if (r.ok) canAdmin.value = (await r.json())?.player?.is_owner === true
   } catch { /* leave false — the blocks are read-only without it */ }
   await Promise.all([refreshAdmission(), refreshAdmin()])
 }
