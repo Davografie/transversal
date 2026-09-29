@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 import { gql } from '../helpers/sheet.js'
-import { bootGmPanel } from '../helpers/gm.js'
+import { bootGmPanel, enterPrep } from '../helpers/gm.js'
 
 // SEC-3 admission: the GM's window onto the table's front door.
 //
@@ -26,7 +26,9 @@ test.beforeAll(async ({ request }) => {
 test('a GM can open an admission window and is shown the link', async ({ page, request }) => {
   await bootGmPanel(page, character)
 
-  // SEC-3 authorization lives in the GM panel's Players tab, not the settings overlay.
+  // SEC-3 authorization lives in the GM panel's Players tab. The browse tabs are
+  // Prep's, and the panel opens on Play.
+  await enterPrep(page)
   await page.locator('.browse-tabs button', { hasText: 'Players' }).click()
   await expect(page.getByRole('button', { name: /admit players/i })).toBeVisible()
 

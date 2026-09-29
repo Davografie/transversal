@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 import { enterAsArchitect } from '../helpers/session.js'
+import { enterPrep } from '../helpers/gm.js'
 
 // SEC-3: the owner's roster, and the two acts that change it.
 //
@@ -16,6 +17,8 @@ test('an architect sees the roster with revoke and role controls', async ({ page
 
   // The GM panel's Players tab is the owner's surface for this (SEC-3).
   await page.locator('.gm-toggle').click()
+  // The browse tabs belong to Prep; the panel opens on Play, where they do not exist.
+  await enterPrep(page)
   await page.locator('.browse-tabs button', { hasText: 'Players' }).click()
 
   const block = page.locator('.admin-block')
