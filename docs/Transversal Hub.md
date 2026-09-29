@@ -51,6 +51,7 @@ status: canonical
 - [[GM Panel Development]] — the Architect's entity/trait editor: panels, composables, conventions
 - [[Life Path Flow and Shared Roll Tables]] — how `next_step` links tables and how shared/unaffiliated tables return control
 - [[UI-UX Design]] — interaction conventions, touch gestures, and tunable feel constants
+- **Security & the way online** (all in `Technical/`): [[Security Posture]] — the SEC-1…SEC-12 register, what is fixed and what is open · [[Identity Programme]] — the **campaign** tenant, admission, accounts and recovery (SEC-3/6/8) · [[Content Registry]] — the cross-campaign catalog, sandbox and GPU entitlement · [[Public Exposure Plan]] — the priced route to the public internet · [[Private Access Runbook]] — the private lane (complete)
 - **Effect system** (in `Technical/Effects/`): [[SFX Source Model]], [[Effect Output Variables]], [[Effect Holders and Owners]], [[Passive Rules and Multi-Target References]], [[Portal Transversal Effect]], and the other SFX/effects design specs
 
 ### 🗂️ Process
