@@ -118,8 +118,17 @@ async def session_refresh_middleware(request: Request, call_next):
     except (KeyError, TypeError, ValueError):
         return response
     if remaining < REFRESH_BELOW_SECONDS:
+        # Only now is the player lookup worth paying for. A dead session must never
+        # be extended — that would keep a revoked cookie alive.
+        resolved = resolve_session(request)
+        if not resolved:
+            return response
+        _, player = resolved
         _set_session_cookie(
-            response, request, payload.get("player"), int(payload.get("epoch", 0))
+            response,
+            request,
+            player.id if player else None,
+            int(player.epoch) if player else 0,
         )
     return response
 
@@ -127,27 +136,46 @@ async def session_refresh_middleware(request: Request, call_next):
 # ── Dependencies: identity comes from here, never from a path ─────────
 
 
-async def require_session(request: Request) -> dict:
-    """Any admitted device — claimed or not."""
+def resolve_session(request: Request):
+    """The session payload and the player it names, validated **together**.
+
+    A cookie naming a player whose epoch has moved on is **dead**, not merely
+    unbound. That distinction is the whole of revoke: bumping the epoch must end
+    every cookie that names that player — including its claim to be in the
+    campaign at all. If it only unbound the player, a revoked device would still
+    be admitted and could simply take someone else, which would make revoke
+    decorative.
+
+    Returns ``(payload, player_or_None)``, or ``None`` when the cookie is dead.
+    """
     payload = current_session(request)
     if not payload:
+        return None
+    player_id = payload.get("player")
+    if not player_id:
+        return payload, None
+    player = player_manager.get(player_id)
+    if not player or int(player.epoch) != int(payload.get("epoch", -1)):
+        return None
+    return payload, player
+
+
+async def require_session(request: Request) -> dict:
+    """Any admitted device — claimed or not, but not a revoked one."""
+    resolved = resolve_session(request)
+    if not resolved:
         raise HTTPException(status_code=401, detail="no valid session")
-    return payload
+    return resolved[0]
 
 
 async def require_player(request: Request):
     """The player this session has taken, with its epoch still current."""
-    payload = await require_session(request)
-    player_id = payload.get("player")
-    if not player_id:
-        raise HTTPException(status_code=403, detail="no player has been taken yet")
-    player = player_manager.get(player_id)
+    resolved = resolve_session(request)
+    if not resolved:
+        raise HTTPException(status_code=401, detail="no valid session")
+    _, player = resolved
     if not player:
-        raise HTTPException(status_code=401, detail="the taken player no longer exists")
-    if int(player.epoch) != int(payload.get("epoch", -1)):
-        # The revoke mechanism: bumping the epoch invalidates the cookie, which is
-        # otherwise unrecallable.
-        raise HTTPException(status_code=401, detail="this session has been revoked")
+        raise HTTPException(status_code=403, detail="no player has been taken yet")
     return player
 
 
@@ -226,15 +254,12 @@ async def check(request: Request):
 @router.get("/session")
 async def whoami(request: Request):
     """Who is calling? The frontend's first question on boot."""
-    payload = current_session(request)
-    if not payload:
+    resolved = resolve_session(request)
+    if not resolved:
         return JSONResponse({"admitted": False}, status_code=401)
-    player_id = payload.get("player")
-    if not player_id:
+    _, player = resolved
+    if not player:
         return {"admitted": True, "player": None}
-    player = player_manager.get(player_id)
-    if not player or int(player.epoch) != int(payload.get("epoch", -1)):
-        return JSONResponse({"admitted": False, "reason": "revoked"}, status_code=401)
     return {
         "admitted": True,
         "player": {"id": player.id, "name": player.name, "role": player.role},
