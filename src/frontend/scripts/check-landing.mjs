@@ -10,14 +10,15 @@
  *     -v /path/to/src/frontend/src:/app/src:ro \
  *     -w /app transversal2-frontend:latest node scripts/check-landing.mjs
  *
- * Two bugs, both invisible to the build and both reported from live testing:
+ * What it pins, in two halves:
  *
- *  1. **Logging in dropped you straight into the game.** `confirmPlayer` closed
- *     the overlay whenever `needsCharacterPick` was false — which is always true
- *     for an architect (`gmMode`), and true for anyone whose perspective was
- *     already restored. You never got the character picker, so you never got to
- *     choose where to begin.
- *  2. **A GM assuming a character stayed where they were roaming.** The
+ *  1. **Arriving gives you a name, and taking one loads what follows.** SEC-3 moved
+ *     identity to the server, so the client no longer asserts an id out of
+ *     `localStorage`: `loadSession()` asks, and the three answers are three screens
+ *     (not admitted / admitted with no name / carry on). Taking a name is what
+ *     reloads the role, the characters and the scene — a name that is set with
+ *     nothing loaded behind it is the bug this half was written for.
+ *  2. **A perspective change loads its scene, in every role.** The
  *     `entityId` watcher skipped `initLocation()` when `gmMode` was set, on the
  *     theory that the GM's own switch path loads its own scene. But the settings
  *     character picker (`beginCharacterSwitch`) has no other location load, so
@@ -28,7 +29,8 @@
  * stubs — the same text that ships, so the check can only pass if the real
  * ordering is right. `locationInit` is included because the picker reaches the
  * scene through it when re-picking the character you already act as (no ref
- * changes, so no watcher run).
+ * changes, so no watcher run). The identity half runs the shipped composable
+ * against a stubbed `fetch`, because the server's answer *is* the input now.
  */
 import { readFileSync } from 'node:fs'
 import { ref } from 'vue'
@@ -40,54 +42,130 @@ const ok = (name, got, want) => {
   same ? pass++ : fail++
   console.log(`${same ? '  PASS' : '  FAIL'}  ${name}${same ? '' : `\n         got ${JSON.stringify(got)}  want ${JSON.stringify(want)}`}`)
 }
-const tick = () => new Promise((r) => setTimeout(r, 5))
+const yes = (name, got) => ok(name, !!got, true)
 
-// Minimal localStorage — `usePlayerIdentity` and the App watcher both write it.
-globalThis.localStorage = {
-  _m: new Map(),
-  getItem(k) { return this._m.has(k) ? this._m.get(k) : null },
-  setItem(k, v) { this._m.set(k, String(v)) },
-  removeItem(k) { this._m.delete(k) },
-}
+// ── 1. arriving, taking a name, and what loads with it ───────────────────
+// SEC-3 made the server the only source of identity, so the answers it can give
+// are the whole test. `fetch` is stubbed per URL rather than mocked wholesale, so
+// the assertions can also see *which* request the client decided to make.
+console.log('\narrival → identity → what follows\n')
 
-// ── 1. logging in lands on the character select ──────────────────────────
-console.log('\nlogin → character select\n')
-
-function loginWorld({ role = 'architect', restoredEntityId = null } = {}) {
-  const showLoginOverlay = ref(true)
+function identityWorld({ session = null, roster = [], taken = null, claim = null } = {}) {
   const playerId = ref('')
   const playerName = ref('')
-  const entityId = ref(restoredEntityId)
+  const showLoginOverlay = ref(false)
   const calls = []
-  const stub = (label) => () => { calls.push(label); return Promise.resolve() }
+  const requests = []
+  const reply = (ok_, body) => ({ ok: ok_, status: ok_ ? 200 : 400, json: async () => body })
+
+  globalThis.fetch = async (url, opts = {}) => {
+    requests.push(`${opts.method || 'GET'} ${url}`)
+    // `session === null` is the 401 the perimeter answers: no login screen can fix
+    // a missing cookie, so the composable must not treat it as "somebody new".
+    if (url === '/api/v1/auth/session') {
+      return session ? reply(true, session) : { ok: false, status: 401, json: async () => ({}) }
+    }
+    if (url === '/api/v1/auth/roster') return reply(true, roster)
+    if (url.startsWith('/api/v1/auth/take/')) return reply(!!taken, { player: taken })
+    if (url === '/api/v1/auth/claim') return reply(!!claim, { player: claim })
+    return reply(false, {})
+  }
+
   const identity = usePlayerIdentity({
-    playerId, playerName, showLoginOverlay, entityId,
-    loadPlayerRole: () => { calls.push('role:' + role); return Promise.resolve() },
-    initLocation: stub('initLocation'),
-    fetchPlayerEntities: stub('entities'),
-    fetchSupportCharacters: stub('support'),
-    fetchActiveMains: stub('mains'),
-    fetchEntitiesFor: stub('entitiesFor'),
-    pendingPlayerEntities: ref([]),
+    playerId, playerName, showLoginOverlay,
+    onIdentityChanged: async () => { calls.push('what-follows') },
   })
-  // Pick an existing player exactly as the search suggestion does.
-  identity.selectSuggestion({ id: 'player-bc80b9', name: 'PTDave' })
-  return { ...identity, calls, showLoginOverlay, playerId }
+  return { ...identity, calls, requests, showLoginOverlay, playerId, playerName }
 }
 
-for (const [role, restored] of [['architect', null], ['architect', 'character-20809'], ['player', null], ['player', 'character-20809']]) {
-  const w = loginWorld({ role, restoredEntityId: restored })
-  w.confirmPlayer()
-  await tick()
-  ok(`after login (${role}, restored ${restored}) the selector is still up`, w.showLoginOverlay.value, true)
-  ok(`after login (${role}, restored ${restored}) the player is set`, w.playerId.value, 'player-bc80b9')
-  ok(`after login (${role}, restored ${restored}) the lists load for it`, w.calls.sort(), ['entities', 'mains', 'role:' + role, 'support'])
+{
+  const w = identityWorld({ session: { admitted: true, player: { id: 'player-1', name: 'PTDave' } } })
+  await w.loadSession()
+  ok('a session carrying a name is the identity', [w.playerId.value, w.playerName.value], ['player-1', 'PTDave'])
+  ok('and the overlay stays out of the way', w.showLoginOverlay.value, false)
+  ok('and everything derived from it is re-read', w.calls, ['what-follows'])
 }
+
+{
+  const w = identityWorld({ session: { admitted: true, player: null }, roster: [{ id: 'p1', name: 'A' }] })
+  await w.loadSession()
+  ok('an admitted device with no name gets the roster', w.showLoginOverlay.value, true)
+  ok('and the roster is what it is offered', w.roster.value.map((r) => r.name), ['A'])
+  ok('with nothing derived loaded yet — there is no one to load it for', w.calls, [])
+}
+
+{
+  const w = identityWorld()
+  await w.loadSession()
+  ok('a refused session is not admitted', w.admitted.value, false)
+  ok('and no player is invented from storage', [w.playerId.value, w.showLoginOverlay.value], ['', true])
+}
+
+// Taking a name is the act the old flow did by typing one. That is the hole
+// SEC-3 closed: the server decides, and the client only asks.
+{
+  const w = identityWorld({ taken: { id: 'player-2', name: 'Someone' } })
+  const took = await w.takePlayer('player-2')
+  ok('taking a name sets it', [took, w.playerId.value, w.playerName.value], [true, 'player-2', 'Someone'])
+  ok('and it is one POST, to the server', w.requests, ['POST /api/v1/auth/take/player-2'])
+  ok('and the new identity reloads what follows', w.calls, ['what-follows'])
+  ok('taking who you already are asks the server nothing', await w.takePlayer('player-2'), true)
+  ok('  …and made no second request', w.requests.length, 1)
+}
+
+{
+  const w = identityWorld({ taken: null })
+  ok('a take the server refuses changes nothing',
+    [await w.takePlayer('nope'), w.playerId.value, w.calls], [false, '', []])
+  ok('  …and says so', w.identityError.value.length > 0, true)
+}
+
+{
+  const w = identityWorld({ claim: { id: 'player-3', name: 'Newcomer' } })
+  w.newName.value = '  Newcomer  '
+  const claimed = await w.claimPlayer()
+  ok('a new name is claimed from the draft', [claimed, w.playerId.value], [true, 'player-3'])
+  ok('and the draft is cleared with it', w.newName.value, '')
+  ok('and it reloads what follows too', w.calls, ['what-follows'])
+  ok('a blank draft claims nothing', await w.claimPlayer(), false)
+}
+
+// The settings overlay's switch: the name plate opens the roster, and Back leaves
+// it. This is the half of the overlay the styling change sits in.
+{
+  const w = identityWorld({ roster: [{ id: 'p1', name: 'A' }] })
+  await w.beginSwitch()
+  ok('the name plate opens the picker on the roster', [w.rosterPicking.value, w.roster.value.length], [true, 1])
+  w.endSwitch()
+  ok('and Back comes out of it', w.rosterPicking.value, false)
+}
+
+// The settings overlay's identity block, which SEC-3 rebuilt: the mechanics became
+// the roster (`beginSwitch` above), and the *styling* went with it — a green
+// "— switch player" button and a paragraph, where the overlay had always shown the
+// player as a name plate. The plate is back; the paragraph lives in its tooltip.
+console.log('\nthe name plate\n')
+
+const SRC = readFileSync('src/App.vue', 'utf8')
+const CSS = readFileSync('src/assets/styles.css', 'utf8')
+
+yes('the overlay shows the player as the name plate it always was',
+  /class="search-wrapper settings-name-wrapper"[\s\S]{0,240}?class="settings-name-static"[\s\S]{0,80}?\{\{ playerName \}\}/.test(SRC))
+yes('and the plate is what opens the picker',
+  /class="settings-name-static" @click="beginSwitch"/.test(SRC))
+yes('styled as a plate — display face, wide tracking',
+  /\.settings-name-static \{[\s\S]{0,240}?font-family: var\(--font-display\)/.test(CSS)
+  && /\.settings-name-static \{[\s\S]{0,240}?letter-spacing: 3px/.test(CSS))
+yes('with the rule SEC-3 enforces riding in its tooltip',
+  /title="Switch player[^"]*architect accounts are never takeable"/.test(SRC))
+ok('the "You are" section and its switch button are gone',
+  /<label class="settings-label">You are<\/label>/.test(SRC), false)
+ok('and so is the paragraph that stood under them',
+  /<p class="name-hint">\s*Taking another name/.test(SRC), false)
 
 // ── 2. a perspective change loads its scene, in every role ───────────────
 console.log('\nperspective → scene load\n')
 
-const SRC = readFileSync('src/App.vue', 'utf8')
 const script = SRC.match(/<script setup>([\s\S]*?)<\/script>/)[1]
 const watcherBody = script.match(/watch\(entityId, \(\) => \{([\s\S]*?)\n\}, \{ flush: 'sync' \}\)/)[1]
 const switchBody = script.match(/async function switchPerspective\(id\) \{([\s\S]*?)\n\}/)[1]
