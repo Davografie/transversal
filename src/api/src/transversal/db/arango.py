@@ -55,6 +55,11 @@ SFX_OWNERS = "sfx_owners"           # document: named SFX owner buckets (table, 
 SFXS = "sfxs"
 SCHEDULED_EVENTS = "scheduled_events"  # document: centrally-scheduled timed reverts/effects
 PLAYERS = "players"
+JOIN_TOKENS = "join_tokens"        # document: campaign admission tokens (SEC-3).
+#   Holds only *liveness* — id, when it was minted, when it expires, when it was
+#   closed. The token itself is signed and self-describing, so verification does
+#   not need this collection; being able to close one early does. In the
+#   campaign-per-database model these live in the campaign's own database.
 RELATIONSHIPS = "relationships"    # edge collection
 MESSAGES = "messages"              # inter-entity persistent messages
 IMAGES = "images"                  # image metadata, owned by an entity or a trait
@@ -75,6 +80,7 @@ COLLECTIONS = {
     SFXS: False,
     SCHEDULED_EVENTS: False,  # document
     PLAYERS: False,
+    JOIN_TOKENS: False,   # document
     RELATIONSHIPS: True,  # edge
     MESSAGES: False,      # document
     IMAGES: False,

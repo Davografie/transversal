@@ -18,6 +18,7 @@ from transversal.db.arango import (
     ENTITIES,
     IMAGES,
     HISTORICAL_RECORDS,
+    JOIN_TOKENS,
     LIFE_PATHS,
     MESSAGES,
     PLAN_ENTITIES,
@@ -44,6 +45,7 @@ from transversal.db.repository_mixins.common import (  # noqa: F401
 from transversal.db.repository_mixins.core import RepositoryCore
 from transversal.db.repository_mixins.entities import RepositoryEntities
 from transversal.db.repository_mixins.images import RepositoryImages
+from transversal.db.repository_mixins.join_tokens import RepositoryJoinTokens
 from transversal.db.repository_mixins.lifepath import RepositoryLifepath
 from transversal.db.repository_mixins.messaging import RepositoryMessaging
 from transversal.db.repository_mixins.plans import RepositoryPlans
@@ -72,6 +74,7 @@ class EntityRepository(
     RepositoryPlans,
     RepositoryMessaging,
     RepositoryPlayers,
+    RepositoryJoinTokens,
     RepositoryCanvas,
     RepositoryImages,
 ):
@@ -92,6 +95,7 @@ class EntityRepository(
         self._roll_tables = self.db.collection(ROLL_TABLES)
         self._relationships = self.db.collection(RELATIONSHIPS)
         self._players = self.db.collection(PLAYERS)
+        self._join_tokens = self.db.collection(JOIN_TOKENS)
         self._images = self.db.collection(IMAGES)
         self._messages = self.db.collection(MESSAGES)
         self._historical_records = self.db.collection(HISTORICAL_RECORDS)
