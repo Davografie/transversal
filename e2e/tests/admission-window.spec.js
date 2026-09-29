@@ -26,7 +26,8 @@ test.beforeAll(async ({ request }) => {
 test('a GM can open an admission window and is shown the link', async ({ page, request }) => {
   await bootGmPanel(page, character)
 
-  await page.locator('.settings-btn').click()
+  // SEC-3 authorization lives in the GM panel's Players tab, not the settings overlay.
+  await page.locator('.browse-tabs button', { hasText: 'Players' }).click()
   await expect(page.getByRole('button', { name: /admit players/i })).toBeVisible()
 
   await page.getByRole('button', { name: /admit players/i }).click()

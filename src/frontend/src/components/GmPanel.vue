@@ -87,6 +87,9 @@
         <Button variant="neutral" :active="browseTab === 'factions'" @click="browseTab = 'factions'">
           Factions<span v-if="filteredFactions.length" class="tab-count">{{ filteredFactions.length }}</span>
         </Button>
+        <Button variant="neutral" :active="browseTab === 'players'" @click="browseTab = 'players'; loadAccessTab()">
+          Players<span v-if="adminPlayers.length" class="tab-count">{{ adminPlayers.length }}</span>
+        </Button>
         <div class="browse-tab-actions">
           <Button variant="ghost" size="icon" title="Collapse all levels" @click="collapseTree">⌃</Button>
           <Button variant="ghost" size="icon" title="Jump to the current location" @click="scrollToNode(props.currentLocationId)">⊙</Button>
@@ -97,6 +100,29 @@
         <template v-if="browseTab === 'tree'">
           <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @select-more="expandLevel" @move-entity="onMoveEntity" @add-entity="onAddEntity" />
           <div v-if="flatTree.length === 0" class="empty">No entities found</div>
+        </template>
+        <template v-else-if="browseTab === 'players'">
+          <AdmitPlayersBlock
+            :windows="admissionWindows"
+            :joining="admissionJoining"
+            :busy="admissionBusy"
+            :error="admissionError"
+            :join-url="admissionJoinUrl"
+            :can-close-all="canAdmin"
+            @open="admissionOpen"
+            @close="admissionClose"
+            @close-all="admissionCloseAll"
+            @copy="copyJoinLink"
+          />
+          <PlayerAdminBlock
+            v-if="canAdmin"
+            :players="adminPlayers"
+            :busy="adminBusy"
+            :error="adminError"
+            :notice="adminNotice"
+            @revoke="revokePlayer"
+            @set-role="setPlayerRole"
+          />
         </template>
         <template v-else>
           <GmList
@@ -150,6 +176,10 @@ import GmSfxManagementPanel from '@/components/gm/GmSfxManagementPanel.vue'
 import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
+import AdmitPlayersBlock from '@/components/app/AdmitPlayersBlock.vue'
+import PlayerAdminBlock from '@/components/app/PlayerAdminBlock.vue'
+import { useAdmission } from '@/composables/useAdmission.js'
+import { usePlayerAdmin } from '@/composables/usePlayerAdmin.js'
 
 const { graphql } = useApi()
 const panel = usePanel()
@@ -189,6 +219,33 @@ const viewSceneSummary = ref(true)
 // Prep's browsing surface: the Places tree or the Factions list (both read the
 // focus filter above them).
 const browseTab = ref('tree')
+
+// SEC-3 authorization lives here rather than in the player settings overlay: it is
+// the owner's work, and this is the owner's panel. `canAdmin` is read from the
+// *session*, because the server decides who may do this — the client's gmMode is a
+// UI hint and must not be what offers an action the server will refuse.
+const {
+  windows: admissionWindows, joining: admissionJoining, busy: admissionBusy,
+  error: admissionError, refresh: refreshAdmission, open: admissionOpen,
+  close: admissionClose, closeAll: admissionCloseAll, joinUrl: admissionJoinUrl,
+} = useAdmission()
+const {
+  players: adminPlayers, busy: adminBusy, error: adminError, notice: adminNotice,
+  refresh: refreshAdmin, revoke: revokePlayer, setRole: setPlayerRole,
+} = usePlayerAdmin()
+const canAdmin = ref(false)
+
+async function copyJoinLink(url) {
+  try { await navigator.clipboard.writeText(url) } catch { /* the field is selectable */ }
+}
+
+async function loadAccessTab() {
+  try {
+    const r = await fetch('/api/v1/auth/session')
+    if (r.ok) canAdmin.value = (await r.json())?.player?.role === 'architect'
+  } catch { /* leave false — the blocks are read-only without it */ }
+  await Promise.all([refreshAdmission(), refreshAdmin()])
+}
 
 function nextBeat() { emit('next-beat') }
 function advanceScene() { viewSceneSummary.value = true; emit('advance-scene') }

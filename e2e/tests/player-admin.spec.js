@@ -14,7 +14,9 @@ test('an architect sees the roster with revoke and role controls', async ({ page
   await enterAsArchitect(page)
   await page.goto('/')
 
-  await page.locator('.settings-btn').click()
+  // The GM panel's Players tab is the owner's surface for this (SEC-3).
+  await page.locator('.gm-toggle').click()
+  await page.locator('.browse-tabs button', { hasText: 'Players' }).click()
 
   const block = page.locator('.admin-block')
   await expect(block).toBeVisible({ timeout: 15_000 })
