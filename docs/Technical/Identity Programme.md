@@ -40,6 +40,8 @@ The sibling design for the shared content surface is [[Content Registry]].
 | sessions | **sliding 30-day signed cookie** carrying the campaign **and the player taken**; revoking that account ends its sessions |
 | architect accounts | **never takeable** — reached only through the recovery email link, so a member cannot promote themselves |
 | hard eject | **rotate the campaign's access** — revoke every session and mint a new token; everyone re-admits and re-takes their account, and the **recovery link is auto-sent** to the architect |
+| **first slice** | **SEC-3 only, against the current single database** — campaigns, the registry and per-campaign databases come later as their own change, because SEC-8 is a migration of live game data |
+| taking a player | **pick from the campaign roster**, not by typing a name — a typo would otherwise silently create a permanent duplicate |
 | recovery | **email link only at first** — passkey and password are deliberate later additions |
 | creators/owners | a **central registry account** (the same one that holds recovery methods); players still have none |
 | GPU | **not** in the free tier — all four GPU operations gated ([[Content Registry]]) |
@@ -110,7 +112,7 @@ no per-player secret anywhere, and that is deliberate.
 
 The campaign is therefore the **only identity boundary**, and within it players are mutually
 trusted: taking a player account is how you assume that character, and nothing stops one member
-taking another's. See §5.1, §5.9 and the open question about [[B43]].
+taking another's. See §5.1 and §5.9.
 
 What the cookie and the player record must carry:
 
@@ -279,13 +281,20 @@ The last architect cannot demote themselves, and **an architect account is never
    notifications, no digests. The SMTP provider is one secret and one dependency, and the abuse case
    (invite spam getting your domain blacklisted) largely disappears because nobody can trigger a
    send by admitting someone.
-9. **Player-level privacy is gone by construction — and that conflicts with [[B43]].** With no
-   per-player secret, a member can take another member's player account and see everything scoped
-   to it. [[B43]] asks the opposite: *"When player, shouldn't be able to see each others blue
-   book, should only see profile and traits."* That filtering is still implementable as the normal
-   UI behaviour, but it is a **convention, not a control** — it holds for honest use and is
-   bypassable by taking the account. Either B43 is reframed as UI policy, or player-level secrets
-   have to come back. See §8.
+9. **There is no player-level isolation, by construction — and that is a property, not a
+   conflict.** With no per-player secret, a member can take another member's player account and
+   see everything scoped to *it*. Nothing in the owner's model asks for otherwise: taking an
+   existing player is how you resume as them, so it cannot also be forbidden. Recorded plainly
+   because it is the standing consequence of campaign-level admission, not because a ticket
+   demands the opposite.
+
+   > [!note] Correction — I had [[B43]] wrong, and it was never a blocker
+   > I read B43 as player-level privacy and treated it as conflicting with this model. The owner
+   > clarified it is **character-level, not player-level**: *"B43 is about a character that
+   > shouldn't be able to read another character's blue book. Not player, character. UI policy."*
+   > So it is an in-fiction visibility rule for a surface, settled as **UI policy**, and it belongs
+   > to whoever owns the blue book — not to identity, and not to this programme. The conflict I
+   > recorded was an artefact of my misreading; withdrawn.
 10. **The auto-sent link is the same credential as a manual recovery, so it needs the same care plus
    one more control.** It is single-use and short-lived like any recovery link, and — being sent
    unprompted — rotations must be **rate-limited per campaign**, or an architect session someone
@@ -323,9 +332,10 @@ The last architect cannot demote themselves, and **an architect account is never
 
 1. **Join token length and cap** — ~30 minutes is the working figure; how many joins should one
    token allow before it closes itself?
-2. **The [[B43]] conflict** (§5.9) — player-level privacy versus free player-taking. Reframe B43
-   as UI policy, or reintroduce a per-player secret for the players who want one. **Also confirm
-   the rule that architect accounts are never takeable** (§4).
+2. **Duplicate players, and no rename path exists.** Roster-picking removes the common case, but
+   a genuinely new player can still be created twice by mistake — and there is **no rename or
+   merge anywhere** in the app (no API, no MCP tool, no UI). The Troupe panel probably wants a
+   rename before this ships, or the duplicates become permanent.
 3. **Second recovery method** — email-only is the v1 decision; a passkey is the natural next, and
    a password door needs rate limiting and lockout before it is worth offering.
 4. **Campaign in the URL** — `/c/<campaign>/…` with a switcher (recommended) versus routing
@@ -381,6 +391,18 @@ The last architect cannot demote themselves, and **an architect account is never
   lock themselves out of their own rotation, and the rotation is only as strong as the distribution
   of the new token. **[[B43]] remains unanswered** — this answer implies free taking stands, which
   would make B43 UI policy, but the owner did not say so and I have not assumed it.
+- 2026-09-26 — **the owner resolved B43, and corrected my reading of it.** It is **character-level,
+  not player-level**: *"a character that shouldn't be able to read another character's blue book.
+  Not player, character. UI policy."* So it was never a blocker for identity — it is an in-fiction
+  visibility rule for a surface, owned by whoever owns the blue book, and the "conflict" I had
+  recorded in §5.9 was an artefact of my misreading. **Withdrawn, and §5.9 reframed**: no
+  player-level isolation is a *property* of this model, not a problem with it.
+  Also decided the shape of the work: **implementation starts with SEC-3 alone, against the
+  current single database** — no campaigns, no registry, no data migration — with a player taken
+  by **picking from the campaign roster** rather than typing a name. A small **additive groundwork
+  pass** landed ahead of the flow: a defaulted `Player.epoch` (the revocation counter, persisted
+  but not yet enforced or exposed) and `api/access_tokens.py` with `mint`/`verify` for signed
+  expiring tokens, both with tests and no behaviour change.
 - 2026-09-26 — **the owner closed the rotation lockout I had flagged:** the recovery link is
   **auto-sent** when campaign access is rotated. Recorded as the mechanism rather than a
   convenience — rotation kills the architect's own session, so the emailed link *is* how they get
