@@ -54,10 +54,14 @@ export async function establishSession(page) {
     )
   }
 
+  // `maxRedirects: 0` matters: /enter answers 302 to `/`, and the API has no `/`
+  // route, so following it turns a successful entry into a 404. The Set-Cookie is
+  // on the 302 itself, and that is all we need.
   const entered = await page.request.get(`${API_BASE}/api/v1/auth/enter`, {
     params: { a: key },
+    maxRedirects: 0,
   })
-  if (!entered.ok() && entered.status() !== 302) {
+  if (entered.status() !== 302 && !entered.ok()) {
     throw new Error(`architect entry failed: HTTP ${entered.status()}`)
   }
 
