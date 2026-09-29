@@ -402,17 +402,11 @@
                 @click="openAddTrait(entry.ts)"
               >＋</button>
             </h4>
-            <div v-if="isSetOpen(entry.ts.name)" class="set-traits">
-              <TraitRow
-                v-for="t in entry.traits"
-                :key="t.id"
-                :trait="t"
-                :api="traitRowApi"
-                :phase="phase"
-                :limit-reached="limitReachedFor(t)"
-                :hide-contact="entry.continuations.has(t.id)"
-              />
-            </div>
+            <!-- The set's own rules sit **directly under its title**, above the
+                 rows — the human's call, 2026-09-29. A set-as-a-unit rule is a
+                 fact about the set, so it reads with the heading; below the rows
+                 it looked like one more trait's card, and on a long set it fell
+                 off the end of the list entirely. -->
             <div v-if="traitsetSfxIds(entry.ts).length || traitsetGrantedSfxIds(entry.ts).length" class="sfx-cards">
               <SfxCard v-for="sfxId in traitsetSfxIds(entry.ts)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
                        @activate="activateSfx(sfxId, traitsetSettingSourceId(entry.ts))" />
@@ -424,6 +418,17 @@
                 v-bind="sfxCardModel(sfxId)"
                 title="Always on: granted to this set by a rule's reach — not attached, so there is nothing to take"
                 @activate="activateSfx(sfxId, traitsetSettingSourceId(entry.ts))"
+              />
+            </div>
+            <div v-if="isSetOpen(entry.ts.name)" class="set-traits">
+              <TraitRow
+                v-for="t in entry.traits"
+                :key="t.id"
+                :trait="t"
+                :api="traitRowApi"
+                :phase="phase"
+                :limit-reached="limitReachedFor(t)"
+                :hide-contact="entry.continuations.has(t.id)"
               />
             </div>
           </div>
@@ -469,6 +474,26 @@
               @click="closeSet"
               title="Back to trait sets"
             >← {{ drilledSet?.name }}</h4>
+            <!-- The entered set's own rules, in the same place the accordion puts
+                 them: under the set's title, above its rows. Without this the
+                 drill-in — which is the default everywhere there is no height to
+                 spare, so phones and portrait tablets — never drew a set-level
+                 rule at all. -->
+            <div
+              v-if="drilledSet && (traitsetSfxIds(drilledSet).length || traitsetGrantedSfxIds(drilledSet).length)"
+              class="sfx-cards"
+            >
+              <SfxCard v-for="sfxId in traitsetSfxIds(drilledSet)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
+                       @activate="activateSfx(sfxId, traitsetSettingSourceId(drilledSet))" />
+              <SfxCard
+                v-for="sfxId in traitsetGrantedSfxIds(drilledSet)"
+                :key="'tsg-' + sfxId"
+                class="sfx-granted"
+                v-bind="sfxCardModel(sfxId)"
+                title="Always on: granted to this set by a rule's reach — not attached, so there is nothing to take"
+                @activate="activateSfx(sfxId, traitsetSettingSourceId(drilledSet))"
+              />
+            </div>
             <TraitRow
               v-for="t in currentTraits"
               :key="t.id"
