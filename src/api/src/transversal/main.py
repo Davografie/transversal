@@ -11,6 +11,8 @@ from strawberry.fastapi import GraphQLRouter
 
 from contextlib import asynccontextmanager
 
+import mimetypes
+import os
 import time
 
 from transversal.api.graphql.schema import schema
@@ -58,9 +60,30 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+def _cors_origins() -> list[str]:
+    """Allowed browser origins (SEC-7).
+
+    Nothing *needs* CORS here: in every supported deployment the app is
+    same-origin — both the Vite dev server and the nginx edge proxy ``/api`` and
+    ``/media``. The previous ``["*"]`` let any web page read API responses
+    wherever the API was browser-reachable. These defaults cover the local dev
+    surfaces; set ``CORS_ALLOW_ORIGINS`` (comma-separated) to override, ``*``
+    included if that is genuinely what you mean.
+    """
+    raw = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -266,7 +289,6 @@ app.include_router(sse_router)
 app.include_router(auth_router)
 
 # Serve uploaded media files
-import os
 
 
 class CachedStaticFiles(StaticFiles):
@@ -286,8 +308,24 @@ class CachedStaticFiles(StaticFiles):
     ) -> Response:
         response = super().file_response(full_path, stat_result, scope, status_code)
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        # SEC-10: only safe because every extension under /media now has a real
+        # type — python:3.12-slim's mimetypes did not know .webp/.webm and served
+        # them as application/octet-stream, and nosniff on a wrong type blanks
+        # every image. The registrations below are what make this line correct.
+        response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 
+
+# SEC-10: python:3.12-slim's mimetypes database has no .webp or .webm, so
+# StaticFiles declared generated images and loops as application/octet-stream.
+# Browsers sniffed them back into place, which is why it went unnoticed — but the
+# declared type was wrong, caching and any future img-src CSP could not rely on
+# it, and it made X-Content-Type-Options: nosniff unsafe to add (it would have
+# blanked every image in the game). Register the types first; nosniff is sent by
+# CachedStaticFiles above. Check any new served extension against this list, or
+# nosniff will bite.
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type("video/webm", ".webm")
 
 # Primary path: Docker bind mount; fallback: local dev layout
 media_path = "/app/media"
