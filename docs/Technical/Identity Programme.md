@@ -197,7 +197,7 @@ and bootstrapped on first use. Self-service is the intent, but throttling and pa
 open on the owner's side.
 
 ### Admission — one token for the whole table
-In the **Troupe** panel, **Admit players** opens a **campaign join token**: one token, shown as a
+In the **GM panel under Prep → Players**, **Admit players** opens a **campaign join token**: one token, shown as a
 QR and as a short readable code (for voice), valid for a short period — **~30 minutes** by
 default. Everyone scans the same one. There is no per-participant link to regenerate, and it can
 be **closed early** without waiting for the clock.
@@ -241,12 +241,48 @@ Because the cookie names a campaign and the app needs a campaign in its URL (e.g
 `/c/<campaign>/…`), a person in two campaigns switches with a **campaign switcher**, not by
 re-authenticating. Two tabs, two campaigns, no re-login.
 
-### The architect's controls (Troupe panel)
+### The architect's controls (GM panel → Prep → Players)
 Per member: **Revoke · Make architect** — *Revoke* is the epoch bump on that player's account.
 Campaign wide: **open a join token**, **close it / close all**, **rotate access** — the hard eject,
 behind a confirmation that spells out what it does to the whole table *and* that it will sign the
 architect out and email them a link back in — and the recovery address.
 The last architect cannot demote themselves, and **an architect account is never takeable**.
+
+### Operating it
+
+Written for whoever is holding the campaign, because the failure modes here are all
+"silently locked out" rather than an error.
+
+**Getting in as the owner.** Open `/enter?a=<ARCHITECT_TOKEN>`. That is the only way
+in that is not issued through the UI — the architect seat is never takeable from the
+roster, which is what stops a member promoting themselves. Two things bite:
+
+- `ARCHITECT_TOKEN` must be in `.env` **and named in `docker-compose.yaml`**. Compose
+  passes only the variables a service lists, so putting it in `.env` alone leaves the
+  container without it and the failure is "nobody can enter", with nothing logged.
+- On the **dev server** the passage link only works because the Vite proxy forwards
+  `/enter` and rewrites it to the API route (`vite.config.js`). It has no nginx, so
+  without that a link falls through to the SPA and sets no session — indistinguishable
+  from a bad token.
+
+**Locked out?** Open the architect link again. It issues a fresh session; the old
+cookie is simply no longer accepted. If you see *"the way is sealed"*, you have no
+valid session — that screen is the perimeter, and no in-app action can fix it.
+
+**Admitting players.** GM panel → **Prep → Players** → **Admit players**. One QR and
+link, good for ~30 minutes, shown to the whole table; everyone scans the same one.
+It can be closed early, and all open windows can be closed at once. Any *member* may
+open one through the API — that is the owner's decision — but the off switch is what
+makes it safe, so it is on the same screen.
+
+**Ejecting someone.** Two different acts, and only one of them is in this slice:
+
+- **Revoke** (same tab) ends every session a player holds. It does *not* delete them:
+  their characters are entities owned through `agency` edges and would be orphaned.
+  It is an epoch bump, so their next request is refused. **They can be re-admitted by
+  any member**, so this ends their session, not their welcome.
+- **Rotating the campaign's access** — the real eject — is *not built*. It belongs to
+  SEC-8 with the rest of the campaign work.
 
 ## 5. Security consequences — what this model *forces*
 
