@@ -5,42 +5,45 @@
   <UnauthorizedNotice v-if="unauthorized" />
   <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
   <!-- Login / Settings overlay -->
-  <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
+  <div v-if="showLoginOverlay" class="name-entry panel" @click.self="playerId && dismissOverlay()">
     <div class="name-entry-scroll">
-    <!-- Fresh login: no identity yet -->
-    <LoginPrompt
+    <!-- Fresh arrival: through the passage, but nobody has said who they are -->
+    <RosterPicker
       v-if="!playerId"
-      v-model:player-name="playerName"
-      :checking="checking"
-      :suggestions="nameSuggestions"
-      :show-create="showLoginCreate"
-      :status="nameStatus"
-      :found="nameFound"
-      @enter="onNameEnter"
-      @select="selectSuggestion"
-      @confirm="confirmPlayer"
+      :roster="roster"
+      :busy="busy"
+      :error="identityError"
+      :new-name="newName"
+      @update:new-name="newName = $event"
+      @take="takePlayer"
+      @claim="claimPlayer"
     />
     <!-- Settings: already logged in -->
     <template v-else>
       <p class="name-hint settings-hint">Player settings</p>
 
-      <IdentitySwitchBlock
-        ref="switchBlockRef"
-        v-model:switch-name="switchName"
-        :player-name="playerName"
-        :editing="switchEditing"
-        :switching="switching"
-        :suggestions="switchSuggestions"
-        :show-create="showSwitchCreate"
-        :status="switchStatus"
-        :found="switchFound"
-        :pending-entities="pendingPlayerEntities"
-        @start-edit="startSwitchEdit"
-        @enter="onSwitchEnter"
-        @blur="onSwitchBlur"
-        @select="selectSwitchSuggestion"
-        @confirm="confirmSwitch"
-      />
+      <div v-if="!rosterPicking" class="settings-section">
+        <label class="settings-label">You are</label>
+        <button class="continue-btn" :disabled="busy" @click="beginSwitch">
+          {{ playerName }} — switch player
+        </button>
+        <p class="name-hint">
+          Taking another name is deliberate; architect accounts are never takeable.
+        </p>
+      </div>
+
+      <template v-else>
+        <RosterPicker
+          :roster="roster"
+          :busy="busy"
+          :error="identityError"
+          :new-name="newName"
+          @update:new-name="newName = $event"
+          @take="takePlayer"
+          @claim="claimPlayer"
+        />
+        <button class="continue-btn" :disabled="busy" @click="endSwitch">Back</button>
+      </template>
 
       <!-- Character switch (loading + cancel) -->
       <div v-if="charSwitchLoading" class="settings-section char-switch-section">
@@ -52,7 +55,7 @@
       </div>
 
       <!-- Mode + Characters (hidden during switch) -->
-      <template v-if="!switchStatus && !charSwitchLoading">
+      <template v-if="!rosterPicking && !charSwitchLoading">
         <AppearanceBlock :mode="colorMode" @update:mode="colorMode = $event" />
 
         <ModeAndMediaBlock
@@ -110,7 +113,7 @@
         </div>
       </template>
 
-      <p v-if="switchError" class="switch-error">{{ switchError }}</p>
+      <p v-if="identityError" class="switch-error">{{ identityError }}</p>
       <button v-if="!charSwitchLoading" class="cancel-btn" @click="dismissOverlay">Back to game</button>
     </template>
     </div>
@@ -259,11 +262,10 @@ import { useEffectApplication } from '@/composables/useEffectApplication.js'
 import { useThemeMode } from '@/composables/useThemeMode.js'
 import { useUniverseTheme } from '@/composables/useUniverseTheme.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
-import LoginPrompt from '@/components/app/LoginPrompt.vue'
+import RosterPicker from '@/components/app/RosterPicker.vue'
 import UnauthorizedNotice from '@/components/app/UnauthorizedNotice.vue'
 import SplashPanel from '@/components/app/SplashPanel.vue'
 import { unauthorized } from '@/composables/useAuthGate.js'
-import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
 import ModeAndMediaBlock from '@/components/app/ModeAndMediaBlock.vue'
 import AppearanceBlock from '@/components/app/AppearanceBlock.vue'
@@ -610,10 +612,12 @@ const gmMode = ref(localStorage.getItem('architectMode') === 'true')
 
 // Player identity + login/switch logic (see composables/usePlayerIdentity.js).
 // The three refs are created here because other composables share them.
-const playerId = ref(localStorage.getItem('playerId') || '')
-const switchBlockRef = useTemplateRef('switchBlockRef')   // settings name field focus
-const playerName = ref(localStorage.getItem('playerName') || '')
-const showLoginOverlay = ref(!playerId.value)
+// SEC-3: none of this is read from localStorage any more. The session cookie is
+// the identity and `loadSession()` fills these in. Until it answers we do not know
+// who anyone is, so the overlay starts closed rather than guessing from storage.
+const playerId = ref('')
+const playerName = ref('')
+const showLoginOverlay = ref(false)
 
 // Owned characters + their actions (see composables/usePlayerCharacters.js).
 const {
@@ -647,21 +651,23 @@ const needsCharacterPick = computed(() =>
 )
 
 const {
-  checking, nameStatus, nameFound, pendingPlayer,
-  nameSuggestions, showLoginCreate, loginHasExactMatch,
-  switchName, switchEditing, switching, switchError, switchPending, switchStatus, switchFound,
-  switchSuggestions, showSwitchCreate,
-  searchPlayers, onNameEnter, selectSuggestion,
-  searchSwitchPlayers, selectSwitchSuggestion,
-  findOrCreatePlayer, fetchPlayer, ensurePlayer, confirmPlayer,
-  startSwitchEdit, onSwitchBlur, onSwitchEnter, confirmSwitch, resetSwitch,
+  roster, busy, identityError, newName, rosterPicking,
+  loadSession, takePlayer, claimPlayer, beginSwitch, endSwitch,
 } = usePlayerIdentity({
   playerId, playerName, showLoginOverlay,
-  entityId,
-  loadPlayerRole, initLocation,
-  fetchPlayerEntities, fetchSupportCharacters, fetchActiveMains, fetchEntitiesFor,
-  pendingPlayerEntities,
-  focusSwitchInput: () => nextTick(() => switchBlockRef.value?.focusName()),
+  onIdentityChanged: async () => {
+    // Identity changed, so everything derived from it is re-read: the role, the
+    // characters owned, and where the map thinks we are.
+    try {
+      await Promise.all([
+        loadPlayerRole(),
+        fetchPlayerEntities(),
+        fetchSupportCharacters(),
+        fetchActiveMains(),
+      ])
+    } catch { /* the 401 path already shows the perimeter notice */ }
+    initLocation()
+  },
   diag: (label, detail) => DIAG.mark(label, detail),
 })
 
@@ -710,7 +716,7 @@ function mainName(id) {
 // Name search
 
 
-ensurePlayer()
+loadSession()
 
 // Session management
 const { sessions, currentSession, listSessions, createSession, joinSession, publishEvent, startSession, endSession } = useSessions()
@@ -2127,15 +2133,9 @@ async function onEndSession() {
 // ── Settings panel ────────────────────────────
 
 function openSettings() {
-  console.log('openSettings: playerName =', playerName.value, 'playerId =', playerId.value)
-  switchName.value = playerName.value
-  switchEditing.value = false
-  switchSuggestions.value = []
-  switchStatus.value = ''
-  switchPending.value = null
+  endSwitch()                     // the picker is opt-in, not the default view
   pendingPlayerEntities.value = []
   resetSwitchAnimation()
-  switchError.value = ''
   resetFinder()
   fetchPlayerEntities()
   fetchSupportCharacters()
@@ -2144,12 +2144,13 @@ function openSettings() {
 }
 
 function dismissOverlay() {
-  if (playerId.value) {
-    if (needsCharacterPick.value) return  // must pick an owned character first
-    resetSwitch()
-    resetSwitchAnimation()
-    showLoginOverlay.value = false
-  }
+  // Only ever called with a player taken (the overlay is not dismissible before
+  // that) — otherwise there would be an app with nobody in it.
+  if (!playerId.value) return
+  if (rosterPicking.value) { endSwitch(); return }
+  if (needsCharacterPick.value) return  // must pick an owned character first
+  resetSwitchAnimation()
+  showLoginOverlay.value = false
 }
 
 function onCharChipClick(e) {
