@@ -16,6 +16,7 @@
 
     <template v-else>
       <label class="settings-label">Show this to the table</label>
+      <img v-if="qr" class="admit-qr" :src="qr" alt="Admission QR code" />
       <div class="admit-link">
         <input class="settings-name-input" readonly :value="joinUrl(joining)" @focus="$event.target.select()" />
         <button class="continue-btn" @click="$emit('copy', joinUrl(joining))">Copy</button>
@@ -52,7 +53,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import QRCode from 'qrcode'
 
 // Presentation only: the composable owns the calls. Global styles are reused
 // (.settings-section, .char-list/.char-item, .continue-btn, .settings-name-input)
@@ -67,6 +69,20 @@ const props = defineProps({
 })
 
 defineEmits(['open', 'close', 'close-all', 'copy'])
+
+// A QR is the point of the ritual: one screen the whole table can scan, rather
+// than a link read out loud. Generated locally — the token is an admission
+// credential and must never be handed to a third-party image service.
+const qr = ref('')
+watch(
+  () => props.joining,
+  async (joining) => {
+    qr.value = joining
+      ? await QRCode.toDataURL(props.joinUrl(joining), { margin: 1, width: 220 })
+      : ''
+  },
+  { immediate: true },
+)
 
 const closingAt = computed(() => {
   const iso = props.joining?.expires_at
@@ -83,4 +99,11 @@ const closingAt = computed(() => {
   align-items: center;
 }
 .admit-link input { flex: 1; font-size: 12px; }
+.admit-qr {
+  display: block;
+  margin: 8px auto;
+  background: #fff;
+  padding: 8px;
+  border-radius: 6px;
+}
 </style>

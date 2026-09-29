@@ -37,6 +37,13 @@ test('a GM can open an admission window and is shown the link', async ({ page, r
   const url = await field.inputValue()
   expect(url).toMatch(/\/enter\?s=.+/)
 
+  // The QR is the point of the ritual: one screen the table can scan. Asserted as
+  // a locally-generated data URL — it must never be fetched from a third-party
+  // image service, which would hand the admission token to someone else.
+  const qr = page.locator('img.admit-qr')
+  await expect(qr).toBeVisible()
+  expect(await qr.getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+
   // The window is listed, so whoever opened it can see it and close it. The test
   // identity is a *member*, so close-all (architect-only server-side) must not be
   // offered — asserting that is the point of the next line, and it is why this
