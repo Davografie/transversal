@@ -16,12 +16,28 @@
 export async function asPlayer(page) {
   await page.route('**/api/v1/players/**', async (route) => {
     const req = route.request()
-    if (req.method() === 'GET') {
-      const body = await (await route.fetch()).json().catch(() => null)
-      if (body && typeof body === 'object' && 'role' in body) body.role = 'player'
-      return route.fulfill({ json: body })
+    try {
+      if (req.method() === 'GET') {
+        const body = await (await route.fetch()).json().catch(() => null)
+        if (body && typeof body === 'object' && 'role' in body) body.role = 'player'
+        return route.fulfill({ json: body })
+      }
+      if (req.url().endsWith('/role')) return route.fulfill({ json: { status: 'ok' } })
+      return route.continue()
+    } catch (err) {
+      // The app fires `/players/{id}` while a test is *ending*, so this callback
+      // can still be awaiting its real fetch when Playwright tears the context
+      // down. That surfaces as `route.fetch: Test ended` and **fails the test** —
+      // a teardown race, not a fault in what the test asserts. Nothing needs
+      // serving once the test is over, so swallow exactly that error and let the
+      // test's own assertions decide the outcome.
+      //
+      // This is why the dock specs passed alone and failed in a multi-file run:
+      // the extra files shift the app's `/players/…` request later relative to
+      // teardown, so the race is lost only when other specs share the run. The
+      // fix belongs here rather than in each spec, because every spec that calls
+      // `asPlayer` has the same in-flight route at its end.
+      if (!/Test ended/i.test(String(err && err.message))) throw err
     }
-    if (req.url().endsWith('/role')) return route.fulfill({ json: { status: 'ok' } })
-    return route.continue()
   })
 }
