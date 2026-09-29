@@ -107,6 +107,12 @@ Three properties worth keeping when touching this:
 - **The stack's 🛠 open/closed state is not a collapse** and is deliberately not
   persisted ([[GM Panel Positioning Plan]]: closing the 🛠 hides the chain, not
   the windows).
+- **A panel holding a credential is never restorable**, and that is a rule rather
+  than a case: a window is stored as a name + props, and `GmAdmissionPanel`'s
+  subject *is* an admission token — which the API returns exactly once. Storing it
+  would write a credential to `localStorage` and restore a QR that admits nobody.
+  Whenever a panel's props would be a secret, the answer is "not on the list",
+  with the reason recorded beside the others.
 
 ## Panel stacking (dynamic z-index)
 
@@ -387,11 +393,11 @@ An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
 
 There is no frontend test runner: checks are plain `node` scripts in
 `src/frontend/scripts/check-*.mjs`, run against the `transversal2-frontend:latest`
-image (build the same way, in Docker). **30 suites exist** (the count was 14 when
+image (build the same way, in Docker). **31 suites exist** (the count was 14 when
 the shared table component was handed over) and a shared primitive can move
 several — `check-theme-tokens`, `check-combobox`, `check-trait-tree`,
 `check-panel-close`, `check-panel-placement`, `check-panel-persistence`,
-`check-panel-stacking`, `check-player-filter`, `check-tree-expand/order/locate`,
+`check-panel-stacking`, `check-admission-panel`, `check-player-filter`, `check-tree-expand/order/locate`,
 `check-place-filter`, `check-trait-explanations`, `check-sheet-profile`,
 `check-sheet-api`, `check-landing`, `check-auth-gate`, `check-entity-create`. **Ping [[gm-panels]]
 when the component lands** and I will re-run them and migrate my 17 call sites —
@@ -412,6 +418,7 @@ chosen, which of the eight capabilities above it covers.
 - Thin consumer panels: `GmPanel.vue` (root), `GmEntityEditPanel.vue`, `GmTraitEditPanel.vue`.
 - Infrastructure: `PanelStack.vue`, `Panel.vue`, `PanelWindow.vue`, `usePanel.js`, `usePanelBus.js`, `usePanelAnchor.js`, `usePanelWindows.js`, `usePanelDiagnostics.js`.
 - Troupe play: `GmTroupeOverview.vue` (recency + active-main groups), `RollTableMenu.vue` (roll-table-as-menu picker), `useRollTableMenu.js`.
+- Admission (SEC-3): `GmAdmissionPanel.vue` — the invitation a GM shows the table. A **block opens it** (`AdmitPlayersBlock` is the Players tab's switch and open list; the QR and the link are the panel), it takes **no props** and reads the shared `useAdmission()` state, so a window closed from the tab cannot leave a QR on screen for a token that no longer admits. A panel that renders a **credential** is never restorable — see *Panel persistence*.
 
 ## Migration backlog — complete
 
