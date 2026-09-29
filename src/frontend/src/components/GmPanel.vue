@@ -107,12 +107,11 @@
             :joining="admissionJoining"
             :busy="admissionBusy"
             :error="admissionError"
-            :join-url="admissionJoinUrl"
             :can-close-all="canAdmin"
-            @open="admissionOpen"
+            @open="admitPlayers"
+            @show="showInvitation"
             @close="admissionClose"
             @close-all="admissionCloseAll"
-            @copy="copyJoinLink"
           />
           <PlayerAdminBlock
             v-if="canAdmin"
@@ -178,6 +177,7 @@ import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import AdmitPlayersBlock from '@/components/app/AdmitPlayersBlock.vue'
 import PlayerAdminBlock from '@/components/app/PlayerAdminBlock.vue'
+import GmAdmissionPanel from '@/components/gm/GmAdmissionPanel.vue'
 import { useAdmission } from '@/composables/useAdmission.js'
 import { usePlayerAdmin } from '@/composables/usePlayerAdmin.js'
 
@@ -227,7 +227,7 @@ const browseTab = ref('tree')
 const {
   windows: admissionWindows, joining: admissionJoining, busy: admissionBusy,
   error: admissionError, refresh: refreshAdmission, open: admissionOpen,
-  close: admissionClose, closeAll: admissionCloseAll, joinUrl: admissionJoinUrl,
+  close: admissionClose, closeAll: admissionCloseAll,
 } = useAdmission()
 const {
   players: adminPlayers, busy: adminBusy, error: adminError, notice: adminNotice,
@@ -237,6 +237,35 @@ const canAdmin = ref(false)
 
 async function copyJoinLink(url) {
   try { await navigator.clipboard.writeText(url) } catch { /* the field is selectable */ }
+}
+
+// The invitation is a **child panel** of this one: the QR needs room the tab does
+// not have, and the code you show the table is something you open and put away
+// rather than chrome left sitting beside the roster. It reads the window itself
+// from `useAdmission`, so `id` is all this spec needs beyond the component — and it
+// is what makes a second open replace the panel in place instead of stacking one.
+function openInvitation() {
+  if (!panel.open) return
+  panel.open({
+    component: GmAdmissionPanel,
+    title: 'Admission',
+    id: 'admission',
+    listeners: { copy: copyJoinLink },
+  })
+}
+
+// Mint, then show it — "admit players" is one act, and the window would otherwise
+// exist with nothing on screen to scan.
+async function admitPlayers() {
+  await admissionOpen()
+  openInvitation()
+}
+
+// Re-open the invitation this session already minted. Not offered when only
+// *other* windows are listed: the API returns a token exactly once, so an older
+// window has no QR to show — the list below can still close it.
+function showInvitation() {
+  openInvitation()
 }
 
 async function loadAccessTab() {

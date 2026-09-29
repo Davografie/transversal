@@ -1,6 +1,18 @@
 import { ref } from 'vue'
 
 /**
+ * The link a person opens. Same origin, so the cookie lands where it is read.
+ *
+ * Module-level and exported because it is the *rule*, not state: the invitation
+ * panel renders the link and this composable mints the record, and the rule must
+ * not be written down twice.
+ */
+export function joinUrl(record) {
+  const token = record?.token || ''
+  return `${window.location.origin}/enter?s=${token}`
+}
+
+/**
  * Admission windows (SEC-3).
  *
  * A window is one token, shown to the whole table, reusable for its lifetime and
@@ -10,13 +22,19 @@ import { ref } from 'vue'
  * all. That is what makes "any member may invite" safe rather than merely
  * convenient, because the token is bearer and its lifetime is the only bound on a
  * leaked link.
+ *
+ * The state is at **module scope** because two surfaces read it: the Players tab
+ * (the switch, the open list) and the invitation panel (the QR). They must see the
+ * same window — including when one of them closes it, which is the case that made
+ * this shared: closing from the tab used to leave the panel showing a QR for a
+ * token that no longer admitted anyone.
  */
-export function useAdmission() {
-  const windows = ref([])
-  const joining = ref(null)
-  const busy = ref(false)
-  const error = ref('')
+const windows = ref([])
+const joining = ref(null)
+const busy = ref(false)
+const error = ref('')
 
+export function useAdmission() {
   /** The open windows — who could still join. */
   async function refresh() {
     try {
@@ -72,11 +90,5 @@ export function useAdmission() {
     }
   }
 
-  /** The link a person opens. Same origin, so the cookie lands where it is read. */
-  function joinUrl(record) {
-    const token = record?.token || ''
-    return `${window.location.origin}/enter?s=${token}`
-  }
-
-  return { windows, joining, busy, error, refresh, open, close, closeAll, joinUrl }
+  return { windows, joining, busy, error, refresh, open, close, closeAll }
 }

@@ -26,6 +26,10 @@
 //   GmRollTableEntryEffectPanel — injects `rowDraft`; without it save is a no-op.
 //   GmEntityCreatePanel     — a create form: restoring it would offer to create
 //                             the same entity again after a reload.
+//   GmAdmissionPanel        — its props carry a live admission **token**, and the
+//                             API returns that token exactly once. A restored copy
+//                             would show a dead QR, and storing it would write a
+//                             credential to localStorage.
 //
 // The panels here *do* inject, but only from App or with a default that is the
 // whole answer: `gmCurrentLocationId` / `actingEntityId` / `panelActive` /

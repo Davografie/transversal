@@ -1,32 +1,20 @@
 <template>
-  <!-- SEC-3 admission: one window shown to the whole table.
-       A link rather than a name box, because the token admits a *device* to the
-       campaign; who they are is chosen afterwards, from the roster. -->
+  <!-- SEC-3 admission, as the Players tab's controls. The invitation itself — the
+       QR and the link — opens as a **child panel** (`GmAdmissionPanel`): a ~220px
+       code is the widest thing this tab would ever hold, and showing the table is
+       not the same act as managing the roster. What stays here is the switch and
+       the open list, because that is the owner's sight and off-switch. -->
   <div class="admit-block">
-    <p v-if="!joining" class="name-hint">
-      Open a window and show it to the table — everyone who scans it can join. It is
-      good for about 30 minutes and can be closed early.
-    </p>
+    <label class="settings-label">Admission</label>
 
-    <div v-if="!joining" class="settings-section">
-      <button class="continue-btn" :disabled="busy" @click="$emit('open')">
-        Admit players
-      </button>
-    </div>
+    <p class="admit-hint">One window admits the whole table — show them the code.</p>
 
-    <template v-else>
-      <label class="settings-label">Show this to the table</label>
-      <img v-if="qr" class="admit-qr" :src="qr" alt="Admission QR code" />
-      <div class="admit-link">
-        <input class="settings-name-input" readonly :value="joinUrl(joining)" @focus="$event.target.select()" />
-        <button class="continue-btn" @click="$emit('copy', joinUrl(joining))">Copy</button>
-      </div>
-      <p class="name-hint">
-        Closes itself at {{ closingAt }} — or close it now with the button below.
-      </p>
-    </template>
+    <Button v-if="!joining" variant="success" solid block :disabled="busy" @click="$emit('open')">
+      Admit players
+    </Button>
+    <Button v-else variant="neutral" block @click="$emit('show')">Show the invitation</Button>
 
-    <div v-if="windows.length" class="settings-section">
+    <template v-if="windows.length">
       <label class="settings-label">Open now ({{ windows.length }})</label>
       <div class="char-list">
         <button
@@ -35,75 +23,61 @@
           class="char-item"
           :disabled="busy"
           @click="$emit('close', w.id)"
-        >{{ w.id }} — close</button>
+        >{{ closingAt(w) }} — close</button>
       </div>
       <!-- Architect-only server-side. Gated on the server's role, not on the
            client's gmMode: SEC-3 means the server decides, and offering an action
            it will refuse is how a UI teaches people to distrust its buttons. -->
-      <button
-        v-if="canCloseAll"
-        class="continue-btn"
-        :disabled="busy"
-        @click="$emit('close-all')"
-      >Close all windows</button>
-    </div>
+      <Button v-if="canCloseAll" variant="danger" block :disabled="busy" @click="$emit('close-all')">
+        Close all windows
+      </Button>
+    </template>
 
     <p v-if="error" class="switch-error">{{ error }}</p>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
-import QRCode from 'qrcode'
+import Button from '@/components/ui/Button.vue'
 
-// Presentation only: the composable owns the calls. Global styles are reused
-// (.settings-section, .char-list/.char-item, .continue-btn, .settings-name-input)
-// so this sits in the settings overlay like everything else.
-const props = defineProps({
+// Presentation only: the composable owns the calls, and the invitation panel owns
+// the QR. The window rows are labelled by when they lapse rather than by token id —
+// an id means nothing to the person deciding whether to close it.
+defineProps({
   windows: { type: Array, default: () => [] },
+  /** The window this session just minted, if it is still open. */
   joining: { type: Object, default: null },
   busy: { type: Boolean, default: false },
   error: { type: String, default: '' },
-  joinUrl: { type: Function, required: true },
   canCloseAll: { type: Boolean, default: false },
 })
 
-defineEmits(['open', 'close', 'close-all', 'copy'])
+defineEmits(['open', 'show', 'close', 'close-all'])
 
-// A QR is the point of the ritual: one screen the whole table can scan, rather
-// than a link read out loud. Generated locally — the token is an admission
-// credential and must never be handed to a third-party image service.
-const qr = ref('')
-watch(
-  () => props.joining,
-  async (joining) => {
-    qr.value = joining
-      ? await QRCode.toDataURL(props.joinUrl(joining), { margin: 1, width: 220 })
-      : ''
-  },
-  { immediate: true },
-)
-
-const closingAt = computed(() => {
-  const iso = props.joining?.expires_at
-  if (!iso) return 'soon'
-  const d = new Date(iso)
-  return isNaN(d) ? 'soon' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-})
+function closingAt(w) {
+  const d = new Date(w?.expires_at)
+  return isNaN(d) ? 'open' : `until ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+}
 </script>
 
 <style scoped>
-.admit-link {
+/* The tab is ~386px wide inside the GM panel's scrolling zone. Nothing here
+   carries a width of its own, so nothing can push that zone into a horizontal
+   scroll; the shared `.settings-section` (min(520px, 100vw - 32px)) belongs to the
+   settings overlay and must not be used here. */
+.admit-block {
   display: flex;
-  gap: 8px;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
 }
-.admit-link input { flex: 1; font-size: 12px; }
-.admit-qr {
-  display: block;
-  margin: 8px auto;
-  background: #fff;
-  padding: 8px;
-  border-radius: 6px;
+.admit-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-dim);
 }
+.admit-block .char-list { justify-content: flex-start; }
 </style>
