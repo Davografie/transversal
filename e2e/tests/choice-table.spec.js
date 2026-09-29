@@ -17,6 +17,7 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
 import { asPlayer } from '../helpers/role.js'
+import { establishSession } from '../helpers/session.js'
 
 const DESKTOP = { width: 1280, height: 950 }
 
@@ -150,6 +151,7 @@ async function seed(page, size, { stack = false, alreadySeeded = false } = {}) {
       localStorage.setItem('playerName', pname)
       localStorage.setItem('entityId', eid)
     }, [character.playerId, character.playerName, character.entityId])
+  await establishSession(page)
   }
   await page.goto('/')
 

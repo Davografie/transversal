@@ -30,6 +30,7 @@
 
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { establishSession } from '../helpers/session.js'
 
 const DESKTOP = { width: 1280, height: 950 }
 const DOCK_W = 400          // --dock-w: the width the docked sheet occupies
@@ -56,6 +57,7 @@ async function seedAndLoad(page, size) {
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
+  await establishSession(page)
   await page.goto('/')
 }
 

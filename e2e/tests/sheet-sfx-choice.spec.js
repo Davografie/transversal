@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
 import { asPlayer } from '../helpers/role.js'
+import { establishSession } from '../helpers/session.js'
 
 // A choice raised **from the sheet** is answered *as the sheet's body*, not floated
 // over it ([[B230]]'s sheet host, handed to [[character-sheet]] 2026-09-28).
@@ -86,6 +87,7 @@ async function openSheet(page, choices, delayMs = 0) {
     localStorage.setItem('playerName', c.playerName)
     localStorage.setItem('entityId', c.entityId)
   }, character)
+  await establishSession(page)
   await page.goto('/')
   await page.waitForTimeout(2000)
   const dot = page.locator('button.map-dot.self').first()

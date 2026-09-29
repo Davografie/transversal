@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { establishSession } from '../helpers/session.js'
 
 // The Active SFX rail is chrome for the map it floats over, so it must not be
 // mounted on top of a surface that has taken the screen.
@@ -66,6 +67,7 @@ async function load(page, size) {
     localStorage.setItem('playerName', ids.playerName)
     localStorage.setItem('entityId', ids.entityId)
   }, character)
+  await establishSession(page)
   await page.goto('/')
   await page.waitForFunction(() => !!document.querySelector('.stage'), null, { timeout: 20_000 })
   await page.waitForTimeout(2000)

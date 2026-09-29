@@ -14,6 +14,7 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
 import { asPlayer } from '../helpers/role.js'
+import { establishSession } from '../helpers/session.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 const SCREENSHOTS = process.env.PALETTE_SHOTS || ''   // a directory, for a visual pass
@@ -71,6 +72,7 @@ async function load(page, { size = { width: 1280, height: 950 }, palette = null 
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
+  await establishSession(page)
   await page.goto('/')
   // `.stage` is a bare positioning div with no box of its own, so it is
   // "hidden" to Playwright forever — attached is the honest wait; the palette

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { establishSession } from '../helpers/session.js'
 
 // This drives a live backend that other sessions are also using, and a batch run
 // can take far longer than the 30s default purely because of that contention —
@@ -69,6 +70,7 @@ async function load(page, size, { entityId, playerId, playerName }) {
     localStorage.removeItem('sheet.openTraitSets')
     localStorage.removeItem('sheet.traitSetDrill')
   }, { entityId, playerId, playerName })
+  await establishSession(page)
   await page.goto('/')
   await page.waitForFunction(() => !!document.querySelector('.stage'), null, { timeout: 20_000 })
   await page.waitForTimeout(1200)

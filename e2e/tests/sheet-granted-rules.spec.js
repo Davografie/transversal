@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
 import { asPlayer } from '../helpers/role.js'
+import { establishSession } from '../helpers/session.js'
 
 // A rule that is **granted** by another rule's reach is available and must be
 // *drawn* ([[Dynamic SFX Reach]]). A granted rule attaches nothing, so the
@@ -71,6 +72,7 @@ async function openSheet(page) {
     localStorage.setItem('playerName', c.playerName)
     localStorage.setItem('entityId', c.entityId)
   }, character)
+  await establishSession(page)
   await page.goto('/')
   await page.waitForTimeout(2000)
   const dot = page.locator('button.map-dot.self').first()

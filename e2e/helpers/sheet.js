@@ -1,8 +1,9 @@
 // Shared navigation for sheet-level tests.
 //
-// The app opens on an identity gate ("Who are you?") and remembers the answer in
-// localStorage, so a test that wants the sheet has to seed a player *and* an
-// entity that player controls.
+// Identity is a **server-issued session** (SEC-3), so it cannot be asserted from
+// localStorage any more: `establishSession` obtains one for the player a spec
+// names. What still lives in localStorage is the *perspective* — `entityId` and
+// the current location — which is UI state, not identity.
 //
 // Those are the project's **test character and its owning test player** — never a
 // real player's. `AGENTS.md` § "Player characters & the testing character"
@@ -15,6 +16,8 @@
 // must drill into a set first; and the occupant dot that opens your own sheet has
 // no accessible name (its title becomes "Drag to reposition" once it is
 // draggable), so it is reached by its `self` class.
+
+import { establishSession } from './session.js'
 
 const GQL = '/api/v1/graphql'
 
@@ -122,6 +125,8 @@ export async function openSheet(page, { playerId, entityId, playerName = 'e2e' }
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
   }, [playerId, playerName, entityId])
+  // SEC-3: the seeding above records *intent*; the session is what the app reads.
+  await establishSession(page)
   await page.goto('/')
 
   const self = page.locator('button.map-dot.self').first()

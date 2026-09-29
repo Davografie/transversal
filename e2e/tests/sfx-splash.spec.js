@@ -27,6 +27,7 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
 import { asPlayer } from '../helpers/role.js'
+import { establishSession } from '../helpers/session.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 // The app keeps polling while the page is open, and a route callback that fires
@@ -123,6 +124,7 @@ async function load(page, size) {
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
+  await establishSession(page)
   await page.goto('/')
   await page.locator('.name-entry.panel').first().waitFor({ state: 'hidden', timeout: 20000 })
 }

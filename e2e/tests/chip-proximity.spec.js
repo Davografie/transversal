@@ -22,6 +22,7 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
 import { asArchitect } from '../helpers/arrange.js'
+import { establishSession } from '../helpers/session.js'
 
 // NEVER a real player character — Kael Drift is the project's testing character, a
 // main of a dedicated test player. The owner is resolved by the RELATIONSHIP rather
@@ -107,6 +108,7 @@ async function open(page, self) {
     localStorage.setItem('entityId', eid)
     localStorage.setItem('currentLocationId', loc)
   }, [character.playerId, character.playerName, character.entityId, LOC])
+  await establishSession(page)
   await page.goto('/')
 
   const chip = (id) => page.locator(`.scene-chip[data-trait-id="${id}"]`)

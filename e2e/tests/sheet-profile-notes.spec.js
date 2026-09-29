@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { establishSession } from '../helpers/session.js'
 
 // A trait with **notes but no statement** shows its full notes on the profile
 // page (2026-09-25, the human's ask). The traits tab is deliberately left alone:
@@ -53,6 +54,7 @@ async function openProfile(page, entityId) {
     localStorage.setItem('playerName', 'DSH MCP')
     localStorage.setItem('entityId', id)
   }, entityId)
+  await establishSession(page)
   await page.goto('/')
   await page.waitForTimeout(2500)
   const dot = page.locator('button.map-dot.self').first()

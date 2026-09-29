@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { establishSession } from '../helpers/session.js'
 
 // The trait-definition picker inside a trait set that allows duplicates.
 //
@@ -43,6 +44,7 @@ async function openKaelsSheet(page) {
     localStorage.setItem('playerName', playerName)
     localStorage.setItem('entityId', entityId)
   }, { playerId: PLAYER, playerName: PLAYER_NAME, entityId: KAEL })
+  await establishSession(page)
   await page.goto('/')
   await page.locator('.sheet-embedded .header').first().waitFor({ state: 'visible', timeout: 20_000 })
 }

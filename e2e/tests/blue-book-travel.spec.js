@@ -19,6 +19,7 @@
 
 import { test, expect } from '@playwright/test'
 import { asPlayer } from '../helpers/role.js'
+import { establishSession } from '../helpers/session.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 
@@ -42,6 +43,7 @@ async function openKaelBlueBook(page, owner) {
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
   }, [owner.id, owner.name, KAEL])
+  await establishSession(page)
   await page.goto('/')
 
   const self = page.locator('button.map-dot.self').first()

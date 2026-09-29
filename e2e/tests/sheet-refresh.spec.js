@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { establishSession } from '../helpers/session.js'
 
 // B125 — a sheet refresh must patch the sheet in place, not rebuild it.
 //
@@ -41,6 +42,7 @@ async function openTestingSheet(page) {
     localStorage.setItem('playerName', ids.playerName)
     localStorage.setItem('entityId', ids.entityId)
   }, character)
+  await establishSession(page)
   await page.goto('/')
 
   const self = page.locator('button.map-dot.self').first()

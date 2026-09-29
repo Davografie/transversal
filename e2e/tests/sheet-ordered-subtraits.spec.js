@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { establishSession } from '../helpers/session.js'
 
 // An **ordered** container's contents render as a numbered list with disabled
 // entries visible (B186, the human's ask: *"Challenge trait subtraits should work
@@ -64,6 +65,7 @@ async function openSheet(page, entityId) {
     localStorage.setItem('playerName', 'DSH MCP')
     localStorage.setItem('entityId', id)
   }, entityId)
+  await establishSession(page)
   await page.goto('/')
   await page.waitForTimeout(2000)
   const dot = page.locator('button.map-dot.self').first()

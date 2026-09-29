@@ -3,6 +3,7 @@ import { gql } from '../helpers/sheet.js'
 // The shared order the relationship list and the location tree already use. The
 // point of this spec is that the peers bar agrees with *this*, not with a copy.
 import { buildAgencyIndex, entityTypeRank } from '../../src/frontend/src/constants/entityTypes.js'
+import { establishSession } from '../helpers/session.js'
 
 // The peer tabs are ordered like every other entity list on the sheet: mains,
 // supports, then by type, alphabetical inside each group — with the entity you
@@ -89,6 +90,7 @@ async function load(page, entityId) {
     // the order, so it asks for the plain player view and says so.
     localStorage.setItem('architectMode', 'false')
   }, entityId)
+  await establishSession(page)
   await page.goto('/')
   await page.waitForFunction(() => !!document.querySelector('.stage'), null, { timeout: 20_000 })
   await page.waitForTimeout(2500)

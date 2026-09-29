@@ -20,6 +20,7 @@
 // and it is left as it was found.
 
 import { test, expect } from '@playwright/test'
+import { establishSession } from '../helpers/session.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 
@@ -55,6 +56,7 @@ test('a die dragged from the pool twice fills one slot, not two', async ({ page,
     localStorage.setItem('playerName', ids.playerName)
     localStorage.setItem('entityId', ids.entityId)
   }, character)
+  await establishSession(page)
 
   const openRoller = async () => {
     await page.locator('button.map-dot.self').first().waitFor({ state: 'visible', timeout: 30_000 })

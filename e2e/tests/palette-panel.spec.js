@@ -13,6 +13,7 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
 import { asArchitect } from '../helpers/arrange.js'
+import { establishSession } from '../helpers/session.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 const DESKTOP = { width: 1280, height: 950 }
@@ -63,6 +64,7 @@ async function openPanel(page) {
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
+  await establishSession(page)
   await page.goto('/')
   await page.locator('.name-entry.panel').first().waitFor({ state: 'hidden', timeout: 20000 })
 

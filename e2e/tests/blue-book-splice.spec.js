@@ -18,6 +18,7 @@
 // spec just built is invisible.
 import { test, expect } from '@playwright/test'
 import { asPlayer } from '../helpers/role.js'
+import { establishSession } from '../helpers/session.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 const A = { id: 'loc-148649253', name: 'Ardennes' }
@@ -68,6 +69,7 @@ test('a seek records nothing, and the next travel splices in at that point', asy
   await page.evaluate(([pid, pname, eid]) => {
     localStorage.setItem('playerId', pid); localStorage.setItem('playerName', pname); localStorage.setItem('entityId', eid)
   }, [owner.id, owner.name, KAEL])
+  await establishSession(page)
   await page.goto('/')
   await page.locator('button.map-dot.self').first().waitFor({ state: 'visible', timeout: 30_000 })
   await page.locator('button.map-dot.self').first().click()

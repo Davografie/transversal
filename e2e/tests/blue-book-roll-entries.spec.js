@@ -14,6 +14,7 @@
 
 import { test, expect } from '@playwright/test'
 import { asPlayer } from '../helpers/role.js'
+import { establishSession } from '../helpers/session.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 
@@ -34,6 +35,7 @@ test('a test/contest entry reads own left, opposition right, rounds stacked', as
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
   }, [owner.id, owner.name, KAEL])
+  await establishSession(page)
   await page.goto('/')
 
   await page.locator('button.map-dot.self').first().waitFor({ state: 'visible', timeout: 30_000 })

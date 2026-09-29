@@ -19,6 +19,7 @@
 
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { establishSession } from '../helpers/session.js'
 
 // The two layouts that render the viewer: wide landscape docks the sheet beside a
 // narrower map; a phone portrait stacks the bands and the viewer becomes a band
@@ -60,6 +61,7 @@ async function seedAndLoad(page, size) {
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
+  await establishSession(page)
   await page.goto('/')
 }
 

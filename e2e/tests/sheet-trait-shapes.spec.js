@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { establishSession } from '../helpers/session.js'
 
 // Which **shape** the traits tab takes, by the sheet's height — the human's rule,
 // 2026-09-25: *"the accordion is only for landscape views with a large height (so
@@ -52,6 +53,7 @@ async function load(page, size) {
     // The drill is persisted, so a previous case would otherwise decide this one.
     localStorage.removeItem('sheet.traitSetDrill')
   }, character)
+  await establishSession(page)
   await page.goto('/')
   await page.waitForFunction(() => !!document.querySelector('.stage'), null, { timeout: 20_000 })
   await page.waitForTimeout(1200)

@@ -12,6 +12,7 @@
 
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
+import { establishSession } from '../helpers/session.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 const LOC = 'loc-scale-test'
@@ -52,6 +53,7 @@ async function ratioAt(page, size) {
     localStorage.setItem('entityId', eid)
     localStorage.setItem('currentLocationId', loc)
   }, [character.playerId, character.playerName, character.entityId, LOC])
+  await establishSession(page)
   await page.goto('/')
 
   await expect(page.locator('.scene-layer')).toBeAttached()

@@ -16,6 +16,7 @@
 import { test, expect } from '@playwright/test'
 import { gql, openSheet } from '../helpers/sheet.js'
 import { asPlayer } from '../helpers/role.js'
+import { establishSession } from '../helpers/session.js'
 
 const DESKTOP = { width: 1280, height: 950 }
 const TABLET_LANDSCAPE = { width: 1194, height: 834 }
@@ -55,6 +56,7 @@ async function seedAndLoad(page, size) {
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
+  await establishSession(page)
   await page.goto('/')
 }
 
@@ -205,6 +207,7 @@ test('?dockw tunes the short-viewport dock, and reset forgets it', async ({ page
   await page.evaluate(([pid, pname, eid]) => {
     localStorage.setItem('playerId', pid); localStorage.setItem('playerName', pname); localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
+  await establishSession(page)
 
   await page.goto('/')
   await expect(page.locator('.stage').first()).toHaveClass(/dock-sheet/)
