@@ -163,6 +163,19 @@ ok('the "You are" section and its switch button are gone',
 ok('and so is the paragraph that stood under them',
   /<p class="name-hint">\s*Taking another name/.test(SRC), false)
 
+// The drillthrough the plate opens. It used to grow to the viewport — a table with
+// 24 players spilled a chip grid 1216px across a 1280px screen — with the
+// explanation wrapped into a four-line column in the middle of it.
+const PICKER = readFileSync('src/components/app/RosterPicker.vue', 'utf8').replace(/\n\s*/g, ' ')
+yes('the roster picker is a bounded column, not the viewport',
+  /\.roster-picker \{ width: min\(520px, calc\(100vw - 32px\)\)/.test(PICKER))
+yes('so its explanation is not left at the login card\'s 280px measure',
+  /\.roster-picker \.name-hint \{ max-width: none/.test(PICKER))
+yes('and the chips wrap inside that column',
+  /\.roster-picker \.char-list \{ max-width: 100%/.test(PICKER))
+yes('the roster is sorted — this is the list you scan for your own name',
+  /localeCompare/.test(PICKER) && /v-for="p in orderedRoster"/.test(PICKER))
+
 // ── 2. a perspective change loads its scene, in every role ───────────────
 console.log('\nperspective → scene load\n')
 

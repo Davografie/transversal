@@ -50,6 +50,34 @@ test('your name is a plate in the settings overlay, and it opens the roster', as
   await plate.click()
   await expect(page.locator('.roster-new input'), 'the roster picker, not a name box').toBeVisible()
 
+  // The picker is a **column**, not the viewport, and the explanation uses it.
+  // Measured, because the failure this fixes is invisible in a screenshot: with 24
+  // players the chip grid ran 1216px across a 1280px screen, and the hint — capped
+  // at the login card's 280px — was four lines in the middle of it.
+  const drill = await page.evaluate(() => {
+    const box = (sel) => {
+      const el = document.querySelector(sel)
+      return el ? { w: el.getBoundingClientRect().width, scrollW: el.scrollWidth, clientW: el.clientWidth } : null
+    }
+    const names = [...document.querySelectorAll('.roster-picker .char-item')].map((e) => e.textContent.trim())
+    return {
+      picker: box('.roster-picker'),
+      list: box('.roster-picker .char-list'),
+      hint: box('.roster-picker .name-hint'),
+      chips: names.length,
+      // The engine that sorted it is the engine that checks it, so there is no
+      // cross-browser comparator question here.
+      sorted: names.every((n, i) => i === 0 || names[i - 1].localeCompare(n) <= 0),
+      overflow: document.documentElement.scrollWidth > window.innerWidth,
+    }
+  })
+  expect(drill.picker.w, 'a column, not the window').toBeLessThanOrEqual(521)
+  expect(drill.hint.w, 'the explanation uses that column').toBeGreaterThan(280)
+  expect(drill.list.scrollW, 'the chips wrap inside it').toBeLessThanOrEqual(drill.list.clientW + 1)
+  expect(drill.chips, 'the roster is not empty').toBeGreaterThan(1)
+  expect(drill.sorted, 'and is sorted, so you can find your own name').toBe(true)
+  expect(drill.overflow, 'nothing scrolls sideways').toBe(false)
+
   // …and Back comes out of it, leaving the plate where it was.
   await page.locator('.name-entry-scroll button', { hasText: /^Back$/ }).first().click()
   await expect(plate).toBeVisible()
