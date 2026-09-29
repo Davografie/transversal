@@ -22,6 +22,19 @@
     <template v-else>
       <p class="name-hint settings-hint">Player settings</p>
 
+      <AdmitPlayersBlock
+        v-if="gmMode && !rosterPicking"
+        :windows="admissionWindows"
+        :joining="admissionJoining"
+        :busy="admissionBusy"
+        :error="admissionError"
+        :join-url="admissionJoinUrl"
+        @open="admissionOpen"
+        @close="admissionClose"
+        @close-all="admissionCloseAll"
+        @copy="copyJoinLink"
+      />
+
       <div v-if="!rosterPicking" class="settings-section">
         <label class="settings-label">You are</label>
         <button class="continue-btn" :disabled="busy" @click="beginSwitch">
@@ -255,6 +268,7 @@ import RelationalCanvas from './components/canvas/RelationalCanvas.vue'
 import { usePeers } from '@/composables/usePeers.js'
 import { usePlayerCharacters } from '@/composables/usePlayerCharacters.js'
 import { usePlayerIdentity } from '@/composables/usePlayerIdentity.js'
+import { useAdmission } from '@/composables/useAdmission.js'
 import { useCharacterFinder } from '@/composables/useCharacterFinder.js'
 import { useCharacterSwitch } from '@/composables/useCharacterSwitch.js'
 import { useMobileBands } from '@/composables/useMobileBands.js'
@@ -263,6 +277,7 @@ import { useThemeMode } from '@/composables/useThemeMode.js'
 import { useUniverseTheme } from '@/composables/useUniverseTheme.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
 import RosterPicker from '@/components/app/RosterPicker.vue'
+import AdmitPlayersBlock from '@/components/app/AdmitPlayersBlock.vue'
 import UnauthorizedNotice from '@/components/app/UnauthorizedNotice.vue'
 import SplashPanel from '@/components/app/SplashPanel.vue'
 import { unauthorized } from '@/composables/useAuthGate.js'
@@ -670,6 +685,20 @@ const {
   },
   diag: (label, detail) => DIAG.mark(label, detail),
 })
+
+// Admission windows (SEC-3): a GM act in the UI, though the API lets any member
+// open one. Renamed on the way in so none of it collides with the identity state.
+const {
+  windows: admissionWindows,
+  joining: admissionJoining,
+  busy: admissionBusy,
+  error: admissionError,
+  refresh: refreshAdmission,
+  open: admissionOpen,
+  close: admissionClose,
+  closeAll: admissionCloseAll,
+  joinUrl: admissionJoinUrl,
+} = useAdmission()
 
 // Switching which character you play (see composables/useCharacterSwitch.js).
 const {
@@ -2132,8 +2161,14 @@ async function onEndSession() {
 
 // ── Settings panel ────────────────────────────
 
+async function copyJoinLink(url) {
+  // The field is selectable either way; this is the convenience.
+  try { await navigator.clipboard.writeText(url) } catch { /* ignore */ }
+}
+
 function openSettings() {
   endSwitch()                     // the picker is opt-in, not the default view
+  refreshAdmission()
   pendingPlayerEntities.value = []
   resetSwitchAnimation()
   resetFinder()
