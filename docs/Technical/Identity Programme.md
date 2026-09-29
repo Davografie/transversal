@@ -46,7 +46,8 @@ The sibling design for the shared content surface is [[Content Registry]].
 | the token | **admits to the campaign, not to a player** — reusable, ~30 min, one QR for the whole table, closable early |
 | the player | **taken after admission** — new or existing; there is no per-player secret |
 | sessions | **sliding 30-day signed cookie** carrying the campaign **and the player taken**; revoking that account ends its sessions |
-| architect accounts | **never takeable** — reached only through the recovery email link, so a member cannot promote themselves |
+| **ownership** | a property of the **session**, set only by the architect-token path — so taking the owner's *player* grants their name and nothing else |
+| **role** | a **UI mode**, self-service — anyone may switch their own in settings; it gates nothing |
 | hard eject | **rotate the campaign's access** — revoke every session and mint a new token; everyone re-admits and re-takes their account, and the **recovery link is auto-sent** to the architect |
 | **first slice** | **SEC-3 only, against the current single database** — campaigns, the registry and per-campaign databases come later as their own change, because SEC-8 is a migration of live game data |
 | taking a player | **pick from the campaign roster**, not by typing a name — a typo would otherwise silently create a permanent duplicate |
@@ -168,7 +169,7 @@ Concretely:
 - the new join token is **not** bundled into the email. It is handed out separately, by QR or chat,
   to the people the architect chooses. Putting campaign access inside the recovery mail would make
   one intercepted message both the way in *and* the way in for everyone else;
-- rotation is architect-only, so a member cannot trigger it or flood the mailbox with it. Rate-limit
+- rotation is owner-only, so a member cannot trigger it or flood the mailbox with it. Rate-limit
   it regardless, so a double-click cannot send twice.
 
 One hazard this creates, stated plainly: **a rotation is a one-way door if the recovery mailbox is
@@ -219,8 +220,12 @@ inside its life is in the campaign and may take any player in it, so:
 
 - a leaked token admits an outsider **and hands them every player in the campaign** — the blast
   radius is the campaign, not a player, unlike every earlier draft of this doc;
-- **architect accounts are the one exception and must not be takeable**, or a member could
-  promote themselves to owner. The architect enters through the recovery email link instead.
+- **architect accounts are takeable too.** An earlier draft made them the one exception, on the
+  theory that taking one would promote a member to owner. That was wrong twice over: a *role*
+  inside the campaign cannot be what guards the campaign, because ownership is established by
+  email, outside it — and worse, the guard read the role off the taken player, so the exception
+  was the *only* thing standing between a member and architect capabilities. Ownership rides the
+  session now, so taking any player, the owner's included, grants a name and nothing else.
 
 ### Recovery — the owner's way back in
 *Recover campaign access* → enter the recovery address → a **single-use, short-lived email link**
@@ -241,21 +246,23 @@ Because the cookie names a campaign and the app needs a campaign in its URL (e.g
 `/c/<campaign>/…`), a person in two campaigns switches with a **campaign switcher**, not by
 re-authenticating. Two tabs, two campaigns, no re-login.
 
-### The architect's controls (GM panel → Prep → Players)
-Per member: **Revoke · Make architect** — *Revoke* is the epoch bump on that player's account.
-Campaign wide: **open a join token**, **close it / close all**, **rotate access** — the hard eject,
-behind a confirmation that spells out what it does to the whole table *and* that it will sign the
-architect out and email them a link back in — and the recovery address.
-The last architect cannot demote themselves, and **an architect account is never takeable**.
+### The owner's controls (GM panel → Prep → Players)
+**Revoke** — the epoch bump on that player's account — and it is **owner-only**, the one act here
+that is not self-service. Campaign wide: **open a join token**, **close it / close all**, and later
+**rotate access** (the hard eject, not built — SEC-8) with the recovery address.
+
+There is deliberately **no role control**: a role is a UI mode and everyone sets their own, so a
+button here for someone else's would be offering an action the server refuses.
 
 ### Operating it
 
 Written for whoever is holding the campaign, because the failure modes here are all
 "silently locked out" rather than an error.
 
-**Getting in as the owner.** Open `/enter?a=<ARCHITECT_TOKEN>`. That is the only way
-in that is not issued through the UI — the architect seat is never takeable from the
-roster, which is what stops a member promoting themselves. Two things bite:
+**Getting in as the owner.** Open `/enter?a=<ARCHITECT_TOKEN>`. That marks *that session*
+as the owner's; the flag is not stored on any player, which is why taking the owner's
+player does not make you the owner — it gives you their name and nothing else. Two things
+bite:
 
 - `ARCHITECT_TOKEN` must be in `.env` **and named in `docker-compose.yaml`**. Compose
   passes only the variables a service lists, so putting it in `.env` alone leaves the
@@ -277,7 +284,7 @@ makes it safe, so it is on the same screen.
 
 **Ejecting someone.** Two different acts, and only one of them is in this slice:
 
-- **Revoke** (same tab) ends every session a player holds. It does *not* delete them:
+- **Revoke** (same tab, **owner-only**) ends every session a player holds. It does *not* delete them:
   their characters are entities owned through `agency` edges and would be orphaned.
   It is an epoch bump, so their next request is refused. **They can be re-admitted by
   any member**, so this ends their session, not their welcome.
@@ -426,7 +433,8 @@ makes it safe, so it is on the same screen.
   ask [[B43]] (*"when player, shouldn't be able to see each others blue book"*). Also recorded:
   **eject is soft** — revoking an account cannot remove someone who still holds a valid token,
   and any member can re-admit them. One rule added as non-negotiable: **architect accounts are
-  never takeable**, or a member could promote themselves to owner.
+  never takeable** *(superseded by the fifth correction below — the rule was wrong, and the guard
+  that enforced it was the only thing holding the escalation it claimed to prevent)*.
 - 2026-09-26 — **hard eject answered by the owner: rotate the campaign's access.** Per-member
   revocation is soft — the token is what admits, and any member can open one — so real exclusion is
   a campaign-wide epoch bump plus a new join token: everyone re-admits and re-takes their own
@@ -457,3 +465,18 @@ makes it safe, so it is on the same screen.
   token is **never bundled into the email**, and rotations are rate-limited so a double-click or a
   stolen architect session cannot flood the mailbox. This makes mail fire on two triggers, so §5.8
   was corrected from "recovery only".
+- 2026-09-26 — **fifth correction, from the owner: `role` stops being a boundary.** The owner
+  rejected architect-account protection outright — *"switching between player/architect is
+  something anyone can do in the settings panel, so filtering on role is bullshit"* — and the
+  argument is sound: ownership is established by email, **outside** the campaign, so a role inside
+  it cannot guard anything, and taking the owner's player is "playing as someone you're not", not
+  ownership. Built as model B: `/take` accepts any player, `/roster` lists everyone,
+  `PATCH /roles` is self-only (the app's GM toggle has always written it back), and **revoke and
+  close-all now require owner**.
+
+  **One flaw in my first attempt, caught by a test rather than by review.** I put `is_owner` on the
+  **player record** — which meant taking the owner's player *did* grant ownership: the same bug one
+  level up, and the owner's own sentence would have been false again. Ownership now rides the
+  **session**, set only by the architect-token path and preserved across take/claim. A test asserts
+  that an architect *role* without ownership is refused by `require_owner`, because that separation
+  is the design.
