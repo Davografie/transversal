@@ -39,6 +39,7 @@ The sibling design for the shared content surface is [[Content Registry]].
 | the player | **taken after admission** — new or existing; there is no per-player secret |
 | sessions | **sliding 30-day signed cookie** carrying the campaign **and the player taken**; revoking that account ends its sessions |
 | architect accounts | **never takeable** — reached only through the recovery email link, so a member cannot promote themselves |
+| hard eject | **rotate the campaign's access** — revoke every session and mint a new token; everyone re-admits and re-takes their account |
 | recovery | **email link only at first** — passkey and password are deliberate later additions |
 | creators/owners | a **central registry account** (the same one that holds recovery methods); players still have none |
 | GPU | **not** in the free tier — all four GPU operations gated ([[Content Registry]]) |
@@ -129,15 +130,20 @@ What the cookie and the player record must carry:
 
 **Ejecting** a member is **revoking on their player account** — an epoch bump that ends every
 session bound to it. It deliberately does **not** delete the player: their characters are entities
-owned through `agency` edges, and deleting the record would orphan them. Revoking ends access;
-deleting is a separate, explicit act.
+owned through `agency` edges, and deleting the record would orphan them.
 
-But under campaign-level admission **eject is soft**. Revoking an account does not remove someone
-who still holds a valid token — they can take another account, or create one. It is revocation
-*plus* closing the token. And since any member can open a new token, an owner cannot permanently
-exclude anyone: a member can always re-admit them. That is the accepted cost of "any member may
-invite"; real exclusion would require per-person credentials, which this model deliberately has
-none of.
+Per-member revocation alone is **soft**, because it cannot remove someone who still holds a valid
+token — they take another account, or make one. So the **real eject is rotating the campaign's
+access**: revoke *every* session (a campaign-wide epoch bump) and mint a new join token. The owner
+hands the new token to the people they want to keep, and everyone **re-admits and re-takes their
+own account**. The excluded person is simply not given it.
+
+That is a deliberately expensive act — the whole table re-onboards — which is exactly why it is the
+answer to "I need this person gone" rather than something that happens by accident. Two properties
+to preserve: **the architect must not lock themselves out of their own rotation** (their session is
+re-minted by the same action, or they re-enter through the recovery link), and the rotation is only
+as strong as the distribution of the new token — anyone who receives it can take any account, which
+is the standing property of campaign-level admission.
 
 ### The one central identity — for owners, not players
 
@@ -198,8 +204,9 @@ re-authenticating. Two tabs, two campaigns, no re-login.
 
 ### The architect's controls (Troupe panel)
 Per member: **Revoke · Make architect** — *Revoke* is the epoch bump on that player's account.
-Campaign wide: **open a join token**, **close it / close all**, and the recovery address. The last
-architect cannot demote themselves, and **an architect account is never takeable**.
+Campaign wide: **open a join token**, **close it / close all**, **rotate access** — the hard eject,
+behind a confirmation that spells out what it does to the whole table — and the recovery address.
+The last architect cannot demote themselves, and **an architect account is never takeable**.
 
 ## 5. Security consequences — what this model *forces*
 
@@ -211,12 +218,13 @@ architect cannot demote themselves, and **an architect account is never takeable
    the accepted consequence is that a leaked token is full access to the campaign's play surface
    for its lifetime. Hence: short expiry, close-early, high entropy, a join cap, a visible
    roster, and **architect accounts excluded from taking**.
-2. **Any member can admit, so the owner needs visibility and eject — and eject is soft.** A
-   member can open a token and admit someone the owner would not have, and can equally re-admit
-   someone the owner ejected. The owner can see the roster and the open tokens, close them, and
-   revoke a member's account — but cannot permanently exclude anyone while any member can open a
-   new token. That is the price of "any member may invite", and it is worth knowing before
-   someone is paying for a campaign.
+2. **Any member can admit, so the owner needs visibility, and exclusion is all-or-nothing.** A
+   member can open a token and admit someone the owner would not have. Per-member revocation
+   cannot keep anyone out on its own, because the token is what admits and any member can open
+   one; the mechanism that *does* exclude is **rotating the campaign's access** — every session
+   revoked, a new token, the whole table re-onboards (§4). Expensive, deliberate and effective,
+   which is the right shape for "I need this person gone", and worth knowing before someone is
+   paying for a campaign: you cannot quietly remove one person without disturbing everyone.
 3. **Recovery is the crown jewel, and the address must be verified at enrolment.** Recovery
    reconstitutes the architect's session, so an unverified address *is* a way in — a mistyped one
    sends the single link that hands the campaign to a stranger. This is the one place that
@@ -327,3 +335,11 @@ architect cannot demote themselves, and **an architect account is never takeable
   **eject is soft** — revoking an account cannot remove someone who still holds a valid token,
   and any member can re-admit them. One rule added as non-negotiable: **architect accounts are
   never takeable**, or a member could promote themselves to owner.
+- 2026-09-26 — **hard eject answered by the owner: rotate the campaign's access.** Per-member
+  revocation is soft — the token is what admits, and any member can open one — so real exclusion is
+  a campaign-wide epoch bump plus a new join token: everyone re-admits and re-takes their own
+  account, and the excluded person is simply not given the new token. Recorded as an expensive,
+  deliberate act rather than an accident, with two properties to preserve: the architect must not
+  lock themselves out of their own rotation, and the rotation is only as strong as the distribution
+  of the new token. **[[B43]] remains unanswered** — this answer implies free taking stands, which
+  would make B43 UI policy, but the owner did not say so and I have not assumed it.
