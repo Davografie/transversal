@@ -29,6 +29,7 @@
         :busy="admissionBusy"
         :error="admissionError"
         :join-url="admissionJoinUrl"
+        :can-close-all="sessionPlayer?.role === 'architect'"
         @open="admissionOpen"
         @close="admissionClose"
         @close-all="admissionCloseAll"
@@ -667,6 +668,7 @@ const needsCharacterPick = computed(() =>
 
 const {
   roster, busy, identityError, newName, rosterPicking,
+  me: sessionPlayer,
   loadSession, takePlayer, claimPlayer, beginSwitch, endSwitch,
 } = usePlayerIdentity({
   playerId, playerName, showLoginOverlay,

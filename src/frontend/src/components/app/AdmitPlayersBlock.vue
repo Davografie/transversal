@@ -36,9 +36,15 @@
           @click="$emit('close', w.id)"
         >{{ w.id }} — close</button>
       </div>
-      <button class="continue-btn" :disabled="busy" @click="$emit('close-all')">
-        Close all windows
-      </button>
+      <!-- Architect-only server-side. Gated on the server's role, not on the
+           client's gmMode: SEC-3 means the server decides, and offering an action
+           it will refuse is how a UI teaches people to distrust its buttons. -->
+      <button
+        v-if="canCloseAll"
+        class="continue-btn"
+        :disabled="busy"
+        @click="$emit('close-all')"
+      >Close all windows</button>
     </div>
 
     <p v-if="error" class="switch-error">{{ error }}</p>
@@ -57,6 +63,7 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
   error: { type: String, default: '' },
   joinUrl: { type: Function, required: true },
+  canCloseAll: { type: Boolean, default: false },
 })
 
 defineEmits(['open', 'close', 'close-all', 'copy'])

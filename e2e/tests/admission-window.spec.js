@@ -37,10 +37,13 @@ test('a GM can open an admission window and is shown the link', async ({ page, r
   const url = await field.inputValue()
   expect(url).toMatch(/\/enter\?s=.+/)
 
-  // And the window is listed, so the GM can see and close what they opened.
-  await expect(page.getByRole('button', { name: /close all windows/i })).toBeVisible()
-
-  // Tidy up: leave no open window behind for the next spec that runs.
-  await page.getByRole('button', { name: /close all windows/i }).click()
+  // The window is listed, so whoever opened it can see it and close it. The test
+  // identity is a *member*, so close-all (architect-only server-side) must not be
+  // offered — asserting that is the point of the next line, and it is why this
+  // closes the window directly instead.
   await expect(page.getByRole('button', { name: /close all windows/i })).toBeHidden()
+  const open = page.locator('.char-item', { hasText: 'close' }).first()
+  await expect(open).toBeVisible()
+  await open.click()
+  await expect(page.locator('.char-item', { hasText: 'close' })).toHaveCount(0)
 })
