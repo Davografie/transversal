@@ -119,3 +119,23 @@ export async function admitDevice(page) {
     )
   }
 }
+
+/**
+ * Enter as the **architect seat itself** — no `take`, because architect accounts
+ * cannot be taken (that is the one escalation campaign-level admission must not
+ * allow). This is the session a GM actually holds, so it is the only way to reach
+ * GM-only surfaces such as the player roster.
+ */
+export async function enterAsArchitect(page) {
+  const key = process.env.ARCHITECT_TOKEN
+  if (!key) throw new Error('ARCHITECT_TOKEN is not set for the Playwright run.')
+  await page.request.get(`${API_BASE}/api/v1/auth/enter`, {
+    params: { a: key },
+    maxRedirects: 0,
+  })
+  const who = await page.request.get(`${API_BASE}/api/v1/auth/session`)
+  const body = await who.json()
+  if (body?.player?.role !== 'architect') {
+    throw new Error(`expected the architect seat, got ${JSON.stringify(body?.player)}`)
+  }
+}
