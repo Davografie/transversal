@@ -326,6 +326,23 @@ def test_the_gift_path_walks_a_set_setting_source_to_its_traits():
     assert [v.id for v in got] == [f"{ENTITY}:{TRAIT}"]
 
 
+def test_a_set_setting_reaches_the_entity_it_sits_on():
+    """A rule carried by a *set* has no actor of its own — the setting records one.
+
+    This is the hop that lets such a rule name the character it is acting for, and
+    so the first step of *bind the world I am in*: without it
+    ``select source → navigate entity`` is a trace error, which is what the author
+    hit while giving `sfx-gift` a bound universe.
+    """
+    repo = FakeRepo()
+    got = resolve(
+        spec(LiteralStep(element="traitsetsetting", value=f"{ENTITY}:{TRAITSET}"),
+             NavigateStep(edge="entity")),
+        ctx(repo),
+    ).values
+    assert [v.id for v in got] == [ENTITY]
+
+
 # ── Live ArangoDB ────────────────────────────────────────
 
 try:
@@ -407,6 +424,42 @@ class TestAgainstLiveArango:
         assert all(s.trait_id in in_set for s in got)
         assert all(s.from_type != "traitsetting" for s in got)
         assert all(s.entity_id == entity_id for s in got)
+
+    def test_a_set_level_source_can_bind_the_world_and_filter_the_registry_by_it(self):
+        """The author's shape, against the live registry: take the actor from the
+        setting, bind the world that actor is in, then keep only the traits that
+        world offers.
+
+        The assertion is the *content*, not the count: every trait returned must
+        declare the universe that was bound. A path that had narrowed by the
+        author's world instead would sail through a count check and fail this one.
+        """
+        repo = _repo
+        entity, traitset = _pair_without_a_row(repo)
+        assert entity is not None, "no un-overridden (GMC, set) pair to test with"
+        context = TargetContext(
+            subject=entity, repo=repo,
+            source=resolve_setting(repo, entity.id, traitset.id),
+            source_element="traitsetsetting",
+        )
+        got = resolve(
+            spec(SelectStep(collection="source"),
+                 NavigateStep(edge="entity"),
+                 NavigateStep(edge="universe", output="world"),
+                 SelectStep(collection="traits"),
+                 FilterStep(field="universes", operator="contains", value="{world}")),
+            context,
+        )
+        assert not got.errors, got.errors
+        binding = context.bindings.get("world")
+        assert binding is not None, "the world hop bound nothing"
+        world = getattr(binding, "value", binding)
+        assert world == entity.current_universe
+        assert got.values, f"the filter narrowed every trait away for {world!r}"
+        assert len(got.values) < len(repo.get_all_traits()), "the filter narrowed nothing"
+        for trait in got.values:
+            assert world in (trait.universes or []), (
+                f"'{trait.name}' does not declare {world!r}")
 
 
 def _hop_from_instance(repo, entity, trait, traitset) -> list[str]:

@@ -190,6 +190,31 @@ def test_traitsetsetting_element_and_polarity_field_exist():
     assert pol.options == ("positive", "negative")
 
 
+def test_a_set_setting_reaches_its_entity_and_a_body_reaches_its_world():
+    """The two hops a set-level rule needs to know *who* it is acting for.
+
+    A rule carried by a trait **set** has no actor of its own, so it takes one from
+    the setting it sits on (`traitsetsetting → entity`), and a body's world is the
+    one it is standing in now (`projection → universe`, not ``origin_universe``).
+    Both were unwalkable — the first made `select source → navigate entity` a trace
+    error, which is what the author hit while giving `sfx-gift` a bound universe.
+    """
+    from transversal.services import target_catalog as tc
+
+    owner = tc.edge("traitsetsetting", "entity")
+    assert owner is not None, "a set-level rule cannot name its own entity"
+    assert owner.target == ("entity",)
+    assert owner.cardinality == "one"
+
+    world = tc.edge("projection", "universe")
+    assert world is not None, "a body cannot name the world it is in"
+    assert world.target == ("universe",)
+    assert world.cardinality == "one"
+
+    # The reverse of `entity → traitsetsettings`, so the pair of hops is complete.
+    assert tc.edge("entity", "traitsetsettings") is not None
+
+
 def test_pool_element_and_edges_exist():
     from transversal.services import target_catalog as tc
 

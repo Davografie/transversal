@@ -538,6 +538,14 @@ EDGES: tuple[Edge, ...] = (
     Edge("traitsetsettings", "traitset", ("traitsetsetting",), "many",
          "Trait set instances", noun="trait set instance", plural="trait set instances"),
 
+    # ...and the way *back*: a setting to the entity it sits on, which is the
+    # reverse of `entity → traitsetsettings` and the hop that gives a set-level
+    # rule the character it belongs to. One read — the pair records its
+    # ``entity_id`` — and it is what lets a set-level rule scope itself to the
+    # acting character's world (`select source → navigate entity → navigate
+    # universe`) instead of baking in the author's universe (`sfx-gift`).
+    Edge("entity", "traitsetsetting", ("entity",), "one", "Owning entity", noun="owner"),
+
     # traitsetsetting → the instances that setting **governs**: the entity's traits
     # in that set ([[B243]]). The hop that lets a rule attached once to a *set*
     # reach what the set holds, instead of being attached to every trait instance
@@ -574,9 +582,15 @@ EDGES: tuple[Edge, ...] = (
     Edge("traitsettings", "entity", ("traitsetting",), "many", "Trait instances",
          noun="trait instance", plural="trait instances"),
 
-    # projection → owning entity / current location
+    # projection → owning entity / current location / the world it is in
     Edge("entity", "projection", ("entity",), "one", "Owning entity", noun="owner"),
     Edge("location", "projection", ("location",), "one", "Current location", noun="location"),
+    # ``projection.universe`` is the body's **current** world (mutable;
+    # ``origin_universe`` is the one it came from), so this is the counterpart of
+    # `entity → universe` for a body — and the hop that lets a rule read *the
+    # world the body it is acting through is standing in* rather than the
+    # entity's own handle, which travel can leave behind.
+    Edge("universe", "projection", ("universe",), "one", "Current universe", noun="universe"),
 
     # entity → its relationship edges → the trait instances anchored to one.
     # A trait instance can live on the *edge* rather than on the entity (your
