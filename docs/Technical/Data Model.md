@@ -375,6 +375,23 @@ Per-entity (or per-projection) traitset configuration — the set-level sibling 
 | `sfx_ids` | string[] | | SFX that apply to the set as a unit |
 | `limit` | int? | | Per-anchor override of the set's registry limit (null = registry default) |
 
+> [!note] The pair is addressable before it exists (B228)
+> A trait-set setting is an **override**, not a relationship: `limit = null` means *the set's
+> registry default* and `sfx_ids = []` means *no set-level rules*, so an absent document says
+> "nothing has been overridden", **not** "this pair is invalid". Its `_key` is therefore a pure
+> function of the pair — `{entity_id}:{traitset_id}`, the shape both writers that have ever minted
+> one already use (`migrate_traitsetsettings`, `effects_applier._apply_set_traitset_limit`) — read
+> through `services/traitset_settings.py`, which resolves **stored-or-default** and **upserts on
+> write** (the first write is what creates the document).
+>
+> Three measured consequences. **92 live rows**, of which **75 carry no information** (their limit
+> equalled the registry default) and **0 carry an SFX**. A set-level rule attaches sparsely, and
+> until this landed nothing could create the row it needed — `set_sfx_for_owner` refused every
+> set-level attach for an entity without one. And enumerating the *defaults* instead would be
+> **7,260 universe-aware (entity, set) pairs** whose entire content is "nothing", which is why the
+> `entity → traitsetsettings` and `traitset → traitsetsettings` hops return **stored rows only**
+> while a **named** pair resolves either way.
+
 ### `sfxs`
 
 SFX (Special Effect) registry. Defines named abilities with triggers, costs, and declarative effects.
