@@ -538,6 +538,16 @@ EDGES: tuple[Edge, ...] = (
     Edge("traitsetsettings", "traitset", ("traitsetsetting",), "many",
          "Trait set instances", noun="trait set instance", plural="trait set instances"),
 
+    # traitsetsetting → the instances that setting **governs**: the entity's traits
+    # in that set ([[B243]]). The hop that lets a rule attached once to a *set*
+    # reach what the set holds, instead of being attached to every trait instance
+    # it should apply to — the `sfx-gift` path (attached to the assets set rather
+    # than to each asset trait). Reads through the registry, because which set an
+    # instance belongs to is a fact about its trait ([[B209]]), and it excludes
+    # nested instances exactly as `entity → traitsettings` does.
+    Edge("traitsettings", "traitsetsetting", ("traitsetting",), "many",
+         "Trait instances", noun="trait instance", plural="trait instances"),
+
     # traitsetting → the instance it is nested *under*. The upward half of
     # `subtraits`: a portent that just completed has to reach the container that
     # holds it (to enable the next one, or to advance the container's own

@@ -46,6 +46,7 @@ OTHER_ENTITY = "gmc-2"
 TRAITSET = "ts-motivations"
 OTHER_TRAITSET = "ts-skills"
 TRAIT = "trait-duty"
+OTHER_TRAIT = "trait-nerve"
 RULE = "sfx-test-rule"
 
 
@@ -57,7 +58,10 @@ class FakeRepo:
             ENTITY: NS(id=ENTITY, type="gmc"),
             OTHER_ENTITY: NS(id=OTHER_ENTITY, type="gmc"),
         }
-        self.traits = {TRAIT: NS(id=TRAIT, traitset_id=TRAITSET)}
+        self.traits = {
+            TRAIT: NS(id=TRAIT, traitset_id=TRAITSET),
+            OTHER_TRAIT: NS(id=OTHER_TRAIT, traitset_id=OTHER_TRAITSET),
+        }
         self.traitsets = {
             TRAITSET: NS(id=TRAITSET, name="motivations"),
             OTHER_TRAITSET: NS(id=OTHER_TRAITSET, name="skills"),
@@ -66,6 +70,13 @@ class FakeRepo:
         self.traitsettings = {
             "gmc-1:trait-duty": NS(id="gmc-1:trait-duty", entity_id=ENTITY,
                                    trait_id=TRAIT, from_type="entity"),
+            # Another set's instance, and a nested one: neither is one of the
+            # set's own top-level instances.
+            "gmc-1:trait-nerve": NS(id="gmc-1:trait-nerve", entity_id=ENTITY,
+                                    trait_id=OTHER_TRAIT, from_type="entity"),
+            "gmc-1:trait-duty:nested": NS(id="gmc-1:trait-duty:nested",
+                                          entity_id=ENTITY, trait_id=TRAIT,
+                                          from_type="traitsetting"),
         }
 
     def get_entity(self, eid):
@@ -76,6 +87,9 @@ class FakeRepo:
 
     def get_traitset_by_id(self, tsid):
         return self.traitsets.get(tsid)
+
+    def get_traits_by_traitset(self, tsid):
+        return [t for t in self.traits.values() if t.traitset_id == tsid]
 
     def get_traitsetting(self, tsid):
         return self.traitsettings.get(tsid)
@@ -99,6 +113,14 @@ class FakeRepo:
 
     def get_traitsettings_for_entity(self, eid):
         return [t for t in self.traitsettings.values() if t.entity_id == eid]
+
+    def get_traitsettings_for_entity_and_traitset(self, eid, tsid):
+        """Mirrors the repository's two-step read: the set's traits, then the
+        entity's settings among them, nested ones excluded."""
+        trait_ids = {t.id for t in self.get_traits_by_traitset(tsid)}
+        return [t for t in self.traitsettings.values()
+                if t.entity_id == eid and t.trait_id in trait_ids
+                and t.from_type != "traitsetting"]
 
 
 def ctx(repo, subject=ENTITY):
@@ -198,14 +220,17 @@ def test_an_instance_reaches_the_setting_governing_its_set():
         spec(SelectStep(collection="self_traitsettings"), NavigateStep(edge="traitsetsetting")),
         ctx(repo),
     ).values
-    assert [v.id for v in got] == [f"{ENTITY}:{TRAITSET}"]
-    assert got[0].limit is None and got[0].sfx_ids == []
+    # One landing per instance, each on *its own* set's setting — the two top-level
+    # instances reach two different sets, and the nested one rides its parent's.
+    assert {v.id for v in got} == {f"{ENTITY}:{TRAITSET}", f"{ENTITY}:{OTHER_TRAITSET}"}
+    assert all(v.limit is None and v.sfx_ids == [] for v in got)
 
 
 def test_an_instance_of_an_unknown_trait_reaches_nothing():
     repo = FakeRepo()
-    repo.traitsettings["gmc-1:trait-duty"] = NS(
-        id="gmc-1:trait-duty", entity_id=ENTITY, trait_id="trait-gone", from_type="entity")
+    repo.traitsettings = {
+        "gmc-1:trait-duty": NS(id="gmc-1:trait-duty", entity_id=ENTITY,
+                               trait_id="trait-gone", from_type="entity")}
     assert resolve(
         spec(SelectStep(collection="self_traitsettings"), NavigateStep(edge="traitsetsetting")),
         ctx(repo),
@@ -258,6 +283,47 @@ def test_the_sfx_list_is_filterable():
         ctx(repo),
     ).values
     assert [v.id for v in got] == [f"{ENTITY}:{TRAITSET}"]
+
+
+# ── …and back down: a setting reaches the instances it governs ──
+
+def test_a_set_setting_reaches_the_instances_it_governs():
+    """`traitset_setting → trait_setting` — what makes a rule attached **once** to a
+    set behave like one attached to each of its traits (the `sfx-gift` path)."""
+    repo = FakeRepo()
+    got = resolve(
+        spec(LiteralStep(element="traitsetsetting", value=f"{ENTITY}:{TRAITSET}"),
+             NavigateStep(edge="traitsettings")),
+        ctx(repo),
+    ).values
+    assert [v.id for v in got] == [f"{ENTITY}:{TRAIT}"]
+
+
+def test_the_governed_instances_are_that_set_only_and_never_nested():
+    """Another set's instance is not this set's, and a nested sub-trait rides its
+    parent — the same exclusion `entity → traitsettings` makes."""
+    repo = FakeRepo()
+    got = resolve(
+        spec(LiteralStep(element="traitsetsetting", value=f"{ENTITY}:{OTHER_TRAITSET}"),
+             NavigateStep(edge="traitsettings")),
+        ctx(repo),
+    ).values
+    assert [v.id for v in got] == [f"{ENTITY}:{OTHER_TRAIT}"]
+
+
+def test_the_gift_path_walks_a_set_setting_source_to_its_traits():
+    """The shape the Gift SFX needs end to end: `select source → navigate
+    traitsettings`, with the source resolved stored-or-default, so a rule attached
+    to a set nobody had overridden still walks down to what the set holds."""
+    repo = FakeRepo()
+    context = TargetContext(subject=repo.get_entity(ENTITY), repo=repo,
+                            source=resolve_setting(repo, ENTITY, TRAITSET),
+                            source_element="traitsetsetting")
+    got = resolve(
+        spec(SelectStep(collection="source"), NavigateStep(edge="traitsettings")),
+        context,
+    ).values
+    assert [v.id for v in got] == [f"{ENTITY}:{TRAIT}"]
 
 
 # ── Live ArangoDB ────────────────────────────────────────
@@ -316,6 +382,31 @@ class TestAgainstLiveArango:
         finally:
             repo.delete_traitsetsetting(setting_id)
         assert repo.get_traitsetsetting(setting_id) is None
+
+    def test_a_live_set_setting_walks_down_to_the_instances_it_governs(self):
+        """The requested hop against the real registry. An instance no longer
+        records its set ([[B209]]), so the set is read through the trait — which
+        makes this the only check that the two reads agree."""
+        repo = _repo
+        pair = next(
+            ((s.entity_id, s.traitset_id) for s in repo.list_all_traitsetsettings()
+             if repo.get_traitsettings_for_entity_and_traitset(s.entity_id, s.traitset_id)),
+            None,
+        )
+        if pair is None:
+            pytest.skip("no live set setting has instances to walk down to")
+        entity_id, traitset_id = pair
+        got = resolve(
+            spec(LiteralStep(element="traitsetsetting",
+                             value=traitsetsetting_id(entity_id, traitset_id)),
+                 NavigateStep(edge="traitsettings")),
+            ctx(repo, entity_id),
+        ).values
+        assert got, "a live set setting walked down to nothing"
+        in_set = {t.id for t in repo.get_traits_by_traitset(traitset_id)}
+        assert all(s.trait_id in in_set for s in got)
+        assert all(s.from_type != "traitsetting" for s in got)
+        assert all(s.entity_id == entity_id for s in got)
 
 
 def _hop_from_instance(repo, entity, trait, traitset) -> list[str]:

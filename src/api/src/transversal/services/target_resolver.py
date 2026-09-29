@@ -1674,6 +1674,13 @@ def register_default_edges() -> None:
     register_edge("entity", "traitsetsettings",
                   lambda e, ctx: list(ctx.repo.get_traitsetsettings_for_entity(e.id)))
     register_edge("traitset", "traitsetsettings", _traitset_traitsetsettings)
+    # ...and back down: a set-level setting reaches the instances it governs — the
+    # entity's traits in that set. This is what lets a rule attached **once** to a
+    # set behave like one attached to each of its traits (`sfx-gift`), and it reads
+    # through the registry because an instance no longer records its set ([[B209]]).
+    register_edge("traitsetsetting", "traitsettings",
+                  lambda tss, ctx: list(ctx.repo.get_traitsettings_for_entity_and_traitset(
+                      tss.entity_id, tss.traitset_id)))
     # The instances nested under this one (elemental roots under Spiritual Power).
     # One repo read: sub-traits share the traitsettings collection, anchored to
     # the parent and marked `from_type == 'traitsetting'`.

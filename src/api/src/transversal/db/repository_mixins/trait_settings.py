@@ -245,6 +245,36 @@ class RepositoryTraitSettings:
             for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
         ]
 
+    def get_traitsettings_for_entity_and_traitset(
+        self, entity_id: str, traitset_id: str
+    ) -> list[TraitSetting]:
+        """The entity's instances of the traits *this set* defines.
+
+        The set is a fact about the **registry** trait ([[B209]] — an instance no
+        longer records one), so this is a two-step read rather than a field
+        filter: the set's trait ids, then the entity's settings among them. Both
+        halves are indexed, so it stays two queries however many traits the set
+        has.
+
+        Nested instances (`from_type == 'traitsetting'`) are excluded, exactly as
+        `get_traitsettings_for_entity` excludes them: a sub-trait rides its parent,
+        and a path that reached one here would treat a facet as a possession.
+        """
+        trait_ids = [t.id for t in self.get_traits_by_traitset(traitset_id)]
+        if not trait_ids:
+            return []
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.entity_id == @eid AND ts.trait_id IN @tids
+                AND ts.from_type != 'traitsetting'
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(
+                query, bind_vars={"eid": entity_id, "tids": trait_ids})
+        ]
+
     def get_location_challenge_traits(self, location_id: str) -> list[TraitSetting]:
         """Challenge (doom/progress) traits for a location, inherited included.
 

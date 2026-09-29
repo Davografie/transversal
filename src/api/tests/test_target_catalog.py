@@ -43,6 +43,14 @@ def test_the_set_setting_pair_is_reachable_from_both_ends_and_from_an_instance()
     assert pairs[("traitset", "traitsetsettings")].cardinality == "many"
 
 
+def test_a_set_setting_reaches_the_instances_it_governs():
+    """The down-hop that lets a rule attached once to a set reach the traits it
+    should apply to — the `sfx-gift` path."""
+    pairs = {(e.source, e.name): e for e in tc.EDGES}
+    assert pairs[("traitsetsetting", "traitsettings")].target == ("traitsetting",)
+    assert pairs[("traitsetsetting", "traitsettings")].cardinality == "many"
+
+
 def test_a_set_setting_exposes_the_sfx_list_it_exists_to_hold():
     """`sfx_ids` was missing from the field map, so the one field a set-level
     setting carries could not be filtered on. A list, so it matches `contains`."""
