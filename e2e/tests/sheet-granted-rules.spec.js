@@ -14,13 +14,19 @@ import { establishSession } from '../helpers/session.js'
 // on their sheet"* — a rule granted to every hidden GMC, available to Lin
 // (`gmc-334682729`) and drawn nowhere.
 //
-// **Why this spec stubs the query.** Measured across the live world, the 890 owners
-// holding a granted rule are **889 trait settings and 1 entity** — there is no
-// projection and no trait-set case in any content, so those two surfaces could
-// never be pinned by rendering real data. The stub adds a granted id to each owner
-// kind on one sheet, which is the only way to cover them at all; the entity and
-// trait-instance halves are then also checked against what the live world returns,
-// so the stub cannot quietly become the only thing that works.
+// **Why this spec stubs the query.** Not every owner kind has live content to draw
+// from, so the stub grafts a granted id onto the entity, its active projection and
+// every trait-set setting — the only way to pin those surfaces at all. Because a
+// stub can quietly become the only thing that works, the live world is asserted
+// separately (`the live world's grant still draws` below) rather than assumed.
+//
+// **The live case moved, 2026-09-29.** `sfx-gift` now reaches the **asset trait
+// set** — measured: `traitSetSettings[ts-3].grantedSfxIds = ['sfx-gift']`, and
+// **zero** of Kael's trait settings carry a granted rule. So the granted rule draws
+// on the *trait-set* strip, not the trait-instance strip. This spec used to pin the
+// trait-instance path from live data on the claim that 889 of 890 granted owners
+// were trait settings; that is no longer true, and the assertion was failing for
+// the right reason rather than because anything broke.
 
 const KAEL = 'character-kael-drift-e555ccde'
 
@@ -44,7 +50,7 @@ const GRANTED = {
  * answer: the entity itself, its active projection, and each of its trait-set
  * settings. Only ids already in the catalog are used, so the cards resolve.
  */
-async function stubGranted(page) {
+async function stubGranted(page, { grantTraitSet = true } = {}) {
   await page.route('**/api/v1/graphql', async (route) => {
     const res = await route.fetch()
     let body
@@ -56,15 +62,19 @@ async function stubGranted(page) {
         // Only the body in play draws a strip, so mark the active one.
         if (p.id === entity.currentProjection) p.grantedSfxIds = [GRANTED.projection]
       }
-      for (const tss of entity.traitSetSettings || []) tss.grantedSfxIds = [GRANTED.traitset]
+      // Left off by the live test, so that any granted set-level card it sees can
+      // only have come from the world rather than from this graft.
+      if (grantTraitSet) {
+        for (const tss of entity.traitSetSettings || []) tss.grantedSfxIds = [GRANTED.traitset]
+      }
     }
     return route.fulfill({ json: body })
   })
 }
 
-async function openSheet(page) {
+async function openSheet(page, opts = {}) {
   await asPlayer(page)
-  await stubGranted(page)
+  await stubGranted(page, opts)
   await page.setViewportSize({ width: 1280, height: 950 })
   await page.goto('/')
   await page.evaluate((c) => {
@@ -147,9 +157,6 @@ test('every owner kind draws its granted rule — entity, body and trait set', a
     return {
       entityOrBody: pick('.sheet-embedded .entity-sfx-cards .sfx-card'),
       traitset: pick('.sheet-embedded .sfx-cards .sfx-card'),
-      // The trait-instance path effects already had, from the live world: Kael's
-      // `computer` / `disguise` / `documents` are granted `sfx-gift`.
-      traitInstance: pick('.sheet-embedded .trait-row .sfx-cards .sfx-card'),
     }
   })
   const dashed = (list) => list.filter((c) => c.granted && c.dashed)
@@ -157,10 +164,30 @@ test('every owner kind draws its granted rule — entity, body and trait set', a
   // The two owner kinds the strip can draw, from the stub: the body in play and
   // the entity itself.
   expect(dashed(m.entityOrBody).length, 'the entity and body owner kinds both draw').toBeGreaterThanOrEqual(2)
-  // The trait-set owner kind — no live rule grants to one, so the stub is the only
-  // way this surface can be pinned at all.
+  // The trait-set owner kind, from the stub. Deliberately *not* asserted as a live
+  // fact here: the stub grants `sfx-one-trick` to every set, so a live grant is
+  // indistinguishable from a stubbed one inside this test. The live case is pinned
+  // by its own test below.
   expect(dashed(m.traitset).length, 'the trait-set owner kind draws too').toBeGreaterThanOrEqual(1)
-  // And the kind that already worked must keep working, from real data: this is the
-  // guard for the `.sfx-granted` rule moving into the shared stylesheet.
-  expect(dashed(m.traitInstance).length, 'the trait-instance path still draws, from live data').toBeGreaterThan(0)
+  // The **trait-instance** path is deliberately no longer asserted. It was pinned
+  // from live data on the claim that Kael's `computer`/`disguise`/`documents`
+  // carried a granted `sfx-gift`; `sfx-gift` now reaches the asset trait set
+  // instead, and no trait setting holds a granted rule at all — so there is no live
+  // case here to pin, and the stub cannot invent one for a field the query does not
+  // select. See the header.
+})
+
+test("the live world's grant still draws, on the path content now uses", async ({ page }) => {
+  // The anti-stub guard. The trait-set graft is switched **off**, so a granted
+  // set-level card can only have come from the live world — Kael's `sfx-gift` reach
+  // onto the asset trait set. Matching on card *content* is not available: the
+  // rendered card has empty text and a generic title, so the stub is turned off
+  // rather than told apart.
+  await openSheet(page, { grantTraitSet: false })
+  await openAllSets(page)
+  const dashed = await page.evaluate(() =>
+    [...document.querySelectorAll('.sheet-embedded .sfx-cards .sfx-card')]
+      .filter((c) => c.classList.contains('sfx-granted')
+        && getComputedStyle(c).outlineStyle === 'dashed').length)
+  expect(dashed, 'the live granted rule draws on the trait-set strip').toBeGreaterThan(0)
 })
