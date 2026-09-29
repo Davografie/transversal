@@ -12,7 +12,7 @@ class RepositoryPlayers:
     """Mixin contributing 18 member(s) to the repository."""
 
     def create_player(self, player_id: str, name: str, role: str = "player") -> Player:
-        doc = {"_key": player_id, "name": name, "role": role}
+        doc = {"_key": player_id, "name": name, "role": role, "epoch": 0}
         self._players.insert(doc)
         return Player(id=player_id, name=name, role=role)
 
@@ -28,6 +28,9 @@ class RepositoryPlayers:
             id=pid,
             name=doc.get("name", ""),
             role=doc.get("role", "player"),
+            # Absent on documents written before this landed; 0 is right, since
+            # nothing has been revoked.
+            epoch=doc.get("epoch", 0),
             last_spotlight_at=doc.get("last_spotlight_at"),
             last_main_entity_id=doc.get("last_main_entity_id"),
             entity_ids=self.get_player_entities(pid),
