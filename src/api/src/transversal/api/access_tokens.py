@@ -1,4 +1,4 @@
-"""Signed, expiring tokens (SEC-3).
+"""Signed, expiring tokens, and the signing key behind them (SEC-3, SEC-5).
 
 One signed-token format, two audiences:
 
@@ -15,9 +15,13 @@ as a join token, letting any admitted device mint admissions off its own session
 ``verify`` refuses a token whose ``aud`` is not the one asked for.
 
 A token is a base64url JSON payload plus an HMAC over it, carrying its own ``exp``
-so verification needs no storage. The signing key and the fail-closed rule are
-*borrowed from* ``auth`` rather than duplicated: one key and one rule, or the two
-drift apart.
+so verification needs no storage.
+
+The signing primitives live here rather than in ``auth`` because ``auth`` imports
+*this*, and the reverse would be a cycle. They keep their SEC-5 behaviour: a key
+shorter than :data:`MIN_SECRET_LENGTH` — including the empty key — counts as
+unconfigured, and every check then fails **closed**, because a value signed with
+an empty key is computable by anyone.
 
 See ``docs/Technical/Identity Programme.md``.
 """
@@ -25,20 +29,43 @@ See ``docs/Technical/Identity Programme.md``.
 from __future__ import annotations
 
 import base64
+import hashlib
 import hmac
 import json
+import os
 import time
-
-from transversal.api import auth
 
 #: Admission to a campaign. Reusable within its life; closable early in the DB.
 AUD_JOIN = "join"
 #: The browser session, carrying the player taken and the epoch issued under.
 AUD_SESSION = "session"
 
+#: A signing key shorter than this counts as "not configured". An empty or stub
+#: secret must never be able to validate a token (SEC-5).
+MIN_SECRET_LENGTH = 32
+
 
 class TokenError(ValueError):
     """A token that could not be minted."""
+
+
+def _session_secret() -> str:
+    return os.getenv("SESSION_SECRET", "")
+
+
+def _secret_is_usable() -> bool:
+    """True only when a long-enough signing key is configured.
+
+    Fail *closed*: with no usable secret every check reports "unauthorized"
+    rather than accepting a signature that anyone could compute.
+    """
+    return len(_session_secret()) >= MIN_SECRET_LENGTH
+
+
+def _sign(message: str) -> str:
+    return hmac.new(
+        _session_secret().encode(), message.encode(), hashlib.sha256
+    ).hexdigest()
 
 
 def _b64_encode(raw: bytes) -> str:
@@ -59,7 +86,7 @@ def mint(
     after ``payload``, so a caller cannot mint outside the audience or lifetime it
     asked for.
     """
-    if not auth._secret_is_usable():
+    if not _secret_is_usable():
         raise TokenError("SESSION_SECRET is not usable; refusing to mint")
     if ttl_seconds <= 0:
         raise TokenError("ttl_seconds must be positive")
@@ -69,7 +96,7 @@ def mint(
     encoded = _b64_encode(
         json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
     )
-    return f"{encoded}.{auth._sign(encoded)}"
+    return f"{encoded}.{_sign(encoded)}"
 
 
 def verify(token: str, audience: str, now: float | None = None) -> dict | None:
@@ -78,7 +105,7 @@ def verify(token: str, audience: str, now: float | None = None) -> dict | None:
     Never raises: every failure is "not a valid token", because a caller that
     distinguishes them would leak which part was wrong.
     """
-    if not token or not auth._secret_is_usable():
+    if not token or not _secret_is_usable():
         return None
     try:
         encoded, signature = token.rsplit(".", 1)
@@ -87,7 +114,7 @@ def verify(token: str, audience: str, now: float | None = None) -> dict | None:
         return None
     if not isinstance(payload, dict):
         return None
-    if not hmac.compare_digest(auth._sign(encoded), signature):
+    if not hmac.compare_digest(_sign(encoded), signature):
         return None
     if payload.get("aud") != audience:
         return None

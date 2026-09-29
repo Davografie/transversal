@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from transversal.api import access_tokens, auth
+from transversal.api import access_tokens
 
 GOOD_SECRET = "a" * 64
 JOIN = access_tokens.AUD_JOIN
@@ -128,6 +128,6 @@ def test_an_unknown_audience_verifies_as_nothing():
 def test_a_legacy_session_value_is_not_a_token():
     """The pre-SEC-3 cookie (`<ts>.<sig>`) must not verify as anything."""
     timestamp = str(int(time.time()))
-    legacy = f"{timestamp}.{auth._sign(timestamp)}"
+    legacy = f"{timestamp}.{access_tokens._sign(timestamp)}"
     assert access_tokens.verify(legacy, SESSION) is None
     assert access_tokens.verify(legacy, JOIN) is None

@@ -165,6 +165,25 @@ class PlayerManager:
             from transversal.services.state_events import broadcast_body_changed
             broadcast_body_changed(player_id, None)
 
+    def revoke_sessions(self, player_id: str) -> int | None:
+        """End every session that names ``player_id`` (SEC-3).
+
+        A signed session cookie cannot be recalled, so revoking is an *epoch
+        bump*: validation compares the cookie's epoch against this record, and
+        every cookie issued under the old value stops being accepted on its next
+        request. Returns the new epoch, or ``None`` when there is no such player.
+
+        Deliberately does **not** delete the player: their characters are entities
+        owned through ``agency`` edges, and removing the record would orphan them.
+        Revoking ends access; deleting is a separate, explicit act.
+        """
+        player = self._repo.get_player(player_id)
+        if not player:
+            return None
+        epoch = int(player.epoch) + 1
+        self._repo.update_player(player_id, {"epoch": epoch})
+        return epoch
+
 
 # Global singleton
 player_manager = PlayerManager()

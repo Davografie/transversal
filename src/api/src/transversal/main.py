@@ -88,6 +88,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# SEC-3: slide an in-use session cookie forward, but only when it is getting old.
+from transversal.api import auth as _auth  # noqa: E402
+
+app.middleware("http")(_auth.session_refresh_middleware)
+
 # ── Suppress noisy polling logs ──────────────────────
 
 import logging
