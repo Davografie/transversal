@@ -20,6 +20,7 @@ from transversal.api.graphql.loaders import build_loaders
 from transversal.api.rest.roll import router as roll_router
 from transversal.api.rest.effects import router as effects_router
 from transversal.api.rest.players import router as players_router
+from transversal.api.rest.access import router as access_router
 from transversal.api.rest.session_events import router as session_events_router
 from transversal.api.rest.locations import router as locations_router
 from transversal.api.rest.media import router as media_router
@@ -292,6 +293,7 @@ app.include_router(sessions_router)
 app.include_router(imagen_router)
 app.include_router(sse_router)
 app.include_router(auth_router)
+app.include_router(access_router)
 
 # Serve uploaded media files
 
