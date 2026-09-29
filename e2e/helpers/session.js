@@ -81,3 +81,41 @@ export async function establishSession(page) {
     )
   }
 }
+
+/**
+ * Put `page` in the state a real arrival lands in: **admitted, no player taken**.
+ *
+ * That is the roster picker's state, and it is what a device gets after scanning
+ * the table's QR. Reached the same way a member would: the architect opens a
+ * window, then the device comes through it. The window is closed immediately
+ * afterwards — closing stops *new* admissions, not the session it already issued,
+ * so the device stays admitted without leaving an open token in the database.
+ */
+export async function admitDevice(page) {
+  const key = process.env.ARCHITECT_TOKEN
+  if (!key) {
+    throw new Error('ARCHITECT_TOKEN is not set for the Playwright run — see establishSession.')
+  }
+
+  await page.request.get(`${API_BASE}/api/v1/auth/enter`, {
+    params: { a: key },
+    maxRedirects: 0,
+  })
+  const opened = await page.request.post(`${API_BASE}/api/v1/access/tokens`, { data: {} })
+  if (!opened.ok()) throw new Error(`could not open a window: HTTP ${opened.status()}`)
+  const { token, id } = await opened.json()
+
+  await page.request.get(`${API_BASE}/api/v1/auth/enter`, {
+    params: { s: token },
+    maxRedirects: 0,
+  })
+  await page.request.post(`${API_BASE}/api/v1/access/tokens/${id}/close`)
+
+  const who = await page.request.get(`${API_BASE}/api/v1/auth/session`)
+  const body = await who.json()
+  if (!body?.admitted || body.player) {
+    throw new Error(
+      `expected an admitted device with no player, got ${JSON.stringify(body)}`,
+    )
+  }
+}
