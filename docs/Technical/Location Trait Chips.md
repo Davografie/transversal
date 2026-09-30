@@ -94,6 +94,20 @@ must not be thirty labels. The words arrive when it opens.
   so "hidden by default" costs nothing once a location has been arranged; placed chips are
   still always on the map, resting as their markers. The stack's own chips are open and
   cannot be approached, so they do not collapse.
+- **Unplaced OCCUPANTS share the drawer** (the human, 2026-09-26), and this is the one
+  place the drawer is **additive rather than a hiding place**. 332 of 467 standing
+  occupants have no stored position, so they sit on a *computed* default (`occupantX/Y`)
+  and a GM has no way to tell who still needs placing; they now get a row in the same
+  drawer — picture or initials, then the name — in the chips' visual language. But they
+  are **not removed from the map**, unlike a chip: an occupant's presence is a **fact about
+  the room**, and hiding someone would misreport who is here, whereas a chip's position is
+  only where its label sits. So the drawer is a worklist of "not placed yet" here, not a
+  second copy of the map. Dragging a row out places the occupant (the same
+  `usePercentDrag` and the same `PATCH /entities/{id}/map-position` the dot drag uses) and
+  the row leaves on its own, because "unplaced" is exactly `map_x`/`map_y` being unset. The
+  drawer renders when *either* list is non-empty, so a room with unplaced occupants and no
+  unplaced traits still gets one. Pinned by two tests in `e2e/tests/chip-proximity.spec.js`
+  — including that entering arrange mode adds a row and takes **no dot away**.
 - **Arrange mode opens every chip.** The GM is placing these, and you cannot place what
   you cannot read — otherwise dragging means chasing an unlabelled marker around the
   map. The zone and nav dots already follow this rule (`:expanded="editZones || …"`).

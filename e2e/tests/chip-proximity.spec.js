@@ -74,7 +74,7 @@ const TRAITS = [
 ]
 
 /** The navigate payload: the character's position and the chips' positions. */
-function navigatePayload(self) {
+function navigatePayload(self, extraOccupants = []) {
   return {
     location: {
       name: 'Proximity Hall',
@@ -85,14 +85,14 @@ function navigatePayload(self) {
     occupants: [{
       id: KAEL, type: 'character', name: 'Kael Drift',
       image: null, map_x: self.x, map_y: self.y,
-    }],
+    }, ...extraOccupants],
   }
 }
 
 /** Load the app at a known self position, with every read mocked. */
-async function open(page, self) {
+async function open(page, self, extraOccupants = []) {
   await page.route('**/api/v1/locations/*/navigate*', (route) =>
-    route.fulfill({ json: navigatePayload(self) }))
+    route.fulfill({ json: navigatePayload(self, extraOccupants) }))
   await page.route('**/api/v1/locations/*/traits*', (route) =>
     route.fulfill({ json: { location_id: LOC, viewer: null, traits: TRAITS } }))
   // No pool anywhere: the roller must be in its `adding` phase for a play to land.
@@ -234,4 +234,53 @@ test('arrange mode opens every chip, and a chip can then be dragged', async ({ p
   const moved = await target.boundingBox()
   expect(moved.x).toBeGreaterThan(before.x + 40)
   console.log('dragged:', JSON.stringify({ from: [before.x, before.y], to: [moved.x, moved.y] }))
+})
+
+// ── Unplaced occupants in the same drawer (the human, 2026-09-26) ─────────────
+//
+// An occupant with no stored position sits on a COMPUTED default, so a GM cannot
+// tell who still needs placing. They now appear in the arrange-mode drawer beside
+// the unplaced traits — ADDITIVELY: they stay on the map, because an occupant's
+// presence is a fact about the room, unlike a chip's label position.
+
+const UNPLACED_GMC = {
+  id: 'gmc-drawer-probe', type: 'gmc', name: 'Unplaced Probe',
+  image: null, map_x: null, map_y: null,
+}
+const PLACED_GMC = {
+  id: 'gmc-placed-probe', type: 'gmc', name: 'Placed Probe',
+  image: null, map_x: 44, map_y: 62,
+}
+
+test('an unplaced occupant is listed in the drawer, and stays on the map', async ({ page }) => {
+  await asArchitect(page)
+  // The placement write is mocked: this asserts the drawer, not the location's data.
+  await page.route('**/api/v1/entities/*/map-position', (route) =>
+    route.fulfill({ json: { status: 'ok' } }))
+
+  await open(page, FAR, [UNPLACED_GMC, PLACED_GMC])
+
+  // How many occupants this map draws before the drawer exists at all. Asserted as a
+  // relation rather than a number: which occupants are rendered depends on when the
+  // acting entity resolves, so an exact count here would be a flake.
+  const drawnBefore = await page.locator('.occ-dot').count()
+  expect(drawnBefore).toBeGreaterThanOrEqual(2)
+
+  await page.locator('.arrange-btn').click()
+
+  // Listed — with a PLACED occupant beside it in the payload, so this is the
+  // "unplaced" filter being asserted and not "every occupant is listed".
+  const rows = page.locator('.occ-drawer-chip')
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first()).toContainText('Unplaced Probe')
+
+  // ADDITIVE, which is the design decision: the drawer added a row and took no dot
+  // away, because an occupant on the map is who is in the room.
+  await expect(page.locator('.occ-dot')).toHaveCount(drawnBefore)
+})
+
+test('the drawer is arrange-mode furniture, and needs no unplaced traits', async ({ page }) => {
+  // No architect role: the drawer must not exist at all for a player.
+  await open(page, FAR, [UNPLACED_GMC])
+  await expect(page.locator('.occ-drawer-chip')).toHaveCount(0)
 })
