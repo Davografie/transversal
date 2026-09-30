@@ -167,6 +167,18 @@
       </div>
     </div>
 
+    <!-- The unplace target (the human, 2026-09-26): drop a dragged occupant or trait
+         chip here and it is *unplaced* — back to the arrange-mode drawer. GM-only
+         (a player has no drawer to recover from) and `pointer-events: none`, because
+         the drag's own hit test decides; it must never swallow a pointer event. -->
+    <div
+      v-if="showElements && unplaceArmed && gmMode"
+      ref="unplaceEl"
+      class="unplace-target"
+      :class="{ armed: unplaceHover }"
+      title="Drop here to unplace"
+    >( x )</div>
+
     <!-- Overlay preset switcher (architect only) -->
     <div class="overlay-switcher fade-in" v-if="showElements && gmMode">
       <button
@@ -943,6 +955,72 @@ const dragDotKey = ref('')
 let occDragMoved = false       // pointer moved past the tap threshold
 let draggingEmitted = false    // emitted 'dragging' so the HUD hides during a real drag
 let occSuppressClick = false   // suppress the synthesized click after a real drag
+
+// ── The unplace target (the human, 2026-09-26) ─────────────────────────────
+// While an **occupant** or a **trait chip** is being dragged, a `( x )` sits at the
+// top of the map. Dropping the dragged thing on it **unplaces** it — the occupant's
+// `map_x`/`map_y` are cleared, the chip's entry is dropped from `trait_positions` —
+// which is exactly the inverse of dragging one OUT of the drawer: it goes back there.
+//
+// **GM-only**, deliberately. A player can drag only their own dot, and unplacing it
+// would hide them with no drawer to get back from — the drawer is arrange-mode
+// furniture and they cannot open it. The GM can always re-place anything.
+//
+// The target is `pointer-events: none`; the drag's own hit test decides, so it can
+// never swallow a pointer event mid-drag (the listeners live on `document`).
+const unplaceArmed = ref(false)   // an unplaceable drag is running
+const unplaceHover = ref(false)   // …and the pointer is over the target
+const unplaceEl = ref(null)
+let unplacePointer = null         // client px of the last drag move
+
+function overUnplaceTarget() {
+  const el = unplaceEl.value
+  if (!el || !unplacePointer) return false
+  const r = el.getBoundingClientRect()
+  return unplacePointer.x >= r.left && unplacePointer.x <= r.right
+    && unplacePointer.y >= r.top && unplacePointer.y <= r.bottom
+}
+
+function noteUnplacePointer(clientX, clientY) {
+  unplacePointer = { x: clientX, y: clientY }
+  unplaceHover.value = unplaceArmed.value && overUnplaceTarget()
+}
+
+// Called on EVERY end path, including the early returns below, so a stale target can
+// never survive a drag it does not belong to.
+function endUnplaceDrag() {
+  unplaceArmed.value = false
+  unplaceHover.value = false
+  unplacePointer = null
+}
+
+async function unplaceOccupant(occ) {
+  occ.map_x = null
+  occ.map_y = null
+  noteOwnMove(occ.id, null, null)
+  try {
+    await fetch(`/api/v1/entities/${occ.id}/map-position`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ map_x: null, map_y: null }),
+    })
+  } catch { /* silent: the dot is gone locally either way */ }
+}
+
+async function unplaceTrait(traitId) {
+  const next = { ...traitPositions.value }
+  delete next[traitId]
+  traitPositions.value = next
+  try {
+    // Whole-map replace, so the absent id IS the unplacement.
+    await fetch(`/api/v1/locations/${props.locationId}/trait-positions`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trait_positions: next }),
+    })
+  } catch { /* silent: the chip is back in the drawer locally */ }
+}
+
 // Arm that suppression for one click only. It disarms on the next pointerdown,
 // so when the drag's synthesized click never fires (mouseup landed off the dot)
 // the flag cannot linger and swallow a later, unrelated click.
@@ -1031,9 +1109,12 @@ function onOccDragMove(e) {
     dragDotKey.value = isSelf ? 'self' : (occupants.value[start.index]?.id || '')
     startFrameProfile(isSelf ? 'self' : 'occupant')
     if (!draggingEmitted) { draggingEmitted = true; emit('dragging', true) }
+    // Past the tap threshold this is a real drag, so offer the unplace target.
+    if (props.gmMode) unplaceArmed.value = true
   }
   e.preventDefault()
   notePointerEvent()
+  noteUnplacePointer(clientX, clientY)
   occDragPending = { clientX, clientY }
   if (occDragRafId == null) occDragRafId = requestAnimationFrame(applyOccDragFrame)
 }
@@ -1195,6 +1276,10 @@ async function onOccDragEnd() {
   document.removeEventListener('mouseup', onOccDragEnd)
   document.removeEventListener('touchmove', onOccDragMove)
   document.removeEventListener('touchend', onOccDragEnd)
+  // Read the drop against the unplace target BEFORE clearing the drag state, then
+  // clear it here so no early return below can leave a stale `( x )` on screen.
+  const droppedOnUnplace = unplaceArmed.value && overUnplaceTarget()
+  endUnplaceDrag()
   expandLevels.value = {}
   armedDot.value = ''
   dragDotKey.value = ''   // with the rest of the transient drag state: the early
@@ -1212,6 +1297,15 @@ async function onOccDragEnd() {
   if (!wasMoved) return  // tap — the synthesized click handles inspect/pop
 
   armClickSuppression()
+
+  // Dropped on the `( x )`: UNPLACE rather than place, and never travel — the target
+  // wins over anything the pointer happened to be passing near.
+  if (droppedOnUnplace) {
+    dragTarget = null
+    await unplaceOccupant(occ)
+    activeElement.value = { type: 'occupant', id: props.entityId }  // keep self popped
+    return
+  }
 
   // If the player dropped near a target, travel there
   if (occ.id === props.entityId && dragTarget && !props.editZones) {
@@ -1465,8 +1559,22 @@ function onTraitChipDragStart(e, trait) {
   percentDrag.start(e, {
     x: from.x,
     y: from.y,
-    onMove: (x, y) => { traitPositions.value = { ...traitPositions.value, [trait.id]: { x, y } } },
-    onEnd: async () => {
+    onMove: (x, y, cx, cy) => {
+      traitPositions.value = { ...traitPositions.value, [trait.id]: { x, y } }
+      // Moving is dragging, not clicking: offer the unplace target.
+      if (props.gmMode) unplaceArmed.value = true
+      noteUnplacePointer(cx, cy)
+    },
+    onEnd: async (pointer) => {
+      // Dropped on the `( x )`: the chip goes back to the drawer instead of being
+      // saved. Checked before the PUT so the absence IS the unplacement.
+      if (pointer) noteUnplacePointer(pointer.clientX, pointer.clientY)
+      if (unplaceArmed.value && overUnplaceTarget()) {
+        endUnplaceDrag()
+        await unplaceTrait(trait.id)
+        return
+      }
+      endUnplaceDrag()
       try {
         await fetch(`/api/v1/locations/${props.locationId}/trait-positions`, {
           method: 'PUT',
@@ -2163,6 +2271,36 @@ onMounted(() => {
 
 .loc-traits.has-switcher {
   top: calc(env(safe-area-inset-top, 16px) + 80px);
+}
+
+/* The unplace target: centred at the top of the map, present only while an occupant
+   or a trait chip is being dragged. `pointer-events: none` is load-bearing — the drag
+   already owns the pointer through document listeners, and hit-testing is done
+   against this element's rect, so it must not intercept anything itself. */
+.unplace-target {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 16px) + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 15px;
+  border-radius: 999px;
+  border: 1px dashed rgba(255,255,255,0.45);
+  background: rgba(10,10,20,0.55);
+  backdrop-filter: blur(4px);
+  color: var(--map-text);
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.85);
+  pointer-events: none;
+  z-index: 40;
+}
+
+/* Over it: the drop will unplace. Same accent language as the armed travel dot, so
+   "this drop will do something" reads the same way everywhere on the map. */
+.unplace-target.armed {
+  border-color: var(--accent);
+  border-style: solid;
+  background: var(--accent-16);
 }
 
 /* An unplaced OCCUPANT in the same drawer: a small row — picture or initials, then

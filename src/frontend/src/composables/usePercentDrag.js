@@ -27,7 +27,12 @@ const CLAMP_MAX = 98
  * @returns {{ start: (event: Event, spec: object) => void }}
  *   `spec` is `{ x, y, onMove, onEnd }`: the entry's current position, a callback for
  *   each live position, and an optional callback once the drag has finished (where a
- *   caller saves). `onMove` receives already-clamped, already-rounded percentages.
+ *   caller saves). `onMove` receives already-clamped, already-rounded percentages,
+ *   **then the pointer's client px**; `onEnd` receives the last client px as
+ *   `{ clientX, clientY }` (or `null` when the pointer never moved). The pointer is
+ *   passed because a caller may need to know *where* the drop happened — a drop target
+ *   that is not the map (the viewer's unplace button) cannot be found from a
+ *   percentage, which is relative to the scene.
  */
 export function usePercentDrag({ enabled, viewerEl, span }) {
   function start(e, { x, y, onMove, onEnd }) {
@@ -50,14 +55,18 @@ export function usePercentDrag({ enabled, viewerEl, span }) {
     const clientX = e.touches ? e.touches[0].clientX : e.clientX
     const clientY = e.touches ? e.touches[0].clientY : e.clientY
     const clamp = (v) => Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, Math.round(v)))
+    let last = null   // last pointer position, for `onEnd`
 
     function move(ev) {
       ev.preventDefault()
       const cx = ev.touches ? ev.touches[0].clientX : ev.clientX
       const cy = ev.touches ? ev.touches[0].clientY : ev.clientY
+      last = { clientX: cx, clientY: cy }
       onMove(
         clamp(x + ((cx - clientX) / extent.w) * 100),
         clamp(y + ((cy - clientY) / extent.h) * 100),
+        cx,
+        cy,
       )
     }
 
@@ -66,7 +75,7 @@ export function usePercentDrag({ enabled, viewerEl, span }) {
       document.removeEventListener('mouseup', end)
       document.removeEventListener('touchmove', move)
       document.removeEventListener('touchend', end)
-      if (onEnd) await onEnd()
+      if (onEnd) await onEnd(last)
     }
 
     document.addEventListener('mousemove', move)

@@ -113,6 +113,20 @@ must not be thirty labels. The words arrive when it opens.
 - **Arrange mode opens every chip.** The GM is placing these, and you cannot place what
   you cannot read — otherwise dragging means chasing an unlabelled marker around the
   map. The zone and nav dots already follow this rule (`:expanded="editZones || …"`).
+- **`( x )` — the unplace target** (the human, 2026-09-26). While an **occupant or a
+  trait chip** is being dragged, a `( x )` appears centred at the top of the map; drop
+  the dragged thing on it and it is **unplaced** — the occupant's `map_x`/`map_y` are
+  cleared, the chip's entry is dropped from `trait_positions` — so it returns to the
+  drawer. It is the exact inverse of dragging something *out* of the drawer, and the
+  round trip is what makes an unplaced thing recoverable rather than merely hidden.
+  Two things are deliberate: it is **GM-only** (a player can drag only their own dot,
+  and unplacing it would hide them with no drawer to get back from), and it is
+  `pointer-events: none` — the drag already owns the pointer through `document`
+  listeners, so the hit test is done against this element's rect and it must never
+  intercept an event itself. `usePercentDrag` now hands its callers the pointer's
+  client px (`onMove`'s 3rd/4th args, `onEnd`'s argument) because a drop target that is
+  not the map cannot be found from a percentage, which is relative to the scene. Both
+  directions are pinned by tests in `e2e/tests/chip-proximity.spec.js`.
 - **The resting marker is given its own box** rather than deriving its width from the
   picture: a cutout's `width: auto` is its intrinsic ratio, which is 0 until the file
   decodes — a sliver on first paint, and permanent if the file ever 404s. A collapsed

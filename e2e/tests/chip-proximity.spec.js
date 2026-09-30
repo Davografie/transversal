@@ -289,3 +289,70 @@ test('the drawer is arrange-mode furniture, and needs no unplaced traits', async
   await open(page, FAR, [UNPLACED_GMC])
   await expect(page.locator('.occ-drawer-chip')).toHaveCount(0)
 })
+
+// ── The `( x )` unplace target (the human, 2026-09-26) ────────────────────────
+//
+// While an occupant or a trait chip is being dragged, `( x )` sits at the top of the
+// map; dropping the dragged thing on it *unplaces* it — the inverse of dragging one
+// out of the drawer. GM-only, because a player has no drawer to recover from.
+
+/** Drag `locator` onto the unplace target, which only exists once the drag has moved. */
+async function dragOntoUnplace(page, locator) {
+  const before = await locator.boundingBox()
+  await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2)
+  await page.mouse.down()
+  // A first move arms the target (nothing appears on a plain click)…
+  await page.mouse.move(before.x + before.width / 2, before.y - 60, { steps: 8 })
+  const target = page.locator('.unplace-target')
+  await expect(target).toHaveCount(1)
+  const box = await target.boundingBox()
+  // …then onto it. `armed` is the live hover state, so this also proves the hit test.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 })
+  await expect(target).toHaveClass(/armed/)
+  await page.mouse.up()
+}
+
+test('dropping a dragged chip on the ( x ) unplaces it', async ({ page }) => {
+  await asArchitect(page)
+  const writes = []
+  await page.route('**/trait-positions', (route) => {
+    writes.push(route.request().postDataJSON())
+    return route.fulfill({ json: { status: 'ok', count: 1 } })
+  })
+  const { chip } = await open(page, FAR)
+  await page.locator('.arrange-btn').click()
+
+  await dragOntoUnplace(page, chip(WITH_IMAGE))
+
+  await expect.poll(() => writes.length).toBe(1)
+  // The absence of the key IS the unplacement — the PUT replaces the whole map.
+  expect(Object.keys(writes[0].trait_positions)).not.toContain(WITH_IMAGE)
+  // Back in the drawer, which is the only place an unplaced chip exists.
+  await expect(
+    page.locator(`.loc-traits .trait-chip[data-trait-id="${WITH_IMAGE}"]`)
+  ).toHaveCount(1)
+})
+
+test('dropping a dragged occupant on the ( x ) unplaces it', async ({ page }) => {
+  await asArchitect(page)
+  const patches = []
+  await page.route('**/api/v1/entities/*/map-position', (route) => {
+    patches.push(route.request().postDataJSON())
+    return route.fulfill({ json: { status: 'ok' } })
+  })
+  await open(page, FAR, [PLACED_GMC])
+  await page.locator('.arrange-btn').click()
+
+  const dot = page.locator('.occ-dot', { hasText: 'PP' })
+  await expect(dot).toHaveCount(1)
+  await dragOntoUnplace(page, dot)
+
+  await expect.poll(() => patches.length).toBe(1)
+  // Clearing the position is the whole contract — `map_x`/`map_y` are nullable.
+  expect(patches[0]).toEqual({ map_x: null, map_y: null })
+  // Off the map…
+  await expect(page.locator('.occ-dot', { hasText: 'PP' })).toHaveCount(0)
+  // …and into the drawer, where the GM can drag it back out.
+  await expect(page.locator('.occ-drawer-chip')).toHaveCount(1)
+  await expect(page.locator('.occ-drawer-chip').first()).toContainText('Placed Probe')
+})
