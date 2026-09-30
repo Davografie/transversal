@@ -238,10 +238,10 @@ test('arrange mode opens every chip, and a chip can then be dragged', async ({ p
 
 // ── Unplaced occupants in the same drawer (the human, 2026-09-26) ─────────────
 //
-// An occupant with no stored position sits on a COMPUTED default, so a GM cannot
-// tell who still needs placing. They now appear in the arrange-mode drawer beside
-// the unplaced traits — ADDITIVELY: they stay on the map, because an occupant's
-// presence is a fact about the room, unlike a chip's label position.
+// An occupant with no stored position used to sit on a COMPUTED default, so a GM
+// could not tell who still needed placing. They are now **not drawn at all** — exactly
+// like an unplaced trait chip — and appear in the arrange-mode drawer instead, where
+// dragging a row out places them.
 
 const UNPLACED_GMC = {
   id: 'gmc-drawer-probe', type: 'gmc', name: 'Unplaced Probe',
@@ -252,7 +252,7 @@ const PLACED_GMC = {
   image: null, map_x: 44, map_y: 62,
 }
 
-test('an unplaced occupant is listed in the drawer, and stays on the map', async ({ page }) => {
+test('an unplaced occupant is listed in the drawer and NOT drawn on the map', async ({ page }) => {
   await asArchitect(page)
   // The placement write is mocked: this asserts the drawer, not the location's data.
   await page.route('**/api/v1/entities/*/map-position', (route) =>
@@ -260,23 +260,28 @@ test('an unplaced occupant is listed in the drawer, and stays on the map', async
 
   await open(page, FAR, [UNPLACED_GMC, PLACED_GMC])
 
-  // How many occupants this map draws before the drawer exists at all. Asserted as a
-  // relation rather than a number: which occupants are rendered depends on when the
-  // acting entity resolves, so an exact count here would be a flake.
-  const drawnBefore = await page.locator('.occ-dot').count()
-  expect(drawnBefore).toBeGreaterThanOrEqual(2)
+  // Wait for self FIRST. Until the acting entity resolves, the character transiently
+  // renders as an occupant dot too, so any count of `.occ-dot` taken before this is
+  // racy — which is what made an earlier version of this test read 3.
+  // Select by IDENTITY, not by count: `MapDot` deliberately gives the self dot
+  // `occ-dot self` as well, so `.occ-dot` is "occupants plus the view's anchor". Each
+  // dot with no picture renders its initials, which is a stable hook.
+  await expect(page.locator('.occ-dot.self')).toHaveCount(1)                // KD, the anchor
+  await expect(page.locator('.occ-dot', { hasText: 'PP' })).toHaveCount(1)  // Placed — drawn
+  await expect(page.locator('.occ-dot', { hasText: 'UP' })).toHaveCount(0)  // Unplaced — not
 
   await page.locator('.arrange-btn').click()
 
-  // Listed — with a PLACED occupant beside it in the payload, so this is the
-  // "unplaced" filter being asserted and not "every occupant is listed".
+  // …and it is in the drawer, where the GM drags it out to place it. The PLACED
+  // occupant in the same payload must NOT be listed, so this is the "unplaced" filter
+  // being asserted and not "list everyone".
   const rows = page.locator('.occ-drawer-chip')
   await expect(rows).toHaveCount(1)
   await expect(rows.first()).toContainText('Unplaced Probe')
 
-  // ADDITIVE, which is the design decision: the drawer added a row and took no dot
-  // away, because an occupant on the map is who is in the room.
-  await expect(page.locator('.occ-dot')).toHaveCount(drawnBefore)
+  // The drawer adds a row and never a dot: still no UP on the map.
+  await expect(page.locator('.occ-dot', { hasText: 'UP' })).toHaveCount(0)
+  await expect(page.locator('.occ-dot', { hasText: 'PP' })).toHaveCount(1)
 })
 
 test('the drawer is arrange-mode furniture, and needs no unplaced traits', async ({ page }) => {

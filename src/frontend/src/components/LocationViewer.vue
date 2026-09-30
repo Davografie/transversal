@@ -47,14 +47,18 @@
       />
       </template>
 
-      <!-- Occupant dots (non-self only, always expanded) -->
-      <template v-for="(o, i) in occupantDots" :key="'o-' + o.id">
+      <!-- Occupant dots (non-self only, always expanded). **Placed occupants only**
+           (the human, 2026-09-26): someone with no stored position is not drawn at
+           all, exactly as an unplaced trait chip is not — they live in the arrange-mode
+           drawer until the GM places them. Presence is not lost by hiding them: the
+           peer rail still lists who is at the location. -->
+      <template v-for="o in placedOccupants" :key="'o-' + o.id">
       <MapDot
         v-if="!travelAnim.active && showElements"
         type="occupant"
         :variant="o.type"
         :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId, controlled: isControlled(o.id), growing: growingIds.includes(o.id), settling: settlingIds.includes(o.id) }"
-        :x="o.map_x ?? occupantX(i, o)" :y="o.map_y ?? occupantY(i, o)"
+        :x="o.map_x" :y="o.map_y"
         :image="o.image"
         :image-transparent="!!o.image_transparent"
         :initials="occupantInitials(o.name)"
@@ -65,15 +69,15 @@
         :title="canDragOccupant(o) ? 'Drag to reposition' : (o.unpublished ? o.name + ' (draft)' : o.name)"
         @click="onDotClick('occupant', o)"
         @overlay-click="onExpandedClick('occupant', o)"
-        @drag-start="(e) => onOccupantDragStart(e, o, i)"
+        @drag-start="(e) => onOccupantDragStart(e, o)"
       />
       <!-- Pool dice ring around occupant dot -->
       <PoolDiceRing
         v-if="!travelAnim.active && showElements && (poolDiceFor(o.id).length > 0 || (poolPhaseFor(o.id) !== 'adding' && remoteResults[o.id]))"
         :dice="poolDiceFor(o.id)"
         :phase="poolPhaseFor(o.id)"
-        :cx="o.map_x ?? occupantX(i, o)"
-        :cy="o.map_y ?? occupantY(i, o)"
+        :cx="o.map_x"
+        :cy="o.map_y"
         :resolved="remoteResults[o.id] || null"
         :scale="isControlled(o.id) ? CONTROLLED_SCALE : 1"
         :transparent="!!o.image_transparent"
@@ -338,15 +342,19 @@ const occupantDots = computed(() =>
   occupants.value.filter(o => o.id !== props.entityId && (props.gmMode || !o.unpublished))
 )
 
-// Occupants with **no stored position on this map** — the arrange-mode worklist.
-//
-// They are still *drawn* (at the computed `occupantX/Y` default), because an
-// occupant's presence is a **fact about the room**: hiding someone would misreport
-// who is here, which is different from a trait chip, whose position is only where
-// its label sits. So this is "who still needs placing", shown in the same drawer as
-// the unplaced traits, not a second copy of the map.
+// An occupant with **no stored position on this map** has nowhere to be drawn, so
+// they are **not drawn at all** (the human, 2026-09-26) — exactly like an unplaced
+// trait chip. They are listed in the arrange-mode drawer instead, and dragging a row
+// out places them. Hiding them costs no information: the peer rail still names who is
+// at the location, and the drawer is where the GM finds the ones still to place.
 const unplacedOccupants = computed(() =>
   occupantDots.value.filter(o => o.map_x == null || o.map_y == null)
+)
+
+// What the scene actually draws — and the reason the dot template needs no position
+// fallback: everything in this list has a stored `map_x`/`map_y`.
+const placedOccupants = computed(() =>
+  occupantDots.value.filter(o => o.map_x != null && o.map_y != null)
 )
 
 // ── Size animation for driven dots ─────────────────────────────────────────
@@ -633,25 +641,9 @@ function navHoleStyle(nd) {
   return holeStyleFor(nd.x, nd.y, c.arriveX, c.arriveY, c.destAspect, p?.panX || 0, p?.panY || 0)
 }
 
-function occupantX(index, occupant) {
-  if (zones.value.length > 0) {
-    const zoneIdx = index % zones.value.length
-    const z = zones.value[zoneIdx]
-    const offset = 5 + (Math.floor(index / zones.value.length) * 5)
-    return z.x + offset
-  }
-  return 20 + (index * 15) % 60
-}
-
-function occupantY(index, occupant) {
-  if (zones.value.length > 0) {
-    const zoneIdx = index % zones.value.length
-    const z = zones.value[zoneIdx]
-    const offset = 5 + (Math.floor(index / zones.value.length) * 5)
-    return z.y + offset
-  }
-  return 75 + (index * 5) % 15
-}
+// (`occupantX`/`occupantY` used to scatter an unplaced occupant near a zone so they
+// were at least visible. They are gone: an unplaced occupant is not drawn at all now,
+// so there is no default position left to compute.)
 
 // ── Drag state ─────────────────────────────────────
 
@@ -982,11 +974,11 @@ function travelProximity() {
   return (radiusPx / pxPerPct) * TRAVEL_PROXIMITY_FACTOR
 }
 
-function onOccupantDragStart(e, occupant, index) {
+function onOccupantDragStart(e, occupant) {
   if (!canDragOccupant(occupant)) return
   occDragMoved = false
-  // The template loops over the filtered (non-self) occupants, so the loop
-  // index does not match occupants.value — resolve the real index by id.
+  // The template loops over the filtered (non-self) occupants, so a loop index would
+  // not match occupants.value — resolve the real index by id.
   const realIndex = occupants.value.findIndex(o => o.id === occupant.id)
   if (realIndex === -1) return
   const el = viewerEl.value
@@ -996,9 +988,11 @@ function onOccupantDragStart(e, occupant, index) {
 
   // Drag origin must be the dot's rendered viewport position at grab time:
   // self renders 1:1 at its map %, other occupants render through the
-  // parallax conversion — otherwise the dot jumps on the first move.
-  const imgX = occupant.map_x ?? occupantX(index, occupant)
-  const imgY = occupant.map_y ?? occupantY(index, occupant)
+  // parallax conversion — otherwise the dot jumps on the first move. No position
+  // fallback is needed: only PLACED occupants are rendered, so `map_x`/`map_y` are
+  // always set here (an unplaced one lives in the drawer instead).
+  const imgX = occupant.map_x
+  const imgY = occupant.map_y
   let origX, origY
   if (occupant.id === props.entityId) {
     origX = imgX
