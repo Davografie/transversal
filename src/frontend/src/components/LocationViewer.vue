@@ -124,7 +124,7 @@
          it is needed: a chip dragged out of it becomes a scene element and never
          returns. -->
     <div
-      v-if="showElements && editZones && unplacedTraits.length"
+      v-if="showElements && editZones && (unplacedTraits.length || unplacedOccupants.length)"
       class="loc-traits fade-in"
       :class="{ 'has-switcher': gmMode }"
     >
@@ -138,6 +138,29 @@
         @touchstart="editZones && onTraitChipDragStart($event, t)"
         @click="!editZones && onTraitChipClick(t)"
       />
+      <!-- Unplaced OCCUPANTS, in the same drawer (the human, 2026-09-26). A person
+           with no stored position is sitting on a computed default, so the GM has no
+           way to tell who still needs placing; this is that list. Unlike a chip they
+           are not removed from the map — hiding a person would misreport the room —
+           so dragging one out *places* them and the entry leaves the drawer. -->
+      <div
+        v-for="o in unplacedOccupants"
+        :key="'uo-' + o.id"
+        class="occ-drawer-chip"
+        :title="`${o.name} — not placed on this map yet. Drag onto the map to place.`"
+        @mousedown="editZones && onOccupantDrawerDragStart($event, o)"
+        @touchstart="editZones && onOccupantDrawerDragStart($event, o)"
+      >
+        <video
+          v-if="o.image && isVideoUrl(o.image)"
+          :src="o.image" class="occ-drawer-img" autoplay loop muted playsinline
+        />
+        <img
+          v-else-if="o.image" :src="o.image" class="occ-drawer-img" alt="" draggable="false"
+        />
+        <span v-else class="occ-drawer-initials">{{ occupantInitials(o.name) }}</span>
+        <span class="occ-drawer-name">{{ o.name }}</span>
+      </div>
     </div>
 
     <!-- Overlay preset switcher (architect only) -->
@@ -313,6 +336,17 @@ const occupants = ref([])
 // entities; the architect sees them (marked as drafts).
 const occupantDots = computed(() =>
   occupants.value.filter(o => o.id !== props.entityId && (props.gmMode || !o.unpublished))
+)
+
+// Occupants with **no stored position on this map** — the arrange-mode worklist.
+//
+// They are still *drawn* (at the computed `occupantX/Y` default), because an
+// occupant's presence is a **fact about the room**: hiding someone would misreport
+// who is here, which is different from a trait chip, whose position is only where
+// its label sits. So this is "who still needs placing", shown in the same drawer as
+// the unplaced traits, not a second copy of the map.
+const unplacedOccupants = computed(() =>
+  occupantDots.value.filter(o => o.map_x == null || o.map_y == null)
 )
 
 // ── Size animation for driven dots ─────────────────────────────────────────
@@ -1450,6 +1484,37 @@ function onTraitChipDragStart(e, trait) {
   })
 }
 
+// Dragging an unplaced occupant out of the drawer **places** them, exactly as
+// dragging their dot does: the same `usePercentDrag`, the same PATCH. The occupant
+// has no stored position yet, so — like a chip promoted out of the stack — they land
+// under the pointer rather than jumping to a default first, and the moment
+// `map_x`/`map_y` are set the drawer entry disappears (that is what `unplaced`
+// measures), leaving only their dot on the map.
+function onOccupantDrawerDragStart(e, occ) {
+  const img = getPosFromEvent(e)
+  const from = {
+    x: Math.max(2, Math.min(98, Math.round(img.x))),
+    y: Math.max(2, Math.min(98, Math.round(img.y))),
+  }
+  occ.map_x = from.x
+  occ.map_y = from.y
+  percentDrag.start(e, {
+    x: from.x,
+    y: from.y,
+    onMove: (x, y) => { occ.map_x = x; occ.map_y = y },
+    onEnd: async () => {
+      noteOwnMove(occ.id, occ.map_x, occ.map_y)
+      try {
+        await fetch(`/api/v1/entities/${occ.id}/map-position`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ map_x: occ.map_x, map_y: occ.map_y }),
+        })
+      } catch { /* silent: they stay where they were dragged locally */ }
+    },
+  })
+}
+
 // (The rating's dice — and the grouping that fans them — live in `TraitChip`, so
 // both the auto-stack and the scene render them identically.)
 
@@ -2105,6 +2170,33 @@ onMounted(() => {
 .loc-traits.has-switcher {
   top: calc(env(safe-area-inset-top, 16px) + 80px);
 }
+
+/* An unplaced OCCUPANT in the same drawer: a small row — picture or initials, then
+   the name — in the chips' own visual language, so the drawer reads as one list of
+   "not placed yet" whatever the kind. `pointer-events: auto` for the same reason the
+   chips need it: the drawer itself is transparent to the map. */
+.occ-drawer-chip {
+  display: flex; align-items: center; gap: 7px;
+  padding: 3px 9px 3px 5px;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 11px;
+  background: rgba(10,10,20,0.55);
+  backdrop-filter: blur(4px);
+  font-size: 12px;
+  color: var(--map-text);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.85);
+  cursor: grab;
+  pointer-events: auto;
+}
+.occ-drawer-img {
+  width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex: 0 0 auto;
+}
+.occ-drawer-initials {
+  width: 22px; height: 22px; border-radius: 50%; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; background: rgba(255,255,255,0.12);
+}
+.occ-drawer-name { white-space: nowrap; }
 
 /* The chip's own appearance — the edge, the two text rows, and the fanned dice —
    lives in `location/TraitChip.vue`, because the same chip renders in two places
