@@ -760,3 +760,43 @@ def test_a_healthy_path_does_not_warn_about_its_seed():
         spec=TargetSpec(steps=[{"kind": "select", "collection": "locations"}]))]
     warnings = validate_sfx(sfx)
     assert not any("names no collection" in w for w in warnings), warnings
+
+
+def test_an_authored_reference_satisfies_required_target():
+    """The reference form satisfies the field it supersedes — as the spec form does.
+
+    The migration moved every path target out of `target_spec` and into the
+    reference the action declares, so a check that only knew `target_spec` warned
+    "missing required field 'target'" on every migrated rule whose target is a
+    path ([[B261]]).
+    """
+    from transversal.domain import TargetRef
+    from transversal.services.target_spec import NavigateStep, SelectStep, TargetSpec
+
+    spec = TargetSpec(steps=[
+        SelectStep(collection="source"),
+        NavigateStep(edge="projections"),
+    ])
+    sfx = _sfx(
+        trigger="on_session_start",
+        effects=[Effect(
+            timing=EffectTiming.ON_ROLL, type="travel", action="move",
+            target="",
+            refs={"location": TargetRef(spec=spec)},
+        )],
+    )
+    warnings = validate_sfx(sfx)
+    assert not any("missing required field 'target'" in w for w in warnings)
+
+
+def testa_reference_with_a_literal_value_satisfies_required_target():
+    from transversal.domain import TargetRef
+
+    sfx = _sfx(
+        trigger="on_session_start",
+        effects=[Effect(
+            timing=EffectTiming.ON_ROLL, type="travel", action="move",
+            target="", refs={"location": TargetRef(value="loc-1")},
+        )],
+    )
+    assert not any("missing required field 'target'" in w for w in validate_sfx(sfx))

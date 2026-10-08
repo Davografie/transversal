@@ -12,7 +12,12 @@ import re
 from transversal.domain import Effect, SFX
 from transversal.services.menu_contexts import trigger_variables
 from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
-from transversal.services.effect_refs import recipient_value, target_value
+from transversal.services.effect_refs import (
+    recipient_spec_of,
+    recipient_value,
+    target_spec_of,
+    target_value,
+)
 
 _TOKEN = re.compile(r"\{([^{}]+)\}")
 
@@ -78,10 +83,15 @@ def _missing_required(effect: Effect) -> list[str]:
             if f.name in ("target", "result", "entity")
             else (effect.context or {}).get(f.name)
         )
-        # A structured spec satisfies the target/entity requirement.
-        if f.name == "target" and (effect.target_spec and effect.target_spec.steps):
+        # A **path** satisfies the target/entity requirement, and it may be
+        # authored either way: the positional spec, or the reference the action
+        # declares for that field. Asking the accessors covers both — and the
+        # reference form is the one content carries now, so reading only
+        # ``target_spec`` warned "missing required field 'target'" on every
+        # migrated rule whose target is a path ([[B261]]).
+        if f.name == "target" and (target_spec_of(effect, meta) or target_value(effect, meta)):
             continue
-        if f.name == "entity" and (effect.entity_spec and effect.entity_spec.steps):
+        if f.name == "entity" and (recipient_spec_of(effect, meta) or recipient_value(effect, meta)):
             continue
         if value in (None, ""):
             missing.append(f.name)
