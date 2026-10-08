@@ -96,6 +96,34 @@ def test_a_running_duration_shows_as_active_with_its_source(monkeypatch):
     ]
 
 
+def test_a_duration_row_says_what_the_rule_is_about(monkeypatch):
+    """A ban's target entity survives **only** on its row.
+
+    Bindings are live-only, so a rule known by its duration row alone had nothing
+    to show but its source — and the human could see they were banned from
+    contesting somebody without seeing *who* (`sfx-give-in-targeting-ban`,
+    2026-09-29). The row keeps the effect it will undo, which names the entity.
+    """
+    from transversal import main
+
+    monkeypatch.setattr(main, "_get_engine", lambda: _Engine({"sfx-ban": "Keep Your Distance"}))
+    repo = _Repo([ScheduledEvent(
+        id="se-ban", target_type="entity", target_id="pc-rail",
+        source_sfx_id="sfx-ban", kind="revert",
+        timers=[Timer(event="scene", remaining=1)],
+        effect=Effect(timing=EffectTiming.IMMEDIATE, type="entity",
+                      action="remove_targeting_ban", target="gmc-banished"),
+    )])
+
+    entries = QueriesSfx().active_sfx(_info(repo), "pc-rail")
+
+    card = next(e for e in entries if e.sfx_id == "sfx-ban")
+    assert [t.id for t in card.targets] == ["gmc-banished"]
+    # `_Repo` cannot name an entity, so the id is the fallback the card renders —
+    # the server never hands the rail a blank line.
+    assert card.targets[0].name == "gmc-banished"
+
+
 def test_an_armed_rule_shows_its_source_and_bound_names(monkeypatch):
     """The live half: the activation's own source and the names it bound.
 

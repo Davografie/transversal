@@ -106,6 +106,39 @@ def _row_activation_source(repo, rows, entity_id: str, sfx_id: str) -> Optional[
     return None
 
 
+def _row_targets(repo, rows, entity_id: str, sfx_id: str, resolve) -> list:
+    """What the rows for one live rule say it is *about*, named.
+
+    A duration row keeps the effect the rule will undo, and that effect carries the
+    thing it acted on — for a targeting ban, the entity its owner may not contest
+    again. That row is the only place the fact survives, because an activation's
+    ``bindings`` are live-only, so a rule known by its row alone had nothing else
+    to show.
+    """
+    from transversal.api.graphql.type_defs.effects import ActiveSfxTarget
+    from transversal.services.scheduled_events import _event_owner_entity
+
+    out: list = []
+    seen: set[str] = set()
+    for event in rows:
+        if event.source_sfx_id != sfx_id:
+            continue
+        if _event_owner_entity(repo, event) != entity_id:
+            continue
+        effect = event.effect
+        for value in (getattr(effect, "target", ""), getattr(effect, "entity", "")):
+            value = (value or "").strip()
+            # `self`, a blank, or an unresolved `{token}` names nothing to show.
+            if not value or value == "self" or value.startswith("{"):
+                continue
+            if value in seen:
+                continue
+            seen.add(value)
+            out.append(ActiveSfxTarget(id=strawberry.ID(value),
+                                       name=_display_name(repo, value, resolve)))
+    return out
+
+
 @strawberry.type
 class QueriesSfx:
     """Mixin contributing 11 field(s) to the root type."""
@@ -346,6 +379,7 @@ class QueriesSfx:
                 source_id=source_id,
                 source_name=_display_name(repo, source_id, resolve) if source_id else None,
                 bindings=_binding_rows(repo, entry, resolve) if entry is not None else [],
+                targets=_row_targets(repo, rows, eid, sfx_id, resolve),
             ))
         return out
 

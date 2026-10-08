@@ -46,6 +46,18 @@
           </ul>
         </div>
 
+        <!-- What the rule is *about*, when only its duration row still knows: an
+             activation's bindings are live-only, so a ban's target entity showed
+             nowhere at all (the human, 2026-09-29). -->
+        <div v-if="sfx.activation?.targets?.length" class="armed-sfx-card__bound">
+          <div class="armed-sfx-card__bound-head">Applies to</div>
+          <ul class="armed-sfx-card__bindings">
+            <li v-for="t in sfx.activation.targets" :key="t.id" class="armed-sfx-card__binding">
+              <span class="armed-sfx-card__binding-value">{{ t.name || t.id }}</span>
+            </li>
+          </ul>
+        </div>
+
         <ul v-if="sfx.effects?.length" class="armed-sfx-card__effects">
           <li v-for="(fx, i) in sfx.effects" :key="i" class="armed-sfx-card__effect">
             <span class="armed-sfx-card__effect-timing">{{ labelize(fx.timing) }}</span>
@@ -149,6 +161,7 @@ async function loadActive() {
         activeSfx(entityId: $id) {
           sfxId name sourceKind sourceId sourceName
           bindings { name element cardinality summary }
+          targets { id name }
         }
       }`,
       { id },
@@ -202,6 +215,8 @@ watch(
   color: var(--text-dim, #8890a0);
   padding-left: 8px;
   margin-bottom: 2px;
+  /* The one label with no card under it, so it sits on the artwork itself. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.7);
 }
 
 .armed-sfx-card {
@@ -211,7 +226,13 @@ watch(
   align-items: flex-start;
   gap: 2px;
   text-align: left;
-  background: var(--overlay-8, rgba(255, 255, 255, 0.06));
+  /* A chip floats **over the map image**, so it needs the panel surface, not an
+     8% overlay: at 8% the artwork read straight through the label and the card
+     was unreadable (the human, 2026-09-29). `--bg-panel` + blur is the treatment
+     every other floating surface in the app uses — see `assets/styles.css`. */
+  background: var(--bg-panel);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border: 1px solid var(--overlay-12, rgba(255, 255, 255, 0.12));
   border-radius: 10px;
   padding: 8px 10px;
@@ -220,9 +241,11 @@ watch(
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
+/* Open or hovered is *fully* opaque: the card being read is the one that must not
+   have artwork behind it. */
 .armed-sfx-card:hover,
 .armed-sfx-card--open {
-  background: var(--overlay-14, rgba(255, 255, 255, 0.14));
+  background: var(--bg-panel-raised);
   border-color: var(--accent, rgba(140, 200, 255, 0.5));
 }
 

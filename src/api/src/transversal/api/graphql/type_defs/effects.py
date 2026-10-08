@@ -104,14 +104,28 @@ class ActiveSfxBinding:
     summary: str = ""
 
 @strawberry.type
+class ActiveSfxTarget:
+    """One thing an active rule is *about*, when only its row still knows.
+
+    A duration row persists the effect the rule will undo — for a targeting ban
+    that is ``remove_targeting_ban`` with **the banned entity** as its target —
+    while the activation's ``bindings`` are live-only and are never written to the
+    row. So a rule known solely by its row had nothing to show but its source, and
+    the human could see they were banned from contesting somebody and not *who*
+    (``sfx-give-in-targeting-ban``, 2026-09-29).
+    """
+    id: strawberry.ID
+    name: str = ""
+
+@strawberry.type
 class ActiveSfx:
     """A rule the entity is currently under, and what its activation is holding.
 
-    ``activeSfxIds`` answered *which*; this answers *what it came from and what
-    it bound* — the instance the rule was activated from and the names its
-    targeting paths could use. ``bindings`` are live-only (they are not persisted
-    on the timer rows), so a rule known solely by its row shows a source and no
-    bindings.
+    ``activeSfxIds`` answered *which*; this answers *what it came from, what it
+    bound, and what it is about* — the instance the rule was activated from, the
+    names its targeting paths could use, and the things its row will act on.
+    ``bindings`` are live-only (they are not persisted on the timer rows), so a
+    rule known solely by its row shows a source, its ``targets``, and no bindings.
     """
     sfx_id: strawberry.ID
     name: str
@@ -119,6 +133,7 @@ class ActiveSfx:
     source_id: Optional[str] = None
     source_name: Optional[str] = None
     bindings: list[ActiveSfxBinding] = strawberry.field(default_factory=list)
+    targets: list[ActiveSfxTarget] = strawberry.field(default_factory=list)
 
 @strawberry.type
 class ConsequenceOption:
