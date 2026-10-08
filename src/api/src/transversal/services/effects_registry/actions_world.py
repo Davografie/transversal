@@ -182,7 +182,23 @@ ACTIONS: list[EffectActionMeta] = [
         # Which bodies may be reused. A path here is the narrowing the old
         # `target_scope` spelled ("the body I have in this place"); with no path,
         # the pool is the actor's bodies in the destination universe.
-        refs=[RefDef(name="projection", label="Body", elements="projection")],
+        # **Declaration order is resolution order, and a reference may consume
+        # an earlier one's output.** This rule's destination path walks through a
+        # body and names it (`… navigate projections → choose output
+        # "target_projection" → navigate location`), so the destination must be
+        # declared *before* the body that reads it — otherwise the consumer
+        # resolves first, finds nothing bound, and the whole effect fails closed
+        # and silently ([[B261]], and the author's diagnosis 2026-10-09). The
+        # recipient leads because it is the question the panel asks first.
+        #
+        # `_DECLARED_REFS` adds nothing here: it skips a reference the action
+        # declares itself.
+        refs=[
+            RefDef(name="recipient", label="Entity", elements="entity", role="entity"),
+            RefDef(name="location", label="Destination Location", elements="location",
+                   role="target"),
+            RefDef(name="projection", label="Body", elements="projection"),
+        ],
     ),
 
     # ── Set Location ───────────────────────────────────
