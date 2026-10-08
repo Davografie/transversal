@@ -14,6 +14,7 @@ from transversal.services.effects_applier.handlers_world import (
     _apply_attune_projection,
     _apply_attune_universe,
 )
+from transversal.services.effect_refs import recipient_value
 
 
 EffectHandler = Callable[[Effect, str, str, dict], None]
@@ -70,7 +71,7 @@ def _razmerit_entity(effect: Effect, acting_entity_id: str) -> str:
     there too — so a concrete value means "this entity", while blank / ``self`` /
     an unresolved placeholder means the acting entity.
     """
-    subject = (effect.entity or "").strip()
+    subject = recipient_value(effect).strip()
     if not subject or subject == "self" or subject.startswith("{"):
         return acting_entity_id
     return subject

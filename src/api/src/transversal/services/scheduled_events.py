@@ -23,7 +23,7 @@ from transversal.domain import (
     Timer,
     TimerCombine,
 )
-from transversal.services.effect_refs import target_value
+from transversal.services.effect_refs import recipient_value, target_value
 
 # Global timing boundaries that also fire an auto-fire SFX trigger.
 _GLOBAL_BOUNDARY_SFX = {"beat": "on_beat", "scene": "on_scene"}
@@ -80,7 +80,7 @@ def build_revert(
     result = effect.result
     if captures_prior and prior_result is not None:
         result = prior_result
-    subject = (effect.entity or "").strip()
+    subject = recipient_value(effect).strip()
     if subject.startswith("{"):
         subject = ""  # unresolved name → the row's owner is the right actor
     return Effect(

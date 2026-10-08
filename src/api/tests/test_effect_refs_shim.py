@@ -21,6 +21,8 @@ from transversal.services.effect_refs import (
     effective_refs,
     legacy_field_by_ref,
     materialise_refs,
+    recipient_spec_of,
+    recipient_value,
     target_spec_of,
     target_value,
 )
@@ -403,3 +405,21 @@ def test_target_spec_of_reads_the_path_from_either_home():
 def test_target_spec_of_is_none_when_the_target_is_a_literal():
     effect = Effect(type="modify_trait", action="set", target="ts-x")
     assert target_spec_of(effect) is None
+
+
+def test_the_accessors_survive_an_object_that_cannot_name_its_action():
+    """Dispatch paths hand these whatever the caller had — including test doubles.
+
+    An object with no `type`/`action`/`refs` has no declaration, so there is no
+    reference to find and the positional field answers. Without this the accessor
+    raised `AttributeError` from inside a razmerit reader that had always been
+    handed a light stub.
+    """
+    class _Stub:
+        entity = "gmc-7"
+        target = "ts-x"
+
+    assert recipient_value(_Stub()) == "gmc-7"
+    assert target_value(_Stub()) == "ts-x"
+    assert recipient_spec_of(_Stub()) is None
+    assert target_spec_of(_Stub()) is None

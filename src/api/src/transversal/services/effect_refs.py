@@ -56,9 +56,20 @@ def _field_ref(effect: Effect, field: str) -> TargetRef | None:
 
 
 def _meta_for(effect: Effect, meta: EffectActionMeta | None) -> EffectActionMeta | None:
+    """The action's declaration, or None when the object cannot name one.
+
+    Defensive on purpose: these accessors are called from dispatch paths that
+    receive whatever the caller had to hand, including test doubles and partially
+    built effects. An object that cannot name its action has no declaration, so
+    there is no reference to look for and the positional field answers.
+    """
     if meta is not None:
         return meta
-    return get_action_meta_for(effect.type, effect.action)
+    effect_type = getattr(effect, "type", "")
+    effect_action = getattr(effect, "action", "")
+    if not effect_type or not effect_action:
+        return None
+    return get_action_meta_for(effect_type, effect_action)
 
 
 def effective_refs(effect: Effect, meta: EffectActionMeta | None = None) -> dict[str, TargetRef]:
@@ -105,9 +116,10 @@ def _ref_for(effect: Effect, legacy_field: str, meta: EffectActionMeta | None = 
     meta = _meta_for(effect, meta)
     if meta is None:
         return None
+    refs = getattr(effect, "refs", None) or {}
     for ref_def in meta.refs:
         if ref_def.legacy_field == legacy_field:
-            return (effect.refs or {}).get(ref_def.name)
+            return refs.get(ref_def.name)
     return None
 
 
@@ -132,7 +144,7 @@ def target_value(effect: Effect, meta: EffectActionMeta | None = None) -> str:
     validator checks nothing, a guided route has no destination. The positional
     field is still the fallback, so both forms work while content is migrated.
     """
-    return ref_value(effect, "target", meta) or (effect.target or "")
+    return ref_value(effect, "target", meta) or (getattr(effect, "target", "") or "")
 
 
 def target_spec_of(effect: Effect, meta: EffectActionMeta | None = None):
@@ -144,17 +156,17 @@ def target_spec_of(effect: Effect, meta: EffectActionMeta | None = None):
     migration the path lives in the reference — reading only `target_spec` would
     silently render no target at all.
     """
-    return ref_spec(effect, "target", meta) or effect.target_spec
+    return ref_spec(effect, "target", meta) or getattr(effect, "target_spec", None)
 
 
 def recipient_value(effect: Effect, meta: EffectActionMeta | None = None) -> str:
     """Who the effect lands on, from its reference or the positional field."""
-    return ref_value(effect, "entity", meta) or (effect.entity or "")
+    return ref_value(effect, "entity", meta) or (getattr(effect, "entity", "") or "")
 
 
 def recipient_spec_of(effect: Effect, meta: EffectActionMeta | None = None):
     """The recipient **path**, wherever it is authored."""
-    return ref_spec(effect, "entity", meta) or effect.entity_spec
+    return ref_spec(effect, "entity", meta) or getattr(effect, "entity_spec", None)
 
 
 def legacy_field_by_ref(effect: Effect, meta: EffectActionMeta | None = None) -> dict[str, str]:

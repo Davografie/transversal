@@ -16,7 +16,7 @@ from transversal.services.effects_applier.targeting import (
     _effect_subject,
     _track_subject,
 )
-from transversal.services.effect_refs import target_value
+from transversal.services.effect_refs import recipient_value, target_value
 
 
 def owner_surface_for(owner) -> tuple[str | None, str]:
@@ -81,7 +81,7 @@ def _apply_grant_sfx(entity, effect: Effect, repo, result: EffectsResult) -> Non
     permit that surface, and its acquire gate must hold. A grant is not a back
     door around either.
     """
-    subject: object = (effect.entity or "").strip()
+    subject: object = recipient_value(effect).strip()
     if subject in ("", "self"):
         subject = entity
     elif str(subject).startswith("{"):

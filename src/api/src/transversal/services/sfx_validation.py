@@ -12,7 +12,7 @@ import re
 from transversal.domain import Effect, SFX
 from transversal.services.menu_contexts import trigger_variables
 from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
-from transversal.services.effect_refs import target_value
+from transversal.services.effect_refs import recipient_value, target_value
 
 _TOKEN = re.compile(r"\{([^{}]+)\}")
 
@@ -53,7 +53,7 @@ def _reserved(token: str) -> bool:
 
 def _effect_tokens(effect: Effect) -> list[str]:
     """Tokens in the effect fields that are meant to hold references/variables."""
-    return _tokens(target_value(effect), effect.entity, effect.result)
+    return _tokens(target_value(effect), recipient_value(effect), effect.result)
 
 
 def _action_meta(effect: Effect):
