@@ -29,6 +29,7 @@ from transversal.services.target_spec import (
     TargetSpec,
     TraceError,
     ValueType,
+    bound_name,
 )
 from transversal.services import target_catalog as tc
 
@@ -457,7 +458,9 @@ def _bound_value(value: Any, context: TargetContext | None) -> Any:
     """
     if not isinstance(value, str) or not (value.startswith("{") and value.endswith("}")):
         return value
-    name = value[1:-1].strip()
+    name = bound_name(value)
+    if name is None:
+        return value
     bindings = getattr(context, "bindings", None) or {}
     binding = bindings.get(name)
     if binding is None:

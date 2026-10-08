@@ -12,16 +12,22 @@ engine asked "who". This module folds them into one ordered set of refs, so the
 resolver, the engine and the handlers can read a single vocabulary while the
 positional fields are migrated away.
 
-A ``RefDef`` declares the ``role`` it plays — the positional field it supersedes. An action that declares no marker, and an effect that carries no
-marked ref, behave exactly as before: the shim is **inert** until an action opts
-in, which is what lets it land without touching 352 stored effects.
+**The order is derived from the paths** (``dependency_order``): a ref that reads a
+name another ref publishes resolves after it, whatever the declaration says. Only
+refs that do not depend on each other keep the declared order — which is also the
+order the panel asks in. Nothing about the ordering is part of the shim; it is a
+fact about refs and it stays.
+
+The shim proper is ``LEGACY_FIELDS``, ``_field_ref``, the fold inside
+``effective_refs``, and the positional fallbacks in ``target_value`` /
+``target_spec_of`` / ``recipient_value`` / ``recipient_spec_of``. Those — and the
+``role`` markers and the positional fields themselves — go together when the
+migration is done, tracked on [[B261]]. ``with_ref``, ``anchor_ref_names`` and
+``dependency_order`` do not.
 
 Not part of the shim, deliberately: ``result`` (the *string* field). It is an
 operand — a die (``d6``) or a number — not a target, and folding it into refs
 would be a category error. Only ``result_spec`` is a path.
-
-Delete this module, the ``role`` markers and the positional fields
-together when the migration is done — tracked on [[B261]].
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ from __future__ import annotations
 from transversal.domain import Effect, TargetRef
 from transversal.services.effects_registry.action_types import EffectActionMeta
 from transversal.services.effects_registry.lookup import get_action_meta_for
+from transversal.services.target_spec import spec_read_names, spec_written_names
 
 #: Legacy field name -> (its string field, its spec field). ``owner`` and
 #: ``result`` have no string form: an owner is only ever a path, and a result
@@ -71,15 +78,62 @@ def _meta_for(effect: Effect, meta: EffectActionMeta | None) -> EffectActionMeta
     return get_action_meta_for(effect_type, effect_action)
 
 
-def effective_refs(effect: Effect, meta: EffectActionMeta | None = None) -> dict[str, TargetRef]:
-    """The effect's refs, in the action's **declared** order, with the positional
-    fields folded in as implicit refs.
+def dependency_order(refs: dict[str, TargetRef]) -> list[str]:
+    """The ref names in the order they *can* be resolved: a consumer after its producer.
 
-    Order is the declaration's, not the stored dict's. Two reasons, and the second
-    is the point of the whole migration: a ref declared before another is resolved
-    first so the later one can compare against it (Attune decides the world, then
-    the projection that filters on it), and the panel renders the same order the
-    engine resolves in — so the two cannot disagree.
+    A ref publishes its own name (``_bind_ref_value``) and every ``output`` its
+    path names; a ref consumes a name with ``{name}`` or ``select variable``.
+    Reading a published name is a dependency, and a consumer resolved before its
+    producer resolves against nothing and fails **closed** — no application, no
+    question, no note, which is how `sfx-transverse` never fired. The engine
+    derives the order from the paths, because only they know ([[B261]]).
+
+    Refs that do not depend on each other keep the order they came in — the
+    action's declaration — so this only ever corrects a real dependency, and the
+    panel still asks in the declaration's order where it does not matter. A
+    dependency **cycle** cannot be honoured; those refs keep their declaration
+    order, which is what the engine resolved by before, rather than guessing.
+    """
+    names = list(refs)
+    publishes: dict[str, set[str]] = {}
+    for name, ref in refs.items():
+        published = spec_written_names(ref.spec) if ref.spec is not None else set()
+        publishes[name] = {name} | published
+
+    producer_of: dict[str, set[str]] = {}
+    for producer, published in publishes.items():
+        for published_name in published:
+            producer_of.setdefault(published_name, set()).add(producer)
+
+    needed: dict[str, set[str]] = {}
+    for name, ref in refs.items():
+        need: set[str] = set()
+        if ref.spec is not None:
+            for read in spec_read_names(ref.spec):
+                need |= {p for p in producer_of.get(read, ()) if p != name}
+        needed[name] = need
+
+    ordered: list[str] = []
+    while len(ordered) < len(names):
+        for name in names:
+            if name not in ordered and needed[name] <= set(ordered):
+                ordered.append(name)
+                break
+        else:
+            # Every remaining ref waits on another — a cycle. Keep the
+            # declaration order for them rather than dropping any.
+            ordered.extend(n for n in names if n not in ordered)
+    return ordered
+
+
+def effective_refs(effect: Effect, meta: EffectActionMeta | None = None) -> dict[str, TargetRef]:
+    """The effect's refs with the positional fields folded in as implicit refs.
+
+    Ordered so that a ref comes **after** anything it reads: the resolution order
+    is derived from the paths (``dependency_order``), not from the declaration, so
+    a consumer cannot be authored into a silent no-op. Refs that do not depend on
+    each other keep the action's **declared** order — which is also the order the
+    panel asks in, so the two cannot disagree.
 
     A declared ref that is present but empty does not block its legacy field: an
     effect carrying ``refs={"trait": {}}`` *and* ``target="ts-x"`` still resolves.
@@ -89,7 +143,7 @@ def effective_refs(effect: Effect, meta: EffectActionMeta | None = None) -> dict
     if meta is None or not meta.refs:
         return declared
 
-    out: dict[str, TargetRef] = {}
+    present: dict[str, TargetRef] = {}
     for ref_def in meta.refs:
         ref = declared.pop(ref_def.name, None)
         if ref is not None and not ref.value and ref.spec is None:
@@ -97,7 +151,8 @@ def effective_refs(effect: Effect, meta: EffectActionMeta | None = None) -> dict
         if ref is None and ref_def.role:
             ref = _field_ref(effect, ref_def.role)
         if ref is not None:
-            out[ref_def.name] = ref
+            present[ref_def.name] = ref
+    out = {name: present[name] for name in dependency_order(present)}
     # A stored ref the action does not declare still resolves (defensive: it is
     # content authored against an older declaration).
     out.update(declared)

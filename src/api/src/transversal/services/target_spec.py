@@ -149,6 +149,50 @@ class TargetSpec(BaseModel):
         return {**data, "steps": folded}
 
 
+# ── Names a spec reads and publishes ──────────────────────────
+#
+# A path can join to what another path decided: a step's ``output`` (the 💡) or a
+# reference's own name publishes a name into the activation scope, and a later
+# path consumes it with ``{name}`` or ``select variable name``. That join is the
+# only thing reference *order* can break, so it is read from the paths themselves
+# rather than trusted to a declaration ([[B261]]).
+
+def bound_name(value: Any) -> str | None:
+    """The name in a ``{name}`` comparison value, or ``None`` when it is not one.
+
+    The one definition of the token shape — a whole string wrapped in braces,
+    with nothing around it — shared with the resolver's substitution so the two
+    cannot drift about what counts as a reference to a bound name.
+    """
+    if not isinstance(value, str) or not (value.startswith("{") and value.endswith("}")):
+        return None
+    return value[1:-1].strip() or None
+
+
+def spec_written_names(spec: TargetSpec) -> set[str]:
+    """The names a spec **publishes** — every step's declared ``output``."""
+    return {s.output for s in spec.steps if getattr(s, "output", None)}
+
+
+def spec_read_names(spec: TargetSpec) -> set[str]:
+    """The names a spec **consumes** — a ``{name}`` value, or ``select variable``.
+
+    Only whole-value tokens count, because only those are substituted at
+    resolution (``_bound_value``); a token inside a list is left alone by the
+    resolver and so is not a dependency here either.
+    """
+    names: set[str] = set()
+    for step in spec.steps:
+        if isinstance(step, SelectStep) and step.collection == "variable":
+            if step.variable:
+                names.add(step.variable)
+            continue
+        name = bound_name(getattr(step, "value", None))
+        if name:
+            names.add(name)
+    return names
+
+
 # ── Value type ────────────────────────────────────────────────
 
 @dataclass(frozen=True)

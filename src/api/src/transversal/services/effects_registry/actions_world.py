@@ -101,9 +101,10 @@ ACTIONS: list[EffectActionMeta] = [
                           required=False, default="self", hidden_when_ref="applies_to"),
         ],
         refs=[
-            # Declared *before* ``projection``: a reference is in scope for the
-            # references that follow it, so the world is decided first and the
-            # projection path can filter on it (``universe == {universe}``).
+            # The world is asked first, and declaring it first is what makes that
+            # the panel's order. The projection path below reads it, so the
+            # dependency would keep the world ahead of it either way — the
+            # declaration decides the asking order, not whether it resolves.
             RefDef(name="universe", label="Universe (which world)", elements="universe"),
             # A path that starts at each entity the target resolved to and walks
             # to that entity's projection counterpart — optionally constrained to
@@ -182,14 +183,14 @@ ACTIONS: list[EffectActionMeta] = [
         # Which bodies may be reused. A path here is the narrowing the old
         # `target_scope` spelled ("the body I have in this place"); with no path,
         # the pool is the actor's bodies in the destination universe.
-        # **Declaration order is resolution order, and a reference may consume
-        # an earlier one's output.** This rule's destination path walks through a
-        # body and names it (`… navigate projections → choose output
-        # "target_projection" → navigate location`), so the destination must be
-        # declared *before* the body that reads it — otherwise the consumer
-        # resolves first, finds nothing bound, and the whole effect fails closed
-        # and silently ([[B261]], and the author's diagnosis 2026-10-09). The
-        # recipient leads because it is the question the panel asks first.
+        # **A reference that consumes an earlier one's output is resolved after
+        # it, and that order is derived from the paths themselves** — this rule's
+        # destination path walks through a body and names it (`… navigate
+        # projections → choose output "target_projection" → navigate location`),
+        # so the body reference is resolved after the destination whatever the
+        # declaration says ([[B261]]). The declaration is therefore only the
+        # *asking* order, and the recipient leads because it is the question the
+        # panel asks first.
         #
         # `_DECLARED_REFS` adds nothing here: it skips a reference the action
         # declares itself.

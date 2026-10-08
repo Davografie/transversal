@@ -146,8 +146,9 @@ def _bind_ref_value(context, name: str, value: str) -> None:
     A step's comparison value may be a ``{name}`` reference (see the resolver's
     ``_bound_value``), so binding each ref as it resolves is what lets one path
     join to a choice made in another — *the who's projection whose universe is
-    the one just chosen*. References resolve in declaration order, so a ref that
-    another depends on must be declared first.
+    the one just chosen*. ``resolve_refs`` resolves producer-first (the order comes
+    from the paths, not the declaration), so a ref that another consumes is bound
+    before its consumer runs ([[B261]]).
 
     A universe resolves to its *entity*, but content identifies a world by its
     handle (``three_realms``, not ``universe-three_realms``) — and a projection's

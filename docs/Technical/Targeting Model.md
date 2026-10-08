@@ -140,12 +140,22 @@ stored content and engine-generated effects keep working.
   fallback field and forget its reference. The table is that derivation, frozen.
   **It covers retired actions too:** retiring is about *authoring*, the registry keeps a
   retired action's dispatch, and the seed builders still construct some of them.
-- **Declaration order is resolution order**, and a reference may **consume an earlier
-  one's output** — a path that names a step output (`choose output "target_projection"`)
-  is read by a later reference (`select variable target_projection`). Declaring the
-  consumer first leaves the variable unbound, the reference resolves to nothing, and
-  `resolve_refs` fails **closed**: no application, no question, no note. `travel` was
-  exactly this (`projection` before the `location` path that names it).
+- **Resolution order is derived from the paths, not from the declaration.** A path
+  can **publish** a name (a step's `output`, or the reference's own name) and a
+  later path can **consume** it (`{name}`, or `select variable name` for a typed
+  step output). `dependency_order` reads those edges out of the paths themselves
+  and resolves a producer before its consumer, so an author cannot order a rule
+  into failure ([[B261]]). Refs that do not depend on each other keep the action's
+  **declared** order — which is also the order the panel asks in, so a declaration
+  still decides the *asking* order and nothing more. A cycle (two refs reading each
+  other) is not orderable; those refs keep their relative order, which is what the
+  engine resolved by before the derivation existed.
+  - This replaced a rule by convention — *"declaration order is resolution order,
+    so declare a producer first"* — which failed **silently** when broken:
+    `resolve_refs` resolves the consumer against an unbound name, the ref resolves
+    to nothing, and the effect returns no application, no question and no note.
+    `travel` was exactly this (`projection` before the `location` path that names
+    it), and it is why `sfx-transverse` never fired.
 - **Readers ask by role, never by name** (`services/effect_refs.py`): `target_value` /
   `target_spec_of` and `recipient_value` / `recipient_spec_of` — the value and path
   halves. `with_ref(effect, role, value, spec)` is the builder's half, so a builder
