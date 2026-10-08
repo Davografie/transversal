@@ -20,6 +20,7 @@ from transversal.services.effect_refs import (
     LEGACY_FIELDS,
     effective_refs,
     legacy_field_by_ref,
+    materialise_refs,
 )
 from transversal.services.effects_engine.refs import resolve_refs
 from transversal.services.effects_registry.action_types import EffectActionMeta, RefDef
@@ -272,3 +273,63 @@ def test_a_target_ref_accepts_exactly_what_the_path_already_accepted():
     ref, path = ref_for("reroll_die")
     assert ref.elements == path == ("die",)
     assert ref.legacy_field == "target"
+
+
+# --- materialising the fold into content (the migration) ---------------------
+
+#: Actions whose *target field* is superseded by a declared reference:
+#: `set_trait`'s `trait` (an instance) and `set_die`'s `die`.
+SET_TRAIT = {"type": "modify_trait", "action": "set"}
+SET_DIE = {"type": "modify_roll", "action": "set_die"}
+GAIN = {"type": "modify_trait", "action": "gain"}
+
+
+def test_materialising_moves_the_field_into_its_reference():
+    """What the content migration will do: store what the fold computes in memory."""
+    out = materialise_refs(Effect(**SET_TRAIT, target="ts-x"))
+    assert out.refs["trait"].value == "ts-x"
+    assert out.target == "" and out.target_spec is None, "the positional source is cleared"
+
+
+def test_materialising_a_spec_moves_the_path_not_its_values():
+    out = materialise_refs(Effect(**SET_TRAIT, target_spec=_spec("ts-x")))
+    assert out.refs["trait"].spec is not None
+    assert out.target_spec is None
+
+
+def test_materialising_carries_every_superseded_field_at_once():
+    """A gain carries a recipient *and* a trait; both move in one pass."""
+    out = materialise_refs(Effect(**GAIN, entity="gmc-7", target="trait-beast"))
+    assert out.refs["trait"].value == "trait-beast"
+    assert out.refs["recipient"].value == "gmc-7"
+    assert out.entity == "" and out.target == ""
+
+
+def test_materialising_changes_nothing_that_has_nothing_to_fold():
+    effect = Effect(**SET_TRAIT)
+    assert materialise_refs(effect) is effect, "identity, so a sweep can skip it"
+
+
+def test_materialising_is_equivalent_to_the_fold():
+    """The property that makes the migration safe: what is stored decides the same.
+
+    `effective_refs` is what the resolver sees. Before the migration it computes
+    the fold from the field; after it, the fold is already in `refs`. The two must
+    agree, or content migration would change what an effect does.
+    """
+    for effect in (
+        Effect(**SET_TRAIT, target="ts-x"),
+        Effect(**SET_TRAIT, target_spec=_spec("ts-x")),
+        Effect(**GAIN, entity="gmc-7", target="trait-beast"),
+        Effect(**SET_DIE, target="d6"),
+        Effect(type="modify_trait", action="move", target="ts-x"),   # no legacy ref
+    ):
+        before = effective_refs(effect)
+        after = effective_refs(materialise_refs(effect))
+        assert before == after, f"{effect.action}: the fold must survive being stored"
+
+
+def test_materialising_leaves_the_result_operand_alone():
+    """`result` is a value, not a path — there is no reference for it to move into."""
+    out = materialise_refs(Effect(**SET_TRAIT, target="ts-x", result="d8"))
+    assert out.result == "d8"

@@ -114,3 +114,30 @@ def anchor_ref_names(effect: Effect, meta: EffectActionMeta | None = None) -> se
     if meta is None:
         return set()
     return {d.name for d in meta.refs if d.anchor}
+
+
+def materialise_refs(effect: Effect, meta: EffectActionMeta | None = None) -> Effect:
+    """Rewrite an effect so its positional paths live in ``refs`` — the fold, stored.
+
+    The shim folds a positional field into its declared reference every time the
+    effect resolves (``effective_refs``). This does it **once**, into the content,
+    so the positional fields can eventually be deleted.
+
+    It is deliberately the *same* fold, not a second implementation: whatever
+    `effective_refs` returns is exactly what gets written, and the fields it
+    superseded are cleared in the same move. An effect with nothing to fold is
+    returned unchanged (identity, so a caller can skip it cheaply).
+
+    Only the fields a ref declares are touched — `result` is an operand, not a
+    path, and never has a reference to move into.
+    """
+    folded = effective_refs(effect, meta)
+    if folded == (effect.refs or {}):
+        return effect
+    updates: dict = {"refs": folded}
+    for field_name in set(legacy_field_by_ref(effect, meta).values()):
+        string_field, spec_field = LEGACY_FIELDS[field_name]
+        if string_field:
+            updates[string_field] = ""
+        updates[spec_field] = None
+    return effect.model_copy(update=updates)
