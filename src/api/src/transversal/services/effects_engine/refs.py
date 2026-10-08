@@ -8,6 +8,7 @@ from transversal.domain import SFX
 from typing import Optional
 from transversal.services.effect_refs import (
     LEGACY_FIELDS,
+    anchor_ref_names,
     effective_refs,
     legacy_field_by_ref,
 )
@@ -189,6 +190,12 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
     ``effect.target``/``effect.entity`` keep working while they are migrated.
     """
     refs_in = effective_refs(effect)
+    # An anchor is authored as a reference but settled by its own resolver, so it
+    # is not resolved (or multiplied) here. An effect whose only ref is an anchor
+    # resolves to itself, exactly as one with no refs does.
+    _anchors = anchor_ref_names(effect)
+    if _anchors:
+        refs_in = {n: r for n, r in refs_in.items() if n not in _anchors}
     if not refs_in:
         return [effect]
     from itertools import product

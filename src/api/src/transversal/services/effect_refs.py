@@ -100,3 +100,17 @@ def legacy_field_by_ref(effect: Effect, meta: EffectActionMeta | None = None) ->
     if meta is None:
         return {}
     return {d.name: d.legacy_field for d in meta.refs if d.legacy_field}
+
+
+def anchor_ref_names(effect: Effect, meta: EffectActionMeta | None = None) -> set[str]:
+    """The ref names that are **anchors** — authored, but not resolved here.
+
+    An anchor says where the thing the effect makes lives, and its own resolver
+    settles it once. `resolve_refs` must leave it alone: every other reference
+    multiplies the application, and an anchor that resolved to three edges would
+    make three things instead of one thing anchored three ways.
+    """
+    meta = _meta_for(effect, meta)
+    if meta is None:
+        return set()
+    return {d.name for d in meta.refs if d.anchor}

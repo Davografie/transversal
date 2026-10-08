@@ -53,6 +53,13 @@ class RefDef:
     # one vocabulary and stored content keeps working with no migration. Absent on
     # a ref that never had a positional form. Delete with the fields ([[B261]]).
     legacy_field: str | None = None
+    # An **anchor** is authored as a reference but is not a per-fire multiplier:
+    # it says where the thing the effect *makes* lives, and its own resolver
+    # (`resolve_effect_owner`) settles it once. A reference that is not an anchor
+    # fans the effect out per resolved value; an anchor resolving to three edges
+    # would make three things rather than one thing anchored three ways. The owner
+    # path is the only one ([[B261]]).
+    anchor: bool = False
 
     def __post_init__(self) -> None:
         if isinstance(self.elements, str):

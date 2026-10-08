@@ -550,6 +550,13 @@ const ownerPathDestination = computed(() => {
   const elements = selectedAction.value?.ownerElements || []
   return elements.length ? { elements } : null
 })
+// The owner is a declared **anchor** reference now ([[B261]]): it renders as a ref
+// row like every other input, so this block is its *fallback* — shown only while
+// no ref is authored, the same shape `hiddenWhenRef` gives a superseded field.
+// Content authored before the reference keeps its path editable here.
+const ownerFallbackShown = computed(() =>
+  !!ownerPathDestination.value
+  && !(newEffect.refs?.owner?.spec?.steps || []).length)
 const ownerHelp = computed(() => {
   const element = (selectedAction.value?.ownerElements || [])[0]
   return `Anchored to ${OWNER_ELEMENT_LABEL[element] || element}.`
@@ -656,7 +663,7 @@ const orderedInputs = computed(() => {
   const tail = unranked.filter((x) => !declaredNames.has(x.f.name))
   // An action that declares an owner path but does not rank it still shows it, at
   // the end — the anchor reads after the thing it anchors.
-  if (ownerPathDestination.value && !declaredNames.has('owner')) tail.push(OWNER_INPUT)
+  if (ownerFallbackShown.value && !declaredNames.has('owner')) tail.push(OWNER_INPUT)
   const items = [...declared, ...tail]
   // A gain verb's in-line trait editor belongs with the trait it is about (see
   // the template). Placed *after* the trait field, wherever that field landed —
@@ -685,7 +692,7 @@ function rank_by_declaration(refs, fields, refsFirst) {
 }
 
 function by_name(name, refs, fields) {
-  if (name === 'owner' && ownerPathDestination.value) return OWNER_INPUT
+  if (name === 'owner' && ownerFallbackShown.value) return OWNER_INPUT
   const r = refs.find((x) => x.name === name)
   if (r) return { kind: 'ref', f: r }
   const f = fields.find((x) => x.name === name)

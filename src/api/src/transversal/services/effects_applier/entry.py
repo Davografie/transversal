@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from transversal.domain import Effect
 from transversal.domain import Entity
+from transversal.domain import TargetRef
 from transversal.services.conditions import evaluate_conditions
 from transversal.services.effects_applier.datatypes import (
     AppliedEffect,
@@ -438,8 +439,16 @@ def resolve_effect_owner(effect: Effect, entity_id: str, repo,
     entity stays the owner — the same fail-open the other specs take, because
     "no owner path resolved" and "no owner path authored" are the same state.
     """
-    if effect.owner_spec is None or not effect.owner_spec.steps:
+    # The owner is a declared **anchor** reference ([[B261]]): authored like any
+    # other reference, but settled here rather than by `resolve_refs`, because an
+    # anchor says where the made thing lives — once — while a reference multiplies
+    # the application. `owner_spec` is the legacy fallback for content authored
+    # before the reference existed.
+    _ref = (effect.refs or {}).get("owner")
+    spec = _ref.spec if _ref is not None and _ref.spec is not None else effect.owner_spec
+    if spec is None or not spec.steps:
         return effect
+
     from transversal.services.effects_applier.datatypes import (
         OWNER_ID_CONTEXT_KEY,
         OWNER_KIND_CONTEXT_KEY,
@@ -455,7 +464,7 @@ def resolve_effect_owner(effect: Effect, entity_id: str, repo,
     seeds.update(collections or {})
 
     resolution = resolve(
-        effect.owner_spec,
+        spec,
         TargetContext(subject=entity, repo=repo, bindings=bindings,
                       collections=seeds, source=source, source_element=source_element),
     )
@@ -472,6 +481,10 @@ def resolve_effect_owner(effect: Effect, entity_id: str, repo,
         kind = getattr(landing, "element", "") or ""
         return effect.model_copy(update={
             "owner_spec": None,
+            # Publish the answer under the reference too, so the vocabulary is
+            # the same whether the anchor was authored as a ref or a field.
+            "refs": {**(effect.refs or {}),
+                     "owner": TargetRef(value=str(rid))},
             "context": {
                 **(effect.context or {}),
                 OWNER_ID_CONTEXT_KEY: str(rid),

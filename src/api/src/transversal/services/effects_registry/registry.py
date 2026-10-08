@@ -72,6 +72,16 @@ for _m in EFFECT_ACTION_REGISTRY:
         _m.refs = [*_m.refs, RefDef(name=_ref_name, label=_f.label,
                                     elements=_elements, legacy_field=_f.name)]
 
+# The **anchor** needs no field to point at it: `owner_elements` already says the
+# action has an owner path and what it may land on, so that declaration is the
+# whole opt-in. The ref is `anchor=True` — authored like any other, but settled
+# once by `resolve_effect_owner` instead of fanning the effect out per value.
+for _m in EFFECT_ACTION_REGISTRY:
+    if _m.owner_elements and not any(r.name == "owner" for r in _m.refs):
+        _m.refs = [*_m.refs, RefDef(name="owner", label="Anchored to",
+                                    elements=_m.owner_elements,
+                                    legacy_field="owner", anchor=True)]
+
 
 # ── Functional grouping (editor optgroups) ─────────────
 # Assigned after construction so each action's group lives beside the section

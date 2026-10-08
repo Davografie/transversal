@@ -355,6 +355,17 @@ const find = (name) => VUE.find((p) => rel(p) === name)
     /ends\.some\(\(e\) => e\.entity === entity && e\.sfxId === sfxId\)/.test(app), true)
   ok('…and declining a loop is not a take-back',
     /if \(c\?\.loop\) continue/.test(app), true)
+
+  // The owner path is a declared **anchor** reference ([[B261]]): it renders as a
+  // ref row like every other input, and the older standalone block becomes its
+  // fallback — shown only while no ref is authored, so both cannot appear at once.
+  const effectForm = read(find('components/gm/EffectForm.vue'))
+  ok('the owner path defers to its declared reference',
+    /const ownerFallbackShown = computed/.test(effectForm)
+      && /!\(newEffect\.refs\?\.owner\?\.spec\?\.steps \|\| \[\]\)\.length/.test(effectForm), true)
+  ok('…and the standalone owner block is gated on that fallback',
+    /ownerFallbackShown\.value && !declaredNames\.has\('owner'\)/.test(effectForm)
+      && /if \(name === 'owner' && ownerFallbackShown\.value\)/.test(effectForm), true)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
