@@ -206,23 +206,25 @@ def test_the_legacy_field_map_covers_exactly_the_four_positional_fields():
 
 # --- the derivation contract (registry) --------------------------------------
 
-def test_every_derived_reference_matches_the_field_it_replaces():
-    """The derivation contract: each fallback field, and the ref built from it.
+def test_every_fallback_field_still_has_its_declared_reference():
+    """The fields are on their way out; while they exist, each must still have the
+    reference the editor defers it to.
 
-    Scoped to the fields the derivation covers (`_ELEMENTS_FOR_FIELD`) on purpose.
-    `hidden_when_ref` has a **second, older meaning** — the attune/suppress
-    `result` fields use it to hide a field the `projection` ref supersedes
-    outright, with no legacy fold and a different label. That use is a plain
-    editor visibility rule; this one adds "and the field is its legacy source".
+    The references used to be *derived* from these fields. They are now declared in
+    a table instead ([[B261]]), so this is what keeps the two in step until the
+    fields go — a field the editor hides cannot name a reference nobody declares.
+
+    `hidden_when_ref` also has an older, weaker meaning: attune/suppress hide a
+    `result` field that the `projection` ref supersedes **outright**, with no legacy
+    source and a different label. That use is a plain visibility rule, so the
+    label/source assertions apply only where a legacy source exists.
     """
-    from transversal.services.effects_registry.registry import _ELEMENTS_FOR_FIELD
-
     covered = 0
     for meta in EFFECT_ACTION_REGISTRY:
         if meta.retired:
             continue
         for f in meta.fields:
-            if f.name not in _ELEMENTS_FOR_FIELD or not f.hidden_when_ref:
+            if not f.hidden_when_ref:
                 continue
             covered += 1
             ref = next((r for r in meta.refs if r.name == f.hidden_when_ref), None)
@@ -230,12 +232,13 @@ def test_every_derived_reference_matches_the_field_it_replaces():
                 f"{meta.action_id}.{f.name} defers to {f.hidden_when_ref!r}, "
                 "which no reference declares"
             )
-            assert ref.label == f.label, f"{meta.action_id}: label drifted"
-            assert ref.legacy_field == f.name, f"{meta.action_id}: wrong legacy source"
-            assert ref.elements, (
-                f"{meta.action_id}.{f.name}: a ref nothing could type-check"
-            )
-    assert covered >= 25, "the entity and die-family fields should all be covered"
+            if ref.legacy_field is not None:
+                assert ref.label == f.label, f"{meta.action_id}: label drifted"
+                assert ref.legacy_field == f.name, f"{meta.action_id}: wrong legacy source"
+                assert ref.elements, (
+                    f"{meta.action_id}.{f.name}: a ref nothing could type-check"
+                )
+    assert covered >= 45, "the entity and target fields should all defer"
 
 
 def test_only_the_recipient_field_may_claim_the_name_recipient():
@@ -423,3 +426,26 @@ def test_the_accessors_survive_an_object_that_cannot_name_its_action():
     assert target_value(_Stub()) == "ts-x"
     assert recipient_spec_of(_Stub()) is None
     assert target_spec_of(_Stub()) is None
+
+
+def test_the_declared_refs_table_has_no_orphans():
+    """Every entry names an action that exists, and a field it actually retires.
+
+    The references are a table now rather than something derived from the fields,
+    so the table can drift in a way the derivation could not: an action renamed, or
+    a field deleted, would leave an entry pointing at nothing.
+    """
+    from transversal.services.effects_registry.registry import _DECLARED_REFS
+
+    by_id = {m.action_id: m for m in EFFECT_ACTION_REGISTRY}
+    for action_id, entries in _DECLARED_REFS.items():
+        meta = by_id.get(action_id)
+        assert meta is not None, f"{action_id} is declared but does not exist"
+        field_names = {f.name for f in meta.fields}
+        declared = {r.name for r in meta.refs}
+        for name, _label, elements, legacy, _anchor in entries:
+            assert name in declared, f"{action_id}: {name} was never appended"
+            assert legacy in field_names or legacy in ("owner",), (
+                f"{action_id}: {name} retires {legacy!r}, which the action has no field for"
+            )
+            assert elements, f"{action_id}.{name}: no elements to type-check against"

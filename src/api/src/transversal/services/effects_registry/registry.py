@@ -34,53 +34,80 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
 ]
 
 
-# ── References derived from the positional fields they replace ([[B261]]) ──
-# An action opts in by marking the *field* it is retiring with
-# `hidden_when_ref="<ref name>"`: that field is the fallback form, and the
-# reference is declared from it here, labelled in the field's own words. One
-# source of truth — a new action cannot add the fallback field and forget the
-# reference, and the two labels cannot drift.
-#
-# The elements come from where the action already declares them: a recipient is
-# an entity, and a target accepts exactly what the action's path already accepted
-# — `path_element` where the action has a path, else the flat `target_kind` it was
-# authored against (the two share the catalog's vocabulary; only `occupant` is a
-# scope word rather than an element). `path_element` is a *set* for the change-die
-# family, where a die lives in a pool or in a rating. A field with no declared
-# elements is left alone rather than given a ref nothing could type-check against.
-#
-# Appended after whatever the action declares itself, which is what keeps the
-# trait before the recipient for copy/move (and so keeps the panel's order, and
-# the engine's, reading subject → destination).
-_ELEMENTS_FOR_FIELD = {
-    "entity": lambda m: ("entity",),
-    "target": lambda m: tuple(m.path_element or ()) or (
-        (m.target_kind,) if m.target_kind else ()
-    ),
+# ── The references an action declares for its retired fields ([[B261]]) ──
+# These were *derived* from the positional fields while those existed, so that an
+# action could not add a fallback field and forget its reference. The fields are
+# going away, so the references are declared here instead — one table, keyed by
+# action, listing exactly what the derivation produced (name, label, elements).
+# `legacy_field` is retained only until the fold goes with the fields.
+# Generated from the derived refs at the moment they were made explicit.
+# (action_id, [(ref name, label, elements, legacy_field, anchor), ...])
+_DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool]]] = {
+    "add_dice": [("pool", "Pool", ('pool',), 'target', False)],
+    "add_rating_die": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
+    "attune": [("applies_to", "Who It Applies To", ('entity',), 'target', False)],
+    "change_trait": [("instance", "Target Trait", ('traitsetting',), 'target', False)],
+    "consolidate_dice": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "copy_trait": [("recipient", "Give To", ('entity',), 'entity', False)],
+    "cortex_gain_trait": [("trait", "Trait", ('trait',), 'target', False), ("recipient", "Entity", ('entity',), 'entity', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
+    "create_projection": [("recipient", "Entity", ('entity',), 'entity', False)],
+    "create_relationship": [("contact", "Target Entity", ('entity',), 'target', False)],
+    "delete_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
+    "disable_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
+    "discover_life_path": [("life_path", "Life Path", ('life_path',), 'target', False)],
+    "double_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "draft_life_path": [("life_path", "Life Path", ('life_path',), 'target', False)],
+    "earn_razmerit": [("recipient", "Entity", ('entity',), 'entity', False)],
+    "enable_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
+    "end_active_effect": [("recipient", "Entity", ('entity',), 'entity', False), ("effect", "Active Effect", ('scheduled_event',), 'target', False)],
+    "entity_targeting_ban": [("entity", "Target Entity", ('entity',), 'target', False)],
+    "gain_or_step_up_trait": [("trait", "Trait", ('trait',), 'target', False), ("recipient", "Entity", ('entity',), 'entity', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
+    "gain_subtrait": [("trait", "Trait", ('trait',), 'target', False), ("owner", "Anchored to", ('traitsetting',), 'owner', True)],
+    "gain_trait": [("trait", "Trait", ('trait',), 'target', False), ("recipient", "Entity", ('entity',), 'entity', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
+    "grant_sfx": [("recipient", "Entity", ('entity',), 'entity', False)],
+    "increase_by_effect_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "invert_polarity": [("trait", "Target", ('traitsetting',), 'target', False)],
+    "learn_entities": [("entity", "Which Entity", ('entity',), 'target', False)],
+    "move_trait": [("recipient", "Give To", ('entity',), 'entity', False)],
+    "next_step": [("table", "Next Table", ('roll_table',), 'target', False)],
+    "open_roll_table": [("table", "Roll Table", ('roll_table',), 'target', False)],
+    "open_sheet": [("recipient", "On Whose Screen", ('entity',), 'entity', False), ("owner", "Owner", ('entity',), 'target', False)],
+    "reduce_by_effect_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "remove_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "reroll_die": [("die", "Target", ('die',), 'target', False)],
+    "reveal_trait": [("trait", "Trait", ('traitsetting',), 'target', False)],
+    "set_destination": [("recipient", "Entity", ('entity',), 'entity', False), ("location", "Destination Location", ('location',), 'target', False)],
+    "set_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "set_hitch_threshold": [("recipient", "Entity", ('entity',), 'entity', False)],
+    "set_location": [("recipient", "Entity", ('entity',), 'entity', False), ("location", "Destination Location", ('location',), 'target', False)],
+    "set_polarity": [("trait", "Target", ('traitsetting',), 'target', False)],
+    "set_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
+    "set_trait_rating_type": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
+    "set_trait_statement": [("trait", "Trait", ('trait',), 'target', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
+    "set_traitset_limit": [("recipient", "Entity", ('entity',), 'entity', False), ("traitset", "Trait Set", ('traitset',), 'target', False)],
+    "show_toast": [("recipient", "On Whose Screen", ('entity',), 'entity', False), ("tap_target", "Tap Target", ('entity',), 'target', False)],
+    "spend_razmerit": [("recipient", "Entity", ('entity',), 'entity', False)],
+    "split_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "start_contest": [("opponent", "Opponent", ('entity',), 'target', False)],
+    "step_down_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "step_up_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "suppress": [("applies_to", "Who It Applies To", ('entity',), 'target', False)],
+    "toggle_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
+    "transfer_razmerit": [("entity", "Target Entity", ('entity',), 'target', False)],
+    "travel": [("recipient", "Entity", ('entity',), 'entity', False), ("location", "Destination Location", ('location',), 'target', False)],
 }
-for _m in EFFECT_ACTION_REGISTRY:
-    for _f in _m.fields:
-        _ref_name = _f.hidden_when_ref
-        if not _ref_name or any(r.name == _ref_name for r in _m.refs):
-            continue
-        _source = _ELEMENTS_FOR_FIELD.get(_f.name)
-        if _source is None:
-            continue
-        _elements = _source(_m)
-        if not _elements:
-            continue
-        _m.refs = [*_m.refs, RefDef(name=_ref_name, label=_f.label,
-                                    elements=_elements, legacy_field=_f.name)]
 
-# The **anchor** needs no field to point at it: `owner_elements` already says the
-# action has an owner path and what it may land on, so that declaration is the
-# whole opt-in. The ref is `anchor=True` — authored like any other, but settled
-# once by `resolve_effect_owner` instead of fanning the effect out per value.
 for _m in EFFECT_ACTION_REGISTRY:
-    if _m.owner_elements and not any(r.name == "owner" for r in _m.refs):
-        _m.refs = [*_m.refs, RefDef(name="owner", label="Anchored to",
-                                    elements=_m.owner_elements,
-                                    legacy_field="owner", anchor=True)]
+    _declared = _DECLARED_REFS.get(_m.action_id, [])
+    if not _declared:
+        continue
+    _existing = {r.name for r in _m.refs}
+    _m.refs = [*_m.refs, *[
+        RefDef(name=_name, label=_label, elements=_elements,
+               legacy_field=_legacy, anchor=_anchor)
+        for _name, _label, _elements, _legacy, _anchor in _declared
+        if _name not in _existing
+    ]]
 
 
 # ── Functional grouping (editor optgroups) ─────────────
