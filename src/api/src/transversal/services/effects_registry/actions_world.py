@@ -104,11 +104,11 @@ ACTIONS: list[EffectActionMeta] = [
             # Declared *before* ``projection``: a reference is in scope for the
             # references that follow it, so the world is decided first and the
             # projection path can filter on it (``universe == {universe}``).
-            RefDef(name="universe", label="Universe (which world)", element="universe"),
+            RefDef(name="universe", label="Universe (which world)", elements="universe"),
             # A path that starts at each entity the target resolved to and walks
             # to that entity's projection counterpart — optionally constrained to
             # the universe above.
-            RefDef(name="projection", label="Attunes To (projection)", element="projection"),
+            RefDef(name="projection", label="Attunes To (projection)", elements="projection"),
         ],
         supports_duration=True,
         inverse=("attune", "disable"),
@@ -143,7 +143,7 @@ ACTIONS: list[EffectActionMeta] = [
                           required=False, default="self"),
         ],
         refs=[
-            RefDef(name="projection", label="Body (projection)", element="projection"),
+            RefDef(name="projection", label="Body (projection)", elements="projection"),
         ],
         # Scope, like attune's: `self` cuts off the carrier's body; `domain` reaches
         # everyone in its location subtree (the "the laws here cut you off" case).
@@ -182,7 +182,7 @@ ACTIONS: list[EffectActionMeta] = [
         # Which bodies may be reused. A path here is the narrowing the old
         # `target_scope` spelled ("the body I have in this place"); with no path,
         # the pool is the actor's bodies in the destination universe.
-        refs=[RefDef(name="projection", label="Body", element="projection")],
+        refs=[RefDef(name="projection", label="Body", elements="projection")],
     ),
 
     # ── Set Location ───────────────────────────────────

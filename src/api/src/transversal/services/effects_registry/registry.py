@@ -49,7 +49,7 @@ for _m in EFFECT_ACTION_REGISTRY:
     if _fallback is None or any(r.name == "recipient" for r in _m.refs):
         continue
     _m.refs = [*_m.refs, RefDef(name="recipient", label=_fallback.label,
-                                element="entity", legacy_field="entity")]
+                                elements="entity", legacy_field="entity")]
 
 
 # ── Functional grouping (editor optgroups) ─────────────

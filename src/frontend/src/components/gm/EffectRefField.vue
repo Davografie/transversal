@@ -1,9 +1,9 @@
 <template>
   <div class="ee-field ee-ref">
-    <label>{{ refDef.label }} <em class="ee-ref-element">{{ refDef.element }}</em></label>
+    <label>{{ refDef.label }} <em class="ee-ref-element">{{ (refDef.elements || []).join(' / ') }}</em></label>
     <PathField
       :model-value="modelValue"
-      :destination="{ elements: [refDef.element] }"
+      :destination="{ elements: refDef.elements || [] }"
       :source-element="sourceElement"
       :variables="variables"
       :title="refDef.label"

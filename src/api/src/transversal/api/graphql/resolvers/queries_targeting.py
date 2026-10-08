@@ -91,7 +91,7 @@ class QueriesTargeting:
                 requires_choice=m.requires_choice, target_kind=m.target_kind, path_elements=list(m.path_element), owner_elements=list(m.owner_elements), supports_duration=m.supports_duration,
                 duration_elements=list(m.duration_elements),
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,
-                refs=[GqlRefDef(name=r.name, label=r.label, element=r.element) for r in m.refs],
+                refs=[GqlRefDef(name=r.name, label=r.label, elements=list(r.elements)) for r in m.refs],
                 refs_first=m.refs_first,
                 field_order=list(m.field_order),
             ) for m in EFFECT_ACTION_REGISTRY if not m.retired
@@ -465,9 +465,15 @@ class QueriesTargeting:
             # compare against it (``filter universe == {universe}``). Typed by the
             # reference's declared element so the wizard can offer it, and filter
             # it, by type.
+            #
+            # A ref may accept **alternatives** (a die in a pool or of a rating),
+            # and a scope variable carries one type, so it is typed by the first —
+            # the primary reading of what the ref selects. A later step that needs
+            # the narrower type narrows by filtering ([[B261]]).
             meta = _action_meta_for(d.type, d.action)
             for ref in (meta.refs if meta is not None else []):
-                scope[ref.name] = ts.ValueType(ref.element, "one")
+                if ref.elements:
+                    scope[ref.name] = ts.ValueType(ref.elements[0], "one")
             # The step's own result, when the author named it (`Effect.output`):
             # the runtime binds the produced element under that name
             # (``effects_applier.publish_effect_output``), so a later step can

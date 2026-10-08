@@ -210,7 +210,10 @@ class RefDef:
     """A named reference an effect action declares (the multi-target model)."""
     name: str
     label: str
-    element: str
+    #: The catalog element type(s) the ref must resolve to — a set, because the
+    #: positional fields it replaces were (a die in a pool *or* of a rating; an
+    #: owner that is a trait instance *or* a relationship edge). [[B261]]
+    elements: list[str]
 
 @strawberry.type
 class EffectActionMeta:

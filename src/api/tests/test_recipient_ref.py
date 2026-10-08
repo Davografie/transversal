@@ -24,7 +24,7 @@ def test_copy_and_move_declare_the_recipient_ref_over_the_entity_field():
     for action in RECIPIENT_ACTIONS:
         meta = get_action_meta_for("modify_trait", action)
         ref = next(d for d in meta.refs if d.name == "recipient")
-        assert ref.element == "entity"
+        assert ref.elements == ("entity",)
         assert ref.legacy_field == "entity", "the stored strings must keep resolving"
         field = next(f for f in meta.fields if f.name == "entity")
         assert field.hidden_when_ref == "recipient", (
@@ -52,7 +52,7 @@ def test_every_action_with_a_recipient_field_declares_the_ref():
             continue
         seen += 1
         ref = next(r for r in meta.refs if r.name == "recipient")
-        assert ref.element == "entity"
+        assert ref.elements == ("entity",)
         assert ref.legacy_field == "entity"
         field = next(f for f in meta.fields if f.name == "entity")
         assert ref.label == field.label, (

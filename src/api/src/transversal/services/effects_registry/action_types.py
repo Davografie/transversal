@@ -34,18 +34,29 @@ class RefDef:
     """A named reference an effect action declares (the multi-target model).
 
     Each ref is a targeting-wizard selection the editor renders as its own
-    picker/spec builder. ``element`` is the catalog element type the ref must
-    resolve to (drives the picker + fire-time type-check).
+    picker/spec builder. ``elements`` is the catalog element type (or types) the
+    ref must resolve to, and drives the picker + the fire-time type-check.
+
+    It is a **set**, not one string, because the positional fields this replaces
+    already were: a target may be a die in a pool or a die of a rating
+    (``path_element``), and an owner may be a trait instance or a relationship
+    edge (``owner_elements``). A single-element ref is written as a plain string —
+    ``RefDef("trait", "Trait", "traitsetting")`` — and normalised to a tuple here,
+    so the two forms cannot be confused at a call site.
     """
     name: str          # key into Effect.refs, e.g. "trait", "pool", "learner"
     label: str         # editor label, e.g. "Trait", "Destination pool"
-    element: str       # target_catalog element type, e.g. "traitsetting", "pool"
+    elements: str | tuple[str, ...] = ""
     # The positional field this ref supersedes, while the effect still carries
     # one: "target" | "entity" | "owner" | "result". When the named ref is empty
     # and the field is set, the field is read *as* this ref — so the resolver sees
     # one vocabulary and stored content keeps working with no migration. Absent on
     # a ref that never had a positional form. Delete with the fields ([[B261]]).
     legacy_field: str | None = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.elements, str):
+            self.elements = (self.elements,) if self.elements else ()
 
 @dataclass
 class EffectActionMeta:
@@ -156,7 +167,7 @@ _ENTITY_FIELD = EffectFieldDef(
 #: The recipient — who an effect lands on — as a declared reference ([[B261]]).
 #: ``legacy_field`` is what keeps the stored ``entity`` strings and ``entity_spec``
 #: paths resolving while the positional form is retired.
-_RECIPIENT_REF = RefDef(name="recipient", label="Entity", element="entity",
+_RECIPIENT_REF = RefDef(name="recipient", label="Entity", elements="entity",
                         legacy_field="entity")
 
 #: Every anchor a trait instance can hang on, declared together on the verbs that

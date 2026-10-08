@@ -156,7 +156,7 @@ def test_dice_limit_actions_target_a_pool():
     for action in ("increase", "decrease"):
         meta = _meta(action)
         assert meta.effect_type == "modify_dice_limit"
-        assert [(r.name, r.element) for r in meta.refs] == [("pool", "pool")]
+        assert [(r.name, r.elements) for r in meta.refs] == [("pool", ("pool",))]
 
 
 def test_increase_by_effect_die_mirrors_reduce():
@@ -209,7 +209,7 @@ def test_copy_and_move_put_the_trait_before_the_recipient():
     for action_id in ("copy_trait", "move_trait"):
         meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
         assert meta.refs_first is True, action_id
-        assert [r.element for r in meta.refs] == ["traitsetting", "entity"], action_id
+        assert [r.elements for r in meta.refs] == [("traitsetting",), ("entity",)], action_id
         assert [r.name for r in meta.refs][0] == "trait", action_id
         recipient = next(r for r in meta.refs if r.name == "recipient")
         assert recipient.legacy_field == "entity", action_id
@@ -281,7 +281,7 @@ def test_change_trait_asks_for_the_instance_and_the_definition_separately():
     assert meta.retired is False
     assert meta.path_element == ("traitsetting",)
     assert [f.name for f in meta.fields] == ["target"]
-    assert [(r.name, r.label, r.element) for r in meta.refs] == [("trait", "Change To", "trait")]
+    assert [(r.name, r.label, r.elements) for r in meta.refs] == [("trait", "Change To", ("trait",))]
     # The instance is the primary input, so the definition reads after it.
     assert meta.refs_first is False
     # The changed instance is nameable for a later step.
@@ -335,5 +335,5 @@ def test_reveal_asks_for_the_learner_as_a_path():
     assert meta is not None
     refs = {r.name: r for r in meta.refs}
     assert "learner" in refs, "reveal must declare the learner as a reference"
-    assert refs["learner"].element == "entity"
+    assert refs["learner"].elements == ("entity",)
     assert "learner" not in {f.name for f in meta.context_fields}
