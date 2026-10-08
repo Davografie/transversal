@@ -360,6 +360,11 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   // ref row like every other input, and the older standalone block becomes its
   // fallback — shown only while no ref is authored, so both cannot appear at once.
   const effectForm = read(find('components/gm/EffectForm.vue'))
+  // A fallback field whose reference reads identically is a duplicate, not a
+  // fallback: `travel` rendered two "Entity" inputs for one question ([[B261]]).
+  ok('a fallback that duplicates its reference steps aside at once',
+    /declared\.label === f\.label\) return false/.test(effectForm), true)
+
   ok('the owner path defers to its declared reference',
     /const ownerFallbackShown = computed/.test(effectForm)
       && /!\(newEffect\.refs\?\.owner\?\.spec\?\.steps \|\| \[\]\)\.length/.test(effectForm), true)

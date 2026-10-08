@@ -623,9 +623,19 @@ const visibleFields = computed(() => {
     // A field a reference supersedes is the fallback form: once the reference is
     // authored the field steps aside (its stored value is still kept). A ref may
     // be authored as a path *or* as a picker value, so both count ([[B261]]).
+    //
+    // …and it steps aside **immediately** when the reference reads exactly like the
+    // field. Two controls with one label asking one question is not a fallback, it
+    // is a duplicate: `travel` showed two "Entity" inputs (the `entity` field and
+    // the `recipient` ref) and two "Destination Location" ones. A fallback with its
+    // own words — attune's "Target Universe" beside the "Attunes To (projection)"
+    // ref — is a genuine simpler form and still shows until the ref is authored.
     if (f.hiddenWhenRef) {
       const ref = newEffect.refs?.[f.hiddenWhenRef]
       if (ref?.spec?.steps?.length || ref?.value) return false
+      const declared = (selectedAction.value?.refs || [])
+        .find((r) => r.name === f.hiddenWhenRef)
+      if (declared && declared.label === f.label) return false
     }
     return true
   })
