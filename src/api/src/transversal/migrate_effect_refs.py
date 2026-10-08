@@ -44,13 +44,26 @@ from transversal.services.effect_refs import materialise_refs
 
 
 def holds_back(effect: Effect) -> bool:
-    """Is this effect in the class whose behaviour changes when it is folded?
+    """Is this effect in a class whose behaviour changes when it is folded?
 
-    A subject path (`entity_spec`) is the one that disagrees: it is resolved
-    **once** before dispatch today and fans out once it is a reference, and a
-    subject that resolves to nobody is fail-open today and fail-closed as a ref.
+    Two classes, both because a migrated effect carries `refs` where it carried
+    nothing:
+
+    - **A subject path** (`entity_spec`, and `entity` alongside it): resolved once
+      before dispatch today, it fans out once it is a reference; and a subject
+      that resolves to nobody is fail-open today and fail-closed as a ref.
+    - **A die filter**: `roll_deferral._apply_armed` checks refs *before* the die
+      filter, so an effect with no refs runs **once per matching die** and one
+      carrying a ref never reaches that loop at all. Folding it would quietly turn
+      "for each unchosen die" into "once".
+
+    Both are held back by default and reported; `--include-subject-paths` migrates
+    them as a deliberate change. Keeping the effect positional costs nothing — the
+    shim resolves the field either way.
     """
-    return effect.entity_spec is not None
+    if effect.entity_spec is not None:
+        return True
+    return bool(effect.die_filter) and not effect.refs
 
 
 def fold_effects(effects: list[Effect], include_subject_paths: bool = False):

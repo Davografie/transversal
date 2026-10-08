@@ -7,7 +7,7 @@ behaviour changes when it is folded, and it must not fold an effect twice.
 
 from __future__ import annotations
 
-from transversal.domain import Effect
+from transversal.domain import Effect, TargetRef
 from transversal.migrate_effect_refs import fold_effects, holds_back
 from transversal.domain.effects import TargetSpec
 
@@ -19,10 +19,24 @@ def _spec(value: str) -> TargetSpec:
     return TargetSpec.model_validate({"steps": [{"kind": "literal", "value": value}]})
 
 
-def test_only_a_subject_path_is_held_back():
+def test_the_two_classes_whose_behaviour_changes_are_held_back():
+    """A subject path, and a die filter that has no reference yet.
+
+    `roll_deferral._apply_armed` checks refs *before* the die filter, so an effect
+    with no refs runs once per matching die and one carrying a ref never reaches
+    that loop — folding it would turn "for each unchosen die" into "once". One
+    live effect is in this state (`sfx-crimson-scars.effects[1]`), and it is why
+    its card text changed wording: `sfx_text` derives `per_die` from the same two
+    fields.
+    """
     assert holds_back(Effect(**SET_TRAIT, target="ts-x")) is False
     assert holds_back(Effect(**SET_TRAIT, entity_spec=_spec("gmc-7"))) is True
     assert holds_back(Effect(**SET_TRAIT, target="ts-x", entity_spec=_spec("gmc-7"))) is True
+    # Per-die today…
+    assert holds_back(Effect(**SET_TRAIT, target="ts-x", die_filter={"role": None})) is True
+    # …but an effect that already carries a ref was never in that loop.
+    assert holds_back(Effect(**SET_TRAIT, target="ts-x", die_filter={"role": None},
+                             refs={"trait": TargetRef(value="ts-x")})) is False
 
 
 def test_a_target_path_is_folded():
