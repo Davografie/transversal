@@ -345,3 +345,40 @@ def test_reveal_asks_for_the_learner_as_a_path():
     assert "learner" in refs, "reveal must declare the learner as a reference"
     assert refs["learner"].elements == ("entity",)
     assert "learner" not in {f.name for f in meta.context_fields}
+
+
+def test_an_inverse_is_either_a_declared_action_or_a_handler_only_verb():
+    """Every declared inverse must actually go somewhere.
+
+    Sixteen actions invert to verbs that are **not** registered actions
+    (`modify_roll/restore_die`, `modify_pool/remove_added_dice`,
+    `entity/remove_targeting_ban`, `attune/unsuppress`, …). That is deliberate: a
+    revert is never *authored*, so those verbs are handler-only and have no
+    `EffectActionMeta` — which is why an inverse addresses its target positionally
+    rather than through a reference ([[B261]]).
+
+    The property worth protecting is the one that makes that safe: an inverse that
+    is not a declared action must still have a handler, or a revert would resolve
+    to nothing at all and fail silently.
+    """
+    from transversal.services import effects_applier
+
+    declared = {(m.effect_type, m.effect_action) for m in EFFECT_ACTION_REGISTRY}
+    handler_only = []
+    for meta in EFFECT_ACTION_REGISTRY:
+        if not meta.inverse or tuple(meta.inverse) in declared:
+            continue
+        handler_only.append((meta.action_id, meta.inverse))
+        handled = any(
+            effects_applier.effect_registry._handlers.get(key) is not None
+            for key in (tuple(meta.inverse), ("*", meta.inverse[1]),
+                        (meta.inverse[0], "*"), ("*", "*"))
+        )
+        assert handled, (
+            f"{meta.action_id} inverts to {meta.inverse}, which is neither a "
+            "declared action nor handled — a revert would silently do nothing"
+        )
+    assert len(handler_only) >= 16, (
+        "the handler-only inverse set shrank; if a verb became a declared action, "
+        "it can join the references ([[B261]])"
+    )
