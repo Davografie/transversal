@@ -197,3 +197,56 @@ def test_the_legacy_field_map_covers_exactly_the_four_positional_fields():
     assert set(LEGACY_FIELDS) == {"target", "entity", "owner", "result"}
     assert LEGACY_FIELDS["owner"][0] == ""   # an owner is only ever a path
     assert LEGACY_FIELDS["result"][0] == ""  # a result string is an operand
+
+
+# --- the derivation contract (registry) --------------------------------------
+
+def test_every_derived_reference_matches_the_field_it_replaces():
+    """The derivation contract: each fallback field, and the ref built from it.
+
+    Scoped to the fields the derivation covers (`_ELEMENTS_FOR_FIELD`) on purpose.
+    `hidden_when_ref` has a **second, older meaning** — the attune/suppress
+    `result` fields use it to hide a field the `projection` ref supersedes
+    outright, with no legacy fold and a different label. That use is a plain
+    editor visibility rule; this one adds "and the field is its legacy source".
+    """
+    from transversal.services.effects_registry.registry import _ELEMENTS_FOR_FIELD
+
+    covered = 0
+    for meta in EFFECT_ACTION_REGISTRY:
+        if meta.retired:
+            continue
+        for f in meta.fields:
+            if f.name not in _ELEMENTS_FOR_FIELD or not f.hidden_when_ref:
+                continue
+            covered += 1
+            ref = next((r for r in meta.refs if r.name == f.hidden_when_ref), None)
+            assert ref is not None, (
+                f"{meta.action_id}.{f.name} defers to {f.hidden_when_ref!r}, "
+                "which no reference declares"
+            )
+            assert ref.label == f.label, f"{meta.action_id}: label drifted"
+            assert ref.legacy_field == f.name, f"{meta.action_id}: wrong legacy source"
+            assert ref.elements, (
+                f"{meta.action_id}.{f.name}: a ref nothing could type-check"
+            )
+    assert covered >= 25, "the entity and die-family fields should all be covered"
+
+
+def test_a_target_ref_accepts_exactly_what_the_path_already_accepted():
+    """The die family's ref is a *set* — and it mirrors the action's own path.
+
+    `reroll_die` is the control: it accepts only a pool die, so its ref accepts
+    one element while its siblings' accept two. The derivation reads the action
+    rather than assuming the wider set.
+    """
+    def ref_for(action_id):
+        meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
+        ref = next(r for r in meta.refs if r.name == "die")
+        return ref, tuple(meta.path_element)
+
+    ref, path = ref_for("set_die")
+    assert ref.elements == path == ("die", "rating_die")
+    ref, path = ref_for("reroll_die")
+    assert ref.elements == path == ("die",)
+    assert ref.legacy_field == "target"

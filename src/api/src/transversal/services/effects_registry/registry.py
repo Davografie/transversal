@@ -34,22 +34,39 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
 ]
 
 
-# ── The recipient reference ([[B261]]) ─────────────────
-# *Who an effect lands on* is a declared reference, not a positional field. An
-# action opts in by marking its `entity` field `hidden_when_ref="recipient"` —
-# that field is the fallback form — and the reference is declared from it here,
-# labelled in the field's own words. One source of truth: a new action cannot add
-# the fallback field and forget the reference, and the two labels cannot drift.
+# ── References derived from the positional fields they replace ([[B261]]) ──
+# An action opts in by marking the *field* it is retiring with
+# `hidden_when_ref="<ref name>"`: that field is the fallback form, and the
+# reference is declared from it here, labelled in the field's own words. One
+# source of truth — a new action cannot add the fallback field and forget the
+# reference, and the two labels cannot drift.
+#
+# The elements come from where the action already declares them: a recipient is
+# an entity, and a target accepts exactly what the action's path already accepted
+# (`path_element`) — a *set* for the change-die family, where a die lives in a
+# pool or in a rating. A field with no declared elements is left alone rather than
+# given a ref nothing could type-check against.
 #
 # Appended after whatever the action declares itself, which is what keeps the
 # trait before the recipient for copy/move (and so keeps the panel's order, and
 # the engine's, reading subject → destination).
+_ELEMENTS_FOR_FIELD = {
+    "entity": lambda m: ("entity",),
+    "target": lambda m: tuple(m.path_element or ()),
+}
 for _m in EFFECT_ACTION_REGISTRY:
-    _fallback = next((f for f in _m.fields if f.hidden_when_ref == "recipient"), None)
-    if _fallback is None or any(r.name == "recipient" for r in _m.refs):
-        continue
-    _m.refs = [*_m.refs, RefDef(name="recipient", label=_fallback.label,
-                                elements="entity", legacy_field="entity")]
+    for _f in _m.fields:
+        _ref_name = _f.hidden_when_ref
+        if not _ref_name or any(r.name == _ref_name for r in _m.refs):
+            continue
+        _source = _ELEMENTS_FOR_FIELD.get(_f.name)
+        if _source is None:
+            continue
+        _elements = _source(_m)
+        if not _elements:
+            continue
+        _m.refs = [*_m.refs, RefDef(name=_ref_name, label=_f.label,
+                                    elements=_elements, legacy_field=_f.name)]
 
 
 # ── Functional grouping (editor optgroups) ─────────────

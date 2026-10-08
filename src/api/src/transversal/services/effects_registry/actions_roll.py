@@ -42,7 +42,8 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="set_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True,
+                          hidden_when_ref="die"),
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
@@ -65,7 +66,8 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="step_up_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True,
+                          hidden_when_ref="die"),
         ],
         # A `count` in `fields` would be dropped on save — only target/entity/result
         # persist from there; everything else is a context field, which is also
@@ -90,7 +92,8 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="step_down_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True,
+                          hidden_when_ref="die"),
         ],
         # A `count` in `fields` would be dropped on save — only target/entity/result
         # persist from there; everything else is a context field, which is also
@@ -115,7 +118,8 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="double_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True,
+                          hidden_when_ref="die"),
         ],
         context_fields=[_EXTRA_DICE_FIELD],
         path_element=("die", "rating_die"),
@@ -137,7 +141,8 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="split_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True,
+                          hidden_when_ref="die"),
         ],
         context_fields=[_EXTRA_DICE_FIELD],
         path_element=("die", "rating_die"),
@@ -162,7 +167,8 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="consolidate_dice",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True,
+                          hidden_when_ref="die"),
         ],
         path_element=("die", "rating_die"),
         supports_duration=True,
@@ -183,7 +189,8 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="remove_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True,
+                          hidden_when_ref="die"),
         ],
         path_element=("die", "rating_die"),
         supports_duration=True,
@@ -200,7 +207,8 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="reroll_die",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True,
+                          hidden_when_ref="die"),
         ],
         # A rating die has no *result* to reroll (its size is the fact), so this
         # stays pool-only — the destination set says so rather than a runtime
