@@ -7,6 +7,7 @@ without a live ArangoDB.
 from types import SimpleNamespace
 
 from transversal.domain import Condition, ConditionType, Entity, EntityType, Timer
+from transversal.services.effect_refs import target_spec_of, target_value
 from transversal.services.sfx_owner import (
     backfill_trait_default_sfx,
     ensure_give_in_sfx,
@@ -477,12 +478,13 @@ def _path(effect):
     choose/random step) rather than the flat ``{choose_kind}`` spelling, so what a
     seeded rule and a migrated one look like is the same thing.
     """
+    spec = target_spec_of(effect)
     return [
         (step.kind,
          getattr(step, "collection", None) or getattr(step, "field", None)
          or getattr(step, "edge", None) or getattr(step, "fn", None)
          or getattr(step, "value", None))
-        for step in (effect.target_spec.steps if effect.target_spec else [])
+        for step in (spec.steps if spec else [])
     ]
 
 
@@ -502,8 +504,8 @@ def test_ensure_starter_location_sfx_creates_once():
     assert effect.target == ""
     assert _path(effect) == [("select", "locations"), ("filter", "universe"),
                              ("filter", "starter_location"), ("aggregate", "random")]
-    assert effect.target_spec.steps[1].value == "earth"
-    assert effect.target_spec.steps[2].value is True
+    assert target_spec_of(effect).steps[1].value == "earth"
+    assert target_spec_of(effect).steps[2].value is True
     ensure_starter_location_sfx(repo)
     assert len(repo.sfxs) == 1
 
@@ -631,7 +633,7 @@ def test_ensure_hitch_gain_complication_sfx_creates_once():
     assert len(sfx.effects) == 2
     assert sfx.effects[0].type == "modify_trait"
     assert sfx.effects[0].action == "gain_or_step_up"
-    assert sfx.effects[0].entity == "{hitch_entity}"
+    assert sfx.effects[0].refs["recipient"].value == "{hitch_entity}"
     assert sfx.effects[0].negative is True
     assert sfx.effects[0].result == "d4"
     assert sfx.effects[0].context == {"steps": "{number_of_hitches}"}
@@ -1014,11 +1016,11 @@ def test_backfill_play_as_rating_moves_the_dead_token_onto_a_path():
 
     assert sfo.backfill_play_as_rating_targets(repo) == 1
     assert dead.target == ""
-    assert dead.target_spec is not None
-    assert [s.kind for s in dead.target_spec.steps] == ["select"]
-    assert dead.target_spec.steps[0].collection == "source"
+    assert target_spec_of(dead) is not None
+    assert [s.kind for s in target_spec_of(dead).steps] == ["select"]
+    assert target_spec_of(dead).steps[0].collection == "source"
     # An author's own path and another action's token are left alone.
-    assert already.target == "kael:distinction" and already.target_spec is None
+    assert target_value(already) == "kael:distinction" and target_spec_of(already) is None
     assert other.target == "{source_trait}"
 
     # Idempotent.
@@ -1603,7 +1605,7 @@ def test_the_support_rule_is_a_manual_entity_rule_with_a_guarded_path():
     assert sfx.id == "sfx-teleport-to-main"
     assert sfx.trigger == "manual" and sfx.source_kind == "entity"
     assert [bv.name for bv in sfx.bound_variables] == ["world"]
-    steps = sfx.effects[0].target_spec.steps
+    steps = target_spec_of(sfx.effects[0]).steps
     assert [getattr(s, "kind") for s in steps] == \
         ["select", "navigate", "filter", "navigate", "filter", "navigate"]
     # The guard compares the contact's universe to the *bound* name, not a literal.

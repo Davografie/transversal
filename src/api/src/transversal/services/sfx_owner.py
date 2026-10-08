@@ -112,24 +112,27 @@ def ensure_base_move_sfxs(repo) -> None:
     base_moves = [
         ("proceed", "Proceed the narrative", "Move the scene forward without applying a consequence.", "player", []),
         ("create_scene_trait", "Create a scene trait", "Introduce a new scene trait at your effect die.", "player", [
-            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
-                   target_spec=_choice("trait"), result="{effect_die}"),
+            with_ref(Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                            action="gain_or_step_up", result="{effect_die}"),
+                     "target", spec=_choice("trait")),
         ]),
         ("decrease_doom", "Decrease the doom pool", "Step down a doom pool die.", "player", [
             Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
                    target_spec=_challenge_pool_spec("negative")),
         ]),
         ("work_on_project", "Work on a project", "Advance a progress clock by stepping it up.", "player", [
-            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
-                   result="{effect_die}", target_spec=_challenge_pool_spec("positive")),
+            with_ref(Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                            action="gain_or_step_up", result="{effect_die}"),
+                     "target", spec=_challenge_pool_spec("positive")),
         ]),
         ("increase_doom", "Increase the doom pool", "Step up a doom pool die.", "architect", [
             Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_up",
                    target_spec=_challenge_pool_spec("negative")),
         ]),
         ("give_asset", "Give a GMC an asset", "Grant a GMC an asset at your effect die.", "architect", [
-            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
-                   target_spec=_choice("trait"), result="{effect_die}"),
+            with_ref(Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                            action="gain", result="{effect_die}"),
+                     "target", spec=_choice("trait")),
         ]),
     ]
 
@@ -160,13 +163,12 @@ def ensure_starter_location_sfx(repo) -> None:
     """
     from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
 
-    desired = Effect(
+    desired = with_ref(Effect(
         timing=EffectTiming.IMMEDIATE,
         type="location",
         action="set",
-        target_spec=_choice("location", "universe:earth", mode="random",
-                            filter={"starter_location": True}),
-    )
+    ), "target", spec=_choice("location", "universe:earth", mode="random",
+                              filter={"starter_location": True}))
 
     existing = repo.get_sfx("sfx-starter-location")
     if existing is None:
@@ -296,14 +298,13 @@ def ensure_contest_complication_sfx(repo) -> None:
     from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
 
     def _complication_effect() -> Effect:
-        return Effect(
+        return with_ref(Effect(
             timing=EffectTiming.IMMEDIATE,
             type="modify_trait",
             action="cortex_gain",
-            target_spec=_choice("trait", "traitset:ts-complications-a190"),
             result="{effect_die}",
             negative=True,
-        )
+        ), "target", spec=_choice("trait", "traitset:ts-complications-a190"))
 
     def _ensure(sfx_id: str, name: str, description: str, outcome: str) -> None:
         existing = repo.get_sfx(sfx_id)
@@ -456,16 +457,17 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
 
     hitch_cond = Condition(type=ConditionType.HITCH)
     effects = [
-        Effect(
-            timing=EffectTiming.IMMEDIATE,
-            type="modify_trait",
-            action="gain_or_step_up",
-            target_spec=_choice("trait", "traitset:ts-complications-a190"),
-            entity="{hitch_entity}",
-            result="d4",
-            negative=True,
-            context={"steps": "{number_of_hitches}"},
-        ),
+        with_ref(with_ref(
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="modify_trait",
+                action="gain_or_step_up",
+                result="d4",
+                negative=True,
+                context={"steps": "{number_of_hitches}"},
+            ),
+            "target", spec=_choice("trait", "traitset:ts-complications-a190"),
+        ), "entity", "{hitch_entity}"),
         with_ref(Effect(
             timing=EffectTiming.IMMEDIATE,
             type="transfer_razmerit",
@@ -1940,19 +1942,18 @@ def ensure_teleport_to_main_sfx(repo) -> None:
             ])),
         ],
         effects=[
-            Effect(
+            with_ref(Effect(
                 timing=EffectTiming.IMMEDIATE,
                 type="location",
                 action="set",
-                target_spec=TargetSpec(steps=[
-                    SelectStep(collection="self"),
-                    NavigateStep(edge="relationships"),
-                    FilterStep(field="type", value="support"),
-                    NavigateStep(edge="contact"),
-                    FilterStep(field="current_universe", value="{world}"),
-                    NavigateStep(edge="location"),
-                ]),
-            ),
+            ), "target", spec=TargetSpec(steps=[
+                SelectStep(collection="self"),
+                NavigateStep(edge="relationships"),
+                FilterStep(field="type", value="support"),
+                NavigateStep(edge="contact"),
+                FilterStep(field="current_universe", value="{world}"),
+                NavigateStep(edge="location"),
+            ])),
         ],
     ))
 
