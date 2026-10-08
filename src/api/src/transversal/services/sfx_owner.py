@@ -117,8 +117,9 @@ def ensure_base_move_sfxs(repo) -> None:
                      "target", spec=_choice("trait")),
         ]),
         ("decrease_doom", "Decrease the doom pool", "Step down a doom pool die.", "player", [
-            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
-                   target_spec=_challenge_pool_spec("negative")),
+            with_ref(Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                            action="step_down"),
+                     "target", spec=_challenge_pool_spec("negative")),
         ]),
         ("work_on_project", "Work on a project", "Advance a progress clock by stepping it up.", "player", [
             with_ref(Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
@@ -126,8 +127,9 @@ def ensure_base_move_sfxs(repo) -> None:
                      "target", spec=_challenge_pool_spec("positive")),
         ]),
         ("increase_doom", "Increase the doom pool", "Step up a doom pool die.", "architect", [
-            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_up",
-                   target_spec=_challenge_pool_spec("negative")),
+            with_ref(Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                            action="step_up"),
+                     "target", spec=_challenge_pool_spec("negative")),
         ]),
         ("give_asset", "Give a GMC an asset", "Grant a GMC an asset at your effect die.", "architect", [
             with_ref(Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
@@ -517,13 +519,14 @@ def ensure_opportunity_sfx(repo) -> None:
             action="spend",
             result="1",
         ), "entity", "{buying_entity}"),
-        Effect(
-            timing=EffectTiming.IMMEDIATE,
-            type="modify_trait",
-            action="step_down",
-            target_spec=_choice("trait", "traitset:ts-complications-a190"),
-            entity="{buying_entity}",
-        ),
+        with_ref(with_ref(
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="modify_trait",
+                action="step_down",
+            ),
+            "target", spec=_choice("trait", "traitset:ts-complications-a190"),
+        ), "entity", "{buying_entity}"),
     ]
 
     existing = repo.get_sfx("opportunity-step-down-complication")

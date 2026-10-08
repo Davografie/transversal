@@ -34,7 +34,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
-                          required=True, default="primary"),
+                          required=True, default="primary", hidden_when_ref="trait"),
             _ENTITY_FIELD,
         ],
         context_fields=[_STEPS_CONTEXT_FIELD],
@@ -58,7 +58,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
-                          required=True, default="primary"),
+                          required=True, default="primary", hidden_when_ref="trait"),
             _ENTITY_FIELD,
         ],
         context_fields=[_STEPS_CONTEXT_FIELD],

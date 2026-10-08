@@ -221,8 +221,10 @@ def test_every_fallback_field_still_has_its_declared_reference():
     """
     covered = 0
     for meta in EFFECT_ACTION_REGISTRY:
-        if meta.retired:
-            continue
+        # **Retired actions are checked too.** Retiring is about authoring: the
+        # registry keeps a retired action's dispatch, and the seed builders still
+        # construct two of them. Skipping them here is how their missing
+        # references went unnoticed until a builder refused to convert ([[B261]]).
         for f in meta.fields:
             if not f.hidden_when_ref:
                 continue

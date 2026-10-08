@@ -663,7 +663,7 @@ def test_ensure_opportunity_sfx_creates_once():
     assert sfx.effects[0].result == "1"
     assert sfx.effects[1].type == "modify_trait"
     assert sfx.effects[1].action == "step_down"
-    assert sfx.effects[1].entity == "{buying_entity}"
+    assert sfx.effects[1].refs["recipient"].value == "{buying_entity}"
     assert _path(sfx.effects[1]) == [("literal", "ts-complications-a190"),
                                      ("navigate", "traits"), ("choose", None)]
     ensure_opportunity_sfx(repo)

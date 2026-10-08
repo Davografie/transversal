@@ -61,6 +61,18 @@ _DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool
     "enable_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
     "end_active_effect": [("recipient", "Entity", ('entity',), 'entity', False), ("effect", "Active Effect", ('scheduled_event',), 'target', False)],
     "entity_targeting_ban": [("entity", "Target Entity", ('entity',), 'target', False)],
+    # Two retired verbs. Retiring is about *authoring*: the registry keeps the
+    # effect's dispatch, and the seeded base moves still construct these -- so
+    # they need the reference their target field defers to like any other. The
+    # element is the one their own `target_kind` declares.
+    "step_up_trait": [("trait", "Target Trait", ('trait',), 'target', False),
+                      ("recipient", "Entity", ('entity',), 'entity', False)],
+    "step_down_trait": [("trait", "Target Trait", ('trait',), 'target', False),
+                        ("recipient", "Entity", ('entity',), 'entity', False)],
+    "remove_rating_die": [("trait", "Target Trait", ('trait',), 'target', False),
+                          ("recipient", "Entity", ('entity',), 'entity', False)],
+    "gain_relationship_trait": [("trait", "Trait", ('trait',), 'target', False),
+                                ("recipient", "Entity", ('entity',), 'entity', False)],
     "gain_or_step_up_trait": [("trait", "Trait", ('trait',), 'target', False), ("recipient", "Entity", ('entity',), 'entity', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
     "gain_subtrait": [("trait", "Trait", ('trait',), 'target', False), ("owner", "Anchored to", ('traitsetting',), 'owner', True)],
     "gain_trait": [("trait", "Trait", ('trait',), 'target', False), ("recipient", "Entity", ('entity',), 'entity', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
