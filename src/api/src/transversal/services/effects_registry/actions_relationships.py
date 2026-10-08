@@ -18,7 +18,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="create",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
-            EffectFieldDef(name="target", label="Target Entity", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target Entity", field_type="text", required=True, hidden_when_ref="contact"),
             # A picker, not free text: the types are a vocabulary the graph
             # already holds, and a typo here creates an edge nothing can find.
             EffectFieldDef(name="result", label="Relationship Type", field_type="select",
@@ -38,7 +38,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="targeting_ban",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Target Entity", field_type="text", required=False),
+            EffectFieldDef(name="target", label="Target Entity", field_type="text", required=False, hidden_when_ref="entity"),
         ],
         target_kind="entity",
         supports_duration=True,
@@ -70,7 +70,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="target", label="Which Entity", field_type="text",
-                           required=False),
+                           required=False, hidden_when_ref="entity"),
         ],
         # Two halves, and they answer different questions, so both are declared:
         # **who learns** is the `learner` reference (a targeting path — "everyone
@@ -104,7 +104,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="start",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Opponent", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Opponent", field_type="text", required=True, hidden_when_ref="opponent"),
         ],
         target_kind="entity",
     ),

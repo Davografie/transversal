@@ -52,7 +52,7 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Amount", field_type="number",
                           required=True, default="1"),
             EffectFieldDef(name="target", label="Target Entity", field_type="text",
-                          required=True),
+                          required=True, hidden_when_ref="entity"),
         ],
         target_kind="entity",
     ),

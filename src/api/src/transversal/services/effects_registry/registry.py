@@ -43,16 +43,20 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
 #
 # The elements come from where the action already declares them: a recipient is
 # an entity, and a target accepts exactly what the action's path already accepted
-# (`path_element`) — a *set* for the change-die family, where a die lives in a
-# pool or in a rating. A field with no declared elements is left alone rather than
-# given a ref nothing could type-check against.
+# — `path_element` where the action has a path, else the flat `target_kind` it was
+# authored against (the two share the catalog's vocabulary; only `occupant` is a
+# scope word rather than an element). `path_element` is a *set* for the change-die
+# family, where a die lives in a pool or in a rating. A field with no declared
+# elements is left alone rather than given a ref nothing could type-check against.
 #
 # Appended after whatever the action declares itself, which is what keeps the
 # trait before the recipient for copy/move (and so keeps the panel's order, and
 # the engine's, reading subject → destination).
 _ELEMENTS_FOR_FIELD = {
     "entity": lambda m: ("entity",),
-    "target": lambda m: tuple(m.path_element or ()),
+    "target": lambda m: tuple(m.path_element or ()) or (
+        (m.target_kind,) if m.target_kind else ()
+    ),
 }
 for _m in EFFECT_ACTION_REGISTRY:
     for _f in _m.fields:

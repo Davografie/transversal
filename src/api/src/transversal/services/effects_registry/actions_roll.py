@@ -259,7 +259,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="add_dice",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Pool", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Pool", field_type="text", required=True, hidden_when_ref="pool"),
         ],
         context_fields=[
             EffectFieldDef(name="dice", label="Dice", field_type="dice_array", required=True),

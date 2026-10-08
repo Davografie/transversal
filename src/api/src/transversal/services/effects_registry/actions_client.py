@@ -28,7 +28,7 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="entity", label="On Whose Screen", field_type="entity",
                           required=False, hidden_when_ref="recipient"),
             EffectFieldDef(name="target", label="Owner", field_type="text",
-                          required=False),
+                          required=False, hidden_when_ref="owner"),
         ],
         target_kind="entity",
     ),
@@ -53,7 +53,7 @@ ACTIONS: list[EffectActionMeta] = [
             # picker rather than a box for an id. As a context entry it was silently
             # dropped — the live stream showed `tap: open_sheet` with no target.
             EffectFieldDef(name="target", label="Tap Target", field_type="text",
-                          required=False),
+                          required=False, hidden_when_ref="tap_target"),
         ],
         context_fields=[
             # Sticky is the *action's* nature ("sticky toast"), so it defaults on;

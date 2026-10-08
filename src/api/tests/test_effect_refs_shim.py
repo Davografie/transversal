@@ -233,6 +233,28 @@ def test_every_derived_reference_matches_the_field_it_replaces():
     assert covered >= 25, "the entity and die-family fields should all be covered"
 
 
+def test_only_the_recipient_field_may_claim_the_name_recipient():
+    """`recipient` is a **global** name, not just a label.
+
+    `_effect_subject` reads `refs["recipient"]` for every action, so a ref with
+    that name means *who this effect lands on*. A ref derived from a **target**
+    must not take it: a transfer's target is the entity it goes to, but a handler
+    resolving the subject through `_effect_subject` would then resolve the
+    transfer's target as the acting entity — silently, since the write-back keeps
+    the positional field correct. Caught by the recipient invariant when
+    `transfer_razmerit`'s target was first named `recipient`.
+    """
+    for meta in EFFECT_ACTION_REGISTRY:
+        if meta.retired:
+            continue
+        for ref in meta.refs:
+            if ref.name == "recipient":
+                assert ref.legacy_field == "entity", (
+                    f"{meta.action_id}: {ref.name!r} is derived from "
+                    f"{ref.legacy_field!r}, which is not the recipient field"
+                )
+
+
 def test_a_target_ref_accepts_exactly_what_the_path_already_accepted():
     """The die family's ref is a *set* — and it mirrors the action's own path.
 

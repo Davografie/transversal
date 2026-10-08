@@ -17,7 +17,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="discover",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Life Path", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Life Path", field_type="text", required=True, hidden_when_ref="life_path"),
         ],
         target_kind="life_path",
     ),
@@ -30,7 +30,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="menu",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Roll Table", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Roll Table", field_type="text", required=True, hidden_when_ref="table"),
         ],
         target_kind="roll_table",
     ),
@@ -43,7 +43,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="next_step",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Next Table", field_type="text", required=False),
+            EffectFieldDef(name="target", label="Next Table", field_type="text", required=False, hidden_when_ref="table"),
         ],
         context_fields=[
             EffectFieldDef(name="return_to", label="Return To", field_type="return_map", required=False),
@@ -60,7 +60,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="draft",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Life Path", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Life Path", field_type="text", required=True, hidden_when_ref="life_path"),
         ],
         target_kind="life_path",
     ),

@@ -38,7 +38,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE"],
         fields=[
             _ENTITY_FIELD,
-            EffectFieldDef(name="target", label="Active Effect", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Active Effect", field_type="text", required=True, hidden_when_ref="effect"),
         ],
         target_kind="scheduled_event",
         requires_choice=True,
@@ -70,7 +70,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             _ENTITY_FIELD,
-            EffectFieldDef(name="target", label="Trait Set", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Trait Set", field_type="text", required=True, hidden_when_ref="traitset"),
             EffectFieldDef(name="result", label="Limit", field_type="number", required=True, default="1"),
         ],
         supports_duration=True,
@@ -98,7 +98,7 @@ ACTIONS: list[EffectActionMeta] = [
                           # Fallback only — the editor lists the universes in the DB.
                           options=["three_realms", "earth"]),
             EffectFieldDef(name="target", label="Who It Applies To", field_type="text",
-                          required=False, default="self"),
+                          required=False, default="self", hidden_when_ref="applies_to"),
         ],
         refs=[
             # Declared *before* ``projection``: a reference is in scope for the
@@ -140,7 +140,7 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Target Projection", field_type="text",
                           required=False, hidden_when_ref="projection"),
             EffectFieldDef(name="target", label="Who It Applies To", field_type="text",
-                          required=False, default="self"),
+                          required=False, default="self", hidden_when_ref="applies_to"),
         ],
         refs=[
             RefDef(name="projection", label="Body (projection)", elements="projection"),
@@ -169,7 +169,7 @@ ACTIONS: list[EffectActionMeta] = [
         fields=[
             _ENTITY_FIELD,
             EffectFieldDef(name="target", label="Destination Location", field_type="text",
-                          required=True, default=""),
+                          required=True, default="", hidden_when_ref="location"),
         ],
         context_fields=[
             EffectFieldDef(name="transversal_type", label="Transversal Type",
@@ -198,7 +198,7 @@ ACTIONS: list[EffectActionMeta] = [
         fields=[
             _ENTITY_FIELD,
             EffectFieldDef(name="target", label="Destination Location", field_type="text",
-                          required=True, default=""),
+                          required=True, default="", hidden_when_ref="location"),
         ],
     ),
 
@@ -220,7 +220,7 @@ ACTIONS: list[EffectActionMeta] = [
         fields=[
             _ENTITY_FIELD,
             EffectFieldDef(name="target", label="Destination Location", field_type="text",
-                          required=True, default=""),
+                          required=True, default="", hidden_when_ref="location"),
         ],
         # `clear` is the inverse and is deliberately **not** offered in the
         # editor: it is how directions expire or are finished, not a verb an
