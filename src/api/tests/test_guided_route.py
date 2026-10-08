@@ -94,17 +94,18 @@ def test_the_action_is_declared_beside_travel_and_set_location():
     assert meta.inverse_captures_prior is True
 
 
-def test_clearing_is_an_inverse_the_editor_does_not_offer():
-    """`clear` is how directions end, never something an author reaches for.
+def test_clearing_is_an_action_an_author_can_reach_for():
+    """`clear` is how directions end — and ending them is a rule's business.
 
-    It is **declared** now — that is what gives a revert a reference surface to
-    name its target through ([[B261]]) — but it stays `retired`, so the editor
-    still never offers it. The intent is unchanged; only the mechanism is.
+    It was declared-but-retired while it was only ever an inverse; the author's
+    decision (2026-10-09) is that an author can reach for it, so it is offered
+    like any other action. What the test keeps is the *behaviour* claim: it is how
+    directions end, so it restores what the guidance replaced when it is given one.
     """
     clear = [m for m in EFFECT_ACTION_REGISTRY
              if m.effect_type == "set_destination" and m.effect_action == "clear"]
-    assert len(clear) == 1, "declared, so a revert can name its target as a reference"
-    assert clear[0].retired is True, "…and still not offered to an author"
+    assert len(clear) == 1
+    assert clear[0].retired is False, "offered, by decision"
 
 
 def test_the_card_says_what_it_grants():

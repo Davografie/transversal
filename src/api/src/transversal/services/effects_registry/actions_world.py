@@ -291,19 +291,23 @@ ACTIONS: list[EffectActionMeta] = [
     ),
     EffectActionMeta(
         action_id="clear_destination",
-        # Declared so it has a reference surface, retired because that is what it
-        # already was by decision: *"clear is how directions end, never something
-        # an author reaches for"* ([[B261]], tests/test_guided_route.py).
-        retired=True,
+        # Offered, by the author's decision 2026-10-09 ([[B261]]), superseding the
+        # earlier "never something an author reaches for" — it is how directions
+        # end, and ending them is a thing a rule may want to do on purpose.
         label="Clear Destination",
-        description="Remove the guidance destination an entity is travelling to",
+        description=(
+            "End an entity's directions. The engine writes this when guidance "
+            "expires, restoring whatever the guidance replaced; authored directly, "
+            "name that destination or leave it blank to clear outright"
+        ),
         category="either",
         effect_type="set_destination",
         effect_action="clear",
         valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="result", label="Prior Destination", field_type="entity",
-                           required=False),
+                           required=False,
+                           description="Blank clears the guidance outright."),
         ],
     ),
 ]
