@@ -21,6 +21,7 @@ from transversal.services.effects_applier.targeting import (
     _resolve_target,
     _track_subject,
 )
+from transversal.services.effect_refs import target_value
 
 
 def _apply_attune_universe(a, em, universe_fallback: str) -> str:
@@ -96,7 +97,7 @@ def _apply_create_projection(entity, effect, repo, result):
     _track_subject(result, entity, subject)
 
     ctx = effect.context or {}
-    name = (effect.target or "").strip() or (ctx.get("name") or "").strip() or "disguise"
+    name = target_value(effect).strip() or (ctx.get("name") or "").strip() or "disguise"
     prior = subject.current_projection
     proj = Projection(
         id=_next_projection_id(subject.id, subject.current_universe, repo),
@@ -282,7 +283,7 @@ def _apply_travel(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"spawned body {proj.id}"))
 
     def _dest_universe() -> str:
-        target = (effect.target or "").strip()
+        target = target_value(effect).strip()
         if target and not target.startswith("{"):
             loc = repo.get_entity(target)
             if loc and loc.current_universe:

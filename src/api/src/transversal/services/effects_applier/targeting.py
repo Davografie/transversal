@@ -26,6 +26,7 @@ from transversal.services.effects_applier.datatypes import (
     AppliedEffect,
     EffectsResult,
 )
+from transversal.services.effect_refs import target_value
 
 
 _SELF_FIELDS = {
@@ -66,7 +67,7 @@ def context_choice(effect: Effect) -> Optional[tuple[str, str]]:
 
 def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, repo) -> Optional[str]:
     """The effect's target as a concrete id, or ``None`` when it names nothing."""
-    target = (effect.target or "").strip()
+    target = target_value(effect).strip()
     if target == "self":
         return entity.id
     attr = _parse_self_field(target)

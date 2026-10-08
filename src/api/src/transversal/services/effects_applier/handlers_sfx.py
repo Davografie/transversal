@@ -16,6 +16,7 @@ from transversal.services.effects_applier.targeting import (
     _effect_subject,
     _track_subject,
 )
+from transversal.services.effect_refs import target_value
 
 
 def owner_surface_for(owner) -> tuple[str | None, str]:
@@ -94,7 +95,7 @@ def _apply_grant_sfx(entity, effect: Effect, repo, result: EffectsResult) -> Non
         _track_subject(result, entity, subject)
 
     ref = (effect.refs or {}).get("sfx")
-    sfx_id = (getattr(ref, "value", "") or "") or (effect.target or "")
+    sfx_id = (getattr(ref, "value", "") or "") or target_value(effect)
     if not sfx_id or sfx_id.startswith("{"):
         result.applied.append(AppliedEffect(effect, "no SFX to grant"))
         return

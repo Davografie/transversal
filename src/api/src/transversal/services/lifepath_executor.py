@@ -19,6 +19,7 @@ from transversal.domain import (
 )
 from transversal.services.effects_applier import apply_effects, EffectsResult
 from transversal.services.roll_table import resolve_applicable_entry
+from transversal.services.effect_refs import target_value
 
 
 def start_term(entity: Entity, faction_id: str, path_id: str, repo) -> PendingTerm:
@@ -177,7 +178,7 @@ def _process_flow(entity: Entity, effects: list[Effect], repo) -> dict:
             continue
 
         if effect.action == "draft":
-            target_path = effect.target
+            target_path = target_value(effect)
             lp = repo.get_lifepath(target_path) if target_path else None
             if pt is not None and lp and lp.entry_table_id:
                 pt.path_id = target_path
@@ -197,7 +198,7 @@ def _next_step(entity: Entity, effect: Effect, flow: dict, repo) -> None:
     if pt is None:
         return
 
-    target = effect.target or ""
+    target = target_value(effect)
     return_to = (effect.context or {}).get("return_to")
 
     if target.startswith("{choose"):

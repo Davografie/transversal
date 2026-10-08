@@ -48,6 +48,12 @@ from transversal.services.target_spec import (
     spec_variables,
     trace,
 )
+from transversal.services.effect_refs import (
+    recipient_spec_of,
+    recipient_value,
+    target_spec_of,
+    target_value,
+)
 
 #: Maps a raw id to a display name, or ``None`` when it is not a known id.
 NameResolver = Callable[[str], Optional[str]]
@@ -1009,22 +1015,24 @@ def _effect_parts(effect: Effect, *, resolve: NameResolver | None = None,
     per_die = bool(effect.die_filter) and effect.target_spec is None and not effect.refs
 
     subject = ""
-    if effect.entity_spec is not None and effect.entity_spec.steps:
-        phrase = path_phrase(effect.entity_spec, source_element=source_element,
+    entity_spec = recipient_spec_of(effect)
+    if entity_spec is not None and entity_spec.steps:
+        phrase = path_phrase(entity_spec, source_element=source_element,
                              variables=variables, resolve=resolve, die_scoped=per_die)
         subject = render_phrase(phrase, _determiner(phrase))
 
     target = ""
-    if effect.target_spec is not None and effect.target_spec.steps:
-        phrase = path_phrase(effect.target_spec, source_element=source_element,
+    target_spec = target_spec_of(effect)
+    if target_spec is not None and target_spec.steps:
+        phrase = path_phrase(target_spec, source_element=source_element,
                              variables=variables, resolve=resolve)
         target = render_phrase(phrase, _determiner(phrase))
     else:
-        raw = (effect.target or "").strip()
+        raw = target_value(effect).strip()
         if raw not in ("", "self"):
             target = id_phrase(raw, _target_element(effect), resolve)
-        elif effect.entity and effect.entity not in ("self",):
-            target = id_phrase(effect.entity, "entity", resolve)
+        elif recipient_value(effect) not in ("", "self"):
+            target = id_phrase(recipient_value(effect), "entity", resolve)
 
     if target:
         if subject:

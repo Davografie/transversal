@@ -94,6 +94,69 @@ def effective_refs(effect: Effect, meta: EffectActionMeta | None = None) -> dict
     return out
 
 
+def _ref_for(effect: Effect, legacy_field: str, meta: EffectActionMeta | None = None):
+    """The reference an action declares for a positional field, if it declares one.
+
+    Declaration-driven on purpose: a reader asks for *the target* or *the
+    recipient*, and the action's own `legacy_field` marker says which ref holds it
+    — so no reader hardcodes a ref name, and renaming one cannot leave a reader
+    behind ([[B261]]).
+    """
+    meta = _meta_for(effect, meta)
+    if meta is None:
+        return None
+    for ref_def in meta.refs:
+        if ref_def.legacy_field == legacy_field:
+            return (effect.refs or {}).get(ref_def.name)
+    return None
+
+
+def ref_value(effect: Effect, legacy_field: str, meta: EffectActionMeta | None = None) -> str:
+    """A ref's resolved/literal value, or ``""`` when it holds a path instead."""
+    ref = _ref_for(effect, legacy_field, meta)
+    return ref.value if ref is not None and ref.value else ""
+
+
+def ref_spec(effect: Effect, legacy_field: str, meta: EffectActionMeta | None = None):
+    """A ref's path, or ``None`` when it holds a literal value instead."""
+    ref = _ref_for(effect, legacy_field, meta)
+    return ref.spec if ref is not None and ref.spec is not None else None
+
+
+def target_value(effect: Effect, meta: EffectActionMeta | None = None) -> str:
+    """The effect's target, from its reference or the positional field.
+
+    This is the accessor the migration needs. Once content carries references
+    instead of positional fields, every reader of `effect.target` must come
+    through here, or it reads an empty string: a card renders "travels to", a
+    validator checks nothing, a guided route has no destination. The positional
+    field is still the fallback, so both forms work while content is migrated.
+    """
+    return ref_value(effect, "target", meta) or (effect.target or "")
+
+
+def target_spec_of(effect: Effect, meta: EffectActionMeta | None = None):
+    """The effect's target **path**, wherever it is authored.
+
+    The companion of `target_value`: that one reads a resolved/literal target,
+    this one reads the path form. A renderer needs the path to describe *what
+    kind of thing* is targeted ("the trait instance you rolled"), and after the
+    migration the path lives in the reference — reading only `target_spec` would
+    silently render no target at all.
+    """
+    return ref_spec(effect, "target", meta) or effect.target_spec
+
+
+def recipient_value(effect: Effect, meta: EffectActionMeta | None = None) -> str:
+    """Who the effect lands on, from its reference or the positional field."""
+    return ref_value(effect, "entity", meta) or (effect.entity or "")
+
+
+def recipient_spec_of(effect: Effect, meta: EffectActionMeta | None = None):
+    """The recipient **path**, wherever it is authored."""
+    return ref_spec(effect, "entity", meta) or effect.entity_spec
+
+
 def legacy_field_by_ref(effect: Effect, meta: EffectActionMeta | None = None) -> dict[str, str]:
     """Ref name -> the positional field it supersedes, for the declared markers."""
     meta = _meta_for(effect, meta)

@@ -43,6 +43,7 @@ from transversal.services.effects_applier.trait_helpers import (
     _die_opt,
     _resync_pool,
 )
+from transversal.services.effect_refs import target_value
 
 
 @dataclass(frozen=True)
@@ -296,7 +297,7 @@ def _owner_entity(repo, owner_id: str):
 
 def _apply_change(entity, effect: Effect, repo, result, verb: str) -> None:
     """Dispatch a change-die effect to whichever home the target names."""
-    target = (effect.target or "").strip()
+    target = target_value(effect).strip()
     rating = _parse_rating_ref(target)
     if rating is not None:
         index, ts_id = rating
@@ -314,7 +315,7 @@ def _apply_restore_die(entity, effect: Effect, repo, result) -> None:
     reversed — and because the dice may have shifted since.
     """
     context = effect.context or {}
-    rating = _parse_rating_ref(effect.target or "")
+    rating = _parse_rating_ref(target_value(effect))
     if rating is not None and "prior_dice" in context:
         _, ts_id = rating
         ts = repo.get_traitsetting(ts_id) if repo else None
@@ -338,9 +339,9 @@ def _apply_restore_die(entity, effect: Effect, repo, result) -> None:
     from transversal.services.contest_tracker import broadcast_pool_change
     from transversal.services.scene_state import get_scene_store
 
-    ref = _parse_die_ref(effect.target or "")
+    ref = _parse_die_ref(target_value(effect))
     if ref is None:
-        result.applied.append(AppliedEffect(effect, f"die target not resolved: {effect.target!r}"))
+        result.applied.append(AppliedEffect(effect, f"die target not resolved: {target_value(effect)!r}"))
         return
     location_id, owner_id, index = ref
     store = get_scene_store()
@@ -353,7 +354,7 @@ def _apply_restore_die(entity, effect: Effect, repo, result) -> None:
         return
     pool = store.get_pool(location_id, owner_id)
     if index < 0 or index >= len(pool):
-        result.applied.append(AppliedEffect(effect, f"no die at {effect.target} to restore"))
+        result.applied.append(AppliedEffect(effect, f"no die at {target_value(effect)} to restore"))
         return
     pool[index] = {**pool[index], "die": prior}
     store.save_pool(location_id, owner_id, pool)
@@ -415,10 +416,10 @@ def _apply_reroll_die(entity, effect, repo, result):
     from transversal.services.scene_state import get_scene_store
     from transversal.domain import DieSpec
 
-    ref = _parse_die_ref(effect.target or "")
+    ref = _parse_die_ref(target_value(effect))
     if ref is None:
         result.applied.append(AppliedEffect(
-            effect, f"die target not resolved: {effect.target!r} (a reroll needs a pool die)"))
+            effect, f"die target not resolved: {target_value(effect)!r} (a reroll needs a pool die)"))
         return
     location_id, owner_id, index = ref
 
@@ -426,7 +427,7 @@ def _apply_reroll_die(entity, effect, repo, result):
     pool = store.get_pool(location_id, owner_id)
     if index < 0 or index >= len(pool):
         result.applied.append(AppliedEffect(
-            effect, f"no die at {effect.target} (pool has {len(pool)})"))
+            effect, f"no die at {target_value(effect)} (pool has {len(pool)})"))
         return
 
     entry = pool[index]
@@ -458,7 +459,7 @@ def _apply_reroll_die(entity, effect, repo, result):
         effect, f"{verdict} {owner_id}'s die {index}: {prior} → {new_result}"))
     if not restore:
         # A duration puts the original result back (the inverse is this action).
-        _queue_entity_revert(repo, entity, effect, target=effect.target, prior_result=str(prior))
+        _queue_entity_revert(repo, entity, effect, target=target_value(effect), prior_result=str(prior))
 
 # ── Play as Rating ────────────────────────────────────────────
 
@@ -476,9 +477,9 @@ def _apply_play_as_rating(entity, effect, repo, result):
     duration is therefore meaningful, and a manual activation books the same hold
     every other rating change does.
     """
-    ts = repo.get_traitsetting(effect.target) if (repo and effect.target) else None
+    ts = repo.get_traitsetting(target_value(effect)) if (repo and target_value(effect)) else None
     if ts is None:
-        result.applied.append(AppliedEffect(effect, f"no trait instance {effect.target or '(unset)'}"))
+        result.applied.append(AppliedEffect(effect, f"no trait instance {target_value(effect) or '(unset)'}"))
         return
 
     prior = (effect.context or {}).get("prior_dice")

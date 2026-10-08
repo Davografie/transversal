@@ -16,6 +16,7 @@ from transversal.services.effects_applier.targeting import (
     _resolve_target,
     _track_subject,
 )
+from transversal.services.effect_refs import target_value
 
 
 def _find_traitsetsetting(entity_id: str, traitset_id: str, repo) -> Optional[TraitSetSetting]:
@@ -219,9 +220,9 @@ def _apply_add_dice(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, "no dice to add"))
         return
 
-    location_id, owner_id = _resolve_pool(effect.target, entity, repo)
+    location_id, owner_id = _resolve_pool(target_value(effect), entity, repo)
     if not location_id or not owner_id:
-        result.applied.append(AppliedEffect(effect, f"pool target not found: {effect.target}"))
+        result.applied.append(AppliedEffect(effect, f"pool target not found: {target_value(effect)}"))
         return
 
     store = get_scene_store()
@@ -368,7 +369,7 @@ def _apply_remove_added_dice(entity, effect, repo, result):
 def _resolve_pool_ref(effect):
     """Return the resolved pool id from ``refs["pool"]`` or the literal ``target``."""
     pool_ref = (effect.refs or {}).get("pool")
-    return (pool_ref.value if pool_ref else "") or (effect.target or "")
+    return (pool_ref.value if pool_ref else "") or target_value(effect)
 
 def _roll_stored_pool(location_id: str, owner_id: str):
     """Roll a stored pool in place; return the enriched dice, or None if empty.

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
+from transversal.services.effect_refs import target_value
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from transversal.domain import Effect, SFX
@@ -72,7 +73,7 @@ def literal_destination(effect: "Effect", repo) -> Optional[str]:
         return None
     if effect.target_spec is not None and effect.target_spec.steps:
         return None
-    raw = (effect.target or "").strip()
+    raw = target_value(effect).strip()
     if not raw or raw.startswith("{"):
         return None
     loc = repo.get_entity(raw)
@@ -98,7 +99,7 @@ def declares_literal_directions(sfx: "SFX") -> bool:
             continue
         if effect.target_spec is not None and effect.target_spec.steps:
             continue
-        raw = (effect.target or "").strip()
+        raw = target_value(effect).strip()
         if raw and not raw.startswith("{"):
             return True
     return False

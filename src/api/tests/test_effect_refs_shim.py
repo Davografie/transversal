@@ -21,6 +21,8 @@ from transversal.services.effect_refs import (
     effective_refs,
     legacy_field_by_ref,
     materialise_refs,
+    target_spec_of,
+    target_value,
 )
 from transversal.services.effects_engine.refs import resolve_refs
 from transversal.services.effects_registry.action_types import EffectActionMeta, RefDef
@@ -333,3 +335,71 @@ def test_materialising_leaves_the_result_operand_alone():
     """`result` is a value, not a path — there is no reference for it to move into."""
     out = materialise_refs(Effect(**SET_TRAIT, target="ts-x", result="d8"))
     assert out.result == "d8"
+
+
+# --- the accessor a migrated reader uses -------------------------------------
+
+def test_target_value_reads_the_reference_first():
+    effect = Effect(type="modify_trait", action="set", target="ts-stale",
+                    refs={"trait": TargetRef(value="ts-fresh")})
+    assert target_value(effect) == "ts-fresh"
+
+
+def test_target_value_falls_back_to_the_field():
+    effect = Effect(type="modify_trait", action="set", target="ts-x")
+    assert target_value(effect) == "ts-x"
+
+
+def test_target_value_is_declaration_driven_not_name_driven():
+    """Whatever the action calls its target ref, the reader finds it the same way.
+
+    `set` names it `trait`, `set_die` names it `die`, `change` names it `instance`,
+    `set_location` names it `location` — a reader asks for *the target*, and the
+    action's own `legacy_field` marker answers.
+    """
+    cases = [
+        ({"type": "modify_trait", "action": "set"}, "trait", "ts-x"),
+        ({"type": "modify_roll", "action": "set_die"}, "die", "die:pool:kael:0"),
+        ({"type": "modify_trait", "action": "change"}, "instance", "ts-y"),
+        ({"type": "location", "action": "set"}, "location", "loc-1"),
+    ]
+    for action_kwargs, ref_name, value in cases:
+        effect = Effect(**action_kwargs, refs={ref_name: TargetRef(value=value)})
+        assert target_value(effect) == value, action_kwargs["action"]
+
+
+def test_target_value_ignores_a_ref_that_is_not_the_target():
+    """An anchor or a secondary ref must not be mistaken for the target."""
+    effect = Effect(type="modify_trait", action="gain", target="trait-beast",
+                    refs={"recipient": TargetRef(value="gmc-7"),
+                          "owner": TargetRef(value="rel-1")})
+    assert target_value(effect) == "trait-beast", "neither ref supersedes `target`"
+
+
+def test_target_value_treats_an_empty_ref_as_no_answer():
+    effect = Effect(type="modify_trait", action="set", target="ts-x",
+                    refs={"trait": TargetRef()})
+    assert target_value(effect) == "ts-x"
+
+
+def test_target_value_on_an_action_with_no_target_ref_is_the_field():
+    effect = Effect(type="modify_trait", action="move", target="ts-x")
+    assert target_value(effect) == "ts-x"
+
+
+def test_target_spec_of_reads_the_path_from_either_home():
+    """The renderer's accessor: the path, whether it is positional or in the ref."""
+    positional = Effect(type="modify_trait", action="set", target_spec=_spec("ts-x"))
+    assert target_spec_of(positional) is positional.target_spec
+
+    migrated = materialise_refs(positional)
+    assert migrated.target_spec is None
+    assert target_spec_of(migrated) is not None, (
+        "a renderer reading only `target_spec` would lose the path after migration"
+    )
+    assert target_spec_of(migrated) == positional.target_spec
+
+
+def test_target_spec_of_is_none_when_the_target_is_a_literal():
+    effect = Effect(type="modify_trait", action="set", target="ts-x")
+    assert target_spec_of(effect) is None

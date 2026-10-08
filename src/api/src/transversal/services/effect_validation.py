@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
+from transversal.services.effect_refs import target_value
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from transversal.domain import Effect
@@ -216,7 +217,7 @@ def find_missing_targets(effects, repo, source_element: str | None = None) -> li
         return []
     out: list[MissingTarget] = []
     for i, effect in enumerate(effects or []):
-        raw = (effect.target or "").strip()
+        raw = target_value(effect).strip()
         if _is_literal_id(raw):
             element = target_element(_action_meta(effect))
             if element and _missing(repo, element, raw):

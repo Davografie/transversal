@@ -38,6 +38,7 @@ from transversal.services.effects_engine.shared import (
     RULE_CHAIN,
     log,
 )
+from transversal.services.effect_refs import target_value
 
 
 #: Context keys that name the *thing* an event is about, most specific first. A
@@ -579,7 +580,7 @@ class EffectsEngine:
                         _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, effect_context)
                         outcome.applied.append(effect)
                         sfx_applied = True
-                        log.info("[process_event] applied sfx=%s effect=%s/%s target=%s", sfx.id, effect.type, effect.action, effect.target)
+                        log.info("[process_event] applied sfx=%s effect=%s/%s target=%s", sfx.id, effect.type, effect.action, target_value(effect))
 
                     if blocked:
                         # Sequential execution: this effect needs a choice, so the

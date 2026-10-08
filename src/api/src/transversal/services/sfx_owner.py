@@ -28,6 +28,7 @@ from typing import Any
 from transversal.domain import SfxOwner
 
 from transversal.services.target_scopes import choice_spec
+from transversal.services.effect_refs import target_value
 
 
 def _choice(kind: str, scope: str | None = None, mode: str = "choose",
@@ -1564,7 +1565,7 @@ def backfill_play_as_rating_targets(repo) -> int:
         for effect in (sfx.effects or []):
             if effect.action != "play_as_rating" or effect.target_spec is not None:
                 continue
-            if (effect.target or "").strip() != "{source_trait}":
+            if target_value(effect).strip() != "{source_trait}":
                 continue
             effect.target_spec = TargetSpec(steps=[SelectStep(collection="source")])
             effect.target = ""
