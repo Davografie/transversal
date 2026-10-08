@@ -100,6 +100,8 @@ A few fields are **derived** — not a single attribute of the element. A trait 
 
 A spec that type-checks is guaranteed to have resolvable steps; the resolver produces the concrete objects (or scalar).
 
+**An empty hop is an empty result, never an error.** A pointer that is optional — an entity's `current_location`, a body's — is falsy for a normal state (the unplaced dock), and the hop yields nothing. Handing the repository that empty pointer instead raises out of the Arango driver and takes the whole effect with it, silently, which is what an unplaced body did to `travel`'s `navigate location` ([[B262]]).
+
 ### Filter operators
 
 `==`, `!=`, `>`, `>=`, `<`, `<=`, `in` (field value is a member of a list), `not in` (the negation of `in`: none of the listed values — one value or several), `contains` (list field contains the value — how a list-valued field is matched: `armed_sfx_ids`, and `tags` on a trait or trait instance), `not contains` (its negation: several values mean *none of*, and an absent list contains nothing). **The two containment directions are not interchangeable and the wrong one fails silently:** `in` tests the field's *whole value* against a list, so on a list field it can never be true — and `not in` on a list field is therefore *always* true. A list field is matched with `contains`/`not contains` and declares neither `==` nor `in`. Ordering compares numerically (a `die` field coerces `d8` → 8). **Values are typed at authoring time** (decision 4): an `int`/`number` field stores a number, `die`/`string` fields store strings — so downstream logic always has typed values.

@@ -1771,7 +1771,13 @@ def register_default_edges() -> None:
     register_edge("traitsetting", "capacity_dice", _traitsetting_capacity_dices)
     register_edge("capacity_die", "traitsetting", _capacity_die_traitsetting)
 
-    register_edge("entity", "location", lambda e, ctx: _maybe(ctx.repo.get_entity(e.current_location)))
+    # A *location pointer* is optional, and its absence is a normal state — an
+    # unplaced body, an entity in the unplaced dock — so the hop yields nothing.
+    # Handing the driver ``None`` instead raises out of the Arango client and takes
+    # the whole effect down with it: every one of Phaos's eight projections is
+    # unplaced, and `travel`'s `navigate location` is what reached them ([[B261]]).
+    register_edge("entity", "location",
+                  lambda e, ctx: _maybe(ctx.repo.get_entity(e.current_location)) if e.current_location else [])
     register_edge("entity", "universe", _entity_to_universe)
     register_edge("entity", "projection",
                   lambda e, ctx: _maybe(ctx.repo.get_projection(e.current_projection)) if e.current_projection else [])
@@ -1797,7 +1803,10 @@ def register_default_edges() -> None:
                   if getattr(ts, "from_type", "") == "relationship" else [])
 
     register_edge("projection", "entity", lambda p, ctx: _maybe(ctx.repo.get_entity(p.entity_id)))
-    register_edge("projection", "location", lambda p, ctx: _maybe(ctx.repo.get_entity(p.current_location)))
+    # Same optional location pointer as `entity → location`: a projection that has
+    # never been placed has no location to navigate to.
+    register_edge("projection", "location",
+                  lambda p, ctx: _maybe(ctx.repo.get_entity(p.current_location)) if p.current_location else [])
     # The body's **current** universe — `universe`, not `origin_universe`: travel
     # mutates the first and never the second, and a path asking "the world this
     # body is in" means where it is now.

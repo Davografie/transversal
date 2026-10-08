@@ -561,3 +561,57 @@ def test_a_stored_path_excludes_whichever_actor_activates_it():
         subject = _entity(id=actor, current_location="railyard")
         resolved = resolve(spec, TargetContext(subject=subject, repo=repo))
         assert actor not in [v.id for v in resolved.values]
+
+
+# ── an unplaced body is a normal state, not a crash ──────────
+
+class _StrictRepo(TargetRepo):
+    """A repo that refuses an entity lookup with no id.
+
+    The real Arango client raises ``TypeError: argument of type 'NoneType' is not
+    iterable`` there, and that escaped the resolver and took the whole effect with
+    it. A fake happily returns ``None`` for a ``None`` key, so the fault is
+    invisible to one — hence this subclass, which is the assertion.
+    """
+
+    def get_entity(self, entity_id):
+        assert entity_id, "the resolver asked the repo for an entity with no id"
+        return super().get_entity(entity_id)
+
+
+def test_an_unplaced_entity_has_no_location_hop_rather_than_a_crash():
+    """``entity → location`` when the entity is in the unplaced dock.
+
+    Being unplaced is a normal state — it is even a planned feature — so the hop
+    yields nothing. Before, it handed the driver ``None`` ([[B261]]).
+    """
+    from transversal.services.target_resolver import TargetContext, resolve
+    from transversal.services.target_spec import NavigateStep, SelectStep, TargetSpec
+
+    spec = TargetSpec(steps=[SelectStep(collection="self"),
+                             NavigateStep(edge="location")])
+    res = resolve(spec, TargetContext(subject=_entity(), repo=_StrictRepo()))
+    assert res.values == []
+
+
+def test_a_path_through_an_unplaced_body_resolves_to_nothing():
+    """``entity → projections → location`` — travel's destination path, on a body
+    that was never placed.
+
+    Every one of Phaos's eight projections is unplaced, so `sfx-transverse` raised
+    out of the driver at exactly this hop: the effect did nothing, and said nothing
+    about it ([[B261]]).
+    """
+    from transversal.services.target_resolver import TargetContext, resolve
+    from transversal.services.target_spec import NavigateStep, SelectStep, TargetSpec
+
+    repo = _StrictRepo()
+    body = _proj("char-1:nowhere", entity_id="char-1")
+    body.current_location = None
+    repo.projections = [body]
+
+    spec = TargetSpec(steps=[SelectStep(collection="self"),
+                             NavigateStep(edge="projections"),
+                             NavigateStep(edge="location")])
+    res = resolve(spec, TargetContext(subject=_entity(), repo=repo))
+    assert res.values == []
