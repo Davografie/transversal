@@ -687,6 +687,53 @@ def test_a_reach_path_from_a_real_collection_does_not_warn():
     assert not any("no source of its own" in w for w in warnings), warnings
 
 
+def test_a_reach_path_the_resolver_rejects_warns_with_the_resolvers_own_words():
+    """The second case the same day: after filtering to a trait **definition**, the
+    owning-entity hop does not exist — it belongs to an instance. Structural, so it
+    can never work for anybody, and until now it was silent."""
+    sfx = _sfx()
+    sfx.reach = [ReachDeclaration(spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "traits"},
+        {"kind": "filter", "field": "id", "value": "trait-x"},
+        {"kind": "navigate", "edge": "entity"},
+    ]))]
+    warnings = validate_sfx(sfx, repo=_DeclaringRepo())
+    assert any("cannot resolve" in w and "trait.entity" in w for w in warnings), warnings
+
+
+def test_a_reach_path_that_merely_matches_nothing_does_not_warn():
+    """An empty result is *data*, not a fault: a rule for a faction nobody has
+    joined yet is a legitimate declaration. Only rejected steps are reported, so
+    the warning cannot cry wolf."""
+    sfx = _sfx()
+    sfx.reach = [ReachDeclaration(spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "traits"},
+        {"kind": "filter", "field": "id", "value": "trait-nobody-has"},
+        {"kind": "navigate", "edge": "traitsettings"},
+        {"kind": "navigate", "edge": "entity"},
+    ]))]
+    warnings = validate_sfx(sfx, repo=_DeclaringRepo())
+    assert not any("cannot resolve" in w for w in warnings), warnings
+
+
+def test_the_source_warning_is_not_duplicated_by_the_trace(monkeypatch):
+    """`select source` fails the trace too, and every step after it is fallout —
+    so the path is reported once, in words that name the cause. `source_kind` is
+    set here because the live rule that hit this had one: the source is declared,
+    it just cannot be resolved in a reach path."""
+    import transversal.services.sfx_owner as sfo
+    monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: set())
+    sfx = _sfx(source_kind="entity")
+    sfx.reach = [ReachDeclaration(spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "source"},
+        {"kind": "navigate", "edge": "traitsettings"},
+    ]))]
+    warnings = validate_sfx(sfx, repo=_DeclaringRepo())
+    hits = [w for w in warnings if "Reach path 1" in w]
+    assert len(hits) == 1, warnings
+    assert "no source of its own" in hits[0], warnings
+
+
 def test_an_attached_rule_does_not_warn_about_reaching_nobody(monkeypatch):
     """Attached *is* reaching someone (`entity.sfx_ids`, the table bucket), so the
     ownership read has to be part of the question."""

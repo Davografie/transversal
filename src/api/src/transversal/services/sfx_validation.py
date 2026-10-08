@@ -454,28 +454,71 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                 "can appear anywhere and no one simply has it"
             )
 
-    # 3. A reach path that starts from `select source` — which can **never** work.
-    #    A declaration is resolved with no subject and **no source**: it says who
-    #    the rule reaches *world-wide*, rather than what is asking (that was the
-    #    retired acquire gate's reading — see `sfx_owner._resolve_reach_spec`). So
-    #    the step errors, the path yields nobody, and the author gets no feedback
-    #    at all: the declaration *is* present, so the warning above stays quiet.
-    #    The human authored exactly this (`sfx-transverse`, 2026-09-29) and saw a
-    #    rule that simply did nothing. Unambiguous, so it is reported per path —
-    #    unlike "this path resolves to nobody", which is data-dependent (a faction
-    #    with no members yet is legitimately empty) and is not warned about.
-    for i, declaration in enumerate(getattr(sfx, "reach", None) or []):
-        steps = getattr(getattr(declaration, "spec", None), "steps", None) or []
-        if any(getattr(s, "kind", "") == "select"
-               and getattr(s, "collection", "") == "source" for s in steps):
-            warnings.append(
+    # 3. A reach path the **resolver rejects** — a *structural* fault, not an empty
+    #    result. A declaration is resolved for the whole world, with no subject and
+    #    no source (see `sfx_owner._resolve_reach_spec`), so some steps are simply
+    #    impossible there and two authors in one day hit one each:
+    #      * `select source` — a declaration has no source of its own; and
+    #      * `… → navigate entity` from a **trait definition** — the owning-entity
+    #        hop belongs to an instance (`traitsettings`), so `trait.entity` is not
+    #        an edge at all (`no edge/resolver for trait.entity`).
+    #    Both leave the declaration present and the rule reaching nobody, so the
+    #    warning above stays quiet and the author sees a rule that does nothing.
+    #
+    #    Why these and not "the path selected nobody": a step the resolver *rejects*
+    #    can never work for anybody, whatever the world holds — while an empty
+    #    result is data-dependent (a faction with no members yet is legitimately
+    #    empty), so warning on that would cry wolf.
+    warnings.extend(_unresolvable_reach_paths(sfx, repo))
+
+    return warnings
+
+
+def _unresolvable_reach_paths(sfx: SFX, repo) -> list[str]:
+    """Warnings for each declared reach path the resolver rejects outright.
+
+    Traced with the same resolver every path uses, and with the same context a
+    reach declaration is really resolved under (no subject, no source), so this
+    cannot disagree with what firing the rule would do.
+    """
+    declarations = getattr(sfx, "reach", None) or []
+    if repo is None or not declarations:
+        return []
+
+    from transversal.services.target_resolver import TargetContext, resolve
+
+    out: list[str] = []
+    for i, declaration in enumerate(declarations):
+        spec = getattr(declaration, "spec", None)
+        steps = getattr(spec, "steps", None) or []
+        # The `select source` case gets its own sentence: the resolver's message
+        # ("requires a declared source_kind") names the symptom, not the cause.
+        from_source = {j for j, s in enumerate(steps)
+                       if getattr(s, "kind", "") == "select"
+                       and getattr(s, "collection", "") == "source"}
+        if from_source:
+            out.append(
                 f"Reach path {i + 1}: 'select source' cannot resolve — a reach "
                 "declaration has no source of its own (it is resolved for the whole "
                 "world, with no activation), so this path reaches nobody. Start from "
                 "a collection instead: `traits`, `entities`, `traitsets`, …"
             )
-
-    return warnings
+            # Everything after a failing first step is fallout (`navigate with no
+            # collection`), so the path is reported once, in words that name the
+            # cause rather than the symptom.
+            continue
+        try:
+            outcome = resolve(spec, TargetContext(subject=None, repo=repo))
+        except Exception:  # a declaration is author content; never fail the read
+            continue
+        for error in (outcome.errors or []):
+            out.append(
+                f"Reach path {i + 1} cannot resolve: {error.message} — so it reaches "
+                "nobody, whoever fires it. The same path in an *effect* may work "
+                "where it cannot here: a declaration is resolved for the whole "
+                "world, with no activation and nothing asking."
+            )
+    return out
 
 
 # ── Directions that lead nowhere ──────────────────────────────
