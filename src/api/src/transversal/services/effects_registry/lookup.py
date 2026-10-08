@@ -38,6 +38,27 @@ def get_action_meta_for(effect_type: str, effect_action: str) -> EffectActionMet
     return _BY_PAIR[key]
 
 
+def refs_before_fields(meta: EffectActionMeta | None) -> bool:
+    """Does this action read its **references** before its fields?
+
+    The panel and the engine must agree on this or the questions arrive in one
+    order and the form reads in another ([[B260]]). Two declarations can say so:
+    ``refs_first``, and an explicit ``field_order`` whose first entry names a ref
+    (``field_order=("pool", "limit", "result")`` — the pool *is* the subject).
+
+    A ``field_order`` that interleaves a ref *between* fields is not read here;
+    no action does it, and when one does the panel's ranking should be lifted
+    into a single helper both readers call.
+    """
+    if meta is None:
+        return False
+    if meta.refs_first:
+        return True
+    if meta.field_order and meta.field_order[0] in {d.name for d in meta.refs}:
+        return True
+    return False
+
+
 def get_actions_by_category(category: str) -> list[EffectActionMeta]:
     """Return all actions matching a category ('cost', 'benefit', 'either')."""
     return [m for m in EFFECT_ACTION_REGISTRY if m.category == category]

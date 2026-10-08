@@ -26,6 +26,10 @@ from transversal.services.effects_engine.firing import (
     bind_declared,
 )
 from transversal.services.effect_refs import effective_refs
+from transversal.services.effects_registry.lookup import (
+    get_action_meta_for,
+    refs_before_fields,
+)
 from transversal.services.effects_engine.refs import (
     _structured_choice,
     _substitute_effect_context,
@@ -462,7 +466,33 @@ class EffectsEngine:
                 )
                 if effect.timing == EffectTiming.IMMEDIATE:
                     blocked = False
-                    if subject_choices:
+                    # The panel reads this action's references and fields in a
+                    # declared order, and the questions must arrive in it: Move
+                    # Trait shows "Trait to Move" before "Give To", so the trait
+                    # has to be asked first even though the subject path is
+                    # resolved before the references below ([[B260]]). Ask the
+                    # references' questions first; the answer's resume resolves
+                    # the subject as well (`resolve_effect_spec_choices` walks
+                    # both), so nothing is lost by not asking it here.
+                    _refs_first = refs_before_fields(
+                        get_action_meta_for(effect.type, effect.action))
+                    if (subject_choices and effective_refs(effect) and _refs_first):
+                        fire_ctx = _fire_context(event, sfx, repo, bindings=bindings,
+                                                 source_id=source_id, source_element=source_element)
+                        ref_choices: list = []
+                        refs_blocked = False
+                        if effect.target_spec is not None and effect.target_spec.steps:
+                            _, refs_blocked = _resolve_primary_targets(
+                                effect, fire_ctx, ref_choices, sfx,
+                                source_id=source_id or "",
+                            )
+                        if not refs_blocked:
+                            resolve_refs(effect, fire_ctx, ref_choices,
+                                         source_sfx_id=sfx.id)
+                        if ref_choices:
+                            outcome.structured.extend(ref_choices)
+                            blocked = True
+                    if subject_choices and not blocked:
                         # *Who* this effect lands on is the table's decision — the
                         # effect stays unapplied until the answer arrives, exactly
                         # as a `choose` in a target path or a reference behaves.
@@ -474,6 +504,13 @@ class EffectsEngine:
                                 source_sfx_id=sfx.id, repo=repo,
                             ))
                         blocked = True
+                    if blocked:
+                        # A question is open for this effect — nothing may be
+                        # applied. It must short-circuit the *whole* chain below,
+                        # not just the references branch: falling through reaches
+                        # the plain `else: apply`, which is how a blocked effect
+                        # got applied anyway.
+                        pass
                     elif effective_refs(effect):
                         before = len(outcome.structured)
                         fire_ctx = _fire_context(event, sfx, repo, bindings=bindings,
