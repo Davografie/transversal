@@ -6,6 +6,16 @@ Split out of ``effects_registry.py``."""
 
 
 EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
+    # The inverse verbs ([[B261]]) — declared so a revert can name its target as a
+    # reference, and offered in the editor so an author can reach for them too.
+    ("modify_roll", "restore_die"): "restore {target}",
+    ("modify_pool", "remove_added_dice"): "take back the dice added to {target}",
+    ("entity", "delete_entity"): "delete {target}",
+    ("entity", "remove_targeting_ban"): "lift the targeting ban on {target}",
+    ("attune", "disable"): "take {target} out of the active set",
+    ("attune", "unsuppress"): "put {target} back in the active set",
+    ("projection", "restore"): "return to {result}",
+    ("set_destination", "clear"): "clear {result}",
     ("modify_roll", "play_as_rating"): "play {target} as {result}",
     ("modify_roll", "double_die"): "double {target}",
     ("modify_roll", "split_die"): "split {target}",

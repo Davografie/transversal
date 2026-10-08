@@ -449,4 +449,51 @@ ACTIONS: list[EffectActionMeta] = [
         retired=True,
     ),
 
+    # ── The inverse verbs, now declared ([[B261]]) ──────
+    # These are what the engine *generates* when a timed change reverts. They were
+    # handler-only, which is why a revert had to address its target positionally —
+    # an undeclared verb has no reference surface. Declaring them gives them one.
+    EffectActionMeta(
+        action_id="restore_die",
+        label="Restore Die",
+        description=(
+            "Put a die back to the size it had before a change. The engine writes "
+            "this when a timed change reverts, recording the prior itself; authored "
+            "directly it restores the size you give"
+        ),
+        category="either",
+        effect_type="modify_roll",
+        effect_action="restore_die",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text",
+                           required=True, hidden_when_ref="die"),
+        ],
+        context_fields=[
+            # The recorded prior, as an *input* — which is what makes this verb
+            # authorable rather than a form asking for something nobody can know:
+            # the engine fills it when it writes the revert, and an author fills it
+            # deliberately when they author one.
+            EffectFieldDef(name="prior_rating", label="Was", field_type="die_select",
+                           required=False, options=["d4", "d6", "d8", "d10", "d12"]),
+        ],
+        path_element=("die", "rating_die"),
+    ),
+    EffectActionMeta(
+        action_id="remove_added_dice",
+        label="Remove Added Dice",
+        description=(
+            "Take back the dice a rule added to a pool. The engine records which "
+            "ones; authored directly it removes what the pool records as added"
+        ),
+        category="cost",
+        effect_type="modify_pool",
+        effect_action="remove_added_dice",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Pool", field_type="text",
+                           required=True, hidden_when_ref="pool"),
+        ],
+        path_element=("pool",),
+    ),
 ]

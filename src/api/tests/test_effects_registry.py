@@ -378,7 +378,10 @@ def test_an_inverse_is_either_a_declared_action_or_a_handler_only_verb():
             f"{meta.action_id} inverts to {meta.inverse}, which is neither a "
             "declared action nor handled — a revert would silently do nothing"
         )
-    assert len(handler_only) >= 16, (
-        "the handler-only inverse set shrank; if a verb became a declared action, "
-        "it can join the references ([[B261]])"
+    # The set is empty now: every inverse is a declared action, which is what
+    # gives a revert a reference surface to name its target through. The loop above
+    # is what keeps the *next* undeclared verb honest.
+    assert handler_only == [], (
+        "an inverse is handler-only again: either declare it, or confirm the "
+        "positional target on the revert path is intended ([[B261]])"
     )

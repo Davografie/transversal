@@ -231,4 +231,79 @@ ACTIONS: list[EffectActionMeta] = [
         inverse_captures_prior=True,
     ),
 
+    # ── The inverse verbs, now declared ([[B261]]) ──────
+    EffectActionMeta(
+        action_id="delete_entity",
+        label="Delete Entity",
+        description="Remove an entity from the world. The engine writes this when a created entity's rule reverts",
+        category="cost",
+        effect_type="entity",
+        effect_action="delete_entity",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Entity", field_type="text",
+                           required=True, hidden_when_ref="entity"),
+        ],
+        target_kind="entity",
+    ),
+    EffectActionMeta(
+        action_id="disable_attunement",
+        label="Disable Attunement",
+        description="Take a body out of the character's active set — the inverse of Attune",
+        category="cost",
+        effect_type="attune",
+        effect_action="disable",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Body", field_type="text",
+                           required=False, hidden_when_ref="entity"),
+        ],
+        target_kind="entity",
+    ),
+    EffectActionMeta(
+        action_id="unsuppress_attunement",
+        label="Restore Attunement",
+        description="Put a suppressed body back into the character's active set — the inverse of Suppress",
+        category="benefit",
+        effect_type="attune",
+        effect_action="unsuppress",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Body", field_type="text",
+                           required=False, hidden_when_ref="entity"),
+        ],
+        target_kind="entity",
+    ),
+    EffectActionMeta(
+        action_id="restore_projection",
+        label="Restore Body",
+        description="Point the character back at the body they were in. The prior body is the recorded one",
+        category="benefit",
+        effect_type="projection",
+        effect_action="restore",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            # A prior *body*, carried in `result` — an operand, not a target, which
+            # is why this verb needs no reference ([[B261]]).
+            EffectFieldDef(name="result", label="Prior Body", field_type="entity",
+                           required=False),
+        ],
+    ),
+    EffectActionMeta(
+        action_id="clear_destination",
+        # Declared so it has a reference surface, retired because that is what it
+        # already was by decision: *"clear is how directions end, never something
+        # an author reaches for"* ([[B261]], tests/test_guided_route.py).
+        retired=True,
+        label="Clear Destination",
+        description="Remove the guidance destination an entity is travelling to",
+        category="either",
+        effect_type="set_destination",
+        effect_action="clear",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="result", label="Prior Destination", field_type="entity",
+                           required=False),
+        ],
+    ),
 ]

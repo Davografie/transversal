@@ -108,4 +108,18 @@ ACTIONS: list[EffectActionMeta] = [
         ],
         target_kind="entity",
     ),
+    EffectActionMeta(
+        action_id="remove_targeting_ban",
+        label="Remove Targeting Ban",
+        description="Lift the ban that stops a character contesting an entity — the inverse of Targeting Ban",
+        category="benefit",
+        effect_type="entity",
+        effect_action="remove_targeting_ban",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Entity", field_type="text",
+                           required=True, hidden_when_ref="entity"),
+        ],
+        target_kind="entity",
+    ),
 ]

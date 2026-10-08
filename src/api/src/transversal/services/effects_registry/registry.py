@@ -65,6 +65,13 @@ _DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool
     # effect's dispatch, and the seeded base moves still construct these -- so
     # they need the reference their target field defers to like any other. The
     # element is the one their own `target_kind` declares.
+    # The inverse verbs, declared so they have a reference surface at all.
+    "restore_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
+    "remove_added_dice": [("pool", "Pool", ('pool',), 'target', False)],
+    "delete_entity": [("entity", "Entity", ('entity',), 'target', False)],
+    "disable_attunement": [("entity", "Body", ('entity',), 'target', False)],
+    "unsuppress_attunement": [("entity", "Body", ('entity',), 'target', False)],
+    "remove_targeting_ban": [("entity", "Entity", ('entity',), 'target', False)],
     "step_up_trait": [("trait", "Target Trait", ('trait',), 'target', False),
                       ("recipient", "Entity", ('entity',), 'entity', False)],
     "step_down_trait": [("trait", "Target Trait", ('trait',), 'target', False),
@@ -126,6 +133,10 @@ for _m in EFFECT_ACTION_REGISTRY:
 # Assigned after construction so each action's group lives beside the section
 # it belongs to, without repeating the label in every constructor call.
 _ACTION_GROUPS: dict[str, str] = {
+    "restore_die": "Change a Die", "remove_added_dice": "Dice Pool",
+    "disable_attunement": "Attunement", "unsuppress_attunement": "Attunement",
+    "delete_entity": "Entity", "remove_targeting_ban": "Entity",
+    "restore_projection": "Attunement", "clear_destination": "Travel",
     # One family, because they are one question: which die, and what happens to
     # it. The path picks the die (in a pool, or in a trait's rating) and where it
     # lands decides whether the change is transient or persists.
