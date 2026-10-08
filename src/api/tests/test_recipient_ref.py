@@ -25,7 +25,7 @@ def test_copy_and_move_declare_the_recipient_ref_over_the_entity_field():
         meta = get_action_meta_for("modify_trait", action)
         ref = next(d for d in meta.refs if d.name == "recipient")
         assert ref.elements == ("entity",)
-        assert ref.legacy_field == "entity", "the stored strings must keep resolving"
+        assert ref.role == "entity", "the stored strings must keep resolving"
         field = next(f for f in meta.fields if f.name == "entity")
         assert field.hidden_when_ref == "recipient", (
             "once the ref is authored the fallback field must stop rendering"
@@ -53,7 +53,7 @@ def test_every_action_with_a_recipient_field_declares_the_ref():
         seen += 1
         ref = next(r for r in meta.refs if r.name == "recipient")
         assert ref.elements == ("entity",)
-        assert ref.legacy_field == "entity"
+        assert ref.role == "entity"
         field = next(f for f in meta.fields if f.name == "entity")
         assert ref.label == field.label, (
             f"{meta.action_id}: the ref must read in the field's own words"
@@ -138,3 +138,41 @@ def test_a_self_dot_field_recipient_still_reads_its_own_id_field():
     effect = Effect(type="modify_trait", action="move",
                     refs={"recipient": TargetRef(value="self.location")})
     assert _subject(effect, repo=_Repo2()).id == "loc-9"
+
+
+# --- pointing an effect at a reference, from the builder's side ----------------
+
+def test_with_ref_sets_the_reference_the_action_declares_for_the_role():
+    from transversal.services.effect_refs import with_ref
+
+    effect = with_ref(Effect(type="modify_trait", action="move"), "entity", "gmc-7")
+    assert effect.refs["recipient"].value == "gmc-7"
+    assert effect.entity == "", "the builder never touches the positional field"
+
+
+def test_with_ref_can_set_a_path_instead_of_a_value():
+    from transversal.services.effect_refs import with_ref
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    spec = TargetSpec(steps=[SelectStep(collection="self")])
+    effect = with_ref(Effect(type="modify_trait", action="move"), "entity", spec=spec)
+    assert effect.refs["recipient"].spec is spec
+
+
+def test_with_ref_refuses_a_role_the_action_does_not_declare():
+    """A caller asking for the wrong reference would build an effect naming nobody."""
+    import pytest
+    from transversal.services.effect_refs import with_ref
+
+    with pytest.raises(ValueError, match="declares no 'owner' reference"):
+        with_ref(Effect(type="modify_pool", action="add_trait_rating"), "owner", "x")
+
+
+def test_with_ref_is_declaration_driven_not_name_driven():
+    """`set_die` calls its target `die`, `set` calls it `trait` — same call."""
+    from transversal.services.effect_refs import with_ref
+
+    a = with_ref(Effect(type="modify_roll", action="set_die"), "target", "die:pool:kael:0")
+    b = with_ref(Effect(type="modify_trait", action="set"), "target", "ts-x")
+    assert a.refs["die"].value == "die:pool:kael:0"
+    assert b.refs["trait"].value == "ts-x"

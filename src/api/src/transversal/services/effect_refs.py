@@ -12,8 +12,7 @@ engine asked "who". This module folds them into one ordered set of refs, so the
 resolver, the engine and the handlers can read a single vocabulary while the
 positional fields are migrated away.
 
-A ``RefDef`` opts in by declaring ``legacy_field`` — the positional field it
-supersedes. An action that declares no marker, and an effect that carries no
+A ``RefDef`` declares the ``role`` it plays — the positional field it supersedes. An action that declares no marker, and an effect that carries no
 marked ref, behave exactly as before: the shim is **inert** until an action opts
 in, which is what lets it land without touching 352 stored effects.
 
@@ -21,7 +20,7 @@ Not part of the shim, deliberately: ``result`` (the *string* field). It is an
 operand — a die (``d6``) or a number — not a target, and folding it into refs
 would be a category error. Only ``result_spec`` is a path.
 
-Delete this module, the ``legacy_field`` markers and the positional fields
+Delete this module, the ``role`` markers and the positional fields
 together when the migration is done — tracked on [[B261]].
 """
 
@@ -95,8 +94,8 @@ def effective_refs(effect: Effect, meta: EffectActionMeta | None = None) -> dict
         ref = declared.pop(ref_def.name, None)
         if ref is not None and not ref.value and ref.spec is None:
             ref = None
-        if ref is None and ref_def.legacy_field:
-            ref = _field_ref(effect, ref_def.legacy_field)
+        if ref is None and ref_def.role:
+            ref = _field_ref(effect, ref_def.role)
         if ref is not None:
             out[ref_def.name] = ref
     # A stored ref the action does not declare still resolves (defensive: it is
@@ -105,11 +104,11 @@ def effective_refs(effect: Effect, meta: EffectActionMeta | None = None) -> dict
     return out
 
 
-def _ref_for(effect: Effect, legacy_field: str, meta: EffectActionMeta | None = None):
+def _ref_for(effect: Effect, role: str, meta: EffectActionMeta | None = None):
     """The reference an action declares for a positional field, if it declares one.
 
     Declaration-driven on purpose: a reader asks for *the target* or *the
-    recipient*, and the action's own `legacy_field` marker says which ref holds it
+    recipient*, and the action's own declared `role` says which ref holds it
     — so no reader hardcodes a ref name, and renaming one cannot leave a reader
     behind ([[B261]]).
     """
@@ -118,20 +117,20 @@ def _ref_for(effect: Effect, legacy_field: str, meta: EffectActionMeta | None = 
         return None
     refs = getattr(effect, "refs", None) or {}
     for ref_def in meta.refs:
-        if ref_def.legacy_field == legacy_field:
+        if ref_def.role == role:
             return refs.get(ref_def.name)
     return None
 
 
-def ref_value(effect: Effect, legacy_field: str, meta: EffectActionMeta | None = None) -> str:
+def ref_value(effect: Effect, role: str, meta: EffectActionMeta | None = None) -> str:
     """A ref's resolved/literal value, or ``""`` when it holds a path instead."""
-    ref = _ref_for(effect, legacy_field, meta)
+    ref = _ref_for(effect, role, meta)
     return ref.value if ref is not None and ref.value else ""
 
 
-def ref_spec(effect: Effect, legacy_field: str, meta: EffectActionMeta | None = None):
+def ref_spec(effect: Effect, role: str, meta: EffectActionMeta | None = None):
     """A ref's path, or ``None`` when it holds a literal value instead."""
-    ref = _ref_for(effect, legacy_field, meta)
+    ref = _ref_for(effect, role, meta)
     return ref.spec if ref is not None and ref.spec is not None else None
 
 
@@ -174,7 +173,36 @@ def legacy_field_by_ref(effect: Effect, meta: EffectActionMeta | None = None) ->
     meta = _meta_for(effect, meta)
     if meta is None:
         return {}
-    return {d.name: d.legacy_field for d in meta.refs if d.legacy_field}
+    return {d.name: d.role for d in meta.refs if d.role}
+
+
+def with_ref(effect: Effect, role: str, value: str = "", spec=None,
+             meta: EffectActionMeta | None = None) -> Effect:
+    """A copy of ``effect`` with the reference its action declares for ``role`` set.
+
+    The **builder's** half of the migration. A builder used to hand an effect a
+    positional field — `target="self"`, `entity="{hitch_entity}"` — and let the
+    resolver fold it. It now points the effect at the reference instead, by role,
+    so the construction says what it means and no caller hardcodes a ref name.
+
+    Asking for a role the action does not declare is a **bug in the caller**, not a
+    no-op: it would silently build an effect that names nobody, so it raises.
+    """
+    meta = _meta_for(effect, meta)
+    if meta is None:
+        raise ValueError(
+            f"{getattr(effect, 'type', '?')}/{getattr(effect, 'action', '?')} "
+            "declares no references"
+        )
+    for ref_def in meta.refs:
+        if ref_def.role == role:
+            refs = dict(effect.refs or {})
+            refs[ref_def.name] = TargetRef(value=value, spec=spec)
+            return effect.model_copy(update={"refs": refs})
+    raise ValueError(
+        f"{meta.action_id} declares no {role!r} reference "
+        f"(has: {[d.name for d in meta.refs]})"
+    )
 
 
 def anchor_ref_names(effect: Effect, meta: EffectActionMeta | None = None) -> set[str]:

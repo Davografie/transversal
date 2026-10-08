@@ -212,7 +212,7 @@ def test_copy_and_move_put_the_trait_before_the_recipient():
         assert [r.elements for r in meta.refs] == [("traitsetting",), ("entity",)], action_id
         assert [r.name for r in meta.refs][0] == "trait", action_id
         recipient = next(r for r in meta.refs if r.name == "recipient")
-        assert recipient.legacy_field == "entity", action_id
+        assert recipient.role == "entity", action_id
         (field,) = meta.fields
         assert field.name == "entity", action_id
         assert field.label == "Give To", action_id

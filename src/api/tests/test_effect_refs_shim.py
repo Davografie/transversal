@@ -61,7 +61,7 @@ def test_no_action_in_the_registry_has_a_marker_yet_so_nothing_folds():
     """
     unchecked = []
     for m in EFFECT_ACTION_REGISTRY:
-        if any(d.legacy_field for d in m.refs):
+        if any(d.role for d in m.refs):
             continue
         unchecked.append(m)
         effect = Effect(type=m.effect_type, action=m.effect_action,
@@ -80,34 +80,34 @@ def test_an_effect_with_no_refs_and_no_markers_returns_unchanged():
 
 def test_a_marked_ref_reads_the_legacy_target_string():
     effect = Effect(type="trait", action="t", target="ts-x")
-    meta = _meta(RefDef("trait", "Trait", "traitsetting", legacy_field="target"))
+    meta = _meta(RefDef("trait", "Trait", "traitsetting", role="target"))
     refs = effective_refs(effect, meta)
     assert refs["trait"].value == "ts-x" and refs["trait"].spec is None
 
 
 def test_a_marked_ref_prefers_the_legacy_spec_over_the_string():
     effect = Effect(type="trait", action="t", target="ts-stale", target_spec=_spec("ts-x"))
-    meta = _meta(RefDef("trait", "Trait", "traitsetting", legacy_field="target"))
+    meta = _meta(RefDef("trait", "Trait", "traitsetting", role="target"))
     assert effective_refs(effect, meta)["trait"].spec is not None
 
 
 def test_a_stored_ref_wins_over_the_legacy_field():
     effect = Effect(type="trait", action="t", target="ts-old",
                     refs={"trait": TargetRef(value="ts-new")})
-    meta = _meta(RefDef("trait", "Trait", "traitsetting", legacy_field="target"))
+    meta = _meta(RefDef("trait", "Trait", "traitsetting", role="target"))
     assert effective_refs(effect, meta)["trait"].value == "ts-new"
 
 
 def test_an_empty_stored_ref_does_not_block_the_legacy_field():
     """`refs={"trait": {}}` beside `target="ts-x"` must still resolve."""
     effect = Effect(type="trait", action="t", target="ts-x", refs={"trait": TargetRef()})
-    meta = _meta(RefDef("trait", "Trait", "traitsetting", legacy_field="target"))
+    meta = _meta(RefDef("trait", "Trait", "traitsetting", role="target"))
     assert effective_refs(effect, meta)["trait"].value == "ts-x"
 
 
 def test_the_entity_field_folds():
     effect = Effect(type="trait", action="t", entity="gmc-7")
-    meta = _meta(RefDef("recipient", "Give To", "entity", legacy_field="entity"))
+    meta = _meta(RefDef("recipient", "Give To", "entity", role="entity"))
     assert effective_refs(effect, meta)["recipient"].value == "gmc-7"
 
 
@@ -115,8 +115,8 @@ def test_the_owner_and_result_specs_fold_but_the_result_string_does_not():
     """`result` is an operand (a die), not a target — only `result_spec` is a path."""
     effect = Effect(type="trait", action="t", result="d6", owner_spec=_spec("rel-1"),
                     result_spec=_spec("rating:0:ts-x"))
-    meta = _meta(RefDef("anchor", "Anchor", "relationship", legacy_field="owner"),
-                 RefDef("die", "Die", "rating_die", legacy_field="result"))
+    meta = _meta(RefDef("anchor", "Anchor", "relationship", role="owner"),
+                 RefDef("die", "Die", "rating_die", role="result"))
     refs = effective_refs(effect, meta)
     assert refs["anchor"].spec is not None
     assert refs["die"].spec is not None
@@ -126,7 +126,7 @@ def test_the_owner_and_result_specs_fold_but_the_result_string_does_not():
 
 def test_an_unknown_legacy_field_is_a_declaration_bug_not_a_silent_no_op():
     effect = Effect(type="trait", action="t", target="ts-x")
-    meta = _meta(RefDef("trait", "Trait", "traitsetting", legacy_field="targt"))
+    meta = _meta(RefDef("trait", "Trait", "traitsetting", role="targt"))
     with pytest.raises(ValueError, match="unknown legacy field"):
         effective_refs(effect, meta)
 
@@ -148,7 +148,7 @@ def test_a_stored_ref_the_action_does_not_declare_still_resolves():
 
 def test_a_declared_ref_that_says_nothing_is_absent():
     effect = Effect(type="trait", action="t")
-    meta = _meta(RefDef("trait", "Trait", "traitsetting", legacy_field="target"))
+    meta = _meta(RefDef("trait", "Trait", "traitsetting", role="target"))
     assert effective_refs(effect, meta) == {}
 
 
@@ -158,7 +158,7 @@ def test_a_resolved_implicit_ref_is_written_back_into_its_field(monkeypatch):
     """The point of the shim: migrate the resolver first, the handlers later."""
     import transversal.services.effect_refs as shim
 
-    meta = _meta(RefDef("trait", "Trait", "traitsetting", legacy_field="target"))
+    meta = _meta(RefDef("trait", "Trait", "traitsetting", role="target"))
     monkeypatch.setattr(shim, "get_action_meta_for", lambda *a, **k: meta)
     assert legacy_field_by_ref(Effect(type="t", action="t"), meta) == {"trait": "target"}
 
@@ -190,7 +190,7 @@ def test_a_literal_ref_still_surfaces_under_its_declared_name(monkeypatch):
     """A string legacy target needs no repo: it *is* the resolved value."""
     import transversal.services.effect_refs as shim
 
-    meta = _meta(RefDef("trait", "Trait", "traitsetting", legacy_field="target"))
+    meta = _meta(RefDef("trait", "Trait", "traitsetting", role="target"))
     monkeypatch.setattr(shim, "get_action_meta_for", lambda *a, **k: meta)
     effect = Effect(type="t", action="t", target="ts-x")
     out = resolve_refs(effect, None)
@@ -232,9 +232,9 @@ def test_every_fallback_field_still_has_its_declared_reference():
                 f"{meta.action_id}.{f.name} defers to {f.hidden_when_ref!r}, "
                 "which no reference declares"
             )
-            if ref.legacy_field is not None:
+            if ref.role is not None:
                 assert ref.label == f.label, f"{meta.action_id}: label drifted"
-                assert ref.legacy_field == f.name, f"{meta.action_id}: wrong legacy source"
+                assert ref.role == f.name, f"{meta.action_id}: wrong legacy source"
                 assert ref.elements, (
                     f"{meta.action_id}.{f.name}: a ref nothing could type-check"
                 )
@@ -257,9 +257,9 @@ def test_only_the_recipient_field_may_claim_the_name_recipient():
             continue
         for ref in meta.refs:
             if ref.name == "recipient":
-                assert ref.legacy_field == "entity", (
+                assert ref.role == "entity", (
                     f"{meta.action_id}: {ref.name!r} is derived from "
-                    f"{ref.legacy_field!r}, which is not the recipient field"
+                    f"{ref.role!r}, which is not the recipient field"
                 )
 
 
@@ -279,7 +279,7 @@ def test_a_target_ref_accepts_exactly_what_the_path_already_accepted():
     assert ref.elements == path == ("die", "rating_die")
     ref, path = ref_for("reroll_die")
     assert ref.elements == path == ("die",)
-    assert ref.legacy_field == "target"
+    assert ref.role == "target"
 
 
 # --- materialising the fold into content (the migration) ---------------------

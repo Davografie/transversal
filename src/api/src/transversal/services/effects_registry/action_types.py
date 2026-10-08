@@ -47,12 +47,12 @@ class RefDef:
     name: str          # key into Effect.refs, e.g. "trait", "pool", "learner"
     label: str         # editor label, e.g. "Trait", "Destination pool"
     elements: str | tuple[str, ...] = ""
-    # The positional field this ref supersedes, while the effect still carries
-    # one: "target" | "entity" | "owner" | "result". When the named ref is empty
-    # and the field is set, the field is read *as* this ref — so the resolver sees
-    # one vocabulary and stored content keeps working with no migration. Absent on
-    # a ref that never had a positional form. Delete with the fields ([[B261]]).
-    legacy_field: str | None = None
+    # What this reference **is**, so a reader can ask for it without knowing its
+    # name: "target" (what the effect acts on), "entity" (who it lands on), "owner"
+    # (where what it makes is anchored). The accessors in `services.effect_refs`
+    # look the ref up by role, so renaming one cannot leave a reader behind
+    # ([[B261]]).
+    role: str | None = None
     # An **anchor** is authored as a reference but is not a per-fire multiplier:
     # it says where the thing the effect *makes* lives, and its own resolver
     # (`resolve_effect_owner`) settles it once. A reference that is not an anchor
@@ -170,12 +170,6 @@ _ENTITY_FIELD = EffectFieldDef(
     # content authored before the reference, and steps aside once one is authored.
     hidden_when_ref="recipient",
 )
-
-#: The recipient — who an effect lands on — as a declared reference ([[B261]]).
-#: ``legacy_field`` is what keeps the stored ``entity`` strings and ``entity_spec``
-#: paths resolving while the positional form is retired.
-_RECIPIENT_REF = RefDef(name="recipient", label="Entity", elements="entity",
-                        legacy_field="entity")
 
 #: Every anchor a trait instance can hang on, declared together on the verbs that
 #: create or move one. The anchor is a path (`Effect.owner_spec`), and this is what

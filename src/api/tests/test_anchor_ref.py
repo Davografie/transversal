@@ -61,7 +61,7 @@ def test_an_action_with_owner_elements_declares_an_anchor_ref():
         ref = next(r for r in meta.refs if r.name == "owner")
         assert ref.anchor is True, action_id
         assert ref.elements == tuple(meta.owner_elements), action_id
-        assert ref.legacy_field == "owner", action_id
+        assert ref.role == "owner", action_id
         assert ref.label == "Anchored to", action_id
     assert checked, "expected the gain/copy/move family to declare an owner path"
 

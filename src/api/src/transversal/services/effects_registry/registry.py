@@ -39,9 +39,9 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
 # action could not add a fallback field and forget its reference. The fields are
 # going away, so the references are declared here instead — one table, keyed by
 # action, listing exactly what the derivation produced (name, label, elements).
-# `legacy_field` is retained only until the fold goes with the fields.
+# `role` says which question each reference answers, for the accessors.
 # Generated from the derived refs at the moment they were made explicit.
-# (action_id, [(ref name, label, elements, legacy_field, anchor), ...])
+# (action_id, [(ref name, label, elements, role, anchor), ...])
 _DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool]]] = {
     "add_dice": [("pool", "Pool", ('pool',), 'target', False)],
     "add_rating_die": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
@@ -104,7 +104,7 @@ for _m in EFFECT_ACTION_REGISTRY:
     _existing = {r.name for r in _m.refs}
     _m.refs = [*_m.refs, *[
         RefDef(name=_name, label=_label, elements=_elements,
-               legacy_field=_legacy, anchor=_anchor)
+               role=_legacy, anchor=_anchor)
         for _name, _label, _elements, _legacy, _anchor in _declared
         if _name not in _existing
     ]]
