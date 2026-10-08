@@ -28,7 +28,7 @@ from typing import Any
 from transversal.domain import SfxOwner
 
 from transversal.services.target_scopes import choice_spec
-from transversal.services.effect_refs import target_value
+from transversal.services.effect_refs import target_value, with_ref
 
 
 def _choice(kind: str, scope: str | None = None, mode: str = "choose",
@@ -216,7 +216,6 @@ def ensure_give_in_sfx(repo) -> None:
                 timing=EffectTiming.IMMEDIATE,
                 type="transfer_razmerit",
                 action="earn",
-                target="self",
                 result="1",
             ),
         ],
@@ -240,12 +239,11 @@ def ensure_support_cast_sfx(repo) -> None:
             description="Open the support-cast roll table to generate a support character — pick an archetype and pay its cost.",
             trigger="manual",
             effects=[
-                Effect(
+                with_ref(Effect(
                     timing=EffectTiming.IMMEDIATE,
                     type="roll_table",
                     action="menu",
-                    target="rt-emberline-support-cast",
-                ),
+                ), "target", "rt-emberline-support-cast"),
             ],
         ))
 
@@ -265,7 +263,6 @@ def ensure_targeting_ban_sfx(repo) -> None:
         timing=EffectTiming.IMMEDIATE,
         type="entity",
         action="targeting_ban",
-        target="",
         duration=EffectDuration(timers=[Timer(event="scene", remaining=1)]),
     )
 
@@ -407,8 +404,8 @@ def ensure_place_rule_example(repo) -> None:
         trigger="on_location_change",
         source_kind="location",
         conditions=[Condition(type=ConditionType.ENTITY_TYPE, target="character")],
-        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="life_path",
-                        action="discover", target=life_path.id)],
+        effects=[with_ref(Effect(timing=EffectTiming.IMMEDIATE, type="life_path",
+                                 action="discover"), "target", life_path.id)],
     )
 
     # Create-only: this is content, and once the author edits it (a condition
@@ -442,7 +439,6 @@ def ensure_prevent_taken_out_sfx(repo) -> None:
                 timing=EffectTiming.IMMEDIATE,
                 type="transfer_razmerit",
                 action="spend",
-                target="self",
                 result="1",
             ),
         ],
@@ -470,14 +466,12 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
             negative=True,
             context={"steps": "{number_of_hitches}"},
         ),
-        Effect(
+        with_ref(Effect(
             timing=EffectTiming.IMMEDIATE,
             type="transfer_razmerit",
             action="earn",
-            target="self",
-            entity="{hitch_entity}",
             result="1",
-        ),
+        ), "entity", "{hitch_entity}"),
     ]
 
     existing = repo.get_sfx("hitch-gain-complication")
@@ -515,14 +509,12 @@ def ensure_opportunity_sfx(repo) -> None:
     hitch_cond = Condition(type=ConditionType.HITCH)
     entity_cond = Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character")
     effects = [
-        Effect(
+        with_ref(Effect(
             timing=EffectTiming.IMMEDIATE,
             type="transfer_razmerit",
             action="spend",
-            target="self",
-            entity="{buying_entity}",
             result="1",
-        ),
+        ), "entity", "{buying_entity}"),
         Effect(
             timing=EffectTiming.IMMEDIATE,
             type="modify_trait",
@@ -582,7 +574,6 @@ def ensure_offer_negative_sfx(repo) -> None:
                 timing=EffectTiming.IMMEDIATE,
                 type="transfer_razmerit",
                 action="earn",
-                target="self",
                 result="1",
             ),
         ],

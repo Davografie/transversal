@@ -639,7 +639,7 @@ def test_ensure_hitch_gain_complication_sfx_creates_once():
                                      ("navigate", "traits"), ("choose", None)]
     assert sfx.effects[1].type == "transfer_razmerit"
     assert sfx.effects[1].action == "earn"
-    assert sfx.effects[1].entity == "{hitch_entity}"
+    assert sfx.effects[1].refs["recipient"].value == "{hitch_entity}"
     assert sfx.effects[1].result == "1"
     ensure_hitch_gain_complication_sfx(repo)
     assert len(repo.sfxs) == 1
@@ -657,7 +657,7 @@ def test_ensure_opportunity_sfx_creates_once():
     assert len(sfx.effects) == 2
     assert sfx.effects[0].type == "transfer_razmerit"
     assert sfx.effects[0].action == "spend"
-    assert sfx.effects[0].entity == "{buying_entity}"
+    assert sfx.effects[0].refs["recipient"].value == "{buying_entity}"
     assert sfx.effects[0].result == "1"
     assert sfx.effects[1].type == "modify_trait"
     assert sfx.effects[1].action == "step_down"
