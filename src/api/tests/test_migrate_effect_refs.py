@@ -96,6 +96,12 @@ class _FakeRepo:
     def get_all_sfxs(self):
         return [self._sfx]
 
+    def get_sfx(self, sfx_id):
+        return self._sfx if sfx_id == self._sfx.id else None
+
+    def get_roll_table(self, _table_id):
+        return None
+
     def list_roll_tables(self):
         return []
 
@@ -142,3 +148,57 @@ def test_applying_writes_a_backup_before_the_change(monkeypatch, tmp_path):
     assert doc["kind"] == "sfx" and doc["id"] == "sfx-x"
     before = doc["before"]["effects"][0]
     assert before["target"] == "ts-x" and before["refs"] == {}, "the OLD row is recorded"
+
+
+# --- the undo is a command, and it is itself undoable -------------------------
+
+def test_restoring_writes_every_backed_up_document(monkeypatch, tmp_path):
+    import json
+    from transversal import migrate_effect_refs as mig
+
+    repo = _FakeRepo()
+    repo._sfx.effects = [Effect(**SET_TRAIT)]          # the migrated (folded) state
+    monkeypatch.setattr("transversal.main._get_repo", lambda: repo)
+
+    backup = tmp_path / "backup.json"
+    backup.write_text(json.dumps({
+        "written_at": "2026-01-01T00:00:00Z",
+        "documents": [{"kind": "sfx", "id": "sfx-x",
+                       "before": repo._sfx.model_copy(
+                           update={"effects": [Effect(**SET_TRAIT, target="ts-x")]}
+                       ).model_dump()}],
+    }))
+
+    assert mig.main(["--restore", str(backup), "--backup-dir", str(tmp_path)]) == 0
+    assert len(repo.written) == 1
+    restored = repo.written[0]
+    assert restored.effects[0].target == "ts-x", "the original positional field is back"
+    assert restored.effects[0].refs == {}
+
+
+def test_a_restore_snapshots_the_state_it_overwrites(monkeypatch, tmp_path):
+    """The undo must be undoable, or 'reversible' only points one way."""
+    import json, os
+    from transversal import migrate_effect_refs as mig
+
+    repo = _FakeRepo()
+    monkeypatch.setattr("transversal.main._get_repo", lambda: repo)
+    backup = tmp_path / "backup.json"
+    backup.write_text(json.dumps({"documents": [
+        {"kind": "sfx", "id": "sfx-x", "before": repo._sfx.model_dump()}]}))
+
+    assert mig.main(["--restore", str(backup), "--backup-dir", str(tmp_path)]) == 0
+    snapshots = [f for f in os.listdir(tmp_path) if f.startswith("pre-restore-")]
+    assert len(snapshots) == 1
+    payload = json.loads((tmp_path / snapshots[0]).read_text())
+    assert payload["documents"][0]["id"] == "sfx-x"
+
+
+def test_an_unreadable_backup_restores_nothing(monkeypatch, tmp_path):
+    from transversal import migrate_effect_refs as mig
+
+    repo = _FakeRepo()
+    monkeypatch.setattr("transversal.main._get_repo", lambda: repo)
+    assert mig.main(["--restore", str(tmp_path / "nope.json"),
+                     "--backup-dir", str(tmp_path)]) == 1
+    assert repo.written == []

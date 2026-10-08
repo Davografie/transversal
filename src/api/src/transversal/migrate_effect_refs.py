@@ -27,8 +27,12 @@ Usage:
     docker compose exec api python -m transversal.migrate_effect_refs --apply
     docker compose exec api python -m transversal.migrate_effect_refs --apply --include-subject-paths
 
-``--apply`` writes a JSON backup of every document it is about to change, beside
-the working directory, before changing anything.
+    docker compose exec api python -m transversal.migrate_effect_refs --restore /app/backups/effect-refs-backup-<stamp>.json
+
+``--apply`` writes a JSON backup of every document it is about to change, into
+``--backup-dir``, **before** changing anything — and refuses to write at all if
+that backup cannot be written. ``--restore`` puts a backup back and snapshots the
+current state first, so the undo is itself undoable.
 """
 
 from __future__ import annotations
@@ -39,7 +43,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from transversal.domain import Effect
+from transversal.domain import Effect, RollTable, SFX
 from transversal.services.effect_refs import materialise_refs
 
 
@@ -93,6 +97,60 @@ def _changed(before: list, after: list) -> bool:
     return any(a is not b for a, b in zip(before, after))
 
 
+def _restore(repo, backup_path: str, backup_dir: str) -> int:
+    """Put a backup's documents back, snapshotting the current state first.
+
+    The migration is only reversible if the undo is a command rather than a
+    procedure, and the undo is only safe if it is itself undoable — hence the
+    second snapshot. Both files are plain dumps of whole documents, so either can
+    be handed back to `--restore`.
+    """
+    try:
+        with open(backup_path) as fh:
+            payload = json.load(fh)
+    except (OSError, ValueError) as exc:
+        print(f"cannot read {backup_path}: {exc}")
+        return 1
+
+    documents = payload.get("documents") or []
+    if not documents:
+        print(f"{backup_path} holds no documents; nothing to restore.")
+        return 1
+    print(f"\nRESTORE from {backup_path}")
+    print(f"  taken at            {payload.get('written_at', '(unrecorded)')}")
+    print(f"  documents to write  {len(documents)}")
+
+    current = []
+    for doc in documents:
+        kind, doc_id = doc.get("kind"), doc.get("id")
+        live = repo.get_sfx(doc_id) if kind == "sfx" else repo.get_roll_table(doc_id)
+        current.append({"kind": kind, "id": doc_id,
+                        "before": live.model_dump() if live is not None else None})
+    missing = [c for c in current if c["before"] is None]
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path = os.path.abspath(os.path.join(backup_dir, f"pre-restore-{stamp}.json"))
+    try:
+        with open(path, "w") as fh:
+            json.dump({"kind": "state before a B261 restore",
+                       "written_at": datetime.now(timezone.utc).isoformat(),
+                       "documents": current}, fh, indent=1)
+    except OSError as exc:
+        print(f"\n  ABORTED: could not snapshot the current state ({exc}).")
+        return 1
+    print(f"  current state saved {path}")
+
+    for doc in documents:
+        if doc["kind"] == "sfx":
+            repo.update_sfx(SFX.model_validate(doc["before"]))
+        else:
+            repo.update_roll_table(RollTable.model_validate(doc["before"]))
+    print(f"\n  {len(documents)} documents restored"
+          + (f" ({len(missing)} of them no longer existed and were recreated)"
+             if missing else ""))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true",
@@ -103,11 +161,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backup-dir", default=".",
                         help="where the pre-change backup is written; must be a "
                              "mounted path or the file dies with the container")
+    parser.add_argument("--restore", metavar="BACKUP",
+                        help="write the documents in a backup file back, undoing "
+                             "an --apply. Takes its own snapshot first, so the "
+                             "restore is itself reversible.")
     args = parser.parse_args(argv)
 
     from transversal.main import _get_repo
 
     repo = _get_repo()
+    if args.restore:
+        return _restore(repo, args.restore, args.backup_dir)
     # Everything the pass would change, gathered *before* anything is written, so
     # the backup can be written first and a failure mid-way cannot leave changes
     # with no record of what they were.
