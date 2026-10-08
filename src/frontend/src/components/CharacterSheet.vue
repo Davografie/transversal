@@ -402,12 +402,16 @@
                 @click="openAddTrait(entry.ts)"
               >＋</button>
             </h4>
-            <!-- The set's own rules sit **directly under its title**, above the
-                 rows — the human's call, 2026-09-29. A set-as-a-unit rule is a
-                 fact about the set, so it reads with the heading; below the rows
-                 it looked like one more trait's card, and on a long set it fell
-                 off the end of the list entirely. -->
-            <div v-if="traitsetSfxIds(entry.ts).length || traitsetGrantedSfxIds(entry.ts).length" class="sfx-cards">
+            <!-- The set's own rules sit **inside the set**: first under its title,
+                 above the rows (the human's call, 2026-09-29), and now *only while
+                 the set is open* (2026-09-29, their follow-up). A set-as-a-unit rule
+                 is a fact about the set, so it belongs to the set's contents — a
+                 collapsed set is a line you scan, and a card hanging under it was
+                 the one thing that did not disappear with it. -->
+            <div
+              v-if="isSetOpen(entry.ts.name) && (traitsetSfxIds(entry.ts).length || traitsetGrantedSfxIds(entry.ts).length)"
+              class="sfx-cards"
+            >
               <SfxCard v-for="sfxId in traitsetSfxIds(entry.ts)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
                        @activate="activateSfx(sfxId, traitsetSettingSourceId(entry.ts))" />
               <!-- Granted to the set as a unit rather than attached to it. -->
@@ -437,7 +441,11 @@
         <!-- The drill-in's first phase: the sets as navigation, shown only until
              one is entered. No `[+]` here — a set you hold nothing in is reached
              through `+ Add Trait` below, which is the pre-accordion path and
-             still the only one that can add to a set the list has no entry for. -->
+             still the only one that can add to a set the list has no entry for.
+             And no set-level rules either (2026-09-29): this list is navigation, so
+             a set's rules belong to the set **entered**, which is where the detail
+             branch below draws them. They used to show here too, which meant a rule
+             for every set at once on the one screen where you have entered none. -->
         <div v-else-if="activeSheetView === 'traits' && !flatTraitList && !drilledSet && traitSets.length && !showAddTrait" class="trait-sets">
           <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
             <h4 class="set-header set-header-link" @click="openSet(ts.name)">
@@ -447,18 +455,6 @@
                 <span v-for="i in ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(ts) }">{{ i <= inPoolCount(ts) ? '●' : '○' }}</span>
               </span>
             </h4>
-            <div v-if="traitsetSfxIds(ts).length || traitsetGrantedSfxIds(ts).length" class="sfx-cards">
-              <SfxCard v-for="sfxId in traitsetSfxIds(ts)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
-                       @activate="activateSfx(sfxId, traitsetSettingSourceId(ts))" />
-              <SfxCard
-                v-for="sfxId in traitsetGrantedSfxIds(ts)"
-                :key="'tsg-' + sfxId"
-                class="sfx-granted"
-                v-bind="sfxCardModel(sfxId)"
-                title="Always on: granted to this set by a rule's reach — not attached, so there is nothing to take"
-                @activate="activateSfx(sfxId, traitsetSettingSourceId(ts))"
-              />
-            </div>
           </div>
         </div>
 

@@ -73,9 +73,10 @@ async function stubGranted(page, { grantTraitSet = true } = {}) {
 }
 
 async function openSheet(page, opts = {}) {
+  const { viewport = { width: 1280, height: 950 }, ...stubOpts } = opts
   await asPlayer(page)
-  await stubGranted(page, opts)
-  await page.setViewportSize({ width: 1280, height: 950 })
+  await stubGranted(page, stubOpts)
+  await page.setViewportSize(viewport)
   await page.goto('/')
   await page.evaluate((c) => {
     localStorage.setItem('playerId', c.playerId)
@@ -190,4 +191,57 @@ test("the live world's grant still draws, on the path content now uses", async (
       .filter((c) => c.classList.contains('sfx-granted')
         && getComputedStyle(c).outlineStyle === 'dashed').length)
   expect(dashed, 'the live granted rule draws on the trait-set strip').toBeGreaterThan(0)
+})
+
+// ── where a set's rules live ────────────────────────────────────────────────
+//
+// A set's own rules belong **inside the set** (the author, 2026-09-29): *"I want the
+// Traitset SFX's to sit inside the traitsets, so if the traitset is collapsed, the
+// SFX is also invisible."* Two shapes, so two cases — the accordion, where "inside"
+// means open, and the drill-in, where the set list is navigation and "inside" means
+// entered. The rule is about the *block*, which renders a set's attached and granted
+// rules together, so one fixture pins both.
+
+/** Every set that currently shows a rule card, with whether it is open. */
+async function setsWithCards(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('.sheet-embedded .trait-set')]
+      .map((s) => ({
+        name: s.querySelector('.set-name')?.textContent?.trim(),
+        open: s.classList.contains('open'),
+        cards: s.querySelectorAll('.sfx-cards .sfx-card').length,
+        // Painted, not merely present: a card inside a `v-if` that is false is not
+        // in the DOM at all, but this also catches one hidden by layout.
+        visible: [...s.querySelectorAll('.sfx-cards .sfx-card')]
+          .filter((c) => c.getBoundingClientRect().height > 0).length,
+      }))
+      .filter((s) => s.cards > 0))
+}
+
+test('the accordion hides a set\'s rules until that set is open', async ({ page }) => {
+  await openSheet(page)
+  // The stub gives every trait-set setting a rule, so this is the *strong* form of
+  // the claim: it is not that one set happens to be empty, it is that a collapsed
+  // set can show nothing at all.
+  expect(await setsWithCards(page), 'every set starts collapsed, so none shows a card').toEqual([])
+
+  await openAllSets(page)
+  const open = await setsWithCards(page)
+  expect(open.length, 'opening the sets reveals their rules').toBeGreaterThan(0)
+  expect(open.every((s) => s.open), 'and no set shows one while collapsed').toBe(true)
+  expect(open.every((s) => s.visible > 0), 'the cards are actually painted').toBe(true)
+})
+
+test('the drill-in shows a set\'s rules only once the set is entered', async ({ page }) => {
+  // Phone landscape: the dock is short, so the sets drill in (the human's rule of
+  // 2026-09-25) rather than accordion.
+  await openSheet(page, { viewport: { width: 844, height: 390 } })
+  const listCards = await page.locator('.sheet-embedded .trait-set .sfx-cards .sfx-card').count()
+  expect(listCards, 'the set list is navigation and carries no rules').toBe(0)
+
+  await page.locator('.sheet-embedded .set-header-link').first().click()
+  await page.waitForTimeout(600)
+  expect(await page.locator('.sheet-embedded .trait-list-title').count(), 'a set is entered').toBe(1)
+  const entered = await page.locator('.sheet-embedded .trait-list > .sfx-cards .sfx-card').count()
+  expect(entered, 'and its rules are drawn inside it').toBeGreaterThan(0)
 })
