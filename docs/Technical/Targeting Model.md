@@ -119,6 +119,44 @@ A spec that type-checks is guaranteed to have resolvable steps; the resolver pro
 
 When both a legacy string and a spec exist, the spec wins. `entity_spec` resolves in `effects_applier._effect_subject`; `target_spec` resolves per target in `roll_deferral._apply_spec_target` (the roll-deferred path), which fans the effect out once per resolved target.
 
+## Named references
+
+An effect's paths live in **`Effect.refs`** — a named reference *is* the vocabulary now
+([[B261]]). The positional fields (`target`/`target_spec`, `entity`/`entity_spec`,
+`owner_spec`) are the **fallback** form the references grew out of, still readable so
+stored content and engine-generated effects keep working.
+
+- **A `RefDef` declares four things:** `name` (the key in `refs`), `label` (the editor's
+  words), **`elements`** — a *set*, because the field a reference replaces often accepted
+  more than one kind (a die lives in a pool **or** in a rating; an owner may be a trait
+  instance or a relationship edge) — and **`role`** (`"target"`, `"entity"`, `"owner"`),
+  which is *what the reference is*, so a reader can ask for it without knowing its name.
+  **`anchor`** marks the one reference that is settled **once** rather than fanned out
+  over: the owner says where the thing an effect *makes* lives, and an anchor resolving
+  to three edges would make three things instead of one thing anchored three ways.
+- **The declarations live in one table** (`registry._DECLARED_REFS`, keyed by action).
+  They were *derived* from the positional fields while those existed — a field marked
+  `hidden_when_ref="trait"` produced the `trait` reference, so an action could not add a
+  fallback field and forget its reference. The table is that derivation, frozen.
+  **It covers retired actions too:** retiring is about *authoring*, the registry keeps a
+  retired action's dispatch, and the seed builders still construct some of them.
+- **Declaration order is resolution order**, and a reference may **consume an earlier
+  one's output** — a path that names a step output (`choose output "target_projection"`)
+  is read by a later reference (`select variable target_projection`). Declaring the
+  consumer first leaves the variable unbound, the reference resolves to nothing, and
+  `resolve_refs` fails **closed**: no application, no question, no note. `travel` was
+  exactly this (`projection` before the `location` path that names it).
+- **Readers ask by role, never by name** (`services/effect_refs.py`): `target_value` /
+  `target_spec_of` and `recipient_value` / `recipient_spec_of` — the value and path
+  halves. `with_ref(effect, role, value, spec)` is the builder's half, so a builder
+  points an effect at a reference instead of handing it a positional field; asking for a
+  role the action does not declare **raises**, because that silently builds an effect
+  naming nobody.
+- **`result` is not a reference.** A result is an *operand* (a die like `d6`, a number),
+  not something the effect acts on, so `result` and `result_spec` stay outside `refs` —
+  and a few inverse verbs (`projection/restore`, `set_destination/clear`) read a prior
+  from `result` rather than naming a target at all.
+
 ### Two homes for a die (the `Change a Die` family)
 
 A die lives in one of two places, and which one decides what changing it *means*:
