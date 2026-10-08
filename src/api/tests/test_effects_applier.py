@@ -18,6 +18,7 @@ from transversal.domain import (
     TraitSetSetting,
     TransversalType,
 )
+from transversal.services.effect_refs import target_value
 from transversal.services.effects_applier import PendingChoice, apply_effects, resolve_choice
 from transversal.services.target_resolver import Binding
 from transversal.services.target_spec import TargetSpec
@@ -502,7 +503,7 @@ def test_add_die_seeded_trait_is_deleted_on_revert():
     assert len(repo.scheduled_events) == 1
     revert = repo.scheduled_events[0]
     assert revert.effect.action == "remove"
-    assert revert.effect.target == "hazard"
+    assert target_value(revert.effect) == "hazard"
 
 
 def test_add_die_accumulates_into_the_seeded_trait():

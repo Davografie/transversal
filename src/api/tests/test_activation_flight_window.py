@@ -21,6 +21,7 @@ from transversal.domain import (
     Timer,
 )
 from transversal.services import roll_deferral
+from transversal.services.effect_refs import recipient_value
 from transversal.services.scheduled_events import (
     activation_booking,
     advance_scheduled_events,
@@ -360,7 +361,7 @@ def test_a_revert_lands_on_the_same_subject():
     # is the right actor then.
     named = Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit",
                    action="earn", result="1", entity="{buyer}")
-    assert build_revert(named).entity == ""
+    assert recipient_value(build_revert(named)) == ""
 
 
 def _pool_of(location_id, owner_id):

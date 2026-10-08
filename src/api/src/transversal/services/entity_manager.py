@@ -9,6 +9,7 @@ from typing import Optional
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.db.repository import EntityRepository
+from transversal.services.effect_refs import with_ref
 from transversal.services.change_log import change_log
 from transversal.services.scene_state import resync_pool_dice_for_trait
 from transversal.services.session_manager import session_manager
@@ -390,13 +391,12 @@ class EntityManager:
         if projection_policy:
             context["projection"] = projection_policy
 
-        effect = Effect(
+        effect = with_ref(Effect(
             timing=EffectTiming.IMMEDIATE,
             type="travel",
             action="move",
-            target=location,
             context=context,
-        )
+        ), "target", location)
 
         from transversal.services.effects_commit import commit_effects
 

@@ -11,6 +11,7 @@ from transversal.domain import (
     TimerCombine,
     TraitSetting,
 )
+from transversal.services.effect_refs import target_value
 from transversal.services.scheduled_events import (
     advance_scheduled_events,
     build_revert,
@@ -171,7 +172,7 @@ def test_build_revert_set_captures_prior():
     assert revert is not None
     assert revert.type == "modify_trait"
     assert revert.action == "set"
-    assert revert.target == "trait-1"
+    assert target_value(revert) == "trait-1"
     assert revert.result == "d6"
 
     assert build_revert(effect).result == "d8"
