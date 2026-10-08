@@ -25,6 +25,7 @@
         :model-value="row.spec"
         :destination="destination"
         :source-element="sourceElement"
+        :allow-source="false"
         title="Reach path"
         @update:model-value="onSpec(i, $event)"
       />
@@ -46,8 +47,10 @@
     </p>
     <p v-else-if="rows.length" class="reach-note">
       Every path must land on <strong>{{ elementName }}</strong> — this rule's source.
-      Paths are OR-ed, and where an owner is both given and offered the rule, having it
-      wins.
+      A path starts from a <em>collection</em> (<code>traits</code>, <code>entities</code>,
+      <code>traitsets</code>, …): a reach declaration has no source of its own, so
+      <code>select source</code> is not offered here. Paths are OR-ed, and where an owner
+      is both given and offered the rule, having it wins.
     </p>
   </div>
 </template>

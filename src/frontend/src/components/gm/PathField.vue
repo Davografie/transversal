@@ -38,6 +38,10 @@ const props = defineProps({
   variables: { type: Object, default: null },
   title: { type: String, default: 'Targeting path' },
   booleanTerminal: { type: Boolean, default: false },
+  // Forwarded to the builder: a reach path has no source, so `select source` must
+  // not be offered there ([[Dynamic SFX Reach]]). Default true — every other host
+  // is an effect or a condition, where the source is real.
+  allowSource: { type: Boolean, default: true },
 })
 
 // `resolve` says which element the path lands on — an effect that means different
@@ -104,6 +108,7 @@ function open() {
       variables: props.variables,
       title: props.title,
       booleanTerminal: props.booleanTerminal,
+      allowSource: props.allowSource,
     },
     listeners: { resolve: (element) => emit('resolve', element) },
   })

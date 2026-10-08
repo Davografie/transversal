@@ -44,7 +44,7 @@
         <div v-if="step.kind === 'select'" class="tsb-config">
           <select v-model="step.collection">
             <option value="">— pick a collection —</option>
-            <option v-if="sourceElement" value="source">SFX source <em>({{ sourceElement }})</em></option>
+            <option v-if="sourceElement && (allowSource || step.collection === 'source')" value="source">SFX source <em>({{ sourceElement }})</em></option>
             <option value="variable">Bound variable</option>
             <option v-for="c in collections()" :key="c.name" :value="c.name">
               {{ c.label }} <em>({{ c.element }})</em>
@@ -282,6 +282,13 @@ const props = defineProps({
   variables: { type: Object, default: null },     // { name: {element, cardinality} } bound output variables
   title: { type: String, default: 'Targeting path' },
   booleanTerminal: { type: Boolean, default: false }, // condition mode: the path's result is "non-empty → boolean"
+  // Whether `select source` may be *chosen* here. It is a real seed for an effect
+  // or a condition — the thing the rule is attached to — but a **reach
+  // declaration** has no source at all: it is resolved for the whole world, with
+  // no activation and nobody asking, so a path starting there selects nobody and
+  // says nothing about it. A stored `source` step stays visible (below) so an
+  // existing declaration is never silently mangled.
+  allowSource: { type: Boolean, default: true },
 })
 const emit = defineEmits(['update:modelValue', 'resolve'])
 

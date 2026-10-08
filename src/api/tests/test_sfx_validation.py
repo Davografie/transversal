@@ -658,6 +658,35 @@ def test_a_reach_declaration_silences_the_reaches_nobody_warning():
     assert not any("reaches nobody" in w for w in warnings), warnings
 
 
+def test_a_reach_path_that_starts_from_the_source_warns():
+    """A reach declaration has **no source**: it is resolved for the whole world,
+    with no activation and nobody asking, so `select source` errors and the path
+    reaches nobody — silently, because the declaration *is* present and so the
+    reaches-nobody warning stays quiet. The human authored exactly this
+    (`sfx-transverse`, 2026-09-29) and saw a rule that simply did nothing."""
+    sfx = _sfx()
+    sfx.reach = [ReachDeclaration(spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "source"},
+        {"kind": "navigate", "edge": "traitsettings"},
+    ]))]
+    warnings = validate_sfx(sfx, repo=_DeclaringRepo())
+    assert any("no source of its own" in w for w in warnings), warnings
+
+
+def test_a_reach_path_from_a_real_collection_does_not_warn():
+    """The warning is about the *source* step only — a path that seeds a real
+    collection is a legitimate declaration, whether or not it happens to match
+    anything in the world today."""
+    sfx = _sfx()
+    sfx.reach = [ReachDeclaration(spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "traits"},
+        {"kind": "filter", "field": "id", "value": "trait-x"},
+        {"kind": "navigate", "edge": "traitsettings"},
+    ]))]
+    warnings = validate_sfx(sfx, repo=_DeclaringRepo())
+    assert not any("no source of its own" in w for w in warnings), warnings
+
+
 def test_an_attached_rule_does_not_warn_about_reaching_nobody(monkeypatch):
     """Attached *is* reaching someone (`entity.sfx_ids`, the table bucket), so the
     ownership read has to be part of the question."""

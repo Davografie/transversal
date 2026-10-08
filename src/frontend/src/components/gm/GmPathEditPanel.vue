@@ -8,6 +8,7 @@
       :variables="variables"
       :title="title"
       :boolean-terminal="booleanTerminal"
+      :allow-source="allowSource"
       @resolve="emit('resolve', $event)"
     />
     <p v-else class="pe-missing">
@@ -38,6 +39,7 @@ const props = defineProps({
   variables: { type: Object, default: null },
   title: { type: String, default: 'Targeting path' },
   booleanTerminal: { type: Boolean, default: false },
+  allowSource: { type: Boolean, default: true },
 })
 
 // The path being edited, handed across in the panel spec's `context` as a

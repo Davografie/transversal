@@ -93,6 +93,32 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   }
 }
 
+// ── A reach path cannot start from the source ([[B257]]) ──────────
+//
+// A reach declaration is resolved for the whole world, with no subject and no
+// source, so `select source` errors and the path selects nobody — silently, since
+// the declaration *is* present. The author authored exactly that on 2026-09-29 and
+// saw a rule that did nothing; the builder must not offer the option, and a stored
+// `source` step must stay visible so an existing declaration is not mangled.
+{
+  const builder = read(find('components/gm/TargetSpecBuilder.vue'))
+  ok('the builder knows whether a source may be chosen',
+    /allowSource: \{ type: Boolean, default: true \}/.test(builder), true)
+  ok('…and gates the `source` option on it, keeping a stored step visible',
+    /v-if="sourceElement && \(allowSource \|\| step\.collection === 'source'\)"/.test(builder), true)
+
+  const panel = read(find('components/gm/GmPathEditPanel.vue'))
+  ok('GmPathEditPanel declares allowSource', /allowSource: \{ type: Boolean, default: true \}/.test(panel), true)
+  ok('GmPathEditPanel forwards it to the builder', /:allow-source="allowSource"/.test(panel), true)
+
+  const fieldSrc = read(find('components/gm/PathField.vue'))
+  ok('PathField declares allowSource', /allowSource: \{ type: Boolean, default: true \}/.test(fieldSrc), true)
+  ok('PathField hands it to the child panel', /allowSource: props\.allowSource/.test(fieldSrc), true)
+
+  const reach = read(find('components/gm/ReachEditor.vue'))
+  ok('the reach editor turns the source option off', /:allow-source="false"/.test(reach), true)
+}
+
 // ── Conditions are an ordered, reorderable list ───────────────────
 {
   const ce = read(find('components/gm/ConditionEditor.vue'))

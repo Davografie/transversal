@@ -454,6 +454,27 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                 "can appear anywhere and no one simply has it"
             )
 
+    # 3. A reach path that starts from `select source` — which can **never** work.
+    #    A declaration is resolved with no subject and **no source**: it says who
+    #    the rule reaches *world-wide*, rather than what is asking (that was the
+    #    retired acquire gate's reading — see `sfx_owner._resolve_reach_spec`). So
+    #    the step errors, the path yields nobody, and the author gets no feedback
+    #    at all: the declaration *is* present, so the warning above stays quiet.
+    #    The human authored exactly this (`sfx-transverse`, 2026-09-29) and saw a
+    #    rule that simply did nothing. Unambiguous, so it is reported per path —
+    #    unlike "this path resolves to nobody", which is data-dependent (a faction
+    #    with no members yet is legitimately empty) and is not warned about.
+    for i, declaration in enumerate(getattr(sfx, "reach", None) or []):
+        steps = getattr(getattr(declaration, "spec", None), "steps", None) or []
+        if any(getattr(s, "kind", "") == "select"
+               and getattr(s, "collection", "") == "source" for s in steps):
+            warnings.append(
+                f"Reach path {i + 1}: 'select source' cannot resolve — a reach "
+                "declaration has no source of its own (it is resolved for the whole "
+                "world, with no activation), so this path reaches nobody. Start from "
+                "a collection instead: `traits`, `entities`, `traitsets`, …"
+            )
+
     return warnings
 
 
