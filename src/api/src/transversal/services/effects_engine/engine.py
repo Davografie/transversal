@@ -25,6 +25,7 @@ from transversal.services.effects_engine.firing import (
     _resolve_primary_targets,
     bind_declared,
 )
+from transversal.services.effect_refs import effective_refs
 from transversal.services.effects_engine.refs import (
     _structured_choice,
     _substitute_effect_context,
@@ -473,7 +474,7 @@ class EffectsEngine:
                                 source_sfx_id=sfx.id, repo=repo,
                             ))
                         blocked = True
-                    elif effect.refs:
+                    elif effective_refs(effect):
                         before = len(outcome.structured)
                         fire_ctx = _fire_context(event, sfx, repo, bindings=bindings,
                                                  source_id=source_id, source_element=source_element)

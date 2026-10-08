@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from transversal.domain import Effect, EffectTiming
+from transversal.services.effect_refs import effective_refs
 
 log = logging.getLogger("transversal.sfx")
 
@@ -357,7 +358,7 @@ def _apply_armed(
                 resolved = _substitute_die_context(effect, die, context or {})
                 resolved = _substitute_effect_context(resolved, context or {}, bindings)
                 resolved = resolve_armed_subject(resolved, entity_id, bindings, {"rolled_dice": [die]})
-                if resolved.refs:
+                if effective_refs(resolved):
                     applied.extend(_apply_refs_roll(
                         resolved, entity_id, universe, context, [die], armed.source_kind,
                         armed.source_id, structured, bindings, source_sfx_id=armed.source_sfx_id,
@@ -373,7 +374,7 @@ def _apply_armed(
                 effect_registry.apply(resolved, entity_id, universe, effect_context)
                 applied.append(resolved)
             continue
-        if effect.refs:
+        if effective_refs(effect):
             resolved_list = _apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings, source_sfx_id=armed.source_sfx_id)
             applied.extend(resolved_list)
             continue

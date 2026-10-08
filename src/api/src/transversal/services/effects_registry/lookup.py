@@ -18,6 +18,26 @@ def get_action_meta(action_id: str) -> EffectActionMeta | None:
     return None
 
 
+_BY_PAIR: dict[tuple[str, str], EffectActionMeta | None] = {}
+
+
+def get_action_meta_for(effect_type: str, effect_action: str) -> EffectActionMeta | None:
+    """Look up an action by the ``(type, action)`` an *effect* carries.
+
+    Memoized: the resolver asks this once per effect per event, and the registry
+    is immutable at runtime (``reload_action_registry`` would need this cleared,
+    which no production path calls).
+    """
+    key = (effect_type, effect_action)
+    if key not in _BY_PAIR:
+        _BY_PAIR[key] = next(
+            (m for m in EFFECT_ACTION_REGISTRY
+             if m.effect_type == effect_type and m.effect_action == effect_action),
+            None,
+        )
+    return _BY_PAIR[key]
+
+
 def get_actions_by_category(category: str) -> list[EffectActionMeta]:
     """Return all actions matching a category ('cost', 'benefit', 'either')."""
     return [m for m in EFFECT_ACTION_REGISTRY if m.category == category]

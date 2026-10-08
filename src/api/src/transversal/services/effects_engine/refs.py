@@ -6,6 +6,11 @@ from dataclasses import field
 from transversal.domain import Effect
 from transversal.domain import SFX
 from typing import Optional
+from transversal.services.effect_refs import (
+    LEGACY_FIELDS,
+    effective_refs,
+    legacy_field_by_ref,
+)
 from transversal.services.effects_engine.events import (
     StructuredChoice,
 )
@@ -177,16 +182,23 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
     ``StructuredChoice`` is appended to ``structured`` (if provided), and an
     empty list is returned. ``answers`` resumes mid-path ``choose`` steps already
     answered by the user.
+
+    The refs are the action's *effective* ones ([[B261]]): a positional field a
+    ``RefDef`` marks as its legacy home is read as that named ref, and the
+    resolved value is written back into the field so handlers that still read
+    ``effect.target``/``effect.entity`` keep working while they are migrated.
     """
-    if not effect.refs:
+    refs_in = effective_refs(effect)
+    if not refs_in:
         return [effect]
     from itertools import product
     from transversal.services.target_resolver import resolve
 
+    legacy_by_ref = legacy_field_by_ref(effect)
     answers_so_far = [{"stepIndex": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
 
     resolved_values: dict[str, list[str]] = {}
-    for name, ref in effect.refs.items():
+    for name, ref in refs_in.items():
         if ref.spec is None:
             resolved_values[name] = [ref.value]
             _bind_ref_value(context, name, ref.value)
@@ -214,17 +226,26 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
         if len(ids) == 1:
             _bind_ref_value(context, name, ids[0])
 
-    names = list(effect.refs.keys())
+    names = list(refs_in.keys())
     out: list[Effect] = []
     for combo in product(*(resolved_values[n] for n in names)):
         refs = {}
+        updates: dict = {}
         for name, value in zip(names, combo):
-            ref = effect.refs[name]
+            ref = refs_in[name]
             refs[name] = (
                 ref if ref.spec is None
                 else ref.model_copy(update={"value": value, "spec": None})
             )
-        out.append(effect.model_copy(update={"refs": refs}))
+            # A ref that stands in for a positional field writes its answer back
+            # into it, so a handler that has not been migrated yet is unaffected.
+            field_name = legacy_by_ref.get(name)
+            if field_name:
+                string_field, spec_field = LEGACY_FIELDS[field_name]
+                if string_field:
+                    updates[string_field] = value
+                updates[spec_field] = None
+        out.append(effect.model_copy(update={"refs": refs, **updates}))
     return out
 
 def resolve_effect_spec_choices(
@@ -290,7 +311,7 @@ def resolve_effect_spec_choices(
     # whole for the answer to re-resolve it — so the effect handed back here still
     # carries them as *paths*, and every handler reads `refs.<name>.value`. Without
     # this, Gift moved the trait to nobody: the recipient arrived, the trait did not.
-    if out and effect.refs:
+    if out and effective_refs(effect):
         ref_choices: list = []
         fanned: list[Effect] = []
         for concrete in out:

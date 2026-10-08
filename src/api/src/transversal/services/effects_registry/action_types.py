@@ -37,9 +37,15 @@ class RefDef:
     picker/spec builder. ``element`` is the catalog element type the ref must
     resolve to (drives the picker + fire-time type-check).
     """
-    name: str          # key into Effect.refs, e.g. "trait", "pool", "subject"
+    name: str          # key into Effect.refs, e.g. "trait", "pool", "learner"
     label: str         # editor label, e.g. "Trait", "Destination pool"
     element: str       # target_catalog element type, e.g. "traitsetting", "pool"
+    # The positional field this ref supersedes, while the effect still carries
+    # one: "target" | "entity" | "owner" | "result". When the named ref is empty
+    # and the field is set, the field is read *as* this ref — so the resolver sees
+    # one vocabulary and stored content keeps working with no migration. Absent on
+    # a ref that never had a positional form. Delete with the fields ([[B261]]).
+    legacy_field: str | None = None
 
 @dataclass
 class EffectActionMeta:
