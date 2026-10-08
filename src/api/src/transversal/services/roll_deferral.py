@@ -489,6 +489,7 @@ def _apply_refs_roll(
         TargetContext(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
             source=source, source_element=source_element, bindings=bindings if bindings is not None else {},
+            source_kind=source_kind or "", source_id=source_id or "",
         ),
         structured,
         source_sfx_id=source_sfx_id or "",
@@ -536,6 +537,7 @@ def _apply_spec_target(
         TargetContext(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
             source=source, source_element=source_element, bindings=bindings if bindings is not None else {},
+            source_kind=source_kind or "", source_id=source_id or "",
         ),
         answers=answers,
     )

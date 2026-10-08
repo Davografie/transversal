@@ -45,6 +45,15 @@ class TargetContext:
     source: Any = None                     # the SFX's activation source (for `select source`)
     source_element: str | None = None      # its catalog element type (drives the source's type)
     bindings: dict[str, "Binding"] = field(default_factory=dict)  # typed output variables (for `select variable`)
+    #: The **declared** source, kept as strings so a question raised mid-path can
+    #: carry them back to the client: answering rebuilds this context from what the
+    #: client echoes, and a path that starts `select source` cannot resolve without
+    #: them. `source`/`source_element` are the resolved half, and are not enough —
+    #: the kind cannot be recovered from the element (`trait_setting` is one kind
+    #: whose element is `traitsetting`), so losing these silently resolved every
+    #: `select source` to nobody.
+    source_kind: str = ""
+    source_id: str = ""
 
 
 @dataclass(frozen=True)

@@ -217,7 +217,12 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
                 for pc in resolution.pending_choices:
                     structured.append(_structured_choice(
                         pc, effect, f"refs.{name}",
-                        source_kind=source_kind, source_id=source_id,
+                        # What a resume rebuilds the source from. Prefer the
+                        # caller's, fall back to the context's, so an emit site
+                        # cannot silently drop it and leave every `select source`
+                        # in the answered path resolving to nobody ([[B262]]).
+                        source_kind=source_kind or getattr(context, "source_kind", "") or "",
+                        source_id=source_id or getattr(context, "source_id", "") or "",
                         source_sfx_id=source_sfx_id, answers_so_far=answers_so_far,
                         repo=getattr(context, "repo", None),
                     ))
@@ -282,7 +287,9 @@ def resolve_effect_spec_choices(
         if source_kind and source_id and repo is not None
         else (None, None)
     )
-    ctx = TargetContext(subject=entity, repo=repo, source=source, source_element=source_element, bindings=bindings if bindings is not None else {})
+    ctx = TargetContext(subject=entity, repo=repo, source=source, source_element=source_element,
+                        bindings=bindings if bindings is not None else {},
+                        source_kind=source_kind or "", source_id=source_id or "")
     answers_so_far = [{"stepIndex": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
 
     if field.startswith("refs."):

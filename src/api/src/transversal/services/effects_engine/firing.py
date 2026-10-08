@@ -223,6 +223,7 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
         subject=entity, repo=repo, collections=seeds,
         source=source, source_element=source_element,
         bindings=bindings if bindings is not None else {},
+        source_kind=sfx.source_kind or "", source_id=raw_source_id or "",
     )
 
 def bind_declared(sfx: SFX, bindings: dict, event: GameEvent, repo,
