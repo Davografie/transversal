@@ -107,13 +107,16 @@ export function useApi() {
    * on a roll is un-armed. Rolling the dice (or a delayed part firing) commits
    * the rule, and after that there is nothing left to end.
    */
-  async function endSfx(entityId, sfxId) {
+  async function endSfx(entityId, sfxId, pending = false) {
     error.value = null
     try {
       const r = await fetch(`${API_BASE}/effects/end`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity_id: entityId, sfx_id: sfxId })
+        // `pending` says the caller is dropping an activation it still holds a
+        // question for. Such an activation may have booked nothing at all — so the
+        // server would otherwise have nothing to report and go quiet.
+        body: JSON.stringify({ entity_id: entityId, sfx_id: sfxId, pending })
       })
       if (!r.ok) throw new Error(await r.text())
       return await r.json()

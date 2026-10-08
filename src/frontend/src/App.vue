@@ -1629,8 +1629,17 @@ function endActivationsBehindChoices(choices) {
     if (!entity || !sfxId) continue
     if (ends.some((e) => e.entity === entity && e.sfxId === sfxId)) continue
     ends.push({ entity, sfxId })
-    apiEndSfx(entity, sfxId)
+    // `pending: true`: the activation is blocked on *this* question, so it may have
+    // booked nothing at all — `sfx-gift` applies nothing before its first choice —
+    // and the take-back would otherwise be silent.
+    apiEndSfx(entity, sfxId, true)
   }
+  // …and the chip the press lit is cleared **here**, not waited for. The server
+  // truth (`inFlightSfxIds`) never lists a rule that booked nothing, and
+  // `fetchInFlightSfxIds` only clears rules the server had previously reported —
+  // so no refresh could ever clear this one, and the chip stayed lit until a
+  // reload (the human, 2026-09-29).
+  sheetRef.value?.clearSfxActivations?.(ends.map((e) => e.sfxId))
 }
 
 function clearSfxChoicesAll() {

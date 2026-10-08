@@ -20,6 +20,13 @@ class TriggerRequest(BaseModel):
 class EndRequest(BaseModel):
     entity_id: str
     sfx_id: str
+    #: The caller is dropping an activation it still holds a **question** for.
+    #: Such an activation may have booked nothing at all — `sfx-gift` blocks on its
+    #: first choice *before* applying anything, so it has no hold, no revert row and
+    #: no armed entry — and then `end_activation` finds nothing, the take-back is
+    #: silent, and the chip the press lit stays lit (the human, 2026-09-29). The
+    #: client is the only one that knows a question is open, so it says so.
+    pending: bool = False
 
 
 def _with_notes(applied: list, notes: list[dict]) -> list[dict]:
@@ -48,16 +55,23 @@ async def end_sfx(req: EndRequest, request: Request):
     un-arms anything still waiting on a roll. Once the dice have been rolled, or
     a delayed part of the activation has fired, there is nothing left to end and
     the summary reports zero records.
+
+    ``pending`` covers the case where there was never anything to end: an
+    activation blocked on a question it has not answered yet may have booked no
+    row at all. It is still **over** when the caller drops it, so ``ended`` says
+    so and the ``sfx_ended`` push goes out — otherwise the only client that knows
+    (the one that pressed) keeps a chip lit and every other screen keeps its card.
     """
     from transversal.main import _get_repo
     from transversal.services.scheduled_events import end_activation
 
     summary = end_activation(_get_repo(), req.entity_id, req.sfx_id)
-    if summary["records"]:
+    ended = bool(summary["records"]) or req.pending
+    if ended:
         from transversal.services.effects_engine import _emit_sfx_ended
 
         _emit_sfx_ended(req.entity_id, req.sfx_id)
-    return {"ended": summary["records"] > 0, **summary}
+    return {"ended": ended, "pending": req.pending, **summary}
 
 
 @router.post("/trigger")

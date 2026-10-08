@@ -2454,7 +2454,7 @@ function setPoolSources(sources) {
   if (recovered) fetchEntity('pool-dice-refunded')
 }
 
-defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity, fetchInFlightSfxIds, fetchTimers, refreshBlueBook: () => blueBookRef.value?.refresh() })
+defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity, fetchInFlightSfxIds, clearSfxActivations, fetchTimers, refreshBlueBook: () => blueBookRef.value?.refresh() })
 
 function sfxActive(sfxId) {
   return (sfxActivations.value[sfxId] || 0) > 0
@@ -2588,6 +2588,23 @@ async function fetchSfxUnmetReasons(entityId) {
  * that save — so the sheet refreshes the ledger from the server at that moment
  * instead of waiting on a push.
  */
+/** Clear the optimistic 'active' flags for rules the caller has just taken back.
+ *
+ * `fetchInFlightSfxIds` cannot do this, and that is the whole bug: it clears a
+ * rule only when the server had **previously** reported it in flight
+ * (`seededInFlight`), and a manual rule that applies nothing before its first
+ * choice ([[sfx-gift]]) is never in that set — so the chip its press lit stayed
+ * lit, through every refresh, until a reload. The caller's cancel path knows
+ * exactly which rules it just ended, so it says so (the human, 2026-09-29).
+ */
+function clearSfxActivations(sfxIds) {
+  for (const sfxId of sfxIds || []) {
+    if (!sfxId) continue
+    sfxActivations.value[sfxId] = 0
+    seededInFlight.value.delete(sfxId)
+  }
+}
+
 async function fetchInFlightSfxIds(reason = 'unspecified') {
   const id = props.overrideEntityId || props.entityId
   if (!id) return

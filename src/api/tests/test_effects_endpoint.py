@@ -69,6 +69,49 @@ def test_an_unknown_entity_still_reports_rather_than_returning_nothing(client):
     assert r.json()["applied"] is False
 
 
+def _nothing_to_end(repo, eid, sid):
+    return {"entity_id": eid, "sfx_id": sid, "records": 0, "reverted": 0,
+            "failed": 0, "dropped_pending": 0, "dropped_holds": 0, "unarmed": 0}
+
+
+def test_a_pending_take_back_is_reported_and_broadcast(client, monkeypatch):
+    """`sfx-gift` blocks on its first choice *before* applying anything, so it books
+    no row at all: `end_activation` finds nothing and the take-back went silent —
+    and the chip the press lit stayed lit (the human, 2026-09-29). The client is the
+    only one that knows a question is open, so it says `pending` and the end is
+    reported."""
+    import transversal.services.effects_engine as ee
+    import transversal.services.scheduled_events as se
+
+    monkeypatch.setattr(se, "end_activation", _nothing_to_end)
+    pushed = []
+    monkeypatch.setattr(ee, "_emit_sfx_ended", lambda eid, sid: pushed.append((eid, sid)))
+
+    r = client.post("/api/v1/effects/end", json={
+        "entity_id": "e1", "sfx_id": "sfx-gift", "pending": True})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["ended"] is True
+    assert pushed == [("e1", "sfx-gift")]
+
+
+def test_a_take_back_with_nothing_behind_it_stays_quiet(client, monkeypatch):
+    """Without `pending` the old reading holds — nothing was taken back, so nothing
+    is claimed. A committed rule's card must not be cleared by a stray call."""
+    import transversal.services.effects_engine as ee
+    import transversal.services.scheduled_events as se
+
+    monkeypatch.setattr(se, "end_activation", _nothing_to_end)
+    pushed = []
+    monkeypatch.setattr(ee, "_emit_sfx_ended", lambda eid, sid: pushed.append((eid, sid)))
+
+    r = client.post("/api/v1/effects/end", json={
+        "entity_id": "e1", "sfx_id": "sfx-gift"})
+
+    assert r.json()["ended"] is False
+    assert pushed == []
+
+
 def test_the_notes_join_is_a_pure_function_of_the_two_lists():
     """Pinned directly, because the endpoint test above exercises it through a
     double whose two lists were built to line up."""
