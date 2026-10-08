@@ -83,7 +83,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION",
                        "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
-            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True, hidden_when_ref="trait"),
             EffectFieldDef(name="result", label="New Statement", field_type="text",
                            required=True),
         ],
@@ -108,7 +108,7 @@ ACTIONS: list[EffectActionMeta] = [
         # spec resolves the instance, so *whose* die and which anchor are already
         # in the reference, not questions the author answers separately.
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True, hidden_when_ref="die"),
         ],
         context_fields=[
             EffectFieldDef(name="effect_die", label="Effect Die", field_type="die_select", required=False, default="{effect_die}", options=["d4", "d6", "d8", "d10", "d12"]),
@@ -129,7 +129,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="increase_by_effect",
         valid_timings=["IMMEDIATE", "ON_ROLL", "ON_SET", "ON_RESULT", "ON_SUCCESS", "ON_FAILURE"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True, hidden_when_ref="die"),
         ],
         context_fields=[
             EffectFieldDef(name="effect_die", label="Effect Die", field_type="die_select", required=False, default="{effect_die}", options=["d4", "d6", "d8", "d10", "d12"]),
@@ -146,7 +146,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
-                          required=True),
+                          required=True, hidden_when_ref="trait"),
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
@@ -164,7 +164,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="add_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
-            EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True, hidden_when_ref="trait"),
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
@@ -213,7 +213,7 @@ ACTIONS: list[EffectActionMeta] = [
                        "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
-                          required=True),
+                          required=True, hidden_when_ref="trait"),
             # The value is the **result**, like Set Trait Rating's die: that is the
             # field a revert's captured prior arrives in, so a duration can restore
             # the old type without a second mechanism (the mistake `set_polarity`
@@ -239,7 +239,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="remove",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
         fields=[
-            EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True, hidden_when_ref="trait"),
         ],
         path_element=("traitsetting",),
     ),
@@ -302,7 +302,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
-                          required=True, default=""),
+                          required=True, default="", hidden_when_ref="instance"),
         ],
         # The *definition* is a path of its own: the wizard offers one ending on a
         # registry trait, the engine resolves it, and the card reads it as the
@@ -329,7 +329,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="invert_polarity",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True, hidden_when_ref="trait"),
         ],
         supports_duration=True,
         # A polarity has two values, so the inverse of a flip is the same flip.
@@ -346,7 +346,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
-                          required=True, default="primary"),
+                          required=True, default="primary", hidden_when_ref="trait"),
         ],
         supports_duration=True,
         inverse=("modify_trait", "enable"),
@@ -365,7 +365,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
-                          required=True, default="primary"),
+                          required=True, default="primary", hidden_when_ref="trait"),
         ],
         supports_duration=True,
         # The handler already existed as `disable`'s duration-revert and had no
@@ -385,7 +385,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="set_polarity",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True, hidden_when_ref="trait"),
         ],
         context_fields=[
             EffectFieldDef(name="polarity", label="Polarity", field_type="select",
@@ -406,7 +406,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
-                          required=True, default="primary"),
+                          required=True, default="primary", hidden_when_ref="trait"),
         ],
         supports_duration=True,
         inverse=("modify_trait", "toggle"),

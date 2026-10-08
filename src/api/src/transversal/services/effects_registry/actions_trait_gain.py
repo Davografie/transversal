@@ -25,7 +25,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="gain",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
-            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True, hidden_when_ref="trait"),
             _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
@@ -92,7 +92,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="gain_subtrait",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
-            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True, hidden_when_ref="trait"),
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
@@ -125,7 +125,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="gain_or_step_up",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
-            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True, hidden_when_ref="trait"),
             _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Create At", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
@@ -146,7 +146,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="cortex_gain",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
-            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True, hidden_when_ref="trait"),
             _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
@@ -165,7 +165,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="reveal",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True, hidden_when_ref="trait"),
         ],
         # Who learns it is a **path**, not a text box: the useful case is dynamic
         # (the trait's *owner*, for spying), and that is exactly what a targeting

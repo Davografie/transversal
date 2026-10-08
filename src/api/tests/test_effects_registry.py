@@ -281,7 +281,15 @@ def test_change_trait_asks_for_the_instance_and_the_definition_separately():
     assert meta.retired is False
     assert meta.path_element == ("traitsetting",)
     assert [f.name for f in meta.fields] == ["target"]
-    assert [(r.name, r.label, r.elements) for r in meta.refs] == [("trait", "Change To", ("trait",))]
+    assert meta.fields[0].hidden_when_ref == "instance", (
+        "the positional target is now the fallback for its own reference"
+    )
+    # The definition ref keeps its name and its place; the instance ref is
+    # appended after it, so the two questions still read in this order.
+    assert [(r.name, r.label, r.elements) for r in meta.refs] == [
+        ("trait", "Change To", ("trait",)),
+        ("instance", "Target Trait", ("traitsetting",)),
+    ]
     # The instance is the primary input, so the definition reads after it.
     assert meta.refs_first is False
     # The changed instance is nameable for a later step.
