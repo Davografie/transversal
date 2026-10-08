@@ -176,9 +176,17 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="transversal_type", label="Transversal Type",
                           field_type="select", required=False, default="inapposite",
                           options=["inapposite", "consciousness"]),
+            # Which body the mind arrives in. `{closest_projection}` is the one
+            # policy that is **place**-driven: it brings the nearest body to the
+            # destination, so the place the author asked for is where they land.
+            # The others reuse a body where it already sits, which quietly makes
+            # the destination question choose only the *universe* ([[B263]]). It
+            # was implemented (`_apply_travel`) and used elsewhere, but never
+            # offered here, so no rule could select the one policy that honours
+            # its own destination.
             EffectFieldDef(name="projection", label="Body", field_type="select",
                           required=False, default="{last_projection}",
-                          options=["{last_projection}", "{new_projection}", "{random_projection}", "{choose_projection}"]),
+                          options=["{last_projection}", "{new_projection}", "{random_projection}", "{choose_projection}", "{closest_projection}"]),
         ],
         # Which bodies may be reused. A path here is the narrowing the old
         # `target_scope` spelled ("the body I have in this place"); with no path,

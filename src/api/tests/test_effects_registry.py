@@ -385,3 +385,20 @@ def test_an_inverse_is_either_a_declared_action_or_a_handler_only_verb():
         "an inverse is handler-only again: either declare it, or confirm the "
         "positional target on the revert path is intended ([[B261]])"
     )
+
+
+def test_travel_offers_the_body_policy_that_honours_its_destination():
+    """`{closest_projection}` brings the nearest body **to** the destination, so
+    the place a rule asks for is where the traveller lands. The other policies
+    reuse a body where it already sits, which quietly reduces the destination
+    question to choosing a *universe*. It was implemented in `_apply_travel` and
+    used by BlueBook and the MCP tool, but was never in this list — so no rule
+    could select it ([[B263]])."""
+    from transversal.services.effects_registry.lookup import get_action_meta_for
+
+    meta = get_action_meta_for("travel", "move")
+    body = next(f for f in meta.context_fields if f.name == "projection")
+
+    assert "{closest_projection}" in body.options
+    # The default is untouched, so every stored rule keeps the meaning it had.
+    assert body.default == "{last_projection}"
