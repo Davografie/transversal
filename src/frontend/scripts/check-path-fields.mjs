@@ -339,7 +339,14 @@ const find = (name) => VUE.find((p) => rel(p) === name)
     /function endActivationsBehindChoices\(choices\)/.test(app)
       && /function clearSfxChoicesAll\(\) \{\s*endActivationsBehindChoices\(sfxChoiceRequest\.value\)/.test(app), true)
   ok('…through the same take-back the sheet\'s own toggle-off makes',
-    /endSfx: apiEndSfx/.test(app) && /apiEndSfx\(entity, sfxId\)/.test(app), true)
+    /endSfx: apiEndSfx/.test(app)
+      && /apiEndSfx\(entity, sfxId, true\)/.test(app), true)
+  // The third argument is `pending` ([[B259]]): an activation blocked on its *first*
+  // question has booked nothing, so an end that only reported booked rows went silent
+  // and the chip stayed lit. Asserted here because this regex is what broke when the
+  // flag was added — the call changed and the check did not.
+  ok('…and says the activation is blocked on the question, not merely empty',
+    /pending: true/.test(app) && /apiEndSfx\(entity, sfxId, true\)/.test(app), true)
   ok('…only for an activation a press started',
     /\(c\?\.origin \|\| 'roll'\) !== 'sheet'/.test(app), true)
   ok('…naming the rule the question belongs to',

@@ -614,10 +614,11 @@ const visibleFields = computed(() => {
     if (f.name === 'result' && selectedAction.value.implicitResult) return false
     if (f.name === 'result' && isGainAction.value) return false
     // A field a reference supersedes is the fallback form: once the reference is
-    // authored the field steps aside (its stored value is still kept).
+    // authored the field steps aside (its stored value is still kept). A ref may
+    // be authored as a path *or* as a picker value, so both count ([[B261]]).
     if (f.hiddenWhenRef) {
       const ref = newEffect.refs?.[f.hiddenWhenRef]
-      if (ref?.spec?.steps?.length) return false
+      if (ref?.spec?.steps?.length || ref?.value) return false
     }
     return true
   })

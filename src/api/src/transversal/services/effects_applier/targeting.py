@@ -76,11 +76,16 @@ def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, repo)
 
 
 def _effect_subject(entity: Entity, effect: Effect, result: EffectsResult, repo):
-    """Resolve the entity an effect acts on (``effect.entity``).
+    """Resolve the entity an effect acts on (the recipient).
 
     A spec (``entity_spec``) wins; otherwise blank or ``"self"`` means the
     applyEffects entity, ``self.<field>`` reads one of its own id fields, and
     anything else is a literal entity id.
+
+    The recipient is a declared **reference** on an action that has one
+    (``refs["recipient"]``, [[B261]]); the positional ``effect.entity`` string is
+    its legacy fallback, so an action can move over one at a time — and the ref is
+    read first, so a value the resolver wrote there is authoritative.
     """
     if effect.entity_spec is not None:
         from transversal.services.target_resolver import TargetContext, resolve
@@ -90,7 +95,8 @@ def _effect_subject(entity: Entity, effect: Effect, result: EffectsResult, repo)
             return resolution.values[0]
         result.applied.append(AppliedEffect(effect, "entity spec resolved to nothing"))
         return None
-    subject = (effect.entity or "").strip()
+    ref = (effect.refs or {}).get("recipient")
+    subject = (ref.value if ref is not None and ref.value else effect.entity or "").strip()
     if subject in ("", "self") or subject == entity.id:
         return entity
     attr = _parse_self_field(subject)

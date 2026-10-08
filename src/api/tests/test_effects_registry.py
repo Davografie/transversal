@@ -200,18 +200,24 @@ def test_copy_and_move_put_the_trait_before_the_recipient():
     """The form reads subject → destination.
 
     "Trait to Move" is the *subject* of a copy/move, and "Give To" is where it
-    lands, so the ref renders above the field (``refs_first``) and the shared
-    entity targeter says what this action is targeting the entity *for* — it is
-    not a plain "Entity" here.
+    lands, so the trait renders first — and both are now **declared references**
+    ([[B261]]), in that order, so the panel and the engine read one declaration.
+    The positional ``entity`` field stays as the legacy fallback, carrying the
+    label that says what this action is targeting the entity *for* (not a plain
+    "Entity"), and it defers to the ref once the ref is authored.
     """
     for action_id in ("copy_trait", "move_trait"):
         meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
         assert meta.refs_first is True, action_id
-        assert [r.element for r in meta.refs] == ["traitsetting"], action_id
+        assert [r.element for r in meta.refs] == ["traitsetting", "entity"], action_id
+        assert [r.name for r in meta.refs][0] == "trait", action_id
+        recipient = next(r for r in meta.refs if r.name == "recipient")
+        assert recipient.legacy_field == "entity", action_id
         (field,) = meta.fields
         assert field.name == "entity", action_id
         assert field.label == "Give To", action_id
         assert field.description, action_id
+        assert field.hidden_when_ref == "recipient", action_id
 
 
 # ── Retiring a superseded action ───────────────────────────────
