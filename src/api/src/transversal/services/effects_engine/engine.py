@@ -25,7 +25,6 @@ from transversal.services.effects_engine.firing import (
     _resolve_primary_targets,
     bind_declared,
 )
-from transversal.services.effect_refs import effective_refs
 from transversal.services.effects_registry.lookup import (
     get_action_meta_for,
     refs_before_fields,
@@ -476,7 +475,12 @@ class EffectsEngine:
                     # both), so nothing is lost by not asking it here.
                     _refs_first = refs_before_fields(
                         get_action_meta_for(effect.type, effect.action))
-                    if (subject_choices and effective_refs(effect) and _refs_first):
+                    # Gate on the *authored* refs, not the effective ones: declaring
+                    # a ref for a positional field must not re-route stored content
+                    # from the subject/target path into this branch. The fold still
+                    # happens inside `resolve_refs`, so a folded ref resolves and
+                    # writes back exactly as before ([[B261]]).
+                    if (subject_choices and effect.refs and _refs_first):
                         fire_ctx = _fire_context(event, sfx, repo, bindings=bindings,
                                                  source_id=source_id, source_element=source_element)
                         ref_choices: list = []
@@ -511,7 +515,7 @@ class EffectsEngine:
                         # the plain `else: apply`, which is how a blocked effect
                         # got applied anyway.
                         pass
-                    elif effective_refs(effect):
+                    elif effect.refs:
                         before = len(outcome.structured)
                         fire_ctx = _fire_context(event, sfx, repo, bindings=bindings,
                                                  source_id=source_id, source_element=source_element)

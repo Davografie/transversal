@@ -44,6 +44,19 @@ def test_a_stored_entity_string_folds_into_the_recipient_ref():
     assert effective_refs(effect)["recipient"].value == "gmc-7"
 
 
+def test_declaring_a_ref_for_a_field_does_not_author_it():
+    """The routing gate reads *authored* refs, the resolver reads *effective* ones.
+
+    That distinction is what keeps this migration inert: declaring a ref for a
+    positional field must not move stored content off its subject/target path and
+    onto the references branch. `effective_refs` sees the fold; `effect.refs` —
+    which the engine, the roll path and the resume path all gate on — does not.
+    """
+    effect = Effect(type="modify_trait", action="move", entity="gmc-7")
+    assert effective_refs(effect)["recipient"].value == "gmc-7"
+    assert effect.refs == {}, "the gate must not see a ref nobody authored"
+
+
 def test_an_authored_ref_wins_over_the_stored_string():
     effect = Effect(type="modify_trait", action="move", entity="gmc-old",
                     refs={"recipient": TargetRef(value="gmc-new")})

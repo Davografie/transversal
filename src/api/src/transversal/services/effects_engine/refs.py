@@ -311,7 +311,7 @@ def resolve_effect_spec_choices(
     # whole for the answer to re-resolve it — so the effect handed back here still
     # carries them as *paths*, and every handler reads `refs.<name>.value`. Without
     # this, Gift moved the trait to nobody: the recipient arrived, the trait did not.
-    if out and effective_refs(effect):
+    if out and effect.refs:
         ref_choices: list = []
         fanned: list[Effect] = []
         for concrete in out:
