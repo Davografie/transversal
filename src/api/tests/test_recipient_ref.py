@@ -32,6 +32,36 @@ def test_copy_and_move_declare_the_recipient_ref_over_the_entity_field():
         )
 
 
+def test_every_action_with_a_recipient_field_declares_the_ref():
+    """The invariant that keeps the fallback field and the reference in step.
+
+    The ref is derived from the field's `hidden_when_ref` marker, so this can only
+    fail by someone marking a field without the registry pass running — or by a
+    new action adding an `entity` field that never opts in.
+    """
+    from transversal.services.effects_registry.registry import EFFECT_ACTION_REGISTRY
+
+    seen = 0
+    for meta in EFFECT_ACTION_REGISTRY:
+        if meta.retired:
+            continue
+        has_field = any(f.name == "entity" for f in meta.fields)
+        has_ref = any(r.name == "recipient" for r in meta.refs)
+        assert has_field == has_ref, f"{meta.action_id}: field={has_field} ref={has_ref}"
+        if not has_ref:
+            continue
+        seen += 1
+        ref = next(r for r in meta.refs if r.name == "recipient")
+        assert ref.element == "entity"
+        assert ref.legacy_field == "entity"
+        field = next(f for f in meta.fields if f.name == "entity")
+        assert ref.label == field.label, (
+            f"{meta.action_id}: the ref must read in the field's own words"
+        )
+        assert field.hidden_when_ref == "recipient", meta.action_id
+    assert seen >= 17, "the whole recipient field set should have opted in"
+
+
 def test_the_trait_ref_is_still_declared_first():
     """The declared order is the panel's order — and the engine's, now."""
     for action in RECIPIENT_ACTIONS:

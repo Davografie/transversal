@@ -18,7 +18,7 @@ from transversal.services.effects_registry import (
     actions_trait_gain,
     actions_world,
 )
-from transversal.services.effects_registry.action_types import EffectActionMeta
+from transversal.services.effects_registry.action_types import EffectActionMeta, RefDef
 
 
 EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
@@ -32,6 +32,24 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
     *actions_sfx.ACTIONS,
     *actions_client.ACTIONS,
 ]
+
+
+# ── The recipient reference ([[B261]]) ─────────────────
+# *Who an effect lands on* is a declared reference, not a positional field. An
+# action opts in by marking its `entity` field `hidden_when_ref="recipient"` —
+# that field is the fallback form — and the reference is declared from it here,
+# labelled in the field's own words. One source of truth: a new action cannot add
+# the fallback field and forget the reference, and the two labels cannot drift.
+#
+# Appended after whatever the action declares itself, which is what keeps the
+# trait before the recipient for copy/move (and so keeps the panel's order, and
+# the engine's, reading subject → destination).
+for _m in EFFECT_ACTION_REGISTRY:
+    _fallback = next((f for f in _m.fields if f.hidden_when_ref == "recipient"), None)
+    if _fallback is None or any(r.name == "recipient" for r in _m.refs):
+        continue
+    _m.refs = [*_m.refs, RefDef(name="recipient", label=_fallback.label,
+                                element="entity", legacy_field="entity")]
 
 
 # ── Functional grouping (editor optgroups) ─────────────

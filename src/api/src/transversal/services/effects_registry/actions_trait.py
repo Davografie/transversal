@@ -21,13 +21,6 @@ _RECIPIENT_FIELD = EffectFieldDef(
     description="The entity that ends up holding the trait.",
 )
 
-#: The recipient as a declared reference ([[B261]]): *who the effect lands on* is a
-#: path like any other, so it reads as one input in the panel and resolves through
-#: the same machinery. ``legacy_field`` is what keeps the stored ``entity`` strings
-#: resolving while the positional form is retired.
-_RECIPIENT_REF = RefDef(name="recipient", label="Give To", element="entity",
-                        legacy_field="entity")
-
 
 ACTIONS: list[EffectActionMeta] = [
     # ── Trait Modification ─────────────────────────────
@@ -274,7 +267,7 @@ ACTIONS: list[EffectActionMeta] = [
                           field_type="select", required=False, default="gifted",
                           options=["gifted", "taught"]),
         ],
-        refs=[RefDef("trait", "Trait to Copy", "traitsetting"), _RECIPIENT_REF],
+        refs=[RefDef("trait", "Trait to Copy", "traitsetting")],
         refs_first=True,
     ),
     EffectActionMeta(
@@ -291,7 +284,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="move",
         valid_timings=["IMMEDIATE"],
         fields=[_RECIPIENT_FIELD],
-        refs=[RefDef("trait", "Trait to Move", "traitsetting"), _RECIPIENT_REF],
+        refs=[RefDef("trait", "Trait to Move", "traitsetting")],
         refs_first=True,
     ),
     EffectActionMeta(

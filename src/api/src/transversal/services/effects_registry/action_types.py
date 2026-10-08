@@ -147,7 +147,17 @@ _ENTITY_FIELD = EffectFieldDef(
     label="Entity",
     field_type="entity",
     required=False,
+    # Superseded by the ``recipient`` reference below ([[B261]]): *who an effect
+    # lands on* is a path like any other. This stays as the fallback form for
+    # content authored before the reference, and steps aside once one is authored.
+    hidden_when_ref="recipient",
 )
+
+#: The recipient — who an effect lands on — as a declared reference ([[B261]]).
+#: ``legacy_field`` is what keeps the stored ``entity`` strings and ``entity_spec``
+#: paths resolving while the positional form is retired.
+_RECIPIENT_REF = RefDef(name="recipient", label="Entity", element="entity",
+                        legacy_field="entity")
 
 #: Every anchor a trait instance can hang on, declared together on the verbs that
 #: create or move one. The anchor is a path (`Effect.owner_spec`), and this is what

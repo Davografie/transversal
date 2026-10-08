@@ -26,7 +26,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="entity", label="On Whose Screen", field_type="entity",
-                          required=False),
+                          required=False, hidden_when_ref="recipient"),
             EffectFieldDef(name="target", label="Owner", field_type="text",
                           required=False),
         ],
@@ -45,7 +45,7 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="entity", label="On Whose Screen", field_type="entity",
-                          required=False),
+                          required=False, hidden_when_ref="recipient"),
             EffectFieldDef(name="result", label="Message", field_type="text",
                           required=True, default=""),
             # The tap target is a **field**, not a context value: that is where
