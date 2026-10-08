@@ -153,3 +153,40 @@ def test_a_question_is_raised_the_same_either_way(_own_repo):
     assert questions(positional) == questions(referenced)
     assert [c.field for c in positional.structured] == ["target"]
     assert [c.field for c in referenced.structured] == [f"refs.{REF_NAME}"]
+
+
+# --- the exception: BOTH paths on one effect ---------------------------------
+
+def test_a_subject_path_that_resolves_to_nothing_fails_open_but_a_ref_fails_closed(_own_repo):
+    """**The content migration's known exception, found by dry-running it live.**
+
+    `resolve_effect_entity` is deliberately fail-**open**: a subject spec that
+    resolves to nothing "leaves the effect as authored so the existing 'resolved
+    to nothing' report still fires" — and the effect then acts on the acting
+    entity. `resolve_refs` is deliberately fail-**closed**: a ref resolving to
+    zero values returns no effects at all.
+
+    So moving a subject path into a reference changes what happens when the path
+    finds nobody: the positional form still applies (to the actor), the reference
+    form applies nothing. Two stored effects in the live corpus are in exactly
+    this state (`sfx-three-realms-arrival`, `sfx-banish`), and one of them also
+    fans out differently once the subject joins the cartesian product.
+
+    This test exists so the exception is *recorded and checked*, not discovered
+    again during the migration. Deciding it is part of running the migration.
+    """
+    from transversal.services.target_spec import ChooseStep  # noqa: F401
+
+    target = _spec(OCCUPANTS, ONLY_GMC_1)          # resolves to one
+    nobody = _spec(OCCUPANTS, ONLY_NOBODY)         # resolves to nothing
+
+    positional = Effect(timing=EffectTiming.IMMEDIATE, **ACTION,
+                        target_spec=target, entity_spec=nobody)
+    referenced = Effect(timing=EffectTiming.IMMEDIATE, **ACTION,
+                        refs={REF_NAME: TargetRef(spec=target),
+                              "recipient": TargetRef(spec=nobody)})
+
+    # The positional form applies (the subject falls back to the actor)…
+    assert len(_decided(_fire(positional, _own_repo))) == 1
+    # …and the reference form does not (one ref resolved to nobody).
+    assert _decided(_fire(referenced, _own_repo)) == []
