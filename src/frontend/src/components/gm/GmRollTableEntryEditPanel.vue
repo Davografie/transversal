@@ -1,6 +1,6 @@
 <template>
   <div class="eep-root">
-    <div v-if="!table" class="eep-loading">Loading entry…</div>
+    <div v-if="!ready" class="eep-loading">Loading entry…</div>
     <template v-else>
       <div class="eep-field">
         <label>Label</label>
@@ -12,14 +12,14 @@
       </div>
 
       <div class="eep-row">
-        <template v-if="table.scheme === 'RANGE'">
+        <template v-if="scheme === 'RANGE'">
           <div class="eep-field"><label>Min</label><input v-model.number="form.minValue" type="number" /></div>
           <div class="eep-field"><label>Max</label><input v-model.number="form.maxValue" type="number" /></div>
         </template>
-        <template v-else-if="table.scheme === 'WEIGHT'">
+        <template v-else-if="scheme === 'WEIGHT'">
           <div class="eep-field"><label>Weight</label><input v-model.number="form.weight" type="number" /></div>
         </template>
-        <template v-else-if="table.scheme === 'TIER'">
+        <template v-else-if="scheme === 'TIER'">
           <div class="eep-field">
             <label>Tier</label>
             <select v-model="form.tier">
@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, onUnmounted } from 'vue'
+import { reactive, ref, computed, inject, onMounted, onUnmounted } from 'vue'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
@@ -76,9 +76,28 @@ const { fetchTable, saveRollTable } = useRollTables()
 const props = defineProps({
   tableId: { type: String, required: true },
   index: { type: Number, required: true },
+  // Scheme / scope for the row's fields. When a draft is injected the stored
+  // table is not fetched, so the opener (the unified roll-table panel) supplies
+  // these; without a draft they are read off the fetched table instead.
+  scheme: { type: String, default: '' },
+  universe: { type: String, default: '' },
+  lifePath: { type: String, default: '' },
 })
 
+// The row, handed across by the unified roll-table panel in the spec's
+// `context` (a child panel cannot inject its parent's provide — see
+// PanelScope). When present, this panel edits that live draft in place and
+// persists nothing itself; the table panel's own Save is the commit point.
+// Without it (e.g. a window restored after a reload) it falls back to the
+// stored table and its whole-table save.
+const draft = inject('rowDraft', null)
+
 const table = ref(null)
+const ready = computed(() => !!draft || !!table.value)
+const scheme = computed(() => table.value?.scheme || props.scheme)
+const universe = computed(() => table.value?.universe || props.universe)
+const lifePath = computed(() => table.value?.lifePath || props.lifePath)
+
 const saving = ref(false)
 const error = ref('')
 const editingEffectIndex = ref(null)
@@ -97,26 +116,39 @@ const form = reactive({
   effects: [],
 })
 
+// One place the local form is seeded from a row, whether the row came from the
+// injected draft (the unified panel's live entry) or the fetched table.
+function seedFrom(e) {
+  if (!e) return
+  form.key = e.key || ''
+  form.label = e.label || ''
+  form.description = e.description || ''
+  form.minValue = e.minValue ?? null
+  form.maxValue = e.maxValue ?? null
+  form.weight = e.weight ?? null
+  form.tier = e.tier || ''
+  form.conditions = JSON.parse(JSON.stringify(e.conditions || []))
+  form.effects = JSON.parse(JSON.stringify(e.effects || []))
+  form.costEffects = JSON.parse(JSON.stringify(e.costEffects || []))
+}
+
 onMounted(async () => {
   // The row highlight follows the open effect. `onChildClose` is the one path
   // every *close* takes, and a detach is deliberately not a close, so a detached
   // effect panel keeps its row lit (P7.18's rule).
   offChildClose = panel.onChildClose(() => { editingEffectIndex.value = null })
+
+  // Opened from the unified roll-table panel: the row arrives as a live draft.
+  // Edit it in place and never touch the stored table — fetching it and saving
+  // it back would clobber the sibling rows that panel is still holding unsaved.
+  if (draft) {
+    seedFrom(draft)
+    return
+  }
+
   try {
     table.value = await fetchTable(props.tableId)
-    const e = table.value?.entries?.[props.index]
-    if (e) {
-      form.key = e.key || ''
-      form.label = e.label || ''
-      form.description = e.description || ''
-      form.minValue = e.minValue ?? null
-      form.maxValue = e.maxValue ?? null
-      form.weight = e.weight ?? null
-      form.tier = e.tier || ''
-      form.conditions = JSON.parse(JSON.stringify(e.conditions || []))
-      form.effects = JSON.parse(JSON.stringify(e.effects || []))
-      form.costEffects = JSON.parse(JSON.stringify(e.costEffects || []))
-    }
+    seedFrom(table.value?.entries?.[props.index])
   } catch (e) {
     error.value = e?.message || 'Failed to load entry'
   }
@@ -135,8 +167,8 @@ function openEffectEditor(index) {
     title: index === null ? 'Add effect' : 'Edit effect',
     props: {
       index,
-      universe: table.value?.universe || '',
-      lifePath: table.value?.lifePath || '',
+      universe: universe.value,
+      lifePath: lifePath.value,
     },
     // The row draft, as a live reference, through the spec's `context` — a panel
     // cannot `provide` to its own child panels. The child writes effects back
@@ -146,6 +178,24 @@ function openEffectEditor(index) {
 }
 
 async function save() {
+  // Draft path (opened from the unified roll-table panel): write the local form
+  // back into the injected row and close. Nothing is persisted here — the table
+  // panel's own Save writes the whole table, including this row.
+  if (draft) {
+    draft.key = form.key || ''
+    draft.costEffects = form.costEffects || []
+    draft.label = form.label
+    draft.description = form.description
+    draft.minValue = form.minValue ?? null
+    draft.maxValue = form.maxValue ?? null
+    draft.weight = form.weight ?? null
+    draft.tier = form.tier || ''
+    draft.conditions = form.conditions
+    draft.effects = form.effects
+    panel.close()
+    return
+  }
+
   if (!table.value) return
   saving.value = true
   error.value = ''

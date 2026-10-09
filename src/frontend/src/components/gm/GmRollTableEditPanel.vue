@@ -91,6 +91,9 @@
             <div class="rte-entry-head">
               <span class="rte-entry-index">#{{ i + 1 }}</span>
               <span class="rte-spacer"></span>
+              <!-- The row body is all inputs and a drag handle, so the entry
+                   editor opens from a button rather than a row click. -->
+              <Button class="rte-edit" variant="neutral" size="sm" title="Edit entry details, conditions and effects" @click.stop="openEntry(i)">✎</Button>
               <Button class="rte-mini rte-del" variant="danger-ghost" size="sm" @click.stop="removeEntry(i)">✕</Button>
             </div>
             <input v-model="e.label" placeholder="Entry label" />
@@ -144,6 +147,15 @@
                 Enrols in this path
               </label>
             </div>
+
+            <!-- What the row does, folded in from the read-only panel it
+                 replaced: conditions and effects are edited in the entry editor
+                 (the ✎ above), so the list shows a summary of them rather than
+                 a second copy of the forms. -->
+            <div v-if="e.conditions?.length || e.effects?.length" class="rte-entry-summary">
+              <span v-for="(eff, ei) in e.effects" :key="ei" class="rte-effect">{{ effectSummary(eff) }}</span>
+              <span v-for="(c, ci) in e.conditions" :key="'c' + ci" class="rte-cond">if {{ conditionSummary(c) }}</span>
+            </div>
           </div>
         </template>
       </GmList>
@@ -160,17 +172,20 @@ import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { useEffectActions } from '@/composables/useEffectActions.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { rowKey, connectorToken, connectorText } from '@/composables/lifePathConnector.js'
 import GmList from '@/components/ui/GmList.vue'
 import Button from '@/components/ui/Button.vue'
 import GmScopePicker from './GmScopePicker.vue'
+import GmRollTableEntryEditPanel from './GmRollTableEntryEditPanel.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
 const { graphql } = useApi()
-const { fetchTable, saveRollTable } = useRollTables()
+const { fetchTable, saveRollTable, allTableNames, fetchAllTableNames } = useRollTables()
 const { fetchLifePath, saveLifePath } = useLifePaths()
 
 const props = defineProps({
@@ -204,6 +219,23 @@ const saving = ref(false)
 const error = ref('')
 const universeOptions = ref([])
 const lifePathOptions = ref([])
+
+// ── Row summaries ─────────────────────────────────────
+// Conditions and effects are edited in the entry editor (the ✎ beside a row);
+// the list shows a one-line summary so a row's behaviour is visible without
+// opening it. Folded in from the read-only roll-table panel this replaced.
+const { traitNameMap, fetchTraitsConfig } = useTraitsConfig()
+const { load: loadEffectActions, summarize: summarizeEffect } = useEffectActions()
+
+function resolveTarget(t) { return t ? (traitNameMap.value[t] || allTableNames.value[t] || t) : t }
+function effectSummary(eff) { return summarizeEffect(eff, resolveTarget) }
+function conditionSummary(c) {
+  const parts = [c.type]
+  if (c.target) parts.push(c.target)
+  if (c.value) parts.push(c.value)
+  if (c.narrative) parts.push(`"${c.narrative}"`)
+  return parts.join(' ')
+}
 
 // ── Life-path connector context ──────────────────────
 // The connector is a property of the *path*, not the table: it lives in the
@@ -362,6 +394,11 @@ async function loadScopeOptions() {
 
 onMounted(async () => {
   loadScopeOptions()
+  // The row summaries resolve effect targets and trait ids, as the read-only
+  // panel did.
+  loadEffectActions()
+  fetchAllTableNames()
+  if (!Object.keys(traitNameMap.value).length) fetchTraitsConfig()
   if (!props.tableId) return
   try {
     const t = await fetchTable(props.tableId)
@@ -401,6 +438,30 @@ onMounted(async () => {
 
 function addEntry() {
   form.entries.push({ key: '', costEffects: [], label: '', description: '', minValue: null, maxValue: null, weight: null, tier: '', conditions: [], effects: [] })
+}
+
+// The row's full editor (label, description, band, conditions, effects). The row
+// object is handed across as a live draft in the spec's `context` and injected
+// by the entry panel as `rowDraft`, so its edits land in `form` — this panel's
+// Save is still the only commit point, and the stored table is never rewritten
+// underneath the unsaved edits held here.
+function openEntry(i) {
+  panel.open({
+    component: GmRollTableEntryEditPanel,
+    title: 'Edit entry #' + (i + 1),
+    // Identity per row: without it the panel would be *reused in place* for a
+    // second row (same component, no id), leaving the first row's values on
+    // screen under the second row's title.
+    id: 'entry-' + i,
+    props: {
+      tableId: form.id,
+      index: i,
+      scheme: form.scheme,
+      universe: form.universe,
+      lifePath: form.lifePath,
+    },
+    context: { rowDraft: form.entries[i] },
+  })
 }
 
 function removeEntry(i) {
@@ -513,7 +574,17 @@ async function save() {
 </script>
 
 <style scoped>
-.rte-root { padding: 0; display: flex; flex-direction: column; gap: 8px; }
+/* Intrinsic floor for the content. The panel shell is content-driven and its
+   own floor is 260px, which is too narrow for an entry row — a full-width label
+   input, a min/max pair and the connector select. The shell keeps owning the
+   cap; this only stops *this* panel from sitting at the floor. 360px is the
+   low end of the range the row needs: wide enough for the connector's longest
+   option ("Muster out (dishonourably)") and the band inputs side by side, and
+   within the shell's 440px cap (minus its 16px padding and the body's 10px, so
+   386px of content). The `min()` mirrors the shell's own viewport clamp — the
+   shell's cap is `100vw - 46px`, less 54px of chrome — so a very narrow
+   viewport scrolls the panel body instead of forcing content past the cap. */
+.rte-root { padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: min(360px, calc(100vw - 100px)); }
 .rte-field { display: flex; flex-direction: column; gap: 3px; flex: 1; }
 .rte-field label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .rte-field input, .rte-field select, .rte-entry-body input, .rte-entry-body select {
@@ -533,6 +604,19 @@ async function save() {
 .rte-entry-index { font-size: 9px; color: var(--text-dim); }
 .rte-spacer { flex: 1; }
 .rte-num { width: 70px; }
+.rte-entry-summary { display: flex; flex-direction: column; gap: 2px; }
+.rte-effect {
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--text);
+  background: var(--overlay-6);
+  border: 1px solid var(--overlay-10);
+  border-radius: 4px;
+  padding: 3px 6px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.rte-cond { font-size: 9px; color: var(--accent); }
 .rte-connector-hint { margin: 0 0 4px 0; }
 .rte-connector {
   display: flex; flex-direction: column; gap: 4px;

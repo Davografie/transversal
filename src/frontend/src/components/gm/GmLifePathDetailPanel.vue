@@ -53,7 +53,6 @@ import { useLifePaths } from '@/composables/useLifePaths.js'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
-import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 import GmList from '@/components/ui/GmList.vue'
@@ -108,11 +107,11 @@ function openTable(t) {
   // wrapped table once — the first step is the one this row means.
   const step = (path.value.steps || []).find(s => s.tableId === t.id) || null
   panel.open({
-    component: GmRollTableDetailPanel,
+    component: GmRollTableEditPanel,
     title: t.name,
     id: t.id,
     badge: 'ROLL-TABLE',
-    props: { tableId: t.id, name: t.name, lifePathId: path.value.id, stepId: step?.id || '' },
+    props: { tableId: t.id, lifePathId: path.value.id, stepId: step?.id || '' },
   })
 }
 

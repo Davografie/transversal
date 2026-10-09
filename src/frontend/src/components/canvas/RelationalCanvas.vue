@@ -103,7 +103,7 @@ import BundlerNode from '@/components/canvas/nodes/BundlerNode.vue'
 import UniverseNode from '@/components/canvas/nodes/UniverseNode.vue'
 import GradientEdge from '@/components/canvas/edges/GradientEdge.vue'
 import LifePathEdge from '@/components/canvas/edges/LifePathEdge.vue'
-import GmRollTableDetailPanel from '@/components/gm/GmRollTableDetailPanel.vue'
+import GmRollTableEditPanel from '@/components/gm/GmRollTableEditPanel.vue'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 
 const props = defineProps({
@@ -215,13 +215,12 @@ function openTable(tableId, stepId = '') {
   const name = node?.data?.name || tableId
   const inPath = mode.value === 'life-path'
   panel.open({
-    component: GmRollTableDetailPanel,
+    component: GmRollTableEditPanel,
     title: name,
     id: tableId,
     badge: 'ROLL-TABLE',
     props: {
       tableId,
-      name,
       // Only the life-path canvas carries the wrapper. Every other mode keeps the
       // panel exactly as it was: no path context, and no connector column.
       lifePathId: inPath ? (props.initialLifePath?.id || '') : '',

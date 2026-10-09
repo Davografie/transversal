@@ -23,7 +23,6 @@ import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmList from '@/components/ui/GmList.vue'
 import Button from '@/components/ui/Button.vue'
-import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 
 const panel = usePanel()
@@ -50,7 +49,7 @@ onMounted(() => {
 onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function openTable(t) {
-  panel.open({ component: GmRollTableDetailPanel, title: t.name, id: t.id, badge: 'ROLL-TABLE', props: { tableId: t.id, name: t.name } })
+  panel.open({ component: GmRollTableEditPanel, title: t.name, id: t.id, badge: 'ROLL-TABLE', props: { tableId: t.id } })
 }
 
 function addTable() {

@@ -17,8 +17,10 @@
  * `id`**, makes that chip the copy-ID control (`is-copyable`, `copyId()`, the ✓
  * swap). Every other panel family passes both — `GmLifePathDetailPanel` is opened
  * with `id` + `badge: 'LIFE-PATH'`, SFX with `id` + `badge: 'SFX'` — but the
- * roll-table family passed neither, so the chip never rendered. The detail
- * openers already carried the table `id`; they were only missing the badge.
+ * roll-table family passed neither, so the chip never rendered. The openers
+ * already carried the table `id`; they were only missing the badge. (The
+ * read-only detail panel has since been folded into `GmRollTableEditPanel`, so
+ * the family is one panel and these checks read the unified openers.)
  *
  * The assertions below read the openers out of the shipping `.vue` files, so the
  * rule is checked where it is written rather than restated.
@@ -37,7 +39,6 @@ const PANEL = read('../src/components/gm/Panel.vue')
 const FILES = {
   'GmLifePathDetailPanel.vue': read('../src/components/gm/GmLifePathDetailPanel.vue'),
   'GmRollTableGroupPanel.vue': read('../src/components/gm/GmRollTableGroupPanel.vue'),
-  'GmRollTableDetailPanel.vue': read('../src/components/gm/GmRollTableDetailPanel.vue'),
   'RelationalCanvas.vue': read('../src/components/canvas/RelationalCanvas.vue'),
 }
 
@@ -67,29 +68,23 @@ const calls = Object.entries(FILES).flatMap(([file, src]) =>
 const detailCalls = calls.filter(c => /component:\s*GmRollTableDetailPanel\b/.test(c.block))
 const editCalls = calls.filter(c => /component:\s*GmRollTableEditPanel\b/.test(c.block))
 
-// ── 1. the detail panel — the chip and the id it copies ─────────────────
-console.log('\nRoll-table detail openers — badge + copyable id\n')
+// ── 1. the unified panel — the chip and the id it copies ────────────────
+// `GmRollTableDetailPanel` was folded into `GmRollTableEditPanel` (B275), so
+// every opener now lands in the editor and there is no detail panel left.
+console.log('\nUnified roll-table openers — badge + copyable id\n')
 
-ok('every opener of the detail panel was found (3 hosts)', detailCalls.length, 3)
-ok('each passes the badge', detailCalls.map(c => /badge:\s*'ROLL-TABLE'/.test(c.block)), [true, true, true])
-ok('each passes the table id, which is what the chip copies',
-  detailCalls.map(c => /id:\s*\S/.test(c.block)), [true, true, true])
-ok('and the id is the table being opened, not a literal',
-  detailCalls.map(c => (c.block.match(/id:\s*([^,\n]+)/) || [])[1].trim()),
+ok('no opener still references the deleted detail panel', detailCalls.length, 0)
+ok('every opener of the unified panel was found (5 calls)', editCalls.length, 5)
+ok('each passes the badge', editCalls.map(c => /badge:\s*'ROLL-TABLE'/.test(c.block)), [true, true, true, true, true])
+
+// Call order follows FILES above: life-path table, group table, canvas table.
+ok('each existing-table opener passes the table id, which is what the chip copies',
+  editCalls.filter(c => /id:\s*\S/.test(c.block))
+    .map(c => (c.block.match(/id:\s*([^,\n]+)/) || [])[1].trim()),
   ['t.id', 't.id', 'tableId'])
-
-// ── 2. the edit panel — a chip, copyable when the table exists ──────────
-console.log('\nRoll-table edit openers — badge, id where there is one\n')
-
-ok('every opener of the edit panel was found (3 hosts)', editCalls.length, 3)
-ok('each passes the badge', editCalls.map(c => /badge:\s*'ROLL-TABLE'/.test(c.block)), [true, true, true])
-
-// Keyed by host rather than by call order, so the assertion says what it means.
-const editByFile = Object.fromEntries(editCalls.map(c => [c.file, c.block]))
-ok('the existing-table opener makes its chip copyable',
-  /id:\s*props\.tableId/.test(editByFile['GmRollTableDetailPanel.vue']), true)
-ok('a brand-new table has no id to copy, so its chip is a plain label',
-  ['GmLifePathDetailPanel.vue', 'GmRollTableGroupPanel.vue'].map(f => /id:\s*\S/.test(editByFile[f])), [false, false])
+ok('only the two create openers omit the id — there is nothing to copy yet',
+  editCalls.filter(c => !/id:\s*\S/.test(c.block)).map(c => c.file).sort(),
+  ['GmLifePathDetailPanel.vue', 'GmRollTableGroupPanel.vue'])
 
 // ── 3. the mechanism: badge renders the chip, id makes it copy ──────────
 console.log('\nPanel.vue — the chip renders on the badge and copies the id\n')
@@ -112,7 +107,7 @@ ok('shipped: adding the badge renders the chip, still copyable',
 console.log('\nNo roll-table opener is left without a badge\n')
 
 const unbaged = calls
-  .filter(c => /component:\s*GmRollTable(Detail|Edit)Panel\b/.test(c.block))
+  .filter(c => /component:\s*GmRollTableEditPanel\b/.test(c.block))
   .filter(c => !/badge:/.test(c.block))
   .map(c => `${c.file}: ${c.block.split('\n')[0].trim()}`)
 ok('every roll-table panel open carries a badge', unbaged, [])

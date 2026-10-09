@@ -40,7 +40,6 @@ import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmTraitEditPanel from '@/components/gm/GmTraitEditPanel.vue'
 import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
-import GmRollTableDetailPanel from '@/components/gm/GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from '@/components/gm/GmRollTableEditPanel.vue'
 import GmRollTableEntryEditPanel from '@/components/gm/GmRollTableEntryEditPanel.vue'
 import GmLifePathDetailPanel from '@/components/gm/GmLifePathDetailPanel.vue'
@@ -52,7 +51,6 @@ export const RESTORABLE_PANELS = {
   GmTraitEditPanel,
   GmTraitsetDetail,
   GmSfxEditPanel,
-  GmRollTableDetailPanel,
   GmRollTableEditPanel,
   GmRollTableEntryEditPanel,
   GmLifePathDetailPanel,

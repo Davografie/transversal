@@ -234,7 +234,7 @@ ok('through the write-through storage helper, keyed per device',
 console.log('\nthe registry is an allow-list, and the store is wired\n')
 
 for (const name of ['GmEntityEditPanel', 'GmTraitEditPanel', 'GmTraitsetDetail', 'GmSfxEditPanel',
-  'GmRollTableDetailPanel', 'GmRollTableEditPanel', 'GmRollTableEntryEditPanel',
+  'GmRollTableEditPanel', 'GmRollTableEntryEditPanel',
   'GmLifePathDetailPanel', 'GmPortalConfigPanel', 'ImageViewer']) {
   ok(`${name} is restorable`, new RegExp(`^\\s*${name},$`, 'm').test(REGISTRY), true)
 }
