@@ -40,6 +40,14 @@ class GqlRepo:
     def get_lifepath(self, lid):
         return self.lifepaths.get(lid)
 
+    def create_lifepath(self, lp):
+        self.lifepaths[lp.id] = lp
+        return lp
+
+    def update_lifepath(self, lp):
+        self.lifepaths[lp.id] = lp
+        return lp
+
     def get_roll_table(self, tid):
         return self.tables.get(tid)
 
@@ -301,3 +309,74 @@ def test_a_roll_table_die_rejects_a_value_that_is_not_a_notation():
 
     assert result.errors, "a die that is not a notation must not save"
     assert set(repo.tables) == before
+
+
+def test_save_life_path_persists_its_steps():
+    """Regression: `saveLifePath` with steps raised NameError and could never save.
+
+    The converter that maps a step input existed in `converters.py`; the mutation
+    never imported it, so every call carrying `steps` died with
+    `name '_life_path_step_input_to_domain' is not defined`. The GM life-path
+    editor sends steps, so it could not be saved at all.
+
+    Nothing caught it because **no test executed this mutation with steps**. The
+    value documents validate against the schema — and a document validating is not
+    a resolver running. The build was green, the schema check was green, and the
+    first person to press Save found it.
+    """
+    repo = _build()
+
+    data = _run(repo, """
+        mutation($steps: [LifePathStepInput!], $es: String) {
+          saveLifePath(
+            id: "lp-1", name: "Life on Earth", universe: "earth",
+            description: "Where you are from.", entryTableId: "",
+            entryStep: $es, steps: $steps
+          )
+        }
+    """, {
+        "es": "s1",
+        "steps": [
+            {
+                "id": "s1", "tableId": "tbl-a", "label": "Where", "next": "",
+                "bindings": [{
+                    "key": "0", "next": "s2", "exitKind": "", "exitPath": "",
+                    "enroll": True, "effects": [],
+                }],
+            },
+            {"id": "s2", "tableId": "tbl-b", "label": "Then", "next": "", "bindings": []},
+        ],
+    })
+
+    assert data["saveLifePath"]["ok"] is True
+    saved = repo.lifepaths["lp-1"]
+    assert saved.entry_step == "s1"
+    assert [s.id for s in saved.steps] == ["s1", "s2"]
+    assert saved.steps[0].table_id == "tbl-a"
+    binding = saved.steps[0].bindings[0]
+    assert (binding.key, binding.next, binding.enroll) == ("0", "s2", True)
+
+
+def test_save_life_path_without_steps_leaves_the_wrapper_alone():
+    """The leave-alone convention the editor relies on: omitting `steps` keeps them.
+
+    A caller editing only a name must not silently unwrap every table the path
+    declares, and the migration/MCP paths depend on this too.
+    """
+    repo = _build()
+    repo.lifepaths["lp-1"].steps = _existing_steps()
+
+    _run(repo, """
+        mutation {
+          saveLifePath(id: "lp-1", name: "Renamed", universe: "earth",
+                       description: "d", entryTableId: "")
+        }
+    """)
+    assert repo.lifepaths["lp-1"].name == "Renamed"
+    assert [s.id for s in repo.lifepaths["lp-1"].steps] == ["s1"], "steps were dropped"
+
+
+def _existing_steps():
+    from transversal.domain import LifePathStep
+
+    return [LifePathStep(id="s1", table_id="tbl-a", label="Where")]

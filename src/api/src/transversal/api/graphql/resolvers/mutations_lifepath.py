@@ -13,6 +13,7 @@ from transversal.api.graphql.type_defs.lifepath import (
 )
 from transversal.api.graphql.resolvers.converters import (
     _em,
+    _life_path_step_input_to_domain,
     _roll_table_input_to_domain,
     _roll_table_to_gql,
 )
