@@ -61,6 +61,13 @@ test('a roaming GM gets the play surface in place of the empty sheet', async ({ 
   await expect(sheet.locator('.troupe-overview .troupe-header h3')).toHaveText('Troupe')
   await expect(sheet.locator('.scene-summary')).toBeVisible()
   await expect(sheet.locator('.scene-summary h3')).toHaveText('Scene')
+
+  // The place is named, not slugged. The sheet already had a `locationName` of its
+  // own — resolved from the entity being viewed — and a first cut of this passed
+  // the GM's place under that same prop name, so the local ref won and the surface
+  // drew `loc-krasnoyarsk` where the panel reads `Krasnoyarsk-45`. The prop is
+  // `placeName` now, and this is what pins it.
+  await expect(sheet.locator('.troupe-overview .scene-loc')).toContainText('Krasnoyarsk-45')
 })
 
 test('the GM rules are drawn, and a manual one asks its question as the sheet body', async ({ page }) => {
@@ -128,6 +135,69 @@ test('a scene row hands the GM that entity, the way the panel always did', async
   // entity" action a peer chip performs, so nothing new is invented here.
   await expect(sheet.locator('.name-primary')).toHaveText('Corwin of Amber', { timeout: 20_000 })
   await expect(sheet.locator('.play-overview')).toHaveCount(0)
+})
+
+// The author's report (2026-09-29): *"I want to see the play overview when I go
+// from acting entity to roaming GM, now the character sheet of the previously
+// acting entity stays open."*
+//
+// The sheet holds its entity as an object, and `loadCachedEntity` returned early
+// when the perspective was dropped — so `hasEntity` stayed true, the entity branch
+// kept rendering, and the play surface underneath it was never reached. Dropping a
+// perspective is a transition of its own, not only a step between two entities.
+//
+// Three things now have to hold, and they fail independently:
+//   1. the gate is derived from the perspective, so the branch flips with the prop;
+//   2. the entity-scoped caches are released with it — `availableSfxIds` in
+//      particular, which is what *greys* a card whose conditions do not hold, so
+//      leaving the previous entity's list would bring the GM's own rules back
+//      disabled on the surface we just revealed;
+//   3. a response that settles after the perspective moved is dropped, since
+//      applying it re-installs what the release cleared.
+//
+// Driven as the author drove it. Acting as a GMC on purpose — assuming a player's
+// character is the one act this suite must not perform.
+async function bootActingGm(page) {
+  await page.setViewportSize({ width: 1280, height: 950 })
+  // Perspective is UI state (App seeds it from storage); the architect seat makes
+  // it an acting entity. Corwin of Amber is at Eindhoven, so he has a self dot on
+  // the map *and* a chip in the peers rail — the two routes back to roaming.
+  await page.addInitScript(() => localStorage.setItem('entityId', 'gmc-12159634'))
+  await enterAsArchitect(page)
+  await page.goto('/')
+  const sheet = page.locator('.sheet-embedded')
+  await expect(sheet.locator('.name-primary')).toHaveText('Corwin of Amber', { timeout: 20_000 })
+  return sheet
+}
+
+/** The GM's own rules are on screen, pressable, and not greyed by stale state. */
+async function expectPlaySurface(sheet) {
+  await expect(sheet.locator('.play-overview')).toBeVisible({ timeout: 10_000 })
+  await expect(sheet.locator('.name-primary')).toHaveCount(0)
+  await expect(sheet.locator('.empty-no-entity')).toHaveCount(0)
+  await expect(sheet.locator('.gm-sfx-rules .sfx-card').first()).toBeVisible()
+  // A card is greyed when `availableSfxIds` — the *previous* entity's list — does
+  // not contain it. Only the manual rule is a control; the readonly one never
+  // takes the class, so this is about the card the GM can actually press.
+  await expect(sheet.locator('.gm-sfx-rules .sfx-card.sfx-blocked')).toHaveCount(0)
+}
+
+test('leaving a perspective by its peer chip shows the play overview', async ({ page }) => {
+  const sheet = await bootActingGm(page)
+  await expect(sheet.locator('.play-overview')).toHaveCount(0)
+  await page.locator('.peer-chip.assumed').click()
+  await expectPlaySurface(sheet)
+})
+
+test('unclicking your character on the map shows the play overview', async ({ page }) => {
+  const sheet = await bootActingGm(page)
+  // The dot lives in the location viewer, not in the sheet — `page`, not `sheet`.
+  const selfDot = page.locator('.map-dot.self')
+  await expect(selfDot).toBeVisible()
+  // The self dot is `onInspectEntity(acting)` → `onPeerClick`, which reads a click
+  // on the entity you already act as, with nothing viewed, as "stop acting as it".
+  await selfDot.first().click()
+  await expectPlaySurface(sheet)
 })
 
 test('the roaming GM keeps a sheet band on mobile, and can focus it', async ({ page }) => {
