@@ -85,6 +85,7 @@ const editingEffectIndex = ref(null)
 let offChildClose = null
 
 const form = reactive({
+  key: '',
   label: '',
   description: '',
   minValue: null,
@@ -92,6 +93,7 @@ const form = reactive({
   weight: null,
   tier: '',
   conditions: [],
+  costEffects: [],
   effects: [],
 })
 
@@ -104,6 +106,7 @@ onMounted(async () => {
     table.value = await fetchTable(props.tableId)
     const e = table.value?.entries?.[props.index]
     if (e) {
+      form.key = e.key || ''
       form.label = e.label || ''
       form.description = e.description || ''
       form.minValue = e.minValue ?? null
@@ -112,6 +115,7 @@ onMounted(async () => {
       form.tier = e.tier || ''
       form.conditions = JSON.parse(JSON.stringify(e.conditions || []))
       form.effects = JSON.parse(JSON.stringify(e.effects || []))
+      form.costEffects = JSON.parse(JSON.stringify(e.costEffects || []))
     }
   } catch (e) {
     error.value = e?.message || 'Failed to load entry'
@@ -147,6 +151,12 @@ async function save() {
   error.value = ''
   try {
     const updatedEntry = {
+      // The row's identity travels through the editor untouched: a binding names
+      // it, so dropping it here would orphan every life path bound to this row.
+      // `costEffects` is preserved for the same reason -- this panel does not
+      // edit them, and the entries map below is a full replace.
+      key: form.key || '',
+      costEffects: form.costEffects || [],
       label: form.label,
       description: form.description,
       minValue: form.minValue ?? null,
@@ -170,6 +180,8 @@ async function save() {
         ? { traitIds: table.value.check.traitIds || [], difficulty: table.value.check.difficulty, freeChoice: table.value.check.freeChoice }
         : null,
       entries: entries.map(e => ({
+        key: e.key || '',
+        costEffects: e.costEffects || [],
         label: e.label,
         description: e.description,
         minValue: e.minValue ?? null,

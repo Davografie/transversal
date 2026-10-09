@@ -28,6 +28,7 @@
       <span v-if="row.key" class="rt-key">{{ row.key }}</span>
       <span class="rt-label">{{ row.label || '—' }}</span>
       <span v-if="row.nextTarget" class="rt-next">→ {{ row.nextTarget.name }}</span>
+      <span v-else-if="row.exit" class="rt-exit" :title="exitTitle(row)">{{ exitLabel(row.exit) }}</span>
     </div>
 
     <Handle id="target" type="target" :position="Position.Top" />
@@ -66,10 +67,20 @@ function resolve(target) {
   return props.data.tableNames?.[target] || target
 }
 
+// A row whose destination is an exit has no edge — badge what leaving means.
+function exitLabel(exit) {
+  return exit.kind === 'force_muster' ? '✕ force muster' : `✕ ${exit.kind}`
+}
+
+function exitTitle(row) {
+  if (!row.exit) return ''
+  return row.exit.path ? `${row.exit.kind} → ${row.exit.path}` : row.exit.kind
+}
+
 function rowTooltip(row) {
   const parts = []
   if (row.label) parts.push(row.label)
-  const effs = (row.effects || []).map((e) => summarize(e, resolve)).filter(Boolean)
+  const effs = [...(row.effects || []), ...(row.bindingEffects || [])].map((e) => summarize(e, resolve)).filter(Boolean)
   if (effs.length) parts.push(effs.join(' · '))
   const conds = (row.conditions || []).map((c) => c.narrative || c.type).filter(Boolean)
   if (conds.length) parts.push('if ' + conds.join(' · '))
@@ -132,6 +143,11 @@ function rowTooltip(row) {
 .rt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rt-next {
   font-size: 8px; color: var(--map-accent); background: rgba(0, 200, 150, 0.12);
+  padding: 1px 4px; border-radius: 3px; flex-shrink: 0; max-width: 90px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.rt-exit {
+  font-size: 8px; color: #e88830; background: rgba(232, 136, 48, 0.12);
   padding: 1px 4px; border-radius: 3px; flex-shrink: 0; max-width: 90px;
   overflow: hidden; text-overflow: ellipsis;
 }

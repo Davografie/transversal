@@ -1,10 +1,15 @@
 // Pure, framework-free graph builder for life-path roll-table flowcharts.
 //
-// A life path is a directed graph of roll tables linked by `next_step` effects.
-// This module turns a path + its roll tables into Vue Flow node/edge descriptors
-// with a layered (Sugiyama-style, longest-path) auto layout. When several rows
-// of one table lead to the same next table, they fan into a small "bundler"
-// (reroute) node that then projects a single edge onward.
+// A life path **wraps** roll tables: `path.steps` names each wrapped table at a
+// position in the path, and a step's `bindings` say what one row of that table
+// means to *this* path (advance to a step, or leave the path). This module turns
+// a path + its roll tables into Vue Flow node/edge descriptors with a layered
+// (Sugiyama-style, longest-path) auto layout. When several rows of one step lead
+// to the same next step, they fan into a small "bundler" (reroute) node that then
+// projects a single edge onward.
+//
+// Nodes are keyed by **step id** (`step:<stepId>`), never by table id: a path may
+// wrap the same table at two steps, and a table id is not unique within a path.
 
 export const LP_DX = 300 // horizontal spacing between columns
 export const LP_DY = 340 // vertical spacing between layers
@@ -20,52 +25,89 @@ export const RT_ROW_H = 26
 export const BD_GAP = 56 // horizontal gap from a table's right edge to its bundlers
 export const BD_SIZE = 18 // bundler node diameter
 
-function entryKey(e) {
+// A row's stable identity. Rows carry an authored `key` now; the fallback derives
+// one from the band. It must match `row_key()` in the API
+// (src/api/src/transversal/services/roll_table.py) **exactly** — the range
+// separator is an en-dash (U+2013) — or a displayed key and a stored binding key
+// would disagree.
+function entryKey(e, index = 0) {
+  if (e.key) return e.key
   if (e.minValue != null || e.maxValue != null) return `${e.minValue ?? ''}–${e.maxValue ?? ''}`
   if (e.weight != null) return `w${e.weight}`
-  if (e.tier) return e.tier
-  return ''
+  if (e.tier) return String(e.tier)
+  return String(index)
 }
 
-// Collect next_step links: sourceId -> Map(targetId -> {count, labels, rowIndexes})
-function collectLinks(tables) {
-  const byId = new Map(tables.map((t) => [t.id, t]))
-  const links = new Map()
+// A resolved step destination, as a row badge shows it: the wrapped table's name,
+// plus the path's own label for the step.
+function stepTarget(id, stepById, nameOfTable) {
+  const step = stepById.get(id)
+  if (!step) return null
+  return { id, name: nameOfTable(step.tableId) || step.tableId, label: step.label || '' }
+}
 
-  for (const t of tables) {
-    for (let i = 0; i < (t.entries || []).length; i++) {
-      const e = t.entries[i]
-      for (const eff of e.effects || []) {
-        if (eff.type === 'life_path' && eff.action === 'next_step' && eff.target) {
-          const target = eff.target
-          if (!byId.has(target) || target === t.id) continue
-          if (!links.has(t.id)) links.set(t.id, new Map())
-          const m = links.get(t.id)
-          if (!m.has(target)) m.set(target, { count: 0, labels: [], rowIndexes: [] })
-          const g = m.get(target)
-          g.count += 1
-          g.rowIndexes.push(i)
-          g.labels.push(e.label || `entry ${i + 1}`)
-        }
-      }
+// Where one row goes: a step (an edge), an exit (a terminal with a kind), or
+// nowhere (the term simply ends). A binding that names the row wins over the
+// step's default `next`; a row with no binding of its own follows the default.
+function resolveRow(step, entry, index, stepById, nameOfTable) {
+  const key = entryKey(entry, index)
+  const binding = (step.bindings || []).find((b) => (b.key || '') === key) || null
+  const exitKind = binding ? (binding.exitKind || '') : ''
+  const next = binding ? (binding.next || '') : (step.next || '')
+  return {
+    key,
+    binding,
+    via: binding ? 'binding' : 'default',
+    // An exit is a destination with a kind, not an edge to a node.
+    exit: exitKind ? { kind: exitKind, path: (binding.exitPath || '') } : null,
+    nextTarget: !exitKind && next && stepById.has(next)
+      ? stepTarget(next, stepById, nameOfTable)
+      : null,
+  }
+}
+
+// Collect step -> step links: sourceStepId -> Map(targetStepId -> {count, labels, rowIndexes}).
+// Destinations are resolved row by row, so a row that exits the path is not a link.
+function collectLinks(steps, stepById, tableById, nameOfTable) {
+  const links = new Map()
+  const rowsByStep = new Map()
+
+  for (const step of steps) {
+    const table = tableById.get(step.tableId)
+    const rows = []
+
+    for (let i = 0; i < (table.entries || []).length; i++) {
+      const entry = table.entries[i]
+      const r = resolveRow(step, entry, i, stepById, nameOfTable)
+      rows.push({ ...r, index: i, entry })
+      if (!r.nextTarget) continue
+
+      if (!links.has(step.id)) links.set(step.id, new Map())
+      const m = links.get(step.id)
+      const tgt = r.nextTarget.id
+      if (!m.has(tgt)) m.set(tgt, { count: 0, labels: [], rowIndexes: [] })
+      const g = m.get(tgt)
+      g.count += 1
+      g.rowIndexes.push(i)
+      g.labels.push(entry.label || `entry ${i + 1}`)
     }
+
+    rowsByStep.set(step.id, rows)
   }
 
-  return { byId, links }
+  return { links, rowsByStep }
 }
 
-// DFS from the entry table: mark back-edges (cycles) and the reachable set.
-function classify(byId, links, entryId) {
+// DFS from the entry step: mark back-edges (cycles) so the layout can ignore them.
+function classify(links, entryId) {
   const adj = new Map()
   for (const [src, m] of links) adj.set(src, [...m.keys()])
 
   const state = new Map() // 0/undefined = unvisited, 1 = on stack, 2 = done
   const backEdges = new Set()
-  const reachable = new Set()
 
   function dfs(u) {
     state.set(u, 1)
-    reachable.add(u)
     for (const v of adj.get(u) || []) {
       if (state.get(v) === 1) {
         backEdges.add(`${u}>${v}`)
@@ -76,12 +118,12 @@ function classify(byId, links, entryId) {
     state.set(u, 2)
   }
 
-  if (byId.has(entryId)) dfs(entryId)
-  return { adj, backEdges, reachable }
+  if (entryId) dfs(entryId)
+  return { backEdges }
 }
 
 // Layered longest-path layout over the forward DAG (back-edges excluded).
-function computePositions(links, backEdges, reachable) {
+function computePositions(links, backEdges, nodeIds) {
   const fwd = new Map() // node -> forward children
   const parent = new Map() // node -> forward parents
   for (const [src, m] of links) {
@@ -96,10 +138,10 @@ function computePositions(links, backEdges, reachable) {
 
   // Kahn topological sort (deterministic).
   const indeg = new Map()
-  for (const id of reachable) indeg.set(id, 0)
+  for (const id of nodeIds) indeg.set(id, 0)
   for (const [src, tgts] of fwd) for (const t of tgts) indeg.set(t, (indeg.get(t) || 0) + 1)
 
-  const queue = [...reachable].filter((id) => (indeg.get(id) || 0) === 0).sort()
+  const queue = [...nodeIds].filter((id) => (indeg.get(id) || 0) === 0).sort()
   const order = []
   while (queue.length) {
     const u = queue.shift()
@@ -109,13 +151,13 @@ function computePositions(links, backEdges, reachable) {
       if (indeg.get(v) === 0) queue.push(v)
     }
   }
-  // Any node not reached (defensive) keeps insertion order.
+  // Any node not reached (defensive: a cycle not rooted at the entry) keeps insertion order.
   const seen = new Set(order)
-  for (const id of reachable) if (!seen.has(id)) order.push(id)
+  for (const id of nodeIds) if (!seen.has(id)) order.push(id)
 
   // Longest-path layer assignment.
   const layer = new Map()
-  for (const id of reachable) layer.set(id, 0)
+  for (const id of nodeIds) layer.set(id, 0)
   for (const u of order) {
     for (const v of fwd.get(u) || []) {
       layer.set(v, Math.max(layer.get(v), layer.get(u) + 1))
@@ -155,77 +197,72 @@ function computePositions(links, backEdges, reachable) {
 
 // Build Vue Flow node/edge descriptors for one life path.
 //
-// `path`  — { id, name, entryTableId }
-// `tables`— RollTable[] (full entries + effects, as returned by GraphQL)
+// `path`  — { id, name, entryStep, steps: [{ id, tableId, label, next, bindings }] }
+// `tables`— RollTable[] (full entries + keys, as returned by GraphQL)
 export function buildLifePathGraph(path, tables, opts = {}) {
-  const { byId, links } = collectLinks(tables || [])
+  const tableById = new Map((tables || []).map((t) => [t.id, t]))
+  const tableNames = new Map((tables || []).map((t) => [t.id, t.name]))
+  const nameOfTable = (id) => tableNames.get(id) || id
 
-  if (!path?.entryTableId || !byId.has(path.entryTableId)) {
+  // `path.steps` is the authoritative node set. A step is drawable only when the
+  // table it wraps is present.
+  const steps = (path?.steps || []).filter((s) => s?.id && tableById.has(s.tableId))
+  const stepById = new Map(steps.map((s) => [s.id, s]))
+
+  if (!path?.entryStep || !stepById.has(path.entryStep)) {
     return { nodes: [], edges: [] }
   }
 
-  const { backEdges, reachable } = classify(byId, links, path.entryTableId)
-  const { positions } = computePositions(links, backEdges, reachable)
+  const { links, rowsByStep } = collectLinks(steps, stepById, tableById, nameOfTable)
+  const { backEdges } = classify(links, path.entryStep)
+  const { positions } = computePositions(links, backEdges, new Set(steps.map((s) => s.id)))
 
-  const tableNames = new Map(tables.map((t) => [t.id, t.name]))
+  const pathMeta = opts.pathMeta || {}
+  const meta = pathMeta[path.id] || {}
   const nodes = []
   const edges = []
 
-  // Tables that belong to this life path (as opposed to out-of-path targets).
-  const pathTableIds = new Set()
-  for (const t of tables || []) if (t.lifePath === path.id) pathTableIds.add(t.id)
+  // Persisted canvasX/canvasY live on the *table*, so two steps wrapping the same
+  // table would otherwise land exactly on top of each other: the n-th occurrence
+  // of a table is nudged along x.
+  const occurrence = new Map()
 
-  // True when following next_step links from `id` can reach back into this path.
-  function canReachPath(id, seen) {
-    seen = seen || new Set()
-    if (pathTableIds.has(id)) return true
-    if (seen.has(id)) return false
-    seen.add(id)
-    const targets = links.get(id)
-    if (!targets) return false
-    for (const tgt of targets.keys()) {
-      if (canReachPath(tgt, seen)) return true
-    }
-    return false
-  }
+  for (const step of steps) {
+    const t = tableById.get(step.tableId)
+    const occ = occurrence.get(t.id) || 0
+    occurrence.set(t.id, occ + 1)
 
-  for (const id of reachable) {
-    const t = byId.get(id)
     // Prefer a persisted GM arrangement over the auto-computed DAG position.
-    const saved = (t.canvasX != null && t.canvasY != null) ? { x: t.canvasX, y: t.canvasY } : null
-    const pos = saved || positions.get(id) || { x: 0, y: 0 }
+    const saved = (t.canvasX != null && t.canvasY != null)
+      ? { x: t.canvasX + occ * LP_DX, y: t.canvasY }
+      : null
+    const pos = saved || positions.get(step.id) || { x: 0, y: 0 }
 
-    // Row-level view with the first next_step target resolved for a badge.
-    const rows = (t.entries || []).map((e, i) => {
-      let nextTarget = null
-      for (const eff of e.effects || []) {
-        if (eff.type === 'life_path' && eff.action === 'next_step' && eff.target && byId.has(eff.target) && eff.target !== id) {
-          nextTarget = { id: eff.target, name: tableNames.get(eff.target) || eff.target }
-          break
-        }
-      }
-      return {
-        index: i,
-        label: e.label || '',
-        description: e.description || '',
-        key: entryKey(e),
-        effects: e.effects || [],
-        conditions: e.conditions || [],
-        nextTarget,
-      }
-    })
-
-    const external = t.lifePath !== path.id
-    const pathMeta = opts.pathMeta || {}
-    const meta = pathMeta[t.lifePath] || {}
+    const rows = (rowsByStep.get(step.id) || []).map((r) => ({
+      index: r.index,
+      key: r.key,
+      label: r.entry.label || '',
+      description: r.entry.description || '',
+      effects: r.entry.effects || [],
+      conditions: r.entry.conditions || [],
+      // The path's own overlay for this row, applied after the row's effects.
+      bindingEffects: (r.binding && r.binding.effects) || [],
+      nextTarget: r.nextTarget,
+      exit: r.exit,
+      via: r.via,
+      enroll: !!(r.binding && r.binding.enroll),
+    }))
 
     nodes.push({
-      id: `rt:${id}`,
+      id: `step:${step.id}`,
       type: 'rolltable',
       position: pos,
       data: {
-        entityId: id,
+        stepId: step.id,
+        entityId: t.id,
+        tableId: t.id,
         name: t.name,
+        stepLabel: step.label || '',
         universe: t.universe,
         scheme: t.scheme,
         die: t.die,
@@ -233,22 +270,28 @@ export function buildLifePathGraph(path, tables, opts = {}) {
         tableNames: Object.fromEntries(tableNames),
         lifePathName: meta.name || '',
         factionNames: meta.factionNames || [],
-        external,
-        terminal: external && !canReachPath(id),
+        // The path declares its own steps, so an edge never leaves the path:
+        // every drawn node is internal. Kept for RollTableNode's styling hooks.
+        external: false,
+        terminal: false,
+        // The step's default destination, for rows with no binding of their own.
+        defaultNext: step.next && stepById.has(step.next)
+          ? stepTarget(step.next, stepById, nameOfTable)
+          : null,
         rows,
       },
     })
 
-    // Outgoing edges. Groups with one entry connect directly; groups with
-    // several entries fan through a bundler (reroute) node.
-    const m = links.get(id)
+    // Outgoing edges. Groups with one row connect directly; groups with several
+    // rows fan through a bundler (reroute) node keyed to this step.
+    const m = links.get(step.id)
     if (!m) continue
 
     for (const [tgt, g] of m) {
-      const isBack = backEdges.has(`${id}>${tgt}`)
+      const isBack = backEdges.has(`${step.id}>${tgt}`)
 
       if (g.count > 1) {
-        const bundlerId = `bd:${id}:${tgt}`
+        const bundlerId = `bd:${step.id}:${tgt}`
         const first = g.rowIndexes[0]
         const last = g.rowIndexes[g.rowIndexes.length - 1]
         const centerRow = (first + last) / 2
@@ -259,14 +302,14 @@ export function buildLifePathGraph(path, tables, opts = {}) {
           type: 'bundler',
           position: { x: pos.x + RT_WIDTH + BD_GAP, y: rowCenterY - BD_SIZE / 2 },
           draggable: false,
-          data: { count: g.count, labels: g.labels, parentId: id },
+          data: { count: g.count, labels: g.labels, parentId: step.id },
         })
 
         // Fan-in: one wire per row into the bundler.
         for (const ri of g.rowIndexes) {
           edges.push({
-            id: `lp:${id}:${tgt}:r${ri}`,
-            source: `rt:${id}`,
+            id: `lp:${step.id}:${tgt}:r${ri}`,
+            source: `step:${step.id}`,
             sourceHandle: `row-${ri}`,
             target: bundlerId,
             targetHandle: 'in',
@@ -275,12 +318,12 @@ export function buildLifePathGraph(path, tables, opts = {}) {
           })
         }
 
-        // Bundler projects a single edge to the target table.
+        // Bundler projects a single edge to the target step.
         edges.push({
-          id: `lp:${id}:${tgt}:out`,
+          id: `lp:${step.id}:${tgt}:out`,
           source: bundlerId,
           sourceHandle: 'out',
-          target: `rt:${tgt}`,
+          target: `step:${tgt}`,
           targetHandle: 'target',
           type: 'lifepath',
           label: `${g.count} entries`,
@@ -288,10 +331,10 @@ export function buildLifePathGraph(path, tables, opts = {}) {
         })
       } else {
         edges.push({
-          id: `lp:${id}:${tgt}`,
-          source: `rt:${id}`,
+          id: `lp:${step.id}:${tgt}`,
+          source: `step:${step.id}`,
           sourceHandle: `row-${g.rowIndexes[0]}`,
-          target: `rt:${tgt}`,
+          target: `step:${tgt}`,
           targetHandle: 'target',
           type: 'lifepath',
           label: g.labels[0],

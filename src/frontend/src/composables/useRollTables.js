@@ -13,8 +13,9 @@ const ROLL_TABLE_FIELDS = `
   id name universe lifePath scheme rollSource traitDiceCount die
   check { traitIds difficulty freeChoice }
   entries {
-    label description minValue maxValue weight tier
+    key label description minValue maxValue weight tier
     conditions { type subject target targets value operator narrative spec }
+    costEffects { timing type action target result negative context }
     effects { timing type action target result negative context }
   }
 `

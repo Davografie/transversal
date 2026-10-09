@@ -216,10 +216,10 @@ export function useCanvas() {
       title.value = lifePath?.name || 'Life Path'
       currentLifePath = lifePath || null
 
-      if (!lifePath?.entryTableId) {
+      if (!lifePath?.entryStep) {
         nodes.value = []
         edges.value = []
-        error.value = 'This life path has no entry table'
+        error.value = 'This life path has no entry step'
         return
       }
 
@@ -227,7 +227,7 @@ export function useCanvas() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query { rollTables { id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } effects { timing type action target result negative context } } } lifePaths { id name factionIds } }`,
+          query: `query { rollTables { id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } effects { timing type action target result negative context } } } lifePaths { id name factionIds } }`,
         }),
       })
       const data = await r.json()
@@ -1438,7 +1438,10 @@ export function useCanvas() {
     const dx = position.x - (old?.position?.x ?? position.x)
     const dy = position.y - (old?.position?.y ?? position.y)
     const isTable = old?.type === 'rolltable'
-    const parentId = old?.data?.entityId
+    // Life-path nodes are keyed by step, so their bundlers follow the step id;
+    // location / GMC nodes have no step and keep following their entity id.
+    const parentId = old?.data?.stepId || old?.data?.entityId
+    const tableId = old?.data?.tableId || old?.data?.entityId
     nodes.value = nodes.value.map((n) => {
       if (n.id === id) return { ...n, position: { ...position } }
       // Bundlers stay glued to the table whose rows they fan in from.
@@ -1447,7 +1450,7 @@ export function useCanvas() {
       }
       return n
     })
-    if (isTable && parentId) persistTablePosition(parentId, position.x, position.y)
+    if (isTable && tableId) persistTablePosition(tableId, position.x, position.y)
   }
 
   async function setFactionFilter(factionId) {
