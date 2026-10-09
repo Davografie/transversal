@@ -671,10 +671,16 @@ const orderedInputs = computed(() => {
   const declared = order.map((name) => by_name(name, refs, fields)).filter(Boolean)
   const declaredNames = new Set(declared.map((x) => x.f.name))
   const tail = unranked.filter((x) => !declaredNames.has(x.f.name))
-  // An action that declares an owner path but does not rank it still shows it, at
-  // the end — the anchor reads after the thing it anchors.
-  if (ownerFallbackShown.value && !declaredNames.has('owner')) tail.push(OWNER_INPUT)
   const items = [...declared, ...tail]
+  // An action that declares an owner path but does not rank it still shows it, at
+  // the end — the anchor reads after the thing it anchors. Added only when nothing
+  // else already answers "Anchored to": the ranked names are **empty** for an action
+  // with no `fieldOrder`, so the declared owner reference rendered from the tail
+  // *and* this block was appended as well — two "Anchored to" inputs for
+  // `gain_or_step_up_trait`, `gain_trait`, `cortex_gain_trait` and
+  // `set_trait_statement` ([[B272]]). The question is "is an owner input already
+  // here", not "was it ranked".
+  if (ownerFallbackShown.value && !items.some((x) => x.f.name === 'owner')) items.push(OWNER_INPUT)
   // A gain verb's in-line trait editor belongs with the trait it is about (see
   // the template). Placed *after* the trait field, wherever that field landed —
   // and appended when the action has no target field, which is exactly where it
@@ -868,7 +874,11 @@ function buildEffect(meta) {
     // A die named by a path: sent only in that mode, so a literal/variable die is
     // never shadowed by a stale spec the author left behind.
     resultSpec: resultMode.value === 'spec' && (newEffect.resultSpec?.steps || []).length ? newEffect.resultSpec : null,
-    ownerSpec: (newEffect.ownerSpec?.steps || []).length ? newEffect.ownerSpec : null,
+    // One home for the anchor where the action declares the reference: leaving the
+    // positional spec behind would fold back in at runtime and resurrect an anchor
+    // the author had just cleared ([[B272]]).
+    ownerSpec: (!newEffect.refs.owner && (newEffect.ownerSpec?.steps || []).length)
+      ? newEffect.ownerSpec : null,
     entitySpec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
     refs: buildRefs(),
     output: (newEffect.output || '').trim() || null,
@@ -916,6 +926,16 @@ function populate(eff) {
     : ((eff.result && eff.result.startsWith('{')) ? 'variable' : 'die')
   newEffect.resultSpec = eff.resultSpec || { steps: [] }
   newEffect.ownerSpec = eff.ownerSpec || { steps: [] }
+  // The positional owner spec is the fallback the refs migration left behind. Fold
+  // it into the declared reference on the way in — the same move `effective_refs`
+  // makes at runtime — so a stored path is visible and editable in the **one** owner
+  // input instead of sitting in a second one beside it ([[B272]]). Three retired
+  // verbs declare `owner_elements` with no owner reference; for them the fallback is
+  // still the only home, and nothing here touches it.
+  if (newEffect.refs.owner && !(newEffect.refs.owner.spec?.steps || []).length
+      && (newEffect.ownerSpec.steps || []).length) {
+    newEffect.refs.owner.spec = newEffect.ownerSpec
+  }
   effectDieMode.value = (eff.context?.effect_die && String(eff.context.effect_die).startsWith('{')) ? 'variable' : 'die'
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
     newEffect.fields.target = eff.target

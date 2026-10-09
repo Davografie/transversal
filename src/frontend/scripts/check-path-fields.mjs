@@ -369,9 +369,23 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   ok('the owner path defers to its declared reference',
     /const ownerFallbackShown = computed/.test(effectForm)
       && /!\(newEffect\.refs\?\.owner\?\.spec\?\.steps \|\| \[\]\)\.length/.test(effectForm), true)
-  ok('…and the standalone owner block is gated on that fallback',
-    /ownerFallbackShown\.value && !declaredNames\.has\('owner'\)/.test(effectForm)
+  ok('…and the standalone owner block substitutes, never doubles',
+    /ownerFallbackShown\.value && !items\.some\(\(x\) => x\.f\.name === 'owner'\)/.test(effectForm)
       && /if \(name === 'owner' && ownerFallbackShown\.value\)/.test(effectForm), true)
+  // The guard used to ask "was `owner` *ranked*", which is empty for any action with
+  // no `fieldOrder` — so the declared reference rendered from the tail **and** the
+  // fallback was appended beside it: two "Anchored to" inputs for
+  // `gain_or_step_up_trait`, `gain_trait`, `cortex_gain_trait` and
+  // `set_trait_statement` ([[B272]]).
+  ok('…asking whether an owner input is already there, not whether it was ranked',
+    /!declaredNames\.has\('owner'\)/.test(effectForm), false)
+  // One home: a stored positional owner path folds into the reference on the way in
+  // (so it stays visible in the single input), and the save leaves the positional
+  // field null so a cleared anchor cannot fold back in.
+  ok('a stored owner path folds into the declared reference on load',
+    /newEffect\.refs\.owner\.spec = newEffect\.ownerSpec/.test(effectForm), true)
+  ok('…and the save keeps the reference as the only home',
+    /ownerSpec: \(!newEffect\.refs\.owner &&/.test(effectForm), true)
 }
 
 // ── A rule authored from an owner's screen lands on that owner ────
