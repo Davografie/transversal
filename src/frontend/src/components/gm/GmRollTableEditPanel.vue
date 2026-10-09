@@ -48,15 +48,25 @@
     <div class="rte-row">
       <div class="rte-field" v-if="form.rollSource === 'FIXED_DIE'">
         <label>Die</label>
-        <select v-model="form.die">
-          <option v-for="d in ['D4','D6','D8','D10','D12']" :key="d" :value="d">{{ d }}</option>
-        </select>
+        <!-- The notation, not a fixed list: the ladder's dice plus any dN a table
+             wants (d20, d100, …). A datalist keeps the common ones one click away
+             without forbidding the rest. -->
+        <input v-model="form.die" list="rte-dice" placeholder="d6" spellcheck="false" />
+        <datalist id="rte-dice">
+          <option v-for="d in TABLE_DICE" :key="d" :value="d" />
+        </datalist>
       </div>
       <div class="rte-field" v-else>
         <label>Trait dice count</label>
         <input v-model.number="form.traitDiceCount" type="number" min="1" />
       </div>
     </div>
+
+    <p v-if="form.rollSource === 'FIXED_DIE'" class="rte-detail">
+      A <strong>repeated digit</strong> reads dice as digits rather than one wide die:
+      a <strong>d66</strong> is two d6 — 11–66, never 7 or 17 — and a <strong>d88</strong>
+      is two d8, 11–88. Write a Range table's entries against that spread (11–88), not 1–88.
+    </p>
 
     <p v-if="form.rollSource === 'TRAIT_DICE'" class="rte-detail">
       The player picks trait{{ form.traitDiceCount === 1 ? '' : 's' }} they have; their roll selects the entry.
@@ -131,6 +141,11 @@ const props = defineProps({
   universe: { type: String, default: '' },
 })
 
+//: Suggestions for the die field — the Cortex ladder plus the dice tables
+//: actually reach for. Any `dN` (or repeated-digit read) is valid; this is a
+//: shortcut, not the rule.
+const TABLE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd66', 'd88', 'd100']
+
 const form = reactive({
   id: props.tableId || '',
   name: '',
@@ -139,7 +154,7 @@ const form = reactive({
   scheme: 'INDEX',
   rollSource: 'FIXED_DIE',
   traitDiceCount: 1,
-  die: 'D6',
+  die: 'd6',
   entries: [],
 })
 
@@ -172,7 +187,9 @@ onMounted(async () => {
     form.scheme = t.scheme
     form.rollSource = t.rollSource || 'FIXED_DIE'
     form.traitDiceCount = t.traitDiceCount ?? 1
-    form.die = t.die
+    // The wire value is the notation (`d6`, `d20`, `d66`); normalise so a table
+    // saved before the field was a string still lands on a known value.
+    form.die = String(t.die || 'd6').toLowerCase()
     form.entries = (t.entries || []).map(e => ({
       label: e.label,
       description: e.description,
