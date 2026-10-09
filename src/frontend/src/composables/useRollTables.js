@@ -15,8 +15,14 @@ const ROLL_TABLE_FIELDS = `
   entries {
     key label description minValue maxValue weight tier
     conditions { type subject target targets value operator narrative spec }
-    costEffects { timing type action target result negative context }
-    effects { timing type action target result negative context }
+    costEffects { timing type action target entity result dieFilter negative context
+                  duration { timers { event remaining } combine }
+                  targetSpec entitySpec resultSpec ownerSpec refs output
+                  conditions { type subject target targets value operator narrative spec } }
+    effects { timing type action target entity result dieFilter negative context
+              duration { timers { event remaining } combine }
+              targetSpec entitySpec resultSpec ownerSpec refs output
+              conditions { type subject target targets value operator narrative spec } }
   }
 `
 

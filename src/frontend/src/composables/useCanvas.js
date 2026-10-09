@@ -227,7 +227,7 @@ export function useCanvas() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query { rollTables { id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } effects { timing type action target result negative context } } } lifePaths { id name factionIds } }`,
+          query: `query { rollTables { id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } } } lifePaths { id name factionIds } }`,
         }),
       })
       const data = await r.json()
@@ -1329,7 +1329,11 @@ export function useCanvas() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } entries { label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } effects { timing type action target result negative context } } } }`,
+          // This one is a read-modify-write: the table is fetched, one entry gains a
+          // `next_step` effect, and the **whole table is saved back**. A narrow effect
+          // selection therefore does not merely display less — it strips every entry
+          // effect's references on the way through ([[B273]]). Fetch what is written.
+          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } costEffects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } } } }`,
           variables: { id: sourceTableId },
         }),
       })

@@ -496,5 +496,57 @@ const find = (name) => VUE.find((p) => rel(p) === name)
     /<RollTableMenu/.test(appTag) && /embedded/.test(appTag), false)
 }
 
+// ── A table round trip fetches what it writes back ───────────────
+//
+// The roll-table editor is a **round trip**: it reads a table, the author edits one
+// effect, and the whole row is written back. A selection that omits a field does not
+// merely display less — it *erases* that field on the next save. The author hit
+// exactly that ("every time I set the trait, entity, and anchor, and save the
+// effect, it doesn't persist"), because `refs` was not among the fields fetched for
+// a table entry's effect. The canvas's link-a-table path was the same shape and
+// worse: it fetched a table, added one effect, and re-saved **all** of it, so every
+// other entry's references went with it ([[B273]]).
+//
+// So the rule is bound to the hazard, not to every read: a file that can *write* a
+// table (it names `saveRollTable`) must fetch an effect's references in every
+// selection it makes. A display-only reader — the return-map's `{return:…}` token,
+// the armed rail, a hitch menu — is free to fetch less, and is not flagged.
+{
+  const collect = (dir, out = []) => {
+    for (const entry of readdirSync(dir)) {
+      const p = join(dir, entry)
+      if (statSync(p).isDirectory()) collect(p, out)
+      else if (/\.(js|vue)$/.test(entry)) out.push(p)
+    }
+    return out
+  }
+  const braceBody = (src, openIndex) => {
+    let depth = 0
+    for (let i = openIndex; i < src.length; i++) {
+      if (src[i] === '{') depth++
+      else if (src[i] === '}') { depth--; if (!depth) return src.slice(openIndex, i + 1) }
+    }
+    return src.slice(openIndex)
+  }
+  const constantBody = (src, name) => {
+    const m = src.match(new RegExp('const\\s+' + name + '\\s*=\\s*`([\\s\\S]*?)`'))
+    return m ? m[1] : null
+  }
+  const offenders = []
+  for (const file of collect(SRC)) {
+    const src = readFileSync(file, 'utf8')
+    if (!/saveRollTable/.test(src)) continue
+    for (const m of src.matchAll(/(?<![\w.-])(?:costEffects|effects)\s*\{/g)) {
+      const body = braceBody(src, src.indexOf('{', m.index + m[0].length - 1))
+      if (/\brefs\b/.test(body)) continue
+      // A named selection is only as good as the constant it names.
+      const named = [...body.matchAll(/\$\{(\w+)\}/g)].map((x) => x[1])
+      if (named.some((n) => { const c = constantBody(src, n); return c && /\brefs\b/.test(c) })) continue
+      offenders.push(`${file.slice(SRC.length + 1)}:${src.slice(0, m.index).split('\n').length}`)
+    }
+  }
+  ok('a table round trip fetches an effect\'s references', offenders, [])
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)
