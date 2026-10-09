@@ -79,6 +79,8 @@ const geometry = (page) => page.evaluate(() => {
     titleVisible: inside(document.querySelector('.rtm-title'), slot),
     actionsVisible: inside(document.querySelector('.ct-actions'), slot),
     marked: marked ? Math.round(Math.abs((marked.getBoundingClientRect().top + marked.getBoundingClientRect().height / 2) - (scroller.getBoundingClientRect().top + scroller.getBoundingClientRect().height / 2))) : null,
+    atScrollStart: scroller.scrollTop <= 1,
+    atScrollEnd: scroller.scrollTop >= scroller.scrollHeight - scroller.clientHeight - 1,
   }
 })
 
@@ -103,8 +105,15 @@ test('a roll brings the marked row to the middle, without moving the header', as
   await openEmbeddedMenu(page, { width: 1280, height: 950 })
   await page.locator('.ct-actions button', { hasText: /Roll/i }).first().click()
 
-  // Smooth, so poll rather than sample mid-animation.
-  await expect.poll(async () => (await geometry(page)).marked, { timeout: 5000, intervals: [100, 200, 300] }).toBeLessThanOrEqual(2)
+  // Smooth, so poll rather than sample mid-animation — and "centred" has to mean
+  // *as centred as the scroll allows*: a roll that lands on one of the first rows
+  // cannot be centred, because the scroller clamps at its own start. (The roll is
+  // random, so asserting the strict version passed only when it picked a middle
+  // row — a flake waiting to happen.)
+  await expect.poll(async () => {
+    const g = await geometry(page)
+    return g.marked <= 2 || g.atScrollStart || g.atScrollEnd
+  }, { timeout: 5000, intervals: [100, 200, 300] }).toBe(true)
   const g = await geometry(page)
   expect(g.titleVisible, 'the header is still visible after the scroll').toBe(true)
   expect(g.actionsVisible, 'the actions are still visible after the scroll').toBe(true)
