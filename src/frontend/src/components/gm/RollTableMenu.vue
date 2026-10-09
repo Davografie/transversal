@@ -1,6 +1,6 @@
 <template>
-  <div class="rtm-overlay" @click.self="$emit('close')">
-    <div class="rtm-root">
+  <div :class="embedded ? 'rtm-in-panel' : 'rtm-overlay'" @click.self="!embedded && $emit('close')">
+    <div class="rtm-root" :class="{ 'rtm-embedded': embedded }">
       <div class="rtm-title">{{ title }}</div>
 
       <!-- Step 1: pick an entry -->
@@ -57,6 +57,15 @@ const props = defineProps({
   mode: { type: String, default: 'apply' },  // 'apply' | 'create-support'
   playerId: { type: String, default: '' },
   mainEntityId: { type: String, default: '' },
+  /**
+   * Hosted **inside a panel** rather than floated over the app. The character
+   * sheet is the container there — the same slot its question wizard and its
+   * life-path choice table take — so the scrim and the fixed frame go, and the
+   * table fills the panel instead of covering the screen. Opt-in because two
+   * hosts mount this: the sheet (embedded) and `App.vue`'s support-character
+   * flow (an overlay, where it really is a modal in front of everything).
+   */
+  embedded: { type: Boolean, default: false },
 })
 const emit = defineEmits(['applied', 'close'])
 
@@ -155,6 +164,10 @@ async function finishResolve(resolutions) {
 
 <style scoped>
 .rtm-overlay { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; background: var(--scrim); padding: 12px; }
+/* Inside a panel the panel *is* the frame: no scrim, no fixed box, no card of its
+   own — the shape `EffectTargetWizard`'s `embedded` takes, for the same reason. */
+.rtm-in-panel { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.rtm-embedded { width: 100%; max-height: none; padding: 0; background: transparent; border: 0; border-radius: 0; }
 .rtm-root { width: min(560px, 96vw); max-height: min(86vh, 720px); overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--bg-panel-solid); border: 1px solid var(--overlay-10); border-radius: var(--radius); }
 .rtm-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
 .rtm-menu { display: flex; flex-direction: column; gap: 4px; }

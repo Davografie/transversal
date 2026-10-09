@@ -210,6 +210,23 @@
           @run-loop="(c) => emit('sfx-choice-loop', c)"
         />
       </div>
+      <!-- The roll table a menu rule opened: the same slot as the question above,
+           because the panel is the container. It used to be teleported to `<body>`
+           and floated over the whole screen — which was also the reason it read as
+           "not in the sheet". -->
+      <div v-else-if="rollTableMenu" class="sheet-sfx-choice">
+        <RollTableMenu
+          embedded
+          :entity-id="sfxSubjectId"
+          :table-id="rollTableMenu.tableId"
+          :title="rollTableMenu.name"
+          :entity-razmerit="entity?.razmerit ?? 0"
+          :mode="rollTableMenu.mode || 'apply'"
+          :player-id="playerId"
+          :main-entity-id="mainEntityId"
+          @close="rollTableMenu = null"
+        />
+      </div>
       <BlueBook
         v-else-if="activeSheetView === 'bluebook'"
         :entity-id="overrideEntityId || entityId"
@@ -565,6 +582,21 @@
           @run-loop="(c) => emit('sfx-choice-loop', c)"
         />
       </div>
+      <!-- The GM's rules are pressed *here*, so the table they open lands here too
+           rather than over the top of the play surface. -->
+      <div v-else-if="rollTableMenu" class="sheet-sfx-choice">
+        <RollTableMenu
+          embedded
+          :entity-id="sfxSubjectId"
+          :table-id="rollTableMenu.tableId"
+          :title="rollTableMenu.name"
+          :entity-razmerit="entity?.razmerit ?? 0"
+          :mode="rollTableMenu.mode || 'apply'"
+          :player-id="playerId"
+          :main-entity-id="mainEntityId"
+          @close="rollTableMenu = null"
+        />
+      </div>
       <div v-else class="sheet-scroll">
         <GmPlayOverview
           :current-location-id="placeId"
@@ -633,17 +665,6 @@
         </div>
       </div>
 
-      <RollTableMenu
-        v-if="rollTableMenu"
-        :entity-id="entity?.id || placeId"
-        :table-id="rollTableMenu.tableId"
-        :title="rollTableMenu.name"
-        :entity-razmerit="entity?.razmerit ?? 0"
-        :mode="rollTableMenu.mode || 'apply'"
-        :player-id="playerId"
-        :main-entity-id="mainEntityId"
-        @close="rollTableMenu = null"
-      />
     </Teleport>
   </div>
 

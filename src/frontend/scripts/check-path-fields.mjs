@@ -438,5 +438,38 @@ const find = (name) => VUE.find((p) => rel(p) === name)
       && /function rollTableMenuEffect\(/.test(sheet), false)
 }
 
+// ── The roll table lands in the sheet's own panel ─────────────────
+//
+// The author, 2026-10-09: *"I expected the roll table to become visible inside the
+// character sheet panel."* It did not, and could not have: the sheet teleported it
+// to `<body>` and its root was a fixed full-screen overlay. The sheet's other
+// surfaces — the question wizard, the life path's choice table, the Blue Book —
+// take the panel instead, and the table now takes the same slot. The other host
+// (`App.vue`'s support-character flow) is genuinely a modal and keeps the overlay,
+// which is why the mode is opt-in.
+{
+  const menu = read(find('components/gm/RollTableMenu.vue'))
+  ok('the menu can be hosted inside a panel',
+    /embedded: \{ type: Boolean, default: false \}/.test(menu), true)
+  ok('…by dropping the scrim and the fixed frame',
+    /:class="embedded \? 'rtm-in-panel' : 'rtm-overlay'"/.test(menu)
+      && /\.rtm-in-panel \{/.test(menu) && /\.rtm-embedded \{/.test(menu), true)
+
+  const sheet = read(find('components/CharacterSheet.vue'))
+  const tags = sheet.match(/<RollTableMenu[\s\S]*?>/g) || []
+  ok('the sheet hosts it embedded, on both of its wizard hosts',
+    tags.length === 2 && tags.every((t) => /embedded/.test(t)), true)
+  ok('…in the body chain, beside the question',
+    /v-else-if="rollTableMenu" class="sheet-sfx-choice"/.test(sheet), true)
+  ok('…and no longer teleports it out of the panel',
+    /<Teleport[\s\S]{0,4000}?<RollTableMenu/.test(sheet), false)
+
+  // The support-character flow really is a modal in front of everything.
+  const app = read(find('App.vue'))
+  const appTag = (app.match(/<RollTableMenu[\s\S]*?>/) || [''])[0]
+  ok('the support-character flow keeps the overlay',
+    /<RollTableMenu/.test(appTag) && /embedded/.test(appTag), false)
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)
