@@ -284,15 +284,34 @@ mutation(
 }
 """
 
+# An effect is the substance of a rule: a four-field SFX response could not show
+# a condition or an action, so an author could write a rule and see none of it.
+_EFFECT_FIELDS = (
+    "timing type action target entity result dieFilter negative context "
+    "duration { timers { event remaining } combine } "
+    "targetSpec entitySpec ownerSpec resultSpec refs output "
+    "conditions { type subject target value operator narrative }"
+)
+
+# A path **wraps** tables: `entryStep` is the step a term begins at and `steps` is
+# the wrapper itself. Each step's `bindings` overlay meaning on one row, named by
+# that row's stable `key` — so the selection carries them, or an authored binding
+# is indistinguishable from one the server dropped.
 _QUERY_LIFE_PATHS = """
 query($universe: String) {
-  lifePaths(universe: $universe) { id name universe entryTableId description }
+  lifePaths(universe: $universe) {
+    id name universe entryTableId description entryStep
+    steps {
+      id tableId label next
+      bindings { key next exitKind exitPath enroll effects { %s } }
+    }
+  }
 }
-"""
+""" % _EFFECT_FIELDS
 
 _QUERY_ROLL_TABLES = """
 query($lifePathId: String) {
-  rollTables(lifePathId: $lifePathId) { id name universe lifePath scheme die }
+  rollTables(lifePathId: $lifePathId) { id name universe lifePath subjectKind scheme die }
 }
 """
 
@@ -414,17 +433,8 @@ mutation(
 }
 """
 
-# An effect is the substance of a rule: a four-field SFX response could not show
-# a condition or an action, so an author could write a rule and see none of it.
-_EFFECT_FIELDS = (
-    "timing type action target entity result dieFilter negative context "
-    "duration { timers { event remaining } combine } "
-    "targetSpec entitySpec ownerSpec resultSpec refs output "
-    "conditions { type subject target value operator narrative }"
-)
-
 _ROLL_ENTRY_FIELDS = (
-    "label description minValue maxValue weight tier "
+    "key label description minValue maxValue weight tier "
     "conditions { type subject target value operator narrative } "
     "costEffects { %s } effects { %s }"
 ) % (_EFFECT_FIELDS, _EFFECT_FIELDS)
@@ -432,7 +442,7 @@ _ROLL_ENTRY_FIELDS = (
 _MUT_SAVE_ROLL_TABLE = (
     "mutation($input: RollTableInput!) {\n"
     "  saveRollTable(input: $input) {\n"
-    "    id name universe lifePath scheme rollSource traitDiceCount die\n"
+    "    id name universe lifePath subjectKind scheme rollSource traitDiceCount die\n"
     "    check { traitIds difficulty freeChoice }\n"
     "    entries { " + _ROLL_ENTRY_FIELDS + " }\n"
     "    boundVariables { name spec } canvasX canvasY\n"
@@ -443,11 +453,13 @@ _MUT_SAVE_ROLL_TABLE = (
 _MUT_SAVE_LIFE_PATH = """
 mutation(
   $id: String!, $name: String!, $universe: String!, $description: String!,
-  $entryTableId: String, $discovery: JSON
+  $entryTableId: String, $entryStep: String, $steps: [LifePathStepInput!],
+  $discovery: JSON
 ) {
   saveLifePath(
     id: $id, name: $name, universe: $universe, description: $description,
-    entryTableId: $entryTableId, discovery: $discovery
+    entryTableId: $entryTableId, entryStep: $entryStep, steps: $steps,
+    discovery: $discovery
   )
 }
 """
@@ -1169,7 +1181,17 @@ def save_roll_table(args: dict) -> dict:
 
 
 def save_life_path(args: dict) -> dict:
-    """Create or update a life path definition."""
+    """Create or update a life path definition.
+
+    A path **wraps** roll tables: ``steps`` declares the wrapped tables and the
+    per-row ``bindings`` that say where each row goes, and ``entry_step`` is the
+    step a term begins at. ``entry_step`` and ``steps`` are **omitted-or-null to
+    leave the stored value alone** — the resolver treats ``None`` as "unchanged"
+    and only a supplied value replaces it. That is load-bearing: the wrapper is
+    the path's whole graph, so a caller that saved only a name and rebuilt the
+    document without them would silently unwrap every table the path declares.
+    ``entry_table_id`` is deprecated (the path's entry is ``entry_step`` now).
+    """
     variables = {
         "id": args["id"],
         "name": args["name"],
@@ -1178,6 +1200,13 @@ def save_life_path(args: dict) -> dict:
         "entryTableId": args.get("entry_table_id", ""),
         "discovery": args.get("discovery"),
     }
+    # Only send the wrapper arguments when the caller actually supplied them: an
+    # explicit null is the resolver's leave-alone signal too, but a key that is
+    # never sent cannot be misread as a replacement.
+    if args.get("entry_step") is not None:
+        variables["entryStep"] = args["entry_step"]
+    if args.get("steps") is not None:
+        variables["steps"] = args["steps"]
     result = _call_mutation("saveLifePath", _MUT_SAVE_LIFE_PATH, variables,
                             args.get("dry_run", True), "saveLifePath")
     if args.get("dry_run", True):
@@ -2398,7 +2427,7 @@ mutation($playerId: ID!, $mainEntityId: ID!, $tableId: ID!, $index: Int!) {
 _MUT_START_TERM = """
 mutation($entityId: ID!, $factionId: ID!, $pathId: ID!) {
   startTerm(entityId: $entityId, factionId: $factionId, pathId: $pathId) {
-    factionId pathId currentTableId continuation
+    factionId pathId currentStepId currentTableId continuation
   }
 }
 """
@@ -3578,12 +3607,15 @@ TOOL_SCHEMAS = {
     },
     "save_roll_table": {
         "name": "save_roll_table",
-        "description": "Create/update a roll table. Pass the full RollTableInput as `input`.",
+        "description": "Create/update a roll table. Pass the full RollTableInput as `input`. "
+                       "`subjectKind` is what the table may be rolled for (\"\" = unconstrained; "
+                       "e.g. \"entity\", \"projection\"), and each entry's stable `key` is what a "
+                       "life path step's `bindings` name.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "input": {"type": "object",
-                           "description": "RollTableInput (id,name,universe,scheme,die,entries)"},
+                           "description": "RollTableInput (id,name,universe,lifePath,subjectKind,scheme,rollSource,traitDiceCount,die,check,entries,boundVariables)"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["input"],
@@ -3591,7 +3623,12 @@ TOOL_SCHEMAS = {
     },
     "save_life_path": {
         "name": "save_life_path",
-        "description": "Create/update a life path definition.",
+        "description": "Create/update a life path definition. A path WRAPS roll tables: `steps` "
+                       "declares the wrapped tables and the per-row `bindings` saying where each row "
+                       "goes, and `entry_step` is the step a term begins at. `steps` and `entry_step` "
+                       "are omitted-or-null to leave the stored value alone; supplying them REPLACES "
+                       "the path's wrapped tables, so a caller that rebuilds the document without them "
+                       "silently unwraps the path. `entry_table_id` is deprecated.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -3599,7 +3636,50 @@ TOOL_SCHEMAS = {
                 "name": {"type": "string"},
                 "universe": {"type": "string"},
                 "description": {"type": "string"},
-                "entry_table_id": {"type": "string"},
+                "entry_table_id": {"type": "string",
+                    "description": "Deprecated: the path's entry is `entry_step` now."},
+                "entry_step": {"type": "string",
+                    "description": "Step id a term begins at. Omit or null to leave the stored value "
+                                   "alone; \"\" unwraps the entry."},
+                "steps": {
+                    "type": "array",
+                    "description": "The tables this path wraps, as LifePathStepInput documents. "
+                                   "Omit or null to leave the stored wrapper alone; supply to REPLACE "
+                                   "the path's wrapped tables (pass [] to unwrap it entirely).",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string",
+                                   "description": "Stable step id; \"\" generates one (s1, s2, …)."},
+                            "tableId": {"type": "string", "description": "The wrapped roll table."},
+                            "label": {"type": "string"},
+                            "next": {"type": "string",
+                                     "description": "Step id this step flows to, or \"\" to stop."},
+                            "bindings": {
+                                "type": "array",
+                                "description": "Per-row overlay: LifePathBindingInput keyed by the "
+                                               "row's stable `key` (RollTableEntry.key).",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "key": {"type": "string",
+                                                "description": "RollTableEntry.key of the bound row."},
+                                        "next": {"type": "string",
+                                                 "description": "Step id in this path, or \"\" to leave it."},
+                                        "exitKind": {"type": "string",
+                                                     "description": "What leaving means when next is \"\"."},
+                                        "exitPath": {"type": "string"},
+                                        "enroll": {"type": "boolean"},
+                                        "effects": {"type": "array", "items": {"type": "object"},
+                                                    "description": "list of EffectInput documents"},
+                                    },
+                                    "required": ["key"],
+                                },
+                            },
+                        },
+                        "required": ["tableId"],
+                    },
+                },
                 "discovery": {"type": "object"},
                 "dry_run": _dry_run_property(),
             },
