@@ -81,7 +81,6 @@
         :key="'granted-' + sfxId"
         class="sfx-granted"
         v-bind="api.sfxCardModel(sfxId, 'full')"
-        title="Always on: granted to this trait by a rule's reach — not attached, so there is nothing to take"
         @activate="api.activateSfx(sfxId, trait.id)"
       />
     </div>

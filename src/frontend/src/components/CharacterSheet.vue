@@ -160,7 +160,6 @@
             :key="'eg-' + sfxId"
             class="sfx-granted"
             v-bind="sfxCardModel(sfxId)"
-            title="Always on: granted to this entity by a rule's reach — not attached, so there is nothing to take"
             @activate="activateSfx(sfxId, entity.id)"
           />
           <SfxCard v-for="sfxId in projectionSfxIds" :key="'p-' + sfxId" v-bind="sfxCardModel(sfxId)"
@@ -172,7 +171,6 @@
             :key="'pg-' + sfxId"
             class="sfx-granted"
             v-bind="sfxCardModel(sfxId)"
-            title="Always on: granted to this body by a rule's reach — not attached, so there is nothing to take"
             @activate="activateSfx(sfxId, activeProjection.id)"
           />
         </div>
@@ -420,7 +418,6 @@
                 :key="'tsg-' + sfxId"
                 class="sfx-granted"
                 v-bind="sfxCardModel(sfxId)"
-                title="Always on: granted to this set by a rule's reach — not attached, so there is nothing to take"
                 @activate="activateSfx(sfxId, traitsetSettingSourceId(entry.ts))"
               />
             </div>
@@ -486,7 +483,6 @@
                 :key="'tsg-' + sfxId"
                 class="sfx-granted"
                 v-bind="sfxCardModel(sfxId)"
-                title="Always on: granted to this set by a rule's reach — not attached, so there is nothing to take"
                 @activate="activateSfx(sfxId, traitsetSettingSourceId(drilledSet))"
               />
             </div>
