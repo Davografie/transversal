@@ -79,8 +79,18 @@ The scheme decides how an entry is chosen:
 
 ### Picking a roll source
 
-- **Fixed die** — the table rolls a die you choose (d4–d12).
+- **Fixed die** — the table rolls a die you choose. It takes a **notation**, any `dN`: the Cortex ladder (`d4`–`d12`), a `d20`, a `d100`, or a repeated-digit read (below).
 - **Trait dice** — the table rolls dice from the character's traits; set how many. Use this when the character's own abilities should sway the result.
+
+> [!warning] A repeated digit reads dice as digits — it is not one wide die
+> `d66` means **two d6 read as digits**: 11, 12 … 66. That is 36 outcomes, and it
+> never shows 7, 17, 20 or 60 — so a Range table's entries are written against
+> **11–66**, never 1–66. The same rule gives `d88` as two d8 (11–88, 64 outcomes)
+> and `d666` as three d6 (111–666).
+>
+> A number whose digits are *not* all the same is a plain die: `d100` is one
+> hundred-sided die, 1–100, not a pair of d10. (`d11` is a plain eleven-sided
+> die too — two d1 could only ever show 11.)
 
 ### Writing entries
 
