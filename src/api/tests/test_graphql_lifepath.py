@@ -251,3 +251,53 @@ def test_roll_table_write_mutations():
 
     assert deleted["deleteRollTable"] is True
     assert tid not in repo.tables
+
+
+def test_a_roll_table_die_takes_the_table_notation():
+    """A table selects on its own die — a d20, a d66, any dN — not the ladder.
+
+    The field is a plain string precisely so widening it cannot widen
+    ``DieType``: that enum is what *trait ratings* are authored from, and a d20
+    has no business being one. Ladder names still arrive from older callers
+    (``"D6"``) and are canonicalised rather than rejected.
+    """
+    repo = _build()
+
+    for sent, kept in (("D6", "d6"), ("d20", "d20"), ("d66", "d66"), ("d7", "d7"), ("D100", "d100")):
+        created = _run(repo, """
+            mutation($input: RollTableInput!) {
+                saveRollTable(input: $input) { id name die }
+            }
+        """, {"input": {
+            "name": f"{kept} table", "universe": "earth", "scheme": "RANGE", "die": sent,
+            "entries": [{"label": "only", "minValue": 1, "maxValue": 100}],
+        }})
+
+        saved = created["saveRollTable"]
+        assert saved["die"] == kept, sent
+        assert str(repo.tables[saved["id"]].die) == kept, sent
+
+
+def test_a_roll_table_die_rejects_a_value_that_is_not_a_notation():
+    """The authoring surface may be a text field, so the edge is validated."""
+    from transversal.services.effects_engine import EffectsEngine
+
+    repo = _build()
+    before = set(repo.tables)
+
+    result = graphql_sync(
+        schema._schema,
+        "mutation($input: RollTableInput!) { saveRollTable(input: $input) { id die } }",
+        context_value={
+            "entity_manager": FakeEM(repo),
+            "razmerit_service": None,
+            "effects_engine": EffectsEngine(),
+        },
+        variable_values={"input": {
+            "name": "bad", "scheme": "RANGE", "die": "2d6",
+            "entries": [{"label": "only", "minValue": 1, "maxValue": 6}],
+        }},
+    )
+
+    assert result.errors, "a die that is not a notation must not save"
+    assert set(repo.tables) == before

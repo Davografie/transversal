@@ -31,9 +31,21 @@ from transversal.domain import (
 
 
 def _roll_die(spec: DieSpec) -> DieRoll:
-    """Roll a single die using cryptographically secure randomness."""
-    result = secrets.randbelow(spec.die.max_value) + 1
-    return DieRoll(**spec.model_dump(), result=result, tier=determine_tier(result))
+    """Roll a single die using cryptographically secure randomness.
+
+    A *table* die may throw more than one physical die — ``d66`` is two d6 read
+    as digits — so the notation says how many faces to throw and how to read
+    them, and this only supplies the randomness.
+
+    The outcome tier is deliberately ``None`` for a die off the Cortex ladder: a
+    d100 showing 87 is not a "perfect" Cortex result, and pretending otherwise
+    would leak into anything that reads ``roll_result.tier``.
+    """
+    die = spec.die
+    faces = [secrets.randbelow(die.face_sides) + 1 for _ in range(die.dice_count)]
+    result = die.combine(faces)
+    tier = determine_tier(result) if die.is_cortex else None
+    return DieRoll(**spec.model_dump(), result=result, tier=tier)
 
 
 def _determine_tier(highest: int) -> OutcomeTier:

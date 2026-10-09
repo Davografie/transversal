@@ -46,6 +46,10 @@ from transversal.domain.enums import (  # noqa: F401
     SheetTab,
 )
 
+# A die a *roll table* may roll — a superset of the ladder, deliberately kept
+# apart from ``DieType`` so a d20 can never become a trait rating.
+from transversal.domain.tabledice import TableDie  # noqa: F401
+
 from transversal.domain.dice import (  # noqa: F401
     DieSpec,
     DieRoll,

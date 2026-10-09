@@ -22,7 +22,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from transversal.domain import DieSpec, DieType, DicePoolRequest, RollResult
+from transversal.domain import DieSpec, DieType, DicePoolRequest, RollResult, TableDie
 from transversal.services.contest_tracker import broadcast_pool_change, get_contest_tracker
 from transversal.services.dice_resolver import (
     determine_tier,
@@ -50,9 +50,11 @@ class MarkBoughtRequest(BaseModel):
 
 
 def _dice_to_specs(dice: list[dict]) -> list[DieSpec]:
+    # `TableDie`, not the ladder: this is also the path a roll *table* takes,
+    # and its die may be a d20, a d100 or a d66.
     return [
         DieSpec(
-            die=DieType(d["die"]),
+            die=TableDie(d["die"]),
             source_kind=d.get("source_kind", "manual"),
             source_id=d.get("source_id", ""),
             label=d.get("label", ""),

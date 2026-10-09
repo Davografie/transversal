@@ -14,6 +14,7 @@ from transversal.domain.enums import (
     RollSource,
     RollTableScheme,
 )
+from transversal.domain.tabledice import TableDie
 
 
 class RollTableEntry(BaseModel):
@@ -55,7 +56,12 @@ class RollTable(BaseModel):
     scheme: RollTableScheme = RollTableScheme.RANGE
     roll_source: RollSource = RollSource.FIXED_DIE
     trait_dice_count: int = 1  # number of trait dice to roll (N=1 for now)
-    die: DieType = DieType.D6  # die size for range/index rolls (FIXED_DIE)
+    #: The die a FIXED_DIE table rolls. A :class:`TableDie`, not a ladder
+    #: ``DieType``: a table may select on a d20, a d100 or a d66, and none of
+    #: those is a Cortex trait die. A repeated-digit notation reads dice as
+    #: digits (``d66`` two d6 → 11..66, ``d88`` two d8 → 11..88), so a RANGE
+    #: table's entries are authored against that spread.
+    die: TableDie = TableDie("d6")
     check: Optional[RollTableCheck] = None  # legacy dice-pool check; unused
     entries: list[RollTableEntry] = Field(default_factory=list)
     # Values this table names and resolves *for itself* before an entry's effects

@@ -53,7 +53,10 @@ class RollTable:
     scheme: RollTableScheme
     roll_source: RollSource = RollSource.FIXED_DIE
     trait_dice_count: int = 1
-    die: DieType
+    #: A table die notation, not the `DieType` ladder enum: `d20`, `d66`, `d100`
+    #: and any `dN` are valid here, and widening the *enum* would have offered
+    #: them to trait ratings too. A plain string keeps the two apart.
+    die: str = "d6"
     check: Optional[RollTableCheck] = None
     entries: list[RollTableEntry]
     # Names the table resolves for itself before an entry's effects run — the
@@ -90,7 +93,7 @@ class RollTableInput:
     scheme: RollTableScheme = RollTableScheme.RANGE
     roll_source: RollSource = RollSource.FIXED_DIE
     trait_dice_count: int = 1
-    die: DieType = DieType.D6
+    die: str = "d6"
     check: Optional[RollTableCheckInput] = None
     entries: list[RollTableEntryInput] = strawberry.field(default_factory=list)
     bound_variables: list[BoundVariableInput] = strawberry.field(default_factory=list)

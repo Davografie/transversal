@@ -37,6 +37,7 @@ from transversal.domain import (
     DieRoll,
     DieSpec,
     DieType,
+    TableDie,
 )
 from transversal.services.dice_resolver import (
     compare_totals as _compare_totals,
@@ -2286,9 +2287,11 @@ def _rolls_to_wire(rolls) -> list[dict]:
 
 
 def _wire_to_rolls(wire) -> list[DieRoll]:
+    # `TableDie`, not the ladder: a roll that came back from a roll table may be
+    # a d66, and rebuilding it through the closed enum would reject its own wire.
     return [
         DieRoll(
-            die=DieType(r["die"]),
+            die=TableDie(r["die"]),
             result=int(r["result"]),
             source_id=r.get("source_id", ""),
             source_kind=r.get("source_kind", "manual"),
@@ -2300,7 +2303,8 @@ def _wire_to_rolls(wire) -> list[DieRoll]:
 
 def roll_dice(args: dict) -> dict:
     """Roll a pool and return rolls + hitch data only (no auto-picking)."""
-    dice = [DieSpec(die=DieType(d), source_id=s, label=s) for d, s in args["dice"]]
+    # The notation, so a table die (d20, d66, d100) can be rolled here too.
+    dice = [DieSpec(die=TableDie(d), source_id=s, label=s) for d, s in args["dice"]]
     rolls = _roll_pool(dice)
     return {
         "pipeline": "pool" if len(rolls) > 2 else "simplified",

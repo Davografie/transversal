@@ -10,16 +10,22 @@ from transversal.domain.enums import (
     OutcomeTier,
     RollKind,
 )
+from transversal.domain.tabledice import TableDie
 
 
 class DieSpec(BaseModel):
     """A die awaiting a roll — the shape shared by pools and roll requests.
 
+    ``die`` is the wide :class:`TableDie` notation, not the closed
+    :class:`DieType` ladder: a pool is also how a *roll table* rolls its own die
+    (a d20, a d100, a d66), and those are not Cortex trait dice. A **rating**
+    stays on the ladder — see ``domain.rating``.
+
     ``source_kind`` is extensible (trait / difficulty / manual / entity /
     projection / location / …); ``source_id`` is the specific identifier;
     ``label`` is the display name; ``ts_id`` is the trait-setting id.
     """
-    die: DieType
+    die: TableDie
     source_kind: str = "manual"
     source_id: str = ""
     label: str = ""
@@ -30,7 +36,9 @@ class DieRoll(DieSpec):
     """A rolled die — a DieSpec plus its result and outcome tier.
 
     ``tier`` is the OutcomeTiers-table mapping of ``result`` (1–12) to an
-    outcome tier; ``tier.effect_die`` gives the tier's virtual effect die.
+    outcome tier; ``tier.effect_die`` gives the tier's virtual effect die. A die
+    the Cortex ladder does not know (a table's d20, d100, d66) has **no** outcome
+    tier, so it is ``None`` here rather than a nonsense reading of its face.
     """
     result: int
     tier: Optional[OutcomeTier] = None
