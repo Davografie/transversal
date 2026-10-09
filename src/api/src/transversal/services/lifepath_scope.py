@@ -67,6 +67,11 @@ def pending_term_for(entity: "Entity", projection_id: str) -> Optional["PendingT
     term = terms.get(projection_id)
     if term is None and projection_id != UNSCOPED:
         term = terms.get(UNSCOPED)
+    if term is None:
+        # Pre-[[B271]] data: one checkpoint on the entity, no body. Handed to
+        # whoever asks, so a term is not lost before the migration runs — it is
+        # still *unscoped*, which is exactly what the migration fixes.
+        term = getattr(entity, "pending_term", None)
     return term
 
 

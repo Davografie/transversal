@@ -182,6 +182,13 @@ class Entity(BaseModel):
     #: projection id → the term that body is part-way through. Keyed rather than a
     #: single value because a character has one body per universe.
     pending_terms: dict[str, "PendingTerm"] = Field(default_factory=dict)
+    #: **Deprecated** — the pre-[[B271]] checkpoint, from when a term belonged to
+    #: the character rather than the body. Read only as a fallback
+    #: (``services/lifepath_scope``) so a database that has not yet run
+    #: ``migrate_lifepath_terms_to_bodies`` neither loses a term nor stops being
+    #: able to resolve one; the migration moves it into ``pending_terms`` and
+    #: clears this. It is *not* scoped, which is the whole bug it predates.
+    pending_term: Optional["PendingTerm"] = None
     # Post-roll consequence menu — location/lair moves authored directly on the entity.
     consequence_options: list["ConsequenceOption"] = Field(default_factory=list)
 

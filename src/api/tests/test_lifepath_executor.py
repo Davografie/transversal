@@ -516,3 +516,28 @@ def test_an_unscoped_term_still_serves_whichever_body_asks():
 
     entity.pending_terms = {"body-1": PendingTerm(faction_id="fac", path_id="lp", current_table_id="t")}
     assert pending_term_for(entity, "body-2") is None, "a scoped term is not shared"
+
+
+def test_a_pre_b271_term_is_adopted_rather_than_stranded():
+    """Legacy content still resolves, and the body playing it claims it.
+
+    The deprecated `pending_term` is unscoped by definition — that is the bug it
+    predates — so it is handed to whoever asks. Resolving has to *adopt* it, or the
+    flow helpers (which ask whether their term is still the stored one) would treat
+    an unkeyed term as already ended and silently finish the term on first use.
+    """
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-a"] = _wrapped("lp-a", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[LifePathBinding(key="0", next="s2")]),
+        LifePathStep(id="s2", table_id="tbl-a2"),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("go", [])])
+    repo.tables["tbl-a2"] = _table("tbl-a2", [_entry("end", [])])
+
+    entity = _entity(current_projection="body-1")
+    entity.pending_term = PendingTerm(
+        faction_id="fac-a", path_id="lp-a", current_step_id="s1", current_table_id="tbl-a")
+
+    result = resolve_step(entity, repo, index=1)
+    assert result["done"] is False
+    assert entity.pending_terms["body-1"].current_step_id == "s2", "adopted by the acting body"

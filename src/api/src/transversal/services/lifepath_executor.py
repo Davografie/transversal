@@ -134,6 +134,18 @@ def resolve_step(
     if not step_id:
         return {"done": True, "error": "no pending term"}
 
+    # Adopt a pre-B271 checkpoint: it is the entity's single legacy term and this
+    # body is the one playing it, so it has to be stored under a key or the flow
+    # helpers — which ask whether their term is still the stored one — would treat
+    # it as already ended. `migrate_lifepath_terms_to_bodies` is what assigns it to
+    # the right body by path universe; this only keeps it resolvable until then.
+    terms = getattr(entity, "pending_terms", None)
+    if terms is None:
+        entity.pending_terms = terms = {}
+    if terms.get(pt.projection_id) is not pt:
+        pt.projection_id = pid
+        terms[pid] = pt
+
     lp = repo.get_lifepath(pt.path_id)
     step = find_step(lp, step_id)
     if step is None:
