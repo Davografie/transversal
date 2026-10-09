@@ -6,22 +6,27 @@
     <div v-else-if="!rows.length" class="ct-state">{{ emptyText }}</div>
 
     <template v-else>
-      <div class="ct-scroll" :style="maxHeight ? { maxHeight, overflowY: 'auto' } : null">
-        <!-- The column head is a legend, not a control: it is hidden once the
-             surface has collapsed to stacked rows, so it never labels a layout
-             the reader cannot see. -->
-        <div v-if="headerOn" class="ct-head" aria-hidden="true">
-          <span class="ct-head-cell ct-head-result">Result</span>
-          <span v-if="showKey" class="ct-head-cell ct-head-key">{{ keyHeader }}</span>
-          <span class="ct-head-cell ct-head-cost">{{ costHeader }}</span>
-        </div>
+      <!-- The column head is a legend, not a control: it is hidden once the
+           surface has collapsed to stacked rows, so it never labels a layout the
+           reader cannot see.
 
+           It sits **outside** the scroller on purpose. A header that scrolls away
+           stops being a header the moment a table is taller than the card — and
+           "Where on Earth" is seventeen rows. -->
+      <div v-if="headerOn" class="ct-head" aria-hidden="true">
+        <span class="ct-head-cell ct-head-result">Result</span>
+        <span v-if="showKey" class="ct-head-cell ct-head-key">{{ keyHeader }}</span>
+        <span class="ct-head-cell ct-head-cost">{{ costHeader }}</span>
+      </div>
+
+      <div ref="scrollEl" class="ct-scroll" :style="maxHeight ? { maxHeight, overflowY: 'auto' } : null">
         <div class="ct-rows" role="list">
           <button
             v-for="(r, i) in rows"
             :key="r.id ?? i"
             type="button"
             role="listitem"
+            :ref="(el) => setRowEl(el, i)"
             class="ct-row"
             :class="[toneOf(r), stateOf(r), {
               'is-rolled': rolled === i,
@@ -87,7 +92,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUpdate, onMounted, onUnmounted, ref, watch } from 'vue'
 import Button from './Button.vue'
 import { useLabelResolver } from '@/composables/useLabelResolver.js'
 import { conditionSummary, costSummary, effectSummary, entryKey } from '@/utils/rowSummary.js'
@@ -180,6 +185,34 @@ const rolled = computed(() => (props.rolledIndex === null || props.rolledIndex =
   ? ownRoll.value
   : props.rolledIndex))
 watch(() => props.rows, () => { ownRoll.value = null })
+
+// ── a roll brings its row into view ─────────────────────────────────────────
+// A roll *finds* a row and marks it; on a table longer than the card, the row it
+// found is exactly the one that can be off screen. So the mark is brought to the
+// middle of the scroller, smoothly — inside its own scroller only, since the hosts
+// bound *its* height (never the page's), and never when the reader has asked for
+// reduced motion.
+const scrollEl = ref(null)
+const rowEls = ref([])
+function setRowEl(el, i) {
+  if (el) rowEls.value[i] = el
+  else delete rowEls.value[i]
+}
+onBeforeUpdate(() => { rowEls.value = [] })   // the rows changed: refs rebuild
+
+watch([() => rolled.value, () => props.rollToken], async () => {
+  const idx = rolled.value
+  if (idx === null || idx === undefined) return
+  await nextTick()
+  const scroller = scrollEl.value
+  const row = rowEls.value[idx]
+  if (!scroller || !row || scroller.scrollHeight <= scroller.clientHeight) return
+  const s = scroller.getBoundingClientRect()
+  const r = row.getBoundingClientRect()
+  const delta = (r.top + r.height / 2) - (s.top + s.height / 2)
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+  scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: reduce ? 'auto' : 'smooth' })
+})
 
 // The landing beat: the mark is persistent, the animation is not.
 const landing = ref(null)
