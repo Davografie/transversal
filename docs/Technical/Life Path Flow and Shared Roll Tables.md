@@ -5,102 +5,182 @@ tags:
   - technical
   - life-path
   - roll-table
-  - next-step
+  - wrapper
   - design
 aliases:
   - Shared Roll Tables
   - Unaffiliated Roll Tables
   - Roll Table Flow
+  - Life-path wrapper
   - next_step return addresses
 status: working
 ---
 
 # Life Path Flow and Shared Roll Tables
 
-How a life-path term moves between roll tables, and how **unaffiliated (shared) roll tables** — tables reused by more than one life path, e.g. a single `Survive` table — carry the information needed to advance the term correctly.
+How a life-path term moves between roll tables, and how a table can be **shared** —
+wrapped by several paths, or by none — without the table knowing anything about them.
 
 > [!summary] TL;DR
-> A term is a graph of roll tables linked by `next_step` effects. Shared tables don't hard-code a per-path next table; instead the *caller* pushes a **return address** onto `pending_term.continuation`, and the shared table returns with `next_step("")` / `next_step("{continue}")`, which pops that address. This is a clean call/return model for **single-exit** shared tables (e.g. `Continue`/Muster). **Multi-exit** shared tables (e.g. `Survive`, where "injured" and "survived" diverge) are *not* solved by the simple stack — see [[#The multi-exit caveat]].
+> A **roll table is content**: a roll selects a row, the row may carry effects, and that is
+> all it knows. A **life path is a wrapper**: it declares the tables it wraps (`steps`) and
+> what each of their rows means to it (`bindings` — where the row goes, what leaving means,
+> whether it enrols you, and a delta of effects). The pointers live in the path. Sharing
+> therefore needs no machinery: two paths wrap the same table and give its rows different
+> meanings, and neither edits it.
+>
+> **This replaces the return-address model.** `continuation` / `return_map` /
+> `{return:<name>}` existed because a shared table could not name its own next table and had
+> to "return to its caller". Measured 2026-10-09: **0 of 103 live `next_step` targets were
+> tokens.** Nothing used it. The wrapper makes the question disappear rather than answering
+> it better — see [[#Why the return addresses are gone]].
 
-## Background
+## The model
 
-- A life path is an entry point (`LifePath.entry_table_id`) into a graph of roll tables (see [[Unified Effects Plan]]).
-- Each table entry carries effects. **Flow effects** move the term forward: `next_step`, `draft`, `force_muster`, `muster`, `enroll` (see [[Data Model]]).
-- `RollTable.life_path` marks ownership: a non-null value = affiliated with one path; `null` = shared/general, reusable by any path.
-- `resolve_step` resolves the current table's entry, applies its effects, and processes the flow effects to compute the next table.
+```
+LifePath {
+  entry_step        # the step a term begins at
+  steps: [
+    { id          # the STEP's identity — not the table's
+      table_id    # the roll table this step wraps
+      label
+      next        # default step id for rows with no binding; "" ends the term
+      bindings: [
+        { key       # names one row of that table (RollTableEntry.key)
+          next      # step id in THIS path; "" leaves the path
+          exit_kind # "" | "muster" | "force_muster" | "draft"
+          exit_path # destination path when exit_kind == "draft"
+          enroll    # taking this row admits the character to the path
+          effects   # delta, applied AFTER the row's own effects
+        }
+      ]
+    }
+  ]
+}
+```
 
-## The problem
+Three consequences worth stating plainly:
 
-`next_step` needs a target table id. For a path-specific table the author can write the literal next table. A shared table can't, because its "next table" differs per calling path.
+- **A step is not a table.** `id` belongs to the step, so a path may wrap the *same table
+  twice* (two steps, one table) — impossible when the table was the node — and a step
+  survives its table being re-pointed. The canvas keys its nodes by step id for exactly
+  this reason.
+- **Scope is derived, not declared.** `RollTable.life_path` used to say which path owned a
+  table. Now a table is *fundamental* (wrapped by nobody), *shared* (wrapped, universe set)
+  or *per-path* (wrapped by a path) purely as a fact about the paths that wrap it.
+- **A row has one identity and many meanings.** `RollTableEntry.key` is stable and stored,
+  deliberately **not** derived from the row's band: a binding naming a row must survive that
+  row's band being re-cut from `1–12` to `1–10`.
 
-The solution for the simple case: the shared table doesn't *choose* — it **returns** to whoever called it.
+## Flow is structure, not effects
 
-## Return-address model (implemented)
+What used to be `life_path`-type effects on a row is now declared by the path. The split was
+**measured against the live content**, and the measurement overruled the first design:
 
-`PendingTerm.continuation` is a LIFO stack (`list[str]`) of table ids. `next_step` interprets its fields as:
+| verb | live uses | alone on its row | with a `next_step` | verdict |
+| --- | --- | --- | --- | --- |
+| `next_step` | 103 | 34 | — | **edge** → `next` |
+| `muster` | 6 | 6 | never | **destination** → `exit_kind` |
+| `force_muster` | 9 | 9 | never | **destination** → `exit_kind` |
+| `enroll` | 24 | 6 | always | **admission** → `enroll` flag |
+| `draft` | 0 | 0 | — | destination → `exit_kind` + `exit_path` |
 
-| `target` | meaning |
-| --- | --- |
-| literal id (e.g. `"rt-survive"`) | advance to that table |
-| `""` or `"{continue}"` | pop `continuation` and advance to it; if the stack is empty, end the term (`done`) |
-| `"{choose…}"` | player chooses the next table (deferred — Phase 5 target-choice) |
+- **`muster` / `force_muster` are destinations, not effects.** All 15 such rows carry
+  *nothing else*, and none of them carries a `next_step`. They are not effects that happen
+  to end a term — they are where the row goes, and the kind carries the payload
+  (honourable / dishonourable).
+- **`enroll` is per-row, never per-path.** `enroll` appears on a row 24 times and **never
+  once without a move**, so it is a flag on the edge. It cannot be a path-level flag:
+  `rt-verdant-qualify` enrols its *Accepted* rows and not its *Rejected* ones, so a
+  path-level flag would enrol the rejected.
+- **`draft` has no live use**, so it was free to design; it stays an exit kind that hands
+  the term to another path.
 
-`Effect.context.return_to` (a dict field) is pushed onto `continuation` **when making a call**, so a later `{continue}` inside the callee returns to it.
+**No live roll table carries a `life_path` effect after the migration.** The actions stay
+registered — an SFX may still draft someone into a path — but a table's flow is the path's
+business now.
 
-The two halves:
+## Two regimes, and why the shim exists
 
-- **Caller (affiliated table):** `next_step(target="rt-shared", context={"return_to": "rt-verdant-advance"})` → push `rt-verdant-advance`, enter `rt-shared`.
-- **Callee (shared table):** entries use `next_step("")` or `next_step("{continue}")` → pop and return to `rt-verdant-advance`.
+`resolve_step` distinguishes them by whether the path declares steps:
 
-Nesting works because `continuation` is a stack: a shared table can itself call another shared table.
+- **Wrapped** — the path owns its graph. The binding for the row that resolved supplies the
+  edge (or the step's default when the row is unbound), and **any `next_step` effect still
+  sitting in the entry is ignored**. Two sources of truth for one edge is how a canvas and
+  a runtime end up disagreeing.
+- **Unwrapped / unmigrated** — the executor synthesises a one-table step from
+  `entry_table_id` and the entries' effects drive the flow exactly as they did before. This
+  is what let the code land before the migration ran, and what keeps an old database
+  working.
 
-## Worked example — single-exit shared table (`Continue`)
+Term verbs run in **both** regimes: they are what a row *does*, not where it goes.
 
-Two paths share one terminal `rt-continue` table, which always returns to the same place per path.
+## Why the return addresses are gone
 
-- Verdant Steps: `Advancement` → `next_step("rt-continue", return_to="rt-verdant-learn")`.
-- Rogue Cultivator: `Advancement` → `next_step("rt-continue", return_to="rt-drifter-3r-learn")`.
+The old model is preserved here only so the reasoning survives, because it was not wrong —
+it was solving a problem the wrapper removes.
 
-`rt-continue` has one exit, e.g.:
+`next_step` needs a target. A path-specific table could hard-code one. A **shared** table
+could not, because "the next table" differed per calling path — so the caller pushed a
+return address onto the checkpoint and the shared table returned through it. A single LIFO
+stack was enough only when every outcome returned to the same place; `Survive` (injured →
+mishap, survived → advance) needed a *map* of named exits, and `{return:<name>}` resolved
+against it.
 
-- `Continue` → `next_step("")` (returns to whichever Learn table called it).
+Under the wrapper a shared table does not choose or return — it does not know it is in a
+path at all. **The path says where each of its rows goes.** `Survive`'s two diverging
+outcomes become two bindings, and there is nothing to return *to*.
 
-Flow: `rt-verdant-advance` → call `rt-continue` (`continuation = ["rt-verdant-learn"]`) → resolve → pop → `rt-verdant-learn`.
+`PendingTerm.current_step_id` is the checkpoint. `current_table_id` is **derived** from it
+and kept because the surfaces read it to display. `continuation` / `return_map` remain as
+empty fields purely because `LifePathWizard` still selects them; they are dead, and they go
+when that wizard is retired into the unified surface ([[ui-ux]]).
 
-## The multi-exit caveat
+## Validation
 
-A single return address is enough only when **every outcome returns to the same place**. `Survive` is the hard case:
+`services/lifepath_validation.py` — `validate_life_path(path, repo)` returns the structural
+problems the wrapper makes possible: an edge naming a step the path does not have, an entry
+step that is not a step, a row bound twice, a binding naming a row the table lacks, a
+`draft` to a path that does not exist, both `next` and `exit_kind` set on one binding.
 
-- `Injured` → the path's *mishap* table.
-- `Survived` → the path's *advance* table.
+It deliberately does **not** check effect targets — that is [[B156]]'s carrier-agnostic job,
+and a second copy of the resolution rules is how the two drift.
 
-If `Survive` is shared, those two outcomes diverge, but the caller only pushed one address. A LIFO stack can't say "injured pops the mishap address, survived pops the advance address."
+The executor's failure mode when it meets a bad edge is to **end the term** rather than loop
+on an unresolvable step; the validator is what should have caught it, and a silent loop is
+the worse failure.
 
-Options (decide before wiring a shared multi-exit table):
+## Authoring a table outside a path
 
-1. **Only share single-exit tables** *(no backend change; recommended default)* — `Continue`/Muster and any table where all paths return to the same next table become shared; divergent tables (`Survive`, `Advancement`) stay per-path.
-2. **Named return addresses** *(backend change)* — generalize the checkpoint so the caller pushes a small map keyed by outcome (e.g. `{"injured": "rt-verdant-mishap", "survived": "rt-verdant-advance"}`), and add a `next_step` target form like `"{return:injured}"` that looks the address up. `context.return_to` today pushes a single id; this generalizes it.
-3. **`{choose}` indirection** *(reuses deferred Phase 5)* — the shared table emits `next_step("{choose:table}")` and the pending-choice resolver shows the path's eligible next tables.
+A row's effects land on the **subject the table was rolled for**. A roll table declares what
+that may be with `RollTable.subject_kind` (`entity` / `projection` / … , from the same
+vocabulary the effect system uses for owners) — a roll table's answer to an SFX's
+`source_kind`. Without it, a row effect naming a trait silently assumes a character was
+rolled for, and means something else or nothing when the table is rolled for a projection.
 
-Until one of 2/3 lands, keep multi-exit tables path-specific and only promote genuinely single-exit tables to shared.
-
-## Status
-
-- **Backend: implemented and tested.** `lifepath_executor._process_flow` / `_next_step` implement the semantics above; `test_lifepath_executor.test_return_to_continuation` covers call → shared → return.
-- **Authoring: partial.** `return_to` lives in `Effect.context` (a dict), which round-trips through GraphQL and `saveRollTable`. Today it is only editable via the raw **"Context (JSON)"** textarea in `EffectEditor` (e.g. `{"return_to": "rt-verdant-advance"}`). The structured per-action context fields (a "Return to → roll-table dropdown") are deferred — see [[Life Path Editor and Wizard Plan]] § Deferred.
-- **Seed: not wired yet.** Current `Survive` tables are per-path (`rt-verdant-survive`, `rt-drifter-3r-survive`); no seeded table uses `return_to`.
+A table with no effects and no `subject_kind` — `rt-earth-regions` is the live example — is
+pure content and can be rolled for anything.
 
 ## Implementation pointers
 
-- `src/api/src/transversal/services/lifepath_executor.py` — `_process_flow`, `_next_step` (return-address logic).
-- `src/api/src/transversal/domain/__init__.py` — `PendingTerm` (`continuation`), `RollTable.life_path`, `Effect.context`.
-- `src/api/src/transversal/services/effects_registry.py` — `next_step` action meta (target field, `target_kind="roll_table"`).
-- `src/api/src/transversal/api/graphql/schema.py` — `rollTables(lifePathId?)`, `resolveStep`.
-- Frontend — `EffectEditor.vue` (context textarea), `GmRollTablePicker.vue` (target picker).
+- `domain/lifepath.py` — `LifePath`, `LifePathStep`, `LifePathBinding`, `PendingTerm`.
+- `domain/rolltables.py` — `RollTableEntry.key`, `RollTable.subject_kind`.
+- `services/lifepath_executor.py` — `start_term`, `resolve_step`, `find_step`, `_process_flow`,
+  `_advance`, `_exit`. `_next_step` survives **only** for the unwrapped regime.
+- `services/roll_table.py` — `row_key`, `entry_key_for`.
+- `services/lifepath_validation.py` — `validate_life_path`.
+- `migrate_lifepath_wrapper.py` — the one-way migration off the old model.
+- Frontend — `composables/lifePathGraph.js` (draws from steps), `GmLifePathEditPanel.vue`
+  (authors steps + bindings).
 
 ## Open items
 
-- Structured `context` UI (replace JSON textarea) — deferred in [[Life Path Editor and Wizard Plan]].
-- Choose an approach for multi-exit shared tables (see [[#The multi-exit caveat]]).
-- Decide whether to collapse `Continue` into a single shared table and add `return_to` wiring to seed.
-- `{choose…}` target-choice resolution — Phase 5.
+- **`RollTable.life_path` is not yet deleted.** Nothing in the backend reads it; the GM
+  detail panel and the canvas's drag-to-link still touch it. It goes once they read the
+  wrapper ([[B269]]).
+- **`useCanvas.linkRollTable` still writes legacy `next_step` effects**, so drag-to-link in
+  the life-path canvas is inert under the wrapper.
+- **Forbidding a row** — a path declining a row it does not want — is designed for but not
+  built (the human: *"paths forbidding rows sounds interesting, maybe later"*).
+- Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
+  ([[B194]]–[[B197]]) are unchanged by this and remain separate gates.
