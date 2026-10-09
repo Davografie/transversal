@@ -93,14 +93,19 @@ def migrate() -> int:
             body = _body_for(repo, entity, path_id)
             if body == UNSCOPED:
                 unresolved.append(f"{entity.id} (term {path_id!r})")
-            elif body in entity.pending_terms:
-                pass  # a body already has a term; do not overwrite it
-            else:
+            elif body not in entity.pending_terms:
                 term = PendingTerm(**legacy_term)
                 term.projection_id = body
                 entity.pending_terms[body] = term
                 moved_terms += 1
-                changed = True
+            # **Always** clear the deprecated field, even when the body already has
+            # its own term — and especially when this run finds the term already
+            # moved. The read shim hands an unscoped term to *every* body, so
+            # leaving the field behind keeps exactly the leak this exists to close.
+            # (First written without this line: the term landed on the right body
+            # and the unqualified read still returned it for the Earth one.)
+            entity.pending_term = None
+            changed = True
 
         for enrollment in entity.life_paths:
             if enrollment.projection_id:
