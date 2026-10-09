@@ -65,6 +65,11 @@ import Button from '@/components/ui/Button.vue'
 const props = defineProps({
   tableId: { type: String, required: true },
   name: { type: String, default: '' },
+  // The life path that wraps this table (not the deprecated `lifePath` ownership
+  // field, which is null for a shared table), and the step wrapping it. Forwarded
+  // to the editor so it can show the connector column.
+  lifePathId: { type: String, default: '' },
+  stepId: { type: String, default: '' },
 })
 
 const panel = usePanel()
@@ -98,7 +103,13 @@ function editTable() {
     title: 'Edit ' + (table.value?.name || props.name),
     id: props.tableId,
     badge: 'ROLL-TABLE',
-    props: { tableId: props.tableId, lifePathId: table.value?.lifePath || '' },
+    props: {
+      tableId: props.tableId,
+      // The passed-in wrapping context wins; the deprecated ownership field is
+      // only a fallback (it is null for a shared table wrapped by a path).
+      lifePathId: props.lifePathId || table.value?.lifePath || '',
+      stepId: props.stepId || '',
+    },
   })
 }
 

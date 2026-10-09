@@ -57,6 +57,19 @@ export function useLifePaths() {
     return computed(() => pathsByUniverse.value[universe || ''] || [])
   }
 
+  // One path by id, across every universe. A panel handed only a path id — the
+  // roll-table editor, whose connector column writes the wrapper back as a full
+  // replace — must read the whole path (its other steps, name, entryStep,
+  // discovery, conditions) before it can save, and this store is keyed per
+  // universe so a lookup by id alone is not otherwise possible. `lifePaths` with
+  // no universe returns every path, which keeps this working for a fundamental
+  // path (`universe: ""`), where `fetchLifePaths('')` would fetch nothing.
+  async function fetchLifePath(id) {
+    if (!id) return null
+    const data = await graphql(`{ lifePaths { ${LIFE_PATH_FIELDS} } }`)
+    return (data?.lifePaths || []).find(p => p.id === id) || null
+  }
+
   // Apply an updater to every bucket (a saved path lives in exactly one, but
   // which one is not the caller's business).
   function _patchBuckets(updater) {
@@ -139,5 +152,5 @@ export function useLifePaths() {
     return data?.deleteLifePath
   }
 
-  return { pathsByUniverse, pathsFor, loading, fetchLifePaths, saveLifePath, deleteLifePath }
+  return { pathsByUniverse, pathsFor, loading, fetchLifePaths, fetchLifePath, saveLifePath, deleteLifePath }
 }

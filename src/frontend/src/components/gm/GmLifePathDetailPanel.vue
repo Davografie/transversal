@@ -103,7 +103,17 @@ onMounted(() => {
 onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function openTable(t) {
-  panel.open({ component: GmRollTableDetailPanel, title: t.name, id: t.id, badge: 'ROLL-TABLE', props: { tableId: t.id, name: t.name } })
+  // The step wrapping this table, so the editor's connector column edits the
+  // right one. A path may wrap the same table twice, and this list shows each
+  // wrapped table once — the first step is the one this row means.
+  const step = (path.value.steps || []).find(s => s.tableId === t.id) || null
+  panel.open({
+    component: GmRollTableDetailPanel,
+    title: t.name,
+    id: t.id,
+    badge: 'ROLL-TABLE',
+    props: { tableId: t.id, name: t.name, lifePathId: path.value.id, stepId: step?.id || '' },
+  })
 }
 
 function addTable() {

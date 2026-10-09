@@ -196,7 +196,7 @@ const displayNodes = computed(() =>
       onShowFaction: (id) => canvas.showFaction(id),
       onInspect: (id) => bus.emit('canvas:inspect', id),
       onOpenFull: (id) => bus.emit('canvas:open-full', { mode: 'location', entityId: id, scope: 'focus' }),
-      onOpenTable: (id) => openTable(id),
+      onOpenTable: (id) => openTable(id, n.data?.stepId),
     },
   })),
 )
@@ -205,10 +205,29 @@ function onFactionChange() {
   setFactionFilter(selectedFaction.value)
 }
 
-function openTable(tableId) {
-  const node = nodes.value.find((n) => n.id === `rt:${tableId}`)
+function openTable(tableId, stepId = '') {
+  // The life-path canvas keys its nodes by **step** id (`step:<stepId>`), so the
+  // old `rt:<tableId>` lookup never matched and the title silently fell back to a
+  // raw table id. Match the table id the node carries; the step id it was
+  // rendered with pins the node when a path wraps the same table twice.
+  const node = nodes.value.find((n) => n.type === 'rolltable' && n.data?.entityId === tableId
+    && (!stepId || n.data?.stepId === stepId))
   const name = node?.data?.name || tableId
-  panel.open({ component: GmRollTableDetailPanel, title: name, id: tableId, badge: 'ROLL-TABLE', props: { tableId, name } })
+  const inPath = mode.value === 'life-path'
+  panel.open({
+    component: GmRollTableDetailPanel,
+    title: name,
+    id: tableId,
+    badge: 'ROLL-TABLE',
+    props: {
+      tableId,
+      name,
+      // Only the life-path canvas carries the wrapper. Every other mode keeps the
+      // panel exactly as it was: no path context, and no connector column.
+      lifePathId: inPath ? (props.initialLifePath?.id || '') : '',
+      stepId: inPath ? (stepId || node?.data?.stepId || '') : '',
+    },
+  })
 }
 
 function openFull() {
