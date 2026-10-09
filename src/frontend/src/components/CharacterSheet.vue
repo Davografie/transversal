@@ -2957,22 +2957,28 @@ const QUERY = `
 // Console-only; strip this block and the reason arguments once the cause is
 // fixed and the paths are quiet again.
 const _fetchLog = {}
-// ── The perspective epoch ────────────────────────────────────────────
+// ── Is this answer still about the entity on screen? ─────────────────
 // Every per-entity read outlives the perspective that started it, and each one
 // writes component state when it lands: the condition-filtered SFX list (what
 // greys a card whose conditions do not hold), the unmet reasons, the place's
-// rules, the timer line, the activation ledger. A perspective can be **dropped**
-// between the request and its answer — a GM going back to roaming is the case
-// that bit (the author, 2026-09-29) — and a late write re-installs exactly what
-// `releaseEntity` cleared. Measured rather than reasoned: the play surface came
-// up with the GM's own rule cards greyed and unpressable, because the previous
-// entity's availability list landed *after* the release that was meant to clear
-// it. One counter, bumped whenever the perspective moves, and each read drops an
-// answer that is no longer the current one — cheaper and far more honest than
-// teaching every reader to distrust the state.
-let perspectiveEpoch = 0
-const epoch = () => perspectiveEpoch
-const stale = (e) => e !== perspectiveEpoch
+// rules, the timer line, the activation ledger. The perspective can move between
+// the request and its answer — a GM going back to roaming is the case that bit
+// (the author, 2026-09-29) — and a late write re-installs exactly what
+// `releaseEntity` cleared. Measured, not reasoned: the play surface came up with
+// the GM's own "Roll Table" card greyed and unpressable, because the previous
+// entity's availability list landed *after* the release meant to clear it.
+//
+// The epoch is simply **the id being shown**: an answer is current iff the
+// perspective is still the one it was asked for. A counter was the first cut and
+// it was wrong — `switchPerspective` moves `entityId` and `viewingEntityId` in one
+// breath, so `loadCachedEntity` runs twice for the same target, the counter
+// advanced past the in-flight fetch, and the dedupe below then refused to start a
+// second one: the entity was dropped and never arrived (the author, 2026-09-29,
+// switching back *to* a character). Comparing against the perspective cannot fail
+// that way — asking for the same entity twice is not a reason to distrust the
+// answer.
+const epoch = () => shownEntityId.value
+const stale = (e) => e !== shownEntityId.value
 
 function _stampFetch(kind, reason) {
   const now = performance.now()
@@ -3011,9 +3017,6 @@ async function fetchEntity(reason = 'unspecified') {
 let inflightLoad = null // { id, promise } — dedupe concurrent cache-miss loads
 
 function loadCachedEntity() {
-  // The perspective is moving: anything already in flight is now about somebody
-  // else and must not write when it lands.
-  perspectiveEpoch++
   const id = shownEntityId.value
   // No id at all: the sheet has no entity to draw. Returning here used to leave
   // the **previous** entity in place, so a GM who stopped acting as someone kept

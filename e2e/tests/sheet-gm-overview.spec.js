@@ -224,3 +224,38 @@ test('the roaming GM keeps a sheet band on mobile, and can focus it', async ({ p
   await expect(stage).toHaveClass(/focus-sheet/)
   await expect(sheetBand.locator('.gm-sfx-rules')).toBeVisible()
 })
+
+// ── Back again: free-roam → a character ─────────────────────────────────────
+// The other direction, which the first cut of the release/epoch work broke. Two
+// routes, and they are different App paths:
+//   one click  → *view* (viewingEntityId), a read-only foreign sheet;
+//   two clicks → *assume* (switchPerspective), which is the one that moves
+//                `entityId` and so fires **two** prop watchers at once.
+// Split on the persisted perspective, not on the name: both end with the
+// character on screen, and only one of them makes the GM act as them.
+async function bootRoamingAtEindhoven(page) {
+  await page.setViewportSize({ width: 1280, height: 950 })
+  await page.addInitScript(() => localStorage.setItem('currentLocationId', 'loc-469287'))
+  await enterAsArchitect(page)
+  await page.goto('/')
+  const sheet = page.locator('.sheet-embedded')
+  await expect(sheet.locator('.play-overview')).toBeVisible({ timeout: 20_000 })
+  return sheet
+}
+
+test('viewing a character from free-roam shows their sheet', async ({ page }) => {
+  const sheet = await bootRoamingAtEindhoven(page)
+  await page.locator('.peer-chip', { hasText: 'Corwin of Amber' }).first().click()
+  await expect(sheet.locator('.name-primary')).toHaveText('Corwin of Amber', { timeout: 15_000 })
+  // Viewed, not assumed — the GM is still roaming underneath.
+  expect(await page.evaluate(() => localStorage.getItem('entityId'))).toBeNull()
+})
+
+test('taking up a character from free-roam shows their sheet', async ({ page }) => {
+  const sheet = await bootRoamingAtEindhoven(page)
+  const chip = page.locator('.peer-chip', { hasText: 'Corwin of Amber' }).first()
+  await chip.click()   // view
+  await chip.click()   // assume — entityId moves, and so do two watchers
+  await expect(sheet.locator('.name-primary')).toHaveText('Corwin of Amber', { timeout: 15_000 })
+  expect(await page.evaluate(() => localStorage.getItem('entityId'))).toBe('gmc-12159634')
+})
