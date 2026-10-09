@@ -214,7 +214,7 @@
            because the panel is the container. It used to be teleported to `<body>`
            and floated over the whole screen — which was also the reason it read as
            "not in the sheet". -->
-      <div v-else-if="rollTableMenu" class="sheet-sfx-choice">
+      <div v-else-if="rollTableMenu" class="sheet-sfx-choice sheet-roll-table">
         <RollTableMenu
           embedded
           :entity-id="sfxSubjectId"
@@ -584,7 +584,7 @@
       </div>
       <!-- The GM's rules are pressed *here*, so the table they open lands here too
            rather than over the top of the play surface. -->
-      <div v-else-if="rollTableMenu" class="sheet-sfx-choice">
+      <div v-else-if="rollTableMenu" class="sheet-sfx-choice sheet-roll-table">
         <RollTableMenu
           embedded
           :entity-id="sfxSubjectId"
@@ -3435,6 +3435,14 @@ watch(() => props.externalPoolSources, (sources) => {
 .sheet-sfx-choice {
   flex: 1;
   overflow-y: auto; overflow-x: hidden;
+}
+/* The embedded roll table fills the slot and scrolls its *rows*: the slot's own
+   scrollbar plus the card's was two on a phone, and the card is not a card here.
+   The question wizard beside it keeps the slot's scroll — it is bounded by its
+   own candidates list and reads better scrolling with the panel. */
+.sheet-roll-table {
+  display: flex; flex-direction: column;
+  min-height: 0; overflow: hidden;
 }
 
 .sheet-embedded {

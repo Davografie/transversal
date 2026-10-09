@@ -459,8 +459,19 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   const tags = sheet.match(/<RollTableMenu[\s\S]*?>/g) || []
   ok('the sheet hosts it embedded, on both of its wizard hosts',
     tags.length === 2 && tags.every((t) => /embedded/.test(t)), true)
-  ok('…in the body chain, beside the question',
-    /v-else-if="rollTableMenu" class="sheet-sfx-choice"/.test(sheet), true)
+  ok('…in the body chain, beside the question, filling the slot rather than scrolling it',
+    /v-else-if="rollTableMenu" class="sheet-sfx-choice sheet-roll-table"/.test(sheet)
+      && /\.sheet-roll-table \{[\s\S]{0,160}?overflow: hidden/.test(sheet), true)
+
+  // The fit, which is what an embedded table gets wrong silently: a card that keeps
+  // the overlay's width is clipped on the side (560px in a 323px slot, measured), and
+  // one that keeps the overlay's scroller gives a phone two scrollbars.
+  ok('…and the embedded card keeps neither the overlay\'s width nor its scrollbar',
+    /\.rtm-root\.rtm-embedded \{[\s\S]{0,220}?max-width: 100%/.test(menu)
+      && /\.rtm-root\.rtm-embedded \{[\s\S]{0,220}?max-height: none/.test(menu)
+      && /\.rtm-root\.rtm-embedded \{[\s\S]{0,260}?overflow: hidden/.test(menu), true)
+  ok('…and it scrolls its rows instead (the one scroller, with the header above them)',
+    /:fill="embedded"/.test(menu), true)
   ok('…and no longer teleports it out of the panel',
     /<Teleport[\s\S]{0,4000}?<RollTableMenu/.test(sheet), false)
 
