@@ -48,11 +48,15 @@ class RepositoryLifepath:
         return lp
 
     def delete_lifepath(self, lp_id: str) -> bool:
-        """Delete a life path and the roll tables it owns."""
-        self.db.aql.execute(
-            f"FOR t IN {ROLL_TABLES} FILTER t.life_path == @lp REMOVE t IN {ROLL_TABLES}",
-            bind_vars={"lp": lp_id},
-        )
+        """Delete a life path.
+
+        It does **not** delete the roll tables it wraps ([[B266]]). Tables stopped
+        being owned when the pointers inverted: a table is content, several paths
+        may wrap it, and a path may wrap a table it did not create — so deleting
+        the path must not take content with it. The old behaviour removed every
+        table whose ``life_path`` named this path, which would now destroy shared
+        content.
+        """
         try:
             self._life_paths.delete(lp_id)
             return True
@@ -100,7 +104,22 @@ class RepositoryLifepath:
         return RollTable.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
     def list_roll_tables(self, life_path_id: Optional[str] = None) -> list[RollTable]:
-        if life_path_id is not None:
+        """All roll tables, or the ones a life path **wraps**.
+
+        ``life_path_id`` used to mean "tables this path owns" (a filter on
+        ``RollTable.life_path``). With the pointers inverted it means "the tables
+        this path's steps wrap" ([[B266]]) — a superset in practice, since a path
+        can now wrap a shared table. The deprecated ownership field is still the
+        answer for a path that declares no steps, so pre-wrapper content lists.
+        """
+        if life_path_id is None:
+            query = f"FOR t IN {ROLL_TABLES} SORT t.name ASC RETURN t"
+            docs = self.db.aql.execute(query)
+            return [RollTable.model_validate({**doc, "id": doc["_key"]}) for doc in docs]
+
+        lp = self.get_lifepath(life_path_id)
+        wanted = {s.table_id for s in (getattr(lp, "steps", None) or [])}
+        if not wanted:
             query = f"""
                 FOR t IN {ROLL_TABLES}
                 FILTER t.life_path == @lp
@@ -110,7 +129,7 @@ class RepositoryLifepath:
             docs = self.db.aql.execute(query, bind_vars={"lp": life_path_id})
         else:
             query = f"FOR t IN {ROLL_TABLES} SORT t.name ASC RETURN t"
-            docs = self.db.aql.execute(query)
+            docs = [d for d in self.db.aql.execute(query) if d["_key"] in wanted]
         return [RollTable.model_validate({**doc, "id": doc["_key"]}) for doc in docs]
 
     def update_roll_table(self, table: RollTable) -> RollTable:

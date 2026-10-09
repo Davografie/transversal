@@ -38,6 +38,14 @@ anyone edits — but it rewrites rows, so it does not touch a path twice.
 (the canvas, the GM grouping, ``target_resolver``); it is dropped in a later step
 once they read the wrapper instead.
 
+⚠ **This migration and its code must land together.** It strips the flow effects
+that the *deployed* executor reads, so running it against a database while the
+old code is still serving breaks every in-flight term — the entry resolves, no
+flow effect fires, and the term sits on the same step. Run it as part of the same
+release as ``services/lifepath_executor.py``'s wrapper support, never before it.
+(Taken 2026-10-09 against the pre-wrapper api by mistake, and restored from the
+backup this script's sibling took; hence the warning.)
+
 A path with no ``entry_table_id`` but exactly one owned table is wrapped as a
 single entry step — such a path was unusable before (``start_term`` refuses a path
 with no entry), and the table would otherwise be left unwrapped and orphaned. The

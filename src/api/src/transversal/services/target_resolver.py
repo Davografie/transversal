@@ -1475,24 +1475,60 @@ def _entity_life_paths(e: Any, ctx: TargetContext) -> list[Any]:
 
 
 def _life_path_roll_tables(lp: Any, ctx: TargetContext) -> list[Any]:
-    """The roll tables that follow this life path."""
+    """The roll tables that follow this life path — the ones its steps wrap."""
     if ctx.repo is None:
         return []
     lid = getattr(lp, "id", None) or (lp.get("id") if isinstance(lp, dict) else None)
-    return [t for t in ctx.repo.list_roll_tables() if t.life_path == lid]
+    steps = getattr(lp, "steps", None) or []
+    tables = {t.id: t for t in ctx.repo.list_roll_tables()}
+    ids = [s.table_id for s in steps]
+    if not ids:
+        # Pre-wrapper content: the path reached its tables by entry + ownership.
+        entry = getattr(lp, "entry_table_id", "") or ""
+        ids = ([entry] if entry else []) + [t.id for t in tables.values() if t.life_path == lid]
+    out: list[Any] = []
+    seen: set[str] = set()
+    for tid in ids:
+        if tid in tables and tid not in seen:
+            seen.add(tid)
+            out.append(tables[tid])
+    return out
 
 
 def _roll_table_life_path(table: Any, ctx: TargetContext) -> list[Any]:
-    """The life path a roll table belongs to ([[B164]]).
+    """The life path this roll table is being played in ([[B164]], [[B266]]).
 
     A table is the *source* of its entries' effects, so this is how an effect reads
     the path it is being played in — and from the path, via the entity's
     enrollment, the faction the term is being served in.
+
+    Under the wrapper a table no longer *belongs* to a path: several may wrap it,
+    or none. The answer is therefore the path the **term is actually in**, read
+    from the acting entity's checkpoint — not a fact about the table. With no live
+    term a path is reported only when exactly one wraps the table; when several
+    do, the question has no single answer, and picking one would silently pick a
+    faction.
     """
     if ctx.repo is None:
         return []
-    lid = getattr(table, "life_path", None)
-    return _maybe(ctx.repo.get_lifepath(lid) if lid else None)
+    tid = getattr(table, "id", None)
+
+    pt = getattr(ctx.subject, "pending_term", None)
+    path_id = getattr(pt, "path_id", "") if pt else ""
+    if path_id:
+        lp = ctx.repo.get_lifepath(path_id)
+        if lp is not None and (
+            any(s.table_id == tid for s in (getattr(lp, "steps", None) or []))
+            or getattr(lp, "entry_table_id", "") == tid
+        ):
+            return [lp]
+
+    wrapping = [
+        lp for lp in ctx.repo.list_all_lifepaths()
+        if any(s.table_id == tid for s in (getattr(lp, "steps", None) or []))
+        or getattr(lp, "entry_table_id", "") == tid
+    ]
+    return wrapping if len(wrapping) == 1 else []
 
 
 def _entity_scheduled_events(e: Any, ctx: TargetContext) -> list[Any]:

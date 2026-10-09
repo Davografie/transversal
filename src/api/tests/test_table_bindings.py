@@ -201,18 +201,52 @@ def test_an_entry_effect_can_name_the_entry_effect_die_in_a_flat_field():
     assert result.new_trait_settings[0].dice[0].value == "d8", "exceptional carries d8"
 
 
-def test_a_table_source_can_walk_to_its_life_path():
-    """The table is the entry-effect's source, so `select source` is the table and
-    the path it belongs to is one hop away — which is where the faction comes from
-    (via the entity's enrollment for that path)."""
+def test_a_table_source_walks_to_the_path_the_term_is_in():
+    """A table is the source of its row's effects, but it no longer owns a path.
+
+    Several paths may wrap the same table, or none ([[B266]]), so `navigate
+    life_path` cannot read an ownership field — the answer is the path the term is
+    actually in, from the acting entity's checkpoint, which is also what makes the
+    faction behind it recoverable.
+    """
     from transversal.services.target_resolver import TargetContext, resolve, resolved_id
 
-    table = NS(id="rt-verdant-advance", life_path="lp-verdant", entries=[])
-    repo = NS(get_lifepath=lambda lid: NS(id=lid, name="Verdant Disciple")
-              if lid == "lp-verdant" else None)
+    table = NS(id="rt-shared", entries=[])
+    wrapped = NS(id="lp-a", entry_table_id="", steps=[NS(table_id="rt-shared")])
+    entity = NS(pending_term=NS(path_id="lp-a"))
+    repo = NS(get_lifepath=lambda lid: wrapped if lid == "lp-a" else None,
+              list_all_lifepaths=lambda: [wrapped])
     spec = TargetSpec.model_validate({"steps": [
         {"kind": "select", "collection": "source"},
         {"kind": "navigate", "edge": "life_path"},
     ]})
-    ctx = TargetContext(subject=None, repo=repo, source=table, source_element="roll_table")
-    assert [resolved_id(v) for v in resolve(spec, ctx).values] == ["lp-verdant"]
+    ctx = TargetContext(subject=entity, repo=repo, source=table, source_element="roll_table")
+    assert [resolved_id(v) for v in resolve(spec, ctx).values] == ["lp-a"]
+
+
+def test_a_table_no_term_wraps_resolves_a_unique_path_or_nothing():
+    """Outside a term, one wrapping path is an answer; several are not.
+
+    Returning the first of several would silently pick a faction, so the resolver
+    declines instead — the same reason an unasked walkability gate reads null
+    rather than true.
+    """
+    from transversal.services.target_resolver import TargetContext, resolve, resolved_id
+
+    table = NS(id="rt-shared", entries=[])
+    one = NS(id="lp-a", entry_table_id="", steps=[NS(table_id="rt-shared")])
+    two = NS(id="lp-b", entry_table_id="", steps=[NS(table_id="rt-shared")])
+    spec = TargetSpec.model_validate({"steps": [
+        {"kind": "select", "collection": "source"},
+        {"kind": "navigate", "edge": "life_path"},
+    ]})
+
+    unique = TargetContext(subject=None, source=table, source_element="roll_table",
+                           repo=NS(get_lifepath=lambda lid: None,
+                                   list_all_lifepaths=lambda: [one]))
+    assert [resolved_id(v) for v in resolve(spec, unique).values] == ["lp-a"]
+
+    ambiguous = TargetContext(subject=None, source=table, source_element="roll_table",
+                              repo=NS(get_lifepath=lambda lid: None,
+                                      list_all_lifepaths=lambda: [one, two]))
+    assert resolve(spec, ambiguous).values == []

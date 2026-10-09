@@ -291,8 +291,14 @@ def test_delete_traitset_cascades_traitset_settings():
     _cleanup(repo)
 
 
-def test_delete_lifepath_cascades_roll_tables():
-    """Deleting a life path removes the roll tables it owns."""
+def test_deleting_a_lifepath_does_not_cascade_to_its_tables():
+    """Deleting a life path removes the path, and leaves the tables it wraps.
+
+    This used to cascade: a path *owned* its tables, so they went with it. The
+    pointers inverted ([[B266]]) — a table is content, several paths may wrap it,
+    and a path may wrap a table it did not create — so a cascade would now destroy
+    content the path never owned. The inverse of the old assertion is the point.
+    """
     repo = _repo
     _cleanup(repo)
 
@@ -302,7 +308,7 @@ def test_delete_lifepath_cascades_roll_tables():
     repo.delete_lifepath(LP6)
 
     assert repo.get_lifepath(LP6) is None
-    assert repo.get_roll_table(RT6) is None
+    assert repo.get_roll_table(RT6) is not None, "the wrapped table is content, not a part"
 
     _cleanup(repo)
 
