@@ -54,6 +54,11 @@ class MutationsSfx:
             duration=_duration_input_to_domain(input.duration),
         )
         created = _em(info).repo.create_sfx(s)
+        # A rule that declares a bucket source (`table`/`gm`) may live *nowhere*
+        # else, so its bucket membership is a fact of the declaration rather than a
+        # click the author has to remember ([[B263]]'s aftermath, 2026-10-09).
+        from transversal.services.sfx_owner import sync_bucket_membership
+        sync_bucket_membership(_em(info).repo, created)
         # The availability caches — SFX records and trait declarations — are
         # dropped on **every** rule write, not only when an effects engine happens
         # to be attached: a cache that a write does not invalidate is a cache that
@@ -112,6 +117,11 @@ class MutationsSfx:
         if input.duration is not None:
             existing.duration = _duration_input_to_domain(input.duration)
         updated = _em(info).repo.update_sfx(existing)
+        # Changing the source changes which bucket the rule may live in, so the
+        # membership follows it — including *out* of a bucket it may no longer be
+        # in, which otherwise lingers as an invisible contradiction.
+        from transversal.services.sfx_owner import sync_bucket_membership
+        sync_bucket_membership(_em(info).repo, updated)
         # Unconditional, for the same reason as `create_sfx` above: a rule edit
         # must reach the availability reads whether or not an engine is attached
         # to this context.

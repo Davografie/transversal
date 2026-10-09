@@ -1418,6 +1418,46 @@ def can_attach(sfx, owner_type: str) -> bool:
     return owner_type in owner_surfaces_for(sfx)
 
 
+def sync_bucket_membership(repo, sfx) -> list[tuple[str, str]]:
+    """Make a bucket-sourced rule's home **true**, instead of waiting for a click.
+
+    ``source_kind`` decides the surfaces a rule may live on (``owner_surfaces_for``),
+    and two of those surfaces *are* buckets — so for a ``table`` or ``gm`` rule the
+    bucket is not a preference, it is the only place the rule may live. Attaching it
+    was nevertheless a separate manual step, and a step that can contradict the
+    declaration is not a choice: the author, 2026-10-09 — *"I just authored
+    ``sfx-roll-table``, but apparently it's not in the GM bucket?"* — had made a rule
+    that could only live in the GM bucket, and it lived in no bucket at all.
+
+    A rule restricted to **other** surfaces is dropped from the buckets for exactly
+    the same reason (the declaration says it may not be there). A rule with no
+    ``source_kind`` — or an unknown one, which reads as unrestricted — is left
+    alone: a bucket *is* one of its options, so a membership there is the author's
+    choice rather than a contradiction.
+
+    Returns the changes as ``[(bucket, "added" | "removed"), …]``, so a caller can
+    report them rather than doing this invisibly.
+    """
+    surfaces = owner_surfaces_for(sfx)
+    wanted = [b for b in _BUCKET_TYPES if b in surfaces]
+    if len(wanted) == len(_BUCKET_TYPES):
+        return []  # unrestricted: buckets are among its options, not its only ones
+
+    changes: list[tuple[str, str]] = []
+    for bucket in _BUCKET_TYPES:
+        owner = repo.get_sfx_owner(bucket)
+        if owner is None:
+            continue
+        held = sfx.id in (owner.sfx_ids or [])
+        if bucket in wanted and not held:
+            if add_sfx_to_owner(repo, bucket, bucket, sfx.id):
+                changes.append((bucket, "added"))
+        elif bucket not in wanted and held:
+            if remove_sfx_from_owner(repo, bucket, bucket, sfx.id):
+                changes.append((bucket, "removed"))
+    return changes
+
+
 def reach_refusal(sfx, owner_id: str, repo) -> str | None:
     """Why this rule may not attach to that owner — or ``None`` when it may.
 

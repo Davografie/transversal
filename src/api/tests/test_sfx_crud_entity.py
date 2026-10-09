@@ -13,6 +13,17 @@ class FakeEM:
 class SfxRepo:
     def __init__(self):
         self.sfxs = {}
+        # A rule write consults the owner buckets: a `table`/`gm` rule may live in
+        # its bucket and nowhere else, so the write keeps that membership true
+        # (`sync_bucket_membership`). Empty = no bucket provisioned, which is the
+        # state this double describes.
+        self.owners = {}
+
+    def get_sfx_owner(self, owner_id):
+        return self.owners.get(owner_id)
+
+    def update_sfx_owner(self, owner):
+        self.owners[owner.id] = owner
 
     def create_sfx(self, sfx):
         self.sfxs[sfx.id] = sfx
