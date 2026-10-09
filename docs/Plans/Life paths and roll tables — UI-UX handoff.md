@@ -112,7 +112,10 @@ names from a *different* map, and the failure is silent:
   depends on.
 - The canvas's `RollTableNode` resolves against **roll-table names only**, so *every* trait target
   there renders as raw text.
-- `GmRollTableDetailPanel` resolves against the full traitset list and gets it right.
+- `GmRollTableDetailPanel` resolved against the full traitset list and got it right. **That panel
+  is gone** — [[B275]] collapsed it into `GmRollTableEditPanel`, which carries the same resolution
+  (`useEffectActions().summarize` with the trait and table-name maps), so the one surface that got
+  this right survives the merge. The two above are still wrong.
 
 If the unified component inherits "the host passes a name map", it will reproduce this per-host.
 It should take **one resolution contract** — an id → label resolver supplied once — and the hosts
