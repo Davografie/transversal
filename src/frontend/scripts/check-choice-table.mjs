@@ -178,6 +178,16 @@ console.log('\nthe one resolver\n')
     /@container ct \(max-width: 520px\)\s*\{\s*\.ct-head\s*\{\s*display:\s*none/.test(table))
   yes('entrance motion is opt-out for reduced motion',
     /prefers-reduced-motion/.test(table))
+  // The legend belongs *above* the scroller: a header that scrolls away stops
+  // being a header the moment a table is taller than the card.
+  yes('the legend sits outside the scroller',
+    /v-if="headerOn" class="ct-head"/.test(table) && !/<div ref="scrollEl"[\s\S]{0,700}?class="ct-head"/.test(table))
+  // In fill mode the surface takes its host's height and the rows scroll.
+  yes('fill mode scrolls the rows, not the surface',
+    /\.ct-fill \.ct-scroll \{[^}]*overflow-y: auto/.test(table))
+  // A roll brings its row to the middle, smoothly, inside its own scroller.
+  yes('a roll scrolls its row to the middle of the scroller',
+    /scrollTo\(\{ top: scroller\.scrollTop \+ delta, behavior: reduce \? 'auto' : 'smooth' \}\)/.test(table))
 
   // One row engine: EntryPicker must delegate rather than keep its own rows.
   const picker = readFileSync('src/components/ui/EntryPicker.vue', 'utf8')

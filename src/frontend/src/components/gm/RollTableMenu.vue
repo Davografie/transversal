@@ -1,7 +1,10 @@
 <template>
   <div :class="embedded ? 'rtm-in-panel' : 'rtm-overlay'" @click.self="!embedded && $emit('close')">
     <div class="rtm-root" :class="{ 'rtm-embedded': embedded }">
-      <div class="rtm-title">{{ title }}</div>
+      <div class="rtm-title">
+        <span class="rtm-table">{{ tableName || title }}</span>
+        <span v-if="tableName && title && title !== tableName" class="rtm-context">{{ title }}</span>
+      </div>
 
       <!-- Step 1: pick an entry -->
       <div v-if="phase === 'menu'" class="rtm-menu">
@@ -9,6 +12,7 @@
           :rows="entries"
           :scheme="scheme"
           stagger
+          :fill="embedded"
           allow-random
           :random-label="mode === 'create-support' ? 'Roll an archetype' : 'Roll'"
           empty-text="No entries in this table."
@@ -67,6 +71,7 @@ const props = defineProps({
    */
   embedded: { type: Boolean, default: false },
 })
+const tableName = ref('')
 const emit = defineEmits(['applied', 'close'])
 
 const { loading, fetchTable, applyEntry, createSupport, resolveEffectTargets } = useRollTableMenu()
@@ -85,6 +90,9 @@ async function load() {
   await loadActions()
   const table = await fetchTable(props.tableId)
   scheme.value = table?.scheme || ''
+  // The header names the *table*, not the rule that opened it: "Roll Table" is a
+  // rule, and the reader is looking at "Where on Earth".
+  tableName.value = table?.name || ''
   // Shaped for the shared choice table: it renders the row (its key comes from
   // the table's `scheme`, its conditions and effects are phrased by the shared
   // resolver), while *this* decides what a row means — an unaffordable entry is
@@ -167,10 +175,29 @@ async function finishResolve(resolutions) {
 /* Inside a panel the panel *is* the frame: no scrim, no fixed box, no card of its
    own — the shape `EffectTargetWizard`'s `embedded` takes, for the same reason. */
 .rtm-in-panel { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-.rtm-embedded { width: 100%; max-height: none; padding: 0; background: transparent; border: 0; border-radius: 0; }
 .rtm-root { width: min(560px, 96vw); max-height: min(86vh, 720px); overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--bg-panel-solid); border: 1px solid var(--overlay-10); border-radius: var(--radius); }
-.rtm-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
-.rtm-menu { display: flex; flex-direction: column; gap: 4px; }
+/* Inside a panel the panel *is* the frame, and the panel *is* the scroller: the
+   card keeps neither its own width nor its own scrollbar. Both matter —
+   560px inside the sheet's ~370px slot is clipped on the side, and a second
+   scrollbar is the mobile complaint (`.sheet-sfx-choice` scrolls, so did this).
+   The compound selector is load-bearing: `.rtm-embedded` alone ties with
+   `.rtm-root` below it, and the later rule wins — which is what shipped. */
+.rtm-root.rtm-embedded {
+  width: auto; max-width: 100%; min-width: 0;
+  max-height: none; overflow: hidden;
+  flex: 1; min-height: 0;
+  padding: 0; background: transparent; border: 0; border-radius: 0;
+}
+.rtm-title {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-size: 10px; font-weight: 600; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.rtm-table { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rtm-context { font-size: 9px; font-weight: 400; color: var(--text-dim); text-transform: none; letter-spacing: 0; white-space: nowrap; }
+/* The menu step fills what is left of the card, so the title above and the
+   actions inside the choice table stay put while the rows scroll. */
+.rtm-menu { display: flex; flex-direction: column; gap: 4px; min-height: 0; flex: 1; }
 /* The entry rows, their key column, conditions, effects, cost treatment and the
    actions now come from ui/ChoiceTable — see [[UI-UX Design#Choice table]]. */
 .rtm-done-title { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }

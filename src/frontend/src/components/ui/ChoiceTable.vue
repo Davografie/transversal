@@ -1,5 +1,5 @@
 <template>
-  <div class="ct-root" :class="[`ct-${density}`, { 'ct-stagger': stagger }]">
+  <div class="ct-root" :class="[`ct-${density}`, { 'ct-stagger': stagger, 'ct-fill': fill }]">
     <slot name="caption" />
 
     <div v-if="loading && !rows.length" class="ct-state">Loading…</div>
@@ -92,7 +92,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUpdate, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import Button from './Button.vue'
 import { useLabelResolver } from '@/composables/useLabelResolver.js'
 import { conditionSummary, costSummary, effectSummary, entryKey } from '@/utils/rowSummary.js'
@@ -150,6 +150,11 @@ const props = defineProps({
   showHeader: { type: Boolean, default: null },
   /** Stagger the rows in on mount. Wanted for a modal surface, off in a dense panel. */
   stagger: { type: Boolean, default: false },
+  /** Fill the host's height and scroll the **rows** — for a host that is itself a
+   *  bounded flex column (the sheet's embedded roll-table slot). Without it the
+   *  surface scrolls only when a host passes `maxHeight`, and a host with its own
+   *  scrollbar gives the reader two. */
+  fill: { type: Boolean, default: false },
   /** Test seam / advanced: override the app-wide resolver. */
   resolver: { type: Object, default: null },
 })
@@ -196,9 +201,12 @@ const scrollEl = ref(null)
 const rowEls = ref([])
 function setRowEl(el, i) {
   if (el) rowEls.value[i] = el
-  else delete rowEls.value[i]
+  else delete rowEls.value[i]   // unmounted
 }
-onBeforeUpdate(() => { rowEls.value = [] })   // the rows changed: refs rebuild
+// Deliberately *not* cleared on update: Vue calls a function ref with null when a
+// node unmounts (which `setRowEl` handles), but it does not re-invoke refs for rows
+// that merely re-rendered — so clearing here emptied the array and the scroll to the
+// marked row silently did nothing on most rolls. It was right once, by luck.
 
 watch([() => rolled.value, () => props.rollToken], async () => {
   const idx = rolled.value
@@ -320,6 +328,11 @@ function pickRandom() {
 }
 
 .ct-scroll { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+/* Fill mode: the surface takes the room the host gives it and the *rows* scroll,
+   so a header above and the actions below stay put at any length. */
+.ct-fill { flex: 1; min-height: 0; }
+.ct-fill .ct-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .ct-rows { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 
 /* ── the column legend ─────────────────────────────────────────────────────
