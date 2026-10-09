@@ -40,7 +40,8 @@ def row_key(entry: RollTableEntry, index: int = 0) -> str:
     if entry.weight is not None:
         return f"w{entry.weight}"
     if entry.tier is not None:
-        return entry.tier.value
+        # A tier may arrive as the enum or as its plain JSON value.
+        return getattr(entry.tier, "value", None) or str(entry.tier)
     return str(index)
 
 
