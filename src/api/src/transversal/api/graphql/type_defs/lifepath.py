@@ -6,6 +6,11 @@ from transversal.domain import EntityType as DomainEntityType
 from typing import Optional
 from transversal.api.graphql.type_defs.conditions import (
     Condition,
+    ConditionInput,
+)
+from transversal.api.graphql.type_defs.effects import (
+    Effect,
+    EffectInput,
 )
 from transversal.api.graphql.type_defs.entities import (
     PendingTerm,
@@ -21,13 +26,64 @@ class DiscoveryBlock:
     has_relationship: list[str]
 
 @strawberry.type
+class LifePathBinding:
+    """A path's overlay on one row of a table it wraps — see the domain model.
+
+    `next` is a **step id in this path** (not a table); `""` leaves the path, and
+    `exitKind` then says what leaving means. Flow is structure here, not effects:
+    the content decided it — all 15 muster/force_muster rows in the live tables
+    carry nothing else and no `next_step`, so they are destinations, not effects.
+    """
+    key: str
+    next: str = ""
+    exit_kind: str = ""
+    exit_path: str = ""
+    enroll: bool = False
+    effects: list[Effect] = strawberry.field(default_factory=list)
+
+@strawberry.type
+class LifePathStep:
+    """One wrapped table at one position in the path.
+
+    The `id` is the step's, not the table's, so a path may wrap the same table
+    twice and a step survives its table being re-pointed.
+    """
+    id: str
+    table_id: str
+    label: str = ""
+    next: str = ""
+    bindings: list[LifePathBinding] = strawberry.field(default_factory=list)
+
+@strawberry.input
+class LifePathBindingInput:
+    key: str
+    next: str = ""
+    exit_kind: str = ""
+    exit_path: str = ""
+    enroll: bool = False
+    effects: list[EffectInput] = strawberry.field(default_factory=list)
+
+@strawberry.input
+class LifePathStepInput:
+    #: Empty generates one (`s1`, `s2`, …) — the editor should not have to invent
+    #: identities, but it must be able to preserve the ones it was given.
+    id: str = ""
+    table_id: str
+    label: str = ""
+    next: str = ""
+    bindings: list[LifePathBindingInput] = strawberry.field(default_factory=list)
+
+@strawberry.type
 class LifePath:
     id: strawberry.ID
     name: str
     universe: str
     description: str
     entry_table_id: str
-    discovery: Optional[DiscoveryBlock]
+    #: The step a term begins at, and the steps it may walk.
+    entry_step: str = ""
+    steps: list[LifePathStep] = strawberry.field(default_factory=list)
+    discovery: Optional[DiscoveryBlock] = None
     conditions: list[Condition] = strawberry.field(default_factory=list)
     # Entity-scoped walkability ([[B194]]). `walkable` is null when the query was
     # not given an entity: "not evaluated" is not the same as "walkable", and

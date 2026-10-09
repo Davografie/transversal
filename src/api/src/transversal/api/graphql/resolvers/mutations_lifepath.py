@@ -8,6 +8,9 @@ from typing import Optional
 from transversal.api.graphql.type_defs.conditions import (
     ConditionInput as GqlConditionInput,
 )
+from transversal.api.graphql.type_defs.lifepath import (
+    LifePathStepInput as GqlStepInput,
+)
 from transversal.api.graphql.resolvers.converters import (
     _em,
     _roll_table_input_to_domain,
@@ -23,6 +26,8 @@ class MutationsLifepath:
     def save_life_path(self, info: strawberry.Info, id: str, name: str, universe: str,
                        description: str,
                        entry_table_id: str = "",
+                       entry_step: Optional[str] = None,
+                       steps: Optional[list[GqlStepInput]] = None,
                        discovery: Optional[strawberry.scalars.JSON] = None,
                        conditions: Optional[list[GqlConditionInput]] = None) -> strawberry.scalars.JSON:
         """Create or update a life path definition. For GM content authoring.
@@ -37,6 +42,12 @@ class MutationsLifepath:
         only the name would otherwise wipe it. Note this differs from ``discovery``
         above, which is rebuilt from the argument every time — that is pre-existing
         behaviour and is left alone.
+
+        ``steps`` and ``entry_step`` follow the **same** leave-alone convention,
+        and here it is load-bearing rather than tidy: the wrapper is the whole
+        graph of the path, so a caller that saved only a name and rebuilt the
+        document would silently unwrap every table the path declares. ``None``
+        keeps what is stored; a list replaces it.
         """
         from transversal.api.graphql.resolvers.converters import _condition_input_to_domain
         from transversal.domain import DiscoveryBlock, LifePath
@@ -60,9 +71,18 @@ class MutationsLifepath:
             gate = list(getattr(existing, "conditions", None) or []) if existing else []
         else:
             gate = [_condition_input_to_domain(c) for c in conditions]
+        if steps is None:
+            wrapped = list(getattr(existing, "steps", None) or []) if existing else []
+        else:
+            wrapped = [_life_path_step_input_to_domain(st) for st in steps]
+        if entry_step is None:
+            entry = (getattr(existing, "entry_step", "") or "") if existing else ""
+        else:
+            entry = entry_step
         lp = LifePath(
             id=id, name=name, universe=universe, description=description,
-            entry_table_id=entry_table_id, discovery=d, conditions=gate,
+            entry_table_id=entry_table_id, entry_step=entry, steps=wrapped,
+            discovery=d, conditions=gate,
         )
 
         if existing:

@@ -254,8 +254,13 @@ def _scheduled_event_to_gql(e: DomainScheduledEvent, repo=None) -> GqlScheduledE
         source_sfx_name=source_name,
     )
 
-def _entry_to_gql(e: DomainRollTableEntry) -> RollTableEntry:
+def _entry_to_gql(e: DomainRollTableEntry, index: int = 0) -> RollTableEntry:
+    # `row_key` falls back to a scheme-derived key for content authored before
+    # keys existed, so a reader never sees an empty identity it cannot bind to.
+    from transversal.services.roll_table import row_key
+
     return RollTableEntry(
+        key=row_key(e, index),
         label=e.label, description=e.description,
         min_value=e.min_value, max_value=e.max_value, weight=e.weight, tier=e.tier,
         conditions=[_condition_to_gql(c) for c in e.conditions],
@@ -266,6 +271,7 @@ def _entry_to_gql(e: DomainRollTableEntry) -> RollTableEntry:
 def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
     return RollTable(
         id=t.id, name=t.name, universe=t.universe, life_path=t.life_path,
+        subject_kind=getattr(t, "subject_kind", "") or "",
         scheme=t.scheme, roll_source=t.roll_source, trait_dice_count=t.trait_dice_count,
         die=t.die,
         check=(
@@ -277,7 +283,7 @@ def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
             if t.check is not None
             else None
         ),
-        entries=[_entry_to_gql(e) for e in t.entries],
+        entries=[_entry_to_gql(e, i) for i, e in enumerate(t.entries)],
         bound_variables=[
             BoundVariable(
                 name=bv.name,
@@ -575,7 +581,7 @@ def _check_input_to_domain(c: RollTableCheckInput) -> DomainRollTableCheck:
 
 def _entry_input_to_domain(e: RollTableEntryInput) -> DomainRollTableEntry:
     return DomainRollTableEntry(
-        label=e.label, description=e.description,
+        key=e.key, label=e.label, description=e.description,
         min_value=e.min_value, max_value=e.max_value, weight=e.weight, tier=e.tier,
         conditions=[_condition_input_to_domain(c) for c in e.conditions],
         cost_effects=[_effect_input_to_domain(x) for x in e.cost_effects],
@@ -587,6 +593,7 @@ def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
 
     return DomainRollTable(
         id=t.id, name=t.name, universe=t.universe, life_path=t.life_path,
+        subject_kind=t.subject_kind,
         scheme=t.scheme, roll_source=t.roll_source, trait_dice_count=t.trait_dice_count,
         die=t.die,
         check=(_check_input_to_domain(t.check) if t.check is not None else None),
@@ -697,6 +704,62 @@ def _gql_field_def(fdef, repo) -> GqlEffectFieldDef:
                              hidden_when_ref=fdef.hidden_when_ref,
                              description=getattr(fdef, "description", "") or "")
 
+def _life_path_steps_to_gql(lp) -> list:
+    """The path's wrapped tables, as GraphQL steps.
+
+    A path that has not been migrated carries no steps; it is reported as having
+    none rather than a synthesised one, so a reader can tell "not migrated yet"
+    from "migrated and deliberately empty" — the executor is what bridges the two.
+    """
+    from transversal.api.graphql.type_defs.lifepath import (
+        LifePathBinding as GqlBinding, LifePathStep as GqlStep,
+    )
+
+    return [
+        GqlStep(
+            id=st.id,
+            table_id=st.table_id,
+            label=st.label,
+            next=st.next,
+            bindings=[
+                GqlBinding(
+                    key=b.key,
+                    next=b.next,
+                    exit_kind=getattr(b, "exit_kind", "") or "",
+                    exit_path=getattr(b, "exit_path", "") or "",
+                    enroll=bool(getattr(b, "enroll", False)),
+                    effects=[_effect_to_gql(x) for x in (b.effects or [])],
+                )
+                for b in (st.bindings or [])
+            ],
+        )
+        for st in (getattr(lp, "steps", None) or [])
+    ]
+
+
+def _life_path_step_input_to_domain(st):
+    """A GraphQL step input as the domain step — bindings and all."""
+    from transversal.domain import LifePathBinding, LifePathStep
+
+    return LifePathStep(
+        id=st.id,
+        table_id=st.table_id,
+        label=st.label,
+        next=st.next,
+        bindings=[
+            LifePathBinding(
+                key=b.key,
+                next=b.next,
+                exit_kind=b.exit_kind,
+                exit_path=b.exit_path,
+                enroll=b.enroll,
+                effects=[_effect_input_to_domain(x) for x in (b.effects or [])],
+            )
+            for b in (st.bindings or [])
+        ],
+    )
+
+
 def _life_path_to_gql(lp, *, walkable=None, reasons=()) -> GqlLifePath:
     """Convert a domain LifePath to the GraphQL type.
 
@@ -710,6 +773,8 @@ def _life_path_to_gql(lp, *, walkable=None, reasons=()) -> GqlLifePath:
         universe=lp.universe,
         description=lp.description if hasattr(lp, 'description') else "",
         entry_table_id=lp.entry_table_id,
+        entry_step=getattr(lp, "entry_step", "") or "",
+        steps=_life_path_steps_to_gql(lp),
         discovery=lp.discovery,
         conditions=[_condition_to_gql(c) for c in (getattr(lp, "conditions", None) or [])],
         walkable=walkable,

@@ -79,9 +79,15 @@ class Attunement:
 
 @strawberry.type
 class PendingTerm:
-    """In-progress life path term checkpoint."""
+    """In-progress life path term checkpoint.
+
+    `current_step_id` is the checkpoint; `current_table_id` is derived from it
+    (the table that step wraps) and kept because the surfaces read it to know
+    what to display. `continuation` is vestigial — see the domain model.
+    """
     faction_id: str
     path_id: str
+    current_step_id: str = ""
     current_table_id: str
     continuation: list[str]
 

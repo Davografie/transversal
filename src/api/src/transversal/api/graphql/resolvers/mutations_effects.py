@@ -256,6 +256,7 @@ class MutationsEffects:
         return GqlPendingTerm(
             faction_id=pt.faction_id,
             path_id=pt.path_id,
+            current_step_id=pt.current_step_id,
             current_table_id=pt.current_table_id,
             continuation=pt.continuation,
         )
@@ -291,6 +292,7 @@ class MutationsEffects:
             GqlPendingTerm(
                 faction_id=pt.faction_id,
                 path_id=pt.path_id,
+                current_step_id=pt.current_step_id,
                 current_table_id=pt.current_table_id,
                 continuation=pt.continuation,
             )

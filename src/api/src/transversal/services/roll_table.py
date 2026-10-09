@@ -14,6 +14,45 @@ from transversal.domain import (
 
 log = logging.getLogger("transversal.roll_table")
 
+#: The separator the scheme-derived fallback key uses for a RANGE band. An
+#: en-dash, matching what the canvas has always *displayed* — the fallback is for
+#: content authored before keys existed, and a caller comparing a displayed key
+#: to a stored one must not get two different answers for the same row.
+BAND_SEPARATOR = "\u2013"
+
+
+def row_key(entry: RollTableEntry, index: int = 0) -> str:
+    """A row's **stable** identity — authored, else derived from its scheme.
+
+    The authored ``key`` is the answer and is what a ``LifePathBinding`` names.
+    The fallback exists only so content authored before keys existed still
+    addresses consistently; it is derived from the same fields the canvas shows,
+    and it **changes when the row changes** — which is exactly why it is a
+    fallback and why ``migrate_lifepath_wrapper`` writes real keys.
+    """
+    authored = getattr(entry, "key", "") or ""
+    if authored:
+        return authored
+    if entry.min_value is not None or entry.max_value is not None:
+        lo = "" if entry.min_value is None else entry.min_value
+        hi = "" if entry.max_value is None else entry.max_value
+        return f"{lo}{BAND_SEPARATOR}{hi}"
+    if entry.weight is not None:
+        return f"w{entry.weight}"
+    if entry.tier is not None:
+        return entry.tier.value
+    return str(index)
+
+
+def entry_key_for(table: RollTable, entry: RollTableEntry) -> str:
+    """The key of an entry *within its table*, for a binding lookup."""
+    entries = list(getattr(table, "entries", None) or [])
+    try:
+        index = entries.index(entry)
+    except ValueError:
+        index = 0
+    return row_key(entry, index)
+
 
 def resolve_table(
     table: RollTable,

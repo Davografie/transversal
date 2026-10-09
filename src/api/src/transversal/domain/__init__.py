@@ -94,6 +94,8 @@ from transversal.domain.entities import (  # noqa: F401
 from transversal.domain.lifepath import (  # noqa: F401
     DiscoveryBlock,
     LifePath,
+    LifePathBinding,
+    LifePathStep,
     Enrollment,
     PendingTerm,
 )

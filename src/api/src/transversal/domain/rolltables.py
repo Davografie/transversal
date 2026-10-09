@@ -23,7 +23,15 @@ class RollTableEntry(BaseModel):
     Which selection fields are meaningful depends on the parent table's
     ``scheme``: range uses ``min_value``/``max_value``, weight uses ``weight``,
     tier uses ``tier``, and index uses the entry's position in the list.
+
+    ``key`` is the row's **identity**, and it is not any of those: a life path
+    superimposes meaning on a row by naming its key (``LifePathBinding.key``), so
+    the key must survive a band being re-cut. Deriving it from ``min_value`` —
+    which is all the surfaces had before — means editing ``1–12`` to ``1–10``
+    silently orphans every binding written against it. Stable, author-visible,
+    generated once when absent (see ``services/roll_table.row_key``).
     """
+    key: str = ""
     label: str = ""
     description: str = ""
     min_value: Optional[int] = None
@@ -52,7 +60,22 @@ class RollTable(BaseModel):
     id: str
     name: str
     universe: str = ""
-    life_path: Optional[str] = None  # owning life path id; None = shared/general
+    #: **Deprecated** — the owning life path. Ownership is inverted now: a path
+    #: names the tables it wraps (``LifePath.steps``), so a table is shared by
+    #: being wrapped by nobody or by several. Kept while content migrates; a
+    #: table's effective scope is derived from the paths that wrap it.
+    life_path: Optional[str] = None
+    #: What this table may be rolled **for** — the element type of the subject its
+    #: entries' effects land on, from the same vocabulary the effect system uses
+    #: for owners (``entity`` / ``projection`` / ``relationship`` / ``traitsetting``,
+    #: see ``TRAIT_OWNER_ELEMENTS``). ``""`` = unconstrained.
+    #:
+    #: This is a roll table's answer to an SFX's ``source_kind``: an entry effect
+    #: that names a trait assumes a *character* was rolled for, and silently means
+    #: something else — or nothing — when the table is rolled for a projection or
+    #: for no subject at all. Declaring it is what lets a table be checked against
+    #: how it is actually rolled.
+    subject_kind: str = ""
     scheme: RollTableScheme = RollTableScheme.RANGE
     roll_source: RollSource = RollSource.FIXED_DIE
     trait_dice_count: int = 1  # number of trait dice to roll (N=1 for now)

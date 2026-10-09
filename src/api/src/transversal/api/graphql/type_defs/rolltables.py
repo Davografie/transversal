@@ -33,6 +33,10 @@ class RollTableCheck:
 @strawberry.type
 class RollTableEntry:
     """A single entry in a roll table."""
+    #: The row's stable identity, and what a `LifePathBinding` names to
+    #: superimpose meaning on it. Not derived from the band: re-cutting `1–12`
+    #: into `1–10` must not orphan every binding written against the row.
+    key: str = ""
     label: str = ""
     description: str = ""
     min_value: Optional[int] = None
@@ -49,7 +53,11 @@ class RollTable:
     id: strawberry.ID
     name: str
     universe: str = ""
+    #: Deprecated — paths name the tables they wrap (`LifePath.steps`) now.
     life_path: Optional[str] = None
+    #: What this table may be rolled *for* (`entity` / `projection` / …), the roll
+    #: table's answer to an SFX's `source_kind`. "" = unconstrained.
+    subject_kind: str = ""
     scheme: RollTableScheme
     roll_source: RollSource = RollSource.FIXED_DIE
     trait_dice_count: int = 1
@@ -74,6 +82,7 @@ class RollTableCheckInput:
 
 @strawberry.input
 class RollTableEntryInput:
+    key: str = ""
     label: str = ""
     description: str = ""
     min_value: Optional[int] = None
@@ -90,6 +99,7 @@ class RollTableInput:
     name: str = ""
     universe: str = ""
     life_path: Optional[str] = None
+    subject_kind: str = ""
     scheme: RollTableScheme = RollTableScheme.RANGE
     roll_source: RollSource = RollSource.FIXED_DIE
     trait_dice_count: int = 1

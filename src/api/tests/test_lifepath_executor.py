@@ -8,6 +8,8 @@ from transversal.domain import (
     Entity,
     EntityType,
     LifePath,
+    LifePathBinding,
+    LifePathStep,
     RollTable,
     RollTableEntry,
     RollTableScheme,
@@ -141,48 +143,163 @@ def test_next_step_advances():
     assert entity.pending_term.current_table_id == "tbl-b"
 
 
-def test_return_to_continuation():
+def _wrapped(path_id, steps, entry_step):
+    return LifePath(id=path_id, name="P", universe="earth",
+                    entry_step=entry_step, steps=steps)
+
+
+def test_wrapped_step_follows_the_paths_edge_not_the_entrys():
+    """A wrapped path owns its graph: the entry's own next_step is ignored.
+
+    Two sources of truth for one edge is how the canvas and the runtime end up
+    disagreeing, so the path's declaration wins outright.
+    """
     repo = ExecutorRepo()
-    repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")
-    repo.tables["tbl-a"] = _table("tbl-a", [_entry("call", [_next("tbl-shared", return_to="tbl-c")])])
-    repo.tables["tbl-shared"] = _table("tbl-shared", [_entry("return", [_next("")])])
+    repo.lifepaths["lp-1"] = _wrapped("lp-1", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[
+            LifePathBinding(key="0", next="s2"),
+        ]),
+        LifePathStep(id="s2", table_id="tbl-b"),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("go", [_next("tbl-elsewhere")])])
+    repo.tables["tbl-b"] = _table("tbl-b", [_entry("end", [])])
+
     entity = _entity()
     start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=1)
-    assert entity.pending_term.current_table_id == "tbl-shared"
-    assert entity.pending_term.continuation == ["tbl-c"]
-    resolve_step(entity, repo, index=1)
-    assert entity.pending_term.current_table_id == "tbl-c"
+    assert entity.pending_term.current_step_id == "s2"
+    assert entity.pending_term.current_table_id == "tbl-b"  # not tbl-elsewhere
 
 
-def test_named_exit_return_map():
+def test_multi_exit_needs_no_return_address():
+    """`Survive`'s two outcomes diverge — the case the return stack could not do.
+
+    This is the old `test_named_exit_return_map` rewritten in the wrapper model.
+    That version pushed a map of named exits onto the checkpoint and resolved
+    `{return:injured}` when the shared table ran; here the path simply says where
+    each row goes, so there is nothing to return *to*. The machinery is not
+    replaced by something cleverer — it is unnecessary.
+    """
     repo = ExecutorRepo()
-    repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")
-    repo.tables["tbl-a"] = _table("tbl-a", [_entry(
-        "call", [_next("tbl-survive", return_to={"survived": "tbl-advance", "injured": "tbl-mishap"})],
-    )])
+    repo.lifepaths["lp-1"] = _wrapped("lp-1", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[
+            LifePathBinding(key="0", next="s-survive"),
+        ]),
+        LifePathStep(id="s-survive", table_id="tbl-survive", bindings=[
+            LifePathBinding(key="0", next="s-advance"),
+            LifePathBinding(key="1", next="s-mishap"),
+        ]),
+        LifePathStep(id="s-advance", table_id="tbl-advance"),
+        LifePathStep(id="s-mishap", table_id="tbl-mishap"),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("call", [_next("tbl-survive")])])
     repo.tables["tbl-survive"] = _table("tbl-survive", [
-        _entry("survived", [_next("{return:survived}")]),
-        _entry("injured", [_next("{return:injured}")]),
+        _entry("survived", [_next("")]), _entry("injured", [_next("")]),
     ])
+    repo.tables["tbl-advance"] = _table("tbl-advance", [_entry("done", [])])
+    repo.tables["tbl-mishap"] = _table("tbl-mishap", [_entry("hurt", [])])
+
+    # Survived → advance.
     entity = _entity()
     start_term(entity, "fac-1", "lp-1", repo)
-
-    # Call into the shared table → return map is stored.
     resolve_step(entity, repo, index=1)
-    assert entity.pending_term.current_table_id == "tbl-survive"
-    assert entity.pending_term.return_map == {"survived": "tbl-advance", "injured": "tbl-mishap"}
-
-    # "survived" exit → advance, map cleared.
     resolve_step(entity, repo, index=1)
     assert entity.pending_term.current_table_id == "tbl-advance"
-    assert entity.pending_term.return_map == {}
 
-    # "injured" exit resolves too (fresh call).
-    entity.pending_term.current_table_id = "tbl-a"
+    # Injured → mishap. The same wrapped table, a different row, a different
+    # destination — with no map on the checkpoint either time.
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=1)
     resolve_step(entity, repo, index=2)
     assert entity.pending_term.current_table_id == "tbl-mishap"
+
+
+def test_binding_next_empty_leaves_the_path():
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-1"] = _wrapped("lp-1", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[
+            LifePathBinding(key="0", next=""),  # bound, and it says "end here"
+        ]),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("rejected", [])])
+
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-1", repo)
+    resolve_step(entity, repo, index=1)
+    assert entity.pending_term.current_step_id == ""
+    assert entity.pending_term.current_table_id == ""
+
+
+def test_exit_kind_musters_without_a_muster_effect():
+    """`muster` is a destination with a meaning, not an effect on the row.
+
+    Every muster/force_muster row in the live content carries nothing else and no
+    next_step, which is what settled this shape.
+    """
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-1"] = _wrapped("lp-1", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[
+            LifePathBinding(key="0", exit_kind="muster"),
+            LifePathBinding(key="1", exit_kind="force_muster"),
+        ]),
+    ], entry_step="s1")
+    # Note the rows carry NO effects at all — the path supplies the outcome.
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("respectful", []), _entry("disgraced", [])])
+
+    entity = _entity(life_paths=[Enrollment(faction_id="fac-1", path_id="lp-1")])
+    start_term(entity, "fac-1", "lp-1", repo)
+    resolve_step(entity, repo, index=2)
+    assert entity.pending_term is None
+    assert entity.life_paths[0].mustered is True
+    assert entity.life_paths[0].mishap_muster is True
+
+
+def test_enroll_is_per_row_so_the_rejected_are_not_enrolled():
+    """The case against a path-level enroll flag, as a test.
+
+    `rt-verdant-qualify` enrols its Accepted rows and not its Rejected ones, so
+    the flag lives on the binding.
+    """
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-1"] = _wrapped("lp-1", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[
+            LifePathBinding(key="0", enroll=True, next="s2"),
+            LifePathBinding(key="1", next=""),  # rejected: no enroll
+        ]),
+        LifePathStep(id="s2", table_id="tbl-b"),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("accepted", []), _entry("rejected", [])])
+    repo.tables["tbl-b"] = _table("tbl-b", [_entry("end", [])])
+
+    accepted = _entity()
+    start_term(accepted, "fac-1", "lp-1", repo)
+    resolve_step(accepted, repo, index=1)
+    assert [(e.faction_id, e.path_id) for e in accepted.life_paths] == [("fac-1", "lp-1")]
+
+    rejected = _entity()
+    start_term(rejected, "fac-1", "lp-1", repo)
+    resolve_step(rejected, repo, index=2)
+    assert rejected.life_paths == []
+
+
+def test_binding_effects_apply_after_the_rows_own():
+    """The delta lands on top of the row, and both are recorded."""
+    repo = ExecutorRepo()
+    repo.traits["t-row"] = FakeTrait("t-row", "ts-1")
+    repo.traits["t-delta"] = FakeTrait("t-delta", "ts-1")
+    repo.lifepaths["lp-1"] = _wrapped("lp-1", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[
+            LifePathBinding(key="0", next="", effects=[_gain("t-delta", "d6")]),
+        ]),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("row", [_gain("t-row", "d6")])])
+
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-1", repo)
+    resolve_step(entity, repo, index=1)
+    gained = {ts.trait_id for ts in repo.created_traitsettings}
+    assert {"t-row", "t-delta"} <= gained
 
 
 def test_force_muster_marks_enrollment():
