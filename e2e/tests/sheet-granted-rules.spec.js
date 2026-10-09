@@ -143,7 +143,14 @@ test('a rule granted to the entity is drawn on the sheet, and not dimmed', async
     'granting adds no dimming of its own (B189)').toBe(true)
   expect(granted.every((c) => c.outlineStyle === 'dashed'), 'marked with a dashed edge').toBe(true)
   expect(granted.every((c) => c.outlineWithout !== 'dashed'), 'and the granted mark is what draws it').toBe(true)
-  expect(granted.some((c) => /granted to this (entity|body)/.test(c.title)), 'says which owner granted it').toBe(true)
+  // A granted card must **not** explain itself. This assertion used to require the
+  // reverse — a title saying *"granted to this entity by a rule's reach"* — and the
+  // author retired that wording: a player is not told the mechanics of why they have
+  // a rule, "player-facing things belong in the fiction" (effects, `10655c75`, which
+  // removed the six titles and left this spec behind). The dashed edge is now the
+  // whole of what the treatment says on screen, and that is what is pinned.
+  expect(granted.every((c) => !/granted to|Always on|nothing to take/i.test(c.title)),
+    'a granted card does not explain the mechanics to a player').toBe(true)
 })
 
 test('every owner kind draws its granted rule — entity, body and trait set', async ({ page }) => {
