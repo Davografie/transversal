@@ -127,3 +127,45 @@ def test_entry_effects_apply():
     assert len(result.new_trait_settings) == 1
     assert result.new_trait_settings[0].trait_id == "iron-will"
     assert result.new_trait_settings[0].dice == [DieType.D6]
+
+
+def test_row_key_prefers_the_authored_key_and_falls_back_per_scheme():
+    """A row's identity must not move when its band does.
+
+    A `LifePathBinding` names a row by its key, so the fallback (for content
+    authored before keys existed) is derived from the band and is therefore only
+    a fallback -- re-cutting `1-12` into `1-10` changes it. Once a key is stored,
+    the band is irrelevant to identity, which is the whole point.
+    """
+    from transversal.services.roll_table import row_key
+
+    banded = RollTableEntry(key="india", label="India", min_value=1, max_value=12)
+    assert row_key(banded, 0) == "india"
+
+    unkeyed = RollTableEntry(label="India", min_value=1, max_value=12)
+    assert row_key(unkeyed, 0) == "1\u201312"          # en-dash, matching the canvas
+    assert row_key(RollTableEntry(weight=3), 0) == "w3"
+    assert row_key(RollTableEntry(tier=OutcomeTier.EXCEPTIONAL), 0) == "exceptional"
+    assert row_key(RollTableEntry(label="third"), 2) == "2"   # INDEX falls back to position
+
+
+def test_saving_a_roll_table_gives_every_row_a_stable_key():
+    """The write boundary guarantees keys, so no editor can orphan a binding.
+
+    The GM entry editor round-trips a row it did not author a key for -- it sends
+    `key: ""` -- and a path's binding names that row by key. If the server stored
+    the empty string, the row would be addressable only by its band from then on.
+    """
+    from transversal.api.graphql.resolvers.converters import _roll_table_input_to_domain
+    from transversal.api.graphql.type_defs.rolltables import (
+        RollTableEntryInput, RollTableInput,
+    )
+
+    table = _roll_table_input_to_domain(RollTableInput(
+        id="rt-1", name="T", universe="earth",
+        entries=[
+            RollTableEntryInput(label="a", min_value=1, max_value=2),          # no key
+            RollTableEntryInput(key="kept", label="b", min_value=3, max_value=4),
+        ],
+    ))
+    assert [e.key for e in table.entries] == ["1\u20132", "kept"]

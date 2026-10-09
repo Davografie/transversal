@@ -590,8 +590,9 @@ def _entry_input_to_domain(e: RollTableEntryInput) -> DomainRollTableEntry:
 
 def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
     from transversal.domain import BoundVariable as DomainBoundVariable
+    from transversal.services.roll_table import row_key
 
-    return DomainRollTable(
+    table = DomainRollTable(
         id=t.id, name=t.name, universe=t.universe, life_path=t.life_path,
         subject_kind=t.subject_kind,
         scheme=t.scheme, roll_source=t.roll_source, trait_dice_count=t.trait_dice_count,
@@ -606,6 +607,16 @@ def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
             for bv in (t.bound_variables or [])
         ],
     )
+
+    # Every row leaves here with a stable key. A life path binding names a row by
+    # its key, so a row that had none would be addressable only by its band --
+    # which is exactly what changes when an author re-cuts it. Guaranteeing it at
+    # the write boundary means no editor has to remember, and one that forgets
+    # cannot orphan a path's bindings.
+    for i, entry in enumerate(table.entries):
+        if not entry.key:
+            entry.key = row_key(entry, i)
+    return table
 
 def _historical_record_to_gql(r: DomainHistoricalRecord) -> HistoricalRecord:
     rtype = r.record_type.value if hasattr(r.record_type, "value") else r.record_type
