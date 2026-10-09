@@ -1094,21 +1094,8 @@ select option {
     overflow: hidden auto;
   }
 
-  /* Empty sheet (GM, no acting/viewed entity): no sheet band — the peers
-     bar is enough. The sheet focus state is unreachable; location/dice
-     states redistribute so nothing gaps. */
-  .stage.mobile-stack.sheet-empty .sheet-band { display: none; }
-  .stage.mobile-stack.sheet-empty.focus-location .loc-band { flex-basis: 84%; }
-  .stage.mobile-stack.sheet-empty.focus-sheet .loc-band { flex-basis: 84%; }
-  .stage.mobile-stack.sheet-empty.focus-sheet .roller-band { flex-basis: 16%; }
-  .stage.mobile-stack.sheet-empty.focus-location:has(.roller-band .kind-empty-pool) .loc-band { flex-basis: 100%; }
-  .stage.mobile-stack.sheet-empty.focus-dice .loc-band {
-    flex-basis: calc(100% - var(--band-roller));
-  }
-  /* No sheet band in dice focus: the roller may use its saved 56px. */
-  .stage.mobile-stack.sheet-empty.focus-dice {
-    --band-roller-max: calc(100% - var(--band-loc-min));
-  }
+  /* (The empty-sheet rules that used to live here are gone: a roaming GM's
+     sheet is the play surface now, so its band is never collapsed.) */
 
   /* GM panels open (PanelStack .panel-viewport exists): the map takes the
      whole stage, the sheet/roller bands and the location-viewer overlay

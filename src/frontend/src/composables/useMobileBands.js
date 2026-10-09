@@ -10,7 +10,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
  * `wrapperEl` is the `.dice-panel-wrapper` template ref — the roller is measured
  * through it, so the caller must pass the real ref, not a copy.
  */
-export function useMobileBands({ wrapperEl, gmMode, entityId, viewingEntityId }) {
+export function useMobileBands({ wrapperEl }) {
   const MOBILE_MAX_WIDTH = 820
   const isMobile = ref(false)
   const mobileFocus = ref('location')  // 'location' | 'sheet' | 'dice'
@@ -56,14 +56,14 @@ export function useMobileBands({ wrapperEl, gmMode, entityId, viewingEntityId })
   shortMq.addEventListener('change', syncShortViewport)
   onUnmounted(() => shortMq.removeEventListener('change', syncShortViewport))
 
-  // GM with no acting/viewed entity has an empty sheet band on mobile — it is
-  // fully collapsed (peers bar is enough) and the sheet focus is unreachable.
-  const sheetEmpty = computed(() => mobileStackActive.value && gmMode.value && !entityId.value && !viewingEntityId.value)
-  watch(sheetEmpty, (v) => { if (v && mobileFocus.value === 'sheet') mobileFocus.value = 'location' })
-
+  // There is no "empty sheet" state. A GM who is neither acting as nor viewing an
+  // entity used to lose the sheet band entirely — the peers bar was judged
+  // enough — but that GM's sheet is now the **play surface**: the troupe, the
+  // scene and the rules that live on the GM. Collapsing it hid the one screen
+  // they run the game from, so the band stands for every GM and the sheet focus
+  // is reachable in all three states (the author, 2026-09-29).
   function setMobileFocus(f) {
     if (f === 'location' || f === 'sheet' || f === 'dice') {
-      if (f === 'sheet' && sheetEmpty.value) return
       mobileFocus.value = f
     }
   }
@@ -152,9 +152,8 @@ export function useMobileBands({ wrapperEl, gmMode, entityId, viewingEntityId })
    * focus class with transitions off for one synchronous frame, measure, swap
    * back. Measuring beats re-deriving the numbers — they live in CSS and differ
    * per state (`focus-dice` mixes percentages, a 56px sheet teaser and the
-   * measured `--roller-h`; `:has(.kind-empty-pool)` and `sheet-empty` each
-   * redistribute again). Nothing paints between the swap and the restore, so
-   * this is invisible.
+   * measured `--roller-h`; `:has(.kind-empty-pool)` redistributes again).
+   * Nothing paints between the swap and the restore, so this is invisible.
    */
   function measureFocus(target) {
     const stage = stageEl()
@@ -183,7 +182,6 @@ export function useMobileBands({ wrapperEl, gmMode, entityId, viewingEntityId })
 
   function onBandDragStart(e, focus) {
     if (!mobileStackActive.value) return
-    if (focus === 'sheet' && sheetEmpty.value) return
     // A GM panel takes the whole stage; there is no stack to drag.
     if (document.querySelector('.panel-viewport')) return
     const touch = e.touches?.[0]
@@ -277,7 +275,7 @@ export function useMobileBands({ wrapperEl, gmMode, entityId, viewingEntityId })
   onUnmounted(() => { if (bandDrag) stopBandDrag(false) })
 
   return {
-    isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobileFocus,
+    isMobile, mobileFocus, mobileStackActive, sheetDock, setMobileFocus,
     shortViewport, rollerContentH, syncRollerContentH,
     onBandDragStart, tapBand,
   }

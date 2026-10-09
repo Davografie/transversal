@@ -134,7 +134,7 @@
     @applied="onSupportCreated"
     @close="supportCastMenu = null"
   />
-  <div class="stage" :style="{ '--roller-h': rollerContentH + 'px', '--dock-w-short': dockWShort }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '', sheetDock ? 'dock-sheet' : '']">
+  <div class="stage" :style="{ '--roller-h': rollerContentH + 'px', '--dock-w-short': dockWShort }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', sheetDock ? 'dock-sheet' : '']">
     <ArmedSfxRail
       v-if="playerId && !showLoginOverlay && !fullCanvas && locationViewerOnScreen"
       :entity-id="entityId"
@@ -182,10 +182,19 @@
           :class="{ 'sheet-hidden': !sheetVisible && !mobileStackActive && !sheetDock }"
           :entity-id="entityId"
           :override-entity-id="viewingEntityId"
+          :location-id="currentLocationId"
+          :location-name="locationName"
+          :in-session="inSession"
           :sfx-choice-request="sheetChoices"
           @sfx-choice-answer="(r) => answerSfxChoices(r, 'sheet')"
           @sfx-choice-cancel="clearSfxChoicesAll"
           @sfx-choice-loop="(c) => loopSfxChoice(c, 'sheet')"
+          @next-beat="onNextBeat"
+          @advance-scene="onAdvanceScene"
+          @start-session="onStartSession"
+          @end-session="onEndSession"
+          @go-to-location="switchViewLocation"
+          @inspect-entity="switchPerspective"
           :viewer-entity-id="entityId"
           :player-owned-entity-ids="ownedEntityIds"
           :player-id="playerId"
@@ -207,7 +216,7 @@
           @sheet-view-change="onSheetViewChange"
           @view-entity="onPeerClick"
         />
-        <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @touchstart="onBandDragStart($event, 'sheet')" @click="tapBand('sheet')"></div>
+        <div v-if="mobileStackActive && mobileFocus !== 'sheet'" class="band-tap" @touchstart="onBandDragStart($event, 'sheet')" @click="tapBand('sheet')"></div>
       </div>
       <div ref="rollerBandEl" class="roller-band" :class="{ open: sheetDock && rollerOpen(), dragging: sheetDock && occupantDragging && !isMobile }">
         <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :hitch-threshold="hitchThreshold" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="rollerChoices" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => { mirrorOwnResult({ result: r }); shareRoll(r) }" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-answer="(r) => answerSfxChoices(r, r?.[0]?.origin || 'roll')"
@@ -1812,8 +1821,8 @@ const { colorMode, isLight } = useThemeMode()
 // on a theme flip because an inline :root override outranks `html.light`.
 useUniverseTheme({ graphql, universe, isLight, diag: (msg) => DIAG.mark(msg) })
 
-const { isMobile, mobileFocus, mobileStackActive, sheetDock, sheetEmpty, setMobileFocus, shortViewport, rollerContentH, onBandDragStart, tapBand } = useMobileBands({
-  wrapperEl, gmMode, entityId, viewingEntityId,
+const { isMobile, mobileFocus, mobileStackActive, sheetDock, setMobileFocus, shortViewport, rollerContentH, onBandDragStart, tapBand } = useMobileBands({
+  wrapperEl,
 })
 
 // Which shape the traits tab takes, handed to the sheet as a fact rather than
@@ -1844,13 +1853,19 @@ const locationViewerOnScreen = computed(() => !mobileStackActive.value || mobile
 
 // Is there a sheet to show? One expression, shared by the sheet's v-show and by
 // the pop-out's own reasoning.
+//
+// A roaming GM used to be excluded here — `&& (!gmMode || entityId || viewing)`
+// — because their sheet had nothing in it. It has something in it now: the sheet
+// is where the GM runs the game (the play surface, B95's free-roam case), so the
+// exclusion is gone and the band stands for every GM. That clause and the mobile
+// `sheetEmpty` rule it mirrored were the same premise, and both are retired
+// together (the author, 2026-09-29).
 const sheetShown = computed(() => {
   // Docked, the sheet is a permanent panel: nothing summons it and nothing
   // dismisses it, so it ignores the roller's hover, the phase and whether a
   // character was explicitly picked.
   if (sheetDock.value) return true
-  return (mobileStackActive.value || (sheetVisible.value && (phase.value === 'adding' || forceSheet.value)))
-    && (!gmMode.value || entityId.value || viewingEntityId.value)
+  return mobileStackActive.value || (sheetVisible.value && (phase.value === 'adding' || forceSheet.value))
 })
 
 // Switching between the pop-out column and the dock moves the peek onto a

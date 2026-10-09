@@ -548,6 +548,56 @@
       </div> <!-- .sheet-scroll -->
       </template>
     </template>
+    <!-- The roaming GM's play surface. A GM who is not viewing an entity has no
+         sheet to show, and the Play tab they used to reach through the panel now
+         lives here — so this is the body the old "No entity loaded" placeholder
+         stood in. Same view chain as the entity body above: a question takes the
+         panel, the overview is what is otherwise there. -->
+    <template v-else-if="gmMode">
+      <div v-if="sfxChoiceRequest && sfxChoiceRequest.length" class="sheet-sfx-choice">
+        <EffectTargetWizard
+          :entity-id="sfxSubjectId"
+          :pending-choices="sfxChoiceRequest"
+          title="Choose a target"
+          embedded
+          @resolve="(r) => emit('sfx-choice-answer', r)"
+          @cancel="emit('sfx-choice-cancel')"
+          @run-loop="(c) => emit('sfx-choice-loop', c)"
+        />
+      </div>
+      <div v-else class="sheet-scroll">
+        <GmPlayOverview
+          :current-location-id="locationId"
+          :current-location-name="locationName"
+          :entities="sceneEntities"
+          :location-tree="locationTree"
+          :in-session="inSession"
+          @next-beat="emit('next-beat')"
+          @advance-scene="emit('advance-scene')"
+          @start-session="emit('start-session')"
+          @end-session="emit('end-session')"
+          @go-to-location="(id) => emit('go-to-location', id)"
+          @inspect="(id) => emit('inspect-entity', id)"
+        >
+          <!-- The rules that live on the GM rather than on anyone in the scene:
+               the manual ones are a press, the rest are stated so the row is not
+               silently missing a rule the GM knows they wrote. -->
+          <template v-if="gmRuleCards.length" #rules>
+            <div class="gm-sfx-rules">
+              <div class="gm-sfx-label">On the GM</div>
+              <div class="entity-sfx-cards">
+                <SfxCard
+                  v-for="c in gmRuleCards"
+                  :key="c.id"
+                  v-bind="c.model"
+                  @activate="activateGmRule(c.id)"
+                />
+              </div>
+            </div>
+          </template>
+        </GmPlayOverview>
+      </div>
+    </template>
     <div v-else class="empty empty-no-entity">
       <span>No entity loaded</span>
       <Button
@@ -585,10 +635,10 @@
 
       <RollTableMenu
         v-if="rollTableMenu"
-        :entity-id="entity.id"
+        :entity-id="entity?.id || locationId"
         :table-id="rollTableMenu.tableId"
         :title="rollTableMenu.name"
-        :entity-razmerit="entity.razmerit ?? 0"
+        :entity-razmerit="entity?.razmerit ?? 0"
         :mode="rollTableMenu.mode || 'apply'"
         :player-id="playerId"
         :main-entity-id="mainEntityId"
@@ -622,6 +672,9 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
+import GmPlayOverview from './gm/GmPlayOverview.vue'
+import { useEntityCrud } from '../composables/useEntityCrud.js'
+import { useLocationTree } from '../composables/useLocationTree.js'
 import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, groupRelationRows, relationContinuations, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
 import { splitRefunds } from '../utils/poolSpends.js'
 import { DEFAULT_SHEET_TAB, hasSheetTab, sheetProfileFor } from '../utils/sheetProfile.js'
@@ -644,6 +697,12 @@ const props = defineProps({
   // shape that does not need height to work.
   traitSetAccordion: { type: Boolean, default: false },
   gmMode: { type: Boolean, default: false },
+  // The place the GM is standing in, and its name. The roaming GM has no entity
+  // to be in the scene *as*, so the scene itself is the subject of the play
+  // surface the sheet now hosts — and the anchor a GM-owned rule is run against.
+  locationId: { type: String, default: '' },
+  locationName: { type: String, default: '' },
+  inSession: { type: Boolean, default: false },
   externalPoolSources: { type: Array, default: null },
   overrideEntityId: { type: String, default: null },
   viewerEntityId: { type: String, default: null },
@@ -653,7 +712,7 @@ const props = defineProps({
   mainEntityId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'retractNegative', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange', 'viewEntity', 'sfx-choice-answer', 'sfx-choice-cancel', 'sfx-choice-loop'])
+const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'retractNegative', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange', 'viewEntity', 'sfx-choice-answer', 'sfx-choice-cancel', 'sfx-choice-loop', 'next-beat', 'advance-scene', 'start-session', 'end-session', 'go-to-location', 'inspect-entity'])
 
 function displayName(name) {
   return name
@@ -1588,6 +1647,11 @@ const sfxUnmetReasons = ref({})
 // sfxIds }]. Nothing is attached to the entity — this is where the place's own
 // rules get a button to be pressed, which attached-only strips never gave them.
 const placeRuleGroups = ref([])
+// The rules that live on the **GM** (`sfxOwners(ownerType: GM)`, the same
+// attachment read the prep manager edits). They belong to no entity, so nothing
+// on any sheet ever drew them, and a manual rule with no card is a rule the GM
+// cannot press (the author, 2026-09-29). Only asked for in gmMode.
+const gmSfxIds = ref([])
 const rollTableMenu = ref(null)  // { sfxId, tableId, name } | null
 const SFX_PHASES = {
   'sfx-hinder': ['adding'],
@@ -2679,6 +2743,59 @@ function resetSfxCounts() {
   refundableSpends.value = {}
 }
 
+// ── The GM's own rules, and the surface that presses them ────────────
+// A GM-owned rule is run against **the scene**: the roaming GM has no acting
+// entity, and the place is what "do this here" means. A rule that needs a
+// particular character asks for one — that question arrives on the same wizard
+// the sheet already hosts, which is why the question host is part of this
+// surface rather than a second mechanism.
+const sfxSubjectId = computed(() => props.entityId || props.locationId)
+
+async function fetchGmRules() {
+  if (!props.gmMode) { gmSfxIds.value = []; return }
+  try {
+    const data = await graphql(`query { sfxOwners(ownerType: GM) { sfxIds } }`)
+    gmSfxIds.value = (data?.sfxOwners || []).flatMap((o) => o.sfxIds || [])
+  } catch (e) {
+    console.error('fetchGmRules', e)
+    gmSfxIds.value = []
+  }
+}
+
+// One card per rule that lives on the GM. A **manual** rule is a press; anything
+// else fires from the roller menu or from a state change, so it is *stated*
+// rather than offered — the same `readonly` axis the auto-firing rules already
+// use, and the reason the author's ask was specifically for the manual ones.
+const gmRuleCards = computed(() => gmSfxIds.value.map((id) => {
+  const model = sfxCardModel(id)
+  const trigger = sfxCatalog.value[id]?.trigger || ''
+  if (trigger === 'manual') return { id, model }
+  const from = trigger === 'menu' ? 'the roller menu' : `the ${trigger.replace(/_/g, ' ')} trigger`
+  return { id, model: { ...model, readonly: true, title: `${sfxName(id)} — fires from ${from}.` } }
+}))
+
+function activateGmRule(sfxId) {
+  if (!sfxSubjectId.value) return
+  return activateSfx(sfxId, null, sfxSubjectId.value)
+}
+
+// The play surface's own data. Both reads are shared: the roster is the same
+// `entities(type: null)` list the GM panel holds, and the tree is a module-level
+// singleton — so a roaming GM whose panel was never opened still gets both. The
+// tree composable is called with no arguments because only its *singleton* is
+// wanted here: `fetchLocationTree` and `locationTree` are state-free reads, and
+// the focus-filter wiring belongs to the panel.
+const { entities: sceneEntities, fetchEntities } = useEntityCrud()
+const { locationTree, fetchLocationTree } = useLocationTree({})
+
+// Asked for **only when the play surface is the body** (a GM acting as nobody): a
+// GM who is acting as an entity gets that entity's sheet, and would otherwise pay
+// for a ~1k-row roster query to draw something it does not render.
+async function loadGmSurface() {
+  if (!props.gmMode || props.entityId || props.overrideEntityId) return
+  await Promise.all([fetchEntities(), fetchLocationTree(), fetchGmRules()])
+}
+
 const QUERY = `
   # Every trait-setting field, shared by all levels of the tree. A nested trait
   # opens the same detail panel and the same editor as a top-level one, and can
@@ -2898,7 +3015,11 @@ function findTsIdForSfx(sfxId) {
   return null
 }
 
-async function activateSfx(sfxId, sourceId = null) {
+// `subjectId` overrides what the rule is run **against**, which is normally the
+// sheet's own entity. The one other case is a GM-owned rule pressed from the
+// roaming GM's play surface: there is no acting entity, so the scene stands in.
+async function activateSfx(sfxId, sourceId = null, subjectId = null) {
+  const subject = subjectId || props.entityId
   const menu = rollTableMenuEffect(sfxId)
   if (menu && menu.target) {
     const isSupportCast = sfxId === 'sfx-roll-support-cast'
@@ -2928,7 +3049,7 @@ async function activateSfx(sfxId, sourceId = null) {
     // Activate. If the SFX declares a source kind, pass the surface it was
     // clicked from (the trait instance id) as ``source_id`` so the backend
     // binds it to the declared ``{variable}``.
-    await triggerSfx(props.entityId, sfxId, props.universe, { phase: props.phase, ...(sourceId ? { source_id: sourceId } : {}) })
+    await triggerSfx(subject, sfxId, props.universe, { phase: props.phase, ...(sourceId ? { source_id: sourceId } : {}) })
     sfxActivations.value[sfxId] = 1
     // Re-stamp dice already in the pool (armed after adding).
     const tsId = findTsIdForSfx(sfxId)
@@ -2953,7 +3074,7 @@ async function activateSfx(sfxId, sourceId = null) {
     // Take back the activation: every undo it still owes is applied now (the
     // razmerit it earned, the die it added), and what was still waiting on a
     // roll is dropped. A rule with nothing in flight is a no-op here.
-    await endSfx(props.entityId, sfxId)
+    await endSfx(subject, sfxId)
 
     // The take-back above (`endSfx`) already refunded what this rule earned or
     // spent — the legacy `{reverse: true}` call would have reversed the same
@@ -3062,7 +3183,9 @@ onMounted(() => {
   console.log('[diag] CharacterSheet fetchEntity mounted', { entityId: props.entityId })
   loadCachedEntity()
   fetchSfxCatalog()
+  loadGmSurface()
 })
+watch(() => [props.gmMode, props.entityId, props.overrideEntityId], loadGmSurface)
 watch(() => props.entityId, loadCachedEntity)
 watch(() => props.universe, loadCachedEntity)
 watch(() => props.overrideEntityId, loadCachedEntity)
@@ -3818,6 +3941,43 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--text-dim);
 }
 
+/* Rules that live on the GM, on the roaming GM's play surface. The same quiet
+   treatment as a place's rules, for the same reason: they are not on anyone in
+   the scene below them. */
+.gm-sfx-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--overlay-8);
+}
+.gm-sfx-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* The troupe rows are the widest thing the sheet ever holds, and the sheet's
+   narrowest home is the phone-landscape dock — 179px of column, the same width
+   the tab row above is written against. There the name, which is the one thing
+   the row is *for*, ellipsised to nothing while the state pill kept its space.
+   Wrapping instead of truncating lets the pill fall onto its own line, so the
+   row degrades at any width rather than at one. Scoped to the sheet's play
+   surface: the GM panel is never this narrow and keeps its single-line row. */
+@media (max-height: 500px) {
+  .sheet-embedded :deep(.play-overview .main-line),
+  .sheet-embedded :deep(.play-overview .recency-line),
+  .sheet-embedded :deep(.play-overview .scene-line),
+  .sheet-embedded :deep(.play-overview .scene-counts) { flex-wrap: wrap; row-gap: 2px; }
+  /* `flex: 0 0 auto` keeps the scene counts on one line however little room there
+     is — a flex container only wraps inside a width it has been *given*, and that
+     basis gives it none. Given one, the two counts stack instead of the second
+     being cut mid-word. */
+  .sheet-embedded :deep(.play-overview .scene-counts) { flex: 1 1 auto; min-width: 0; }
+}
+
 /* ── Relationship widget ──────────────────────── */
 .rel-widget {
   display: inline-flex;
@@ -3867,8 +4027,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .rel-editor input:focus {
   border-color: var(--accent);
 }
-.sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: var(--radius-chip); overflow: hidden; border: 1px solid var(--overlay-8); }
-/* The tabs are a *row*, and the group is drawn as one rounded control. Below
+.sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: var(--radius-chip); overflow: hidden; border: 1px solid var(--overlay-8); }/* The tabs are a *row*, and the group is drawn as one rounded control. Below
    roughly 200px — which the phone-landscape dock reaches, at 179px of sheet —
    the tab buttons used to wrap onto a second line *inside* that rounded border,
    so the group stopped reading as a group. One scrollable row instead: the tabs

@@ -7,18 +7,17 @@
 
     <template v-if="mode === 'play'">
       <div class="gm-tab-body">
-        <div class="gm-shortcuts">
-          <Button class="shortcut-btn beat-btn" variant="neutral" @click="nextBeat">◆ Next Beat</Button>
-          <Button class="shortcut-btn scene-btn" variant="neutral" @click="advanceScene">◈ Scene</Button>
-          <Button v-if="!inSession" class="shortcut-btn session-btn" variant="neutral" title="Start the session" @click="startSession">▶ Start</Button>
-          <Button v-else class="shortcut-btn session-btn" variant="danger" title="End the session" @click="endSession">■ End</Button>
-        </div>
-        <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" @go-to-location="goToLocation" />
-        <GmSceneSummary
-          v-if="viewSceneSummary"
-          :entities="sceneEntitiesHere"
-          :parents="sceneParentGroups"
-          :zones="sceneZoneGroups"
+        <GmPlayOverview
+          :current-location-id="currentLocationId"
+          :current-location-name="currentLocationName"
+          :entities="entities"
+          :location-tree="locationTree"
+          :in-session="inSession"
+          @next-beat="nextBeat"
+          @advance-scene="advanceScene"
+          @start-session="startSession"
+          @end-session="endSession"
+          @go-to-location="goToLocation"
           @inspect="inspectEntity"
         />
       </div>
@@ -161,12 +160,12 @@ import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import Button from '@/components/ui/Button.vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLocationTree } from '@/composables/useLocationTree.js'
+import { useSceneOverview } from '@/composables/useSceneOverview.js'
 import { useEntityFilter } from '@/composables/useEntityFilter.js'
 import { buildAgencyIndex, buildPlayerHoldings, NO_PLAYER_HOLDINGS } from '@/constants/entityTypes.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
-import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
-import GmTroupeOverview from '@/components/gm/GmTroupeOverview.vue'
+import GmPlayOverview from '@/components/gm/GmPlayOverview.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmList from '@/components/ui/GmList.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
@@ -214,7 +213,6 @@ const {
 // session_started/session_ended SSE broadcasts) so this button reflects the
 // real state — e.g. after a refresh or when another device toggles it.
 const mode = ref('play')
-const viewSceneSummary = ref(true)
 // Prep's browsing surface: the Places tree or the Factions list (both read the
 // focus filter above them).
 const browseTab = ref('tree')
@@ -276,7 +274,7 @@ async function loadAccessTab() {
 }
 
 function nextBeat() { emit('next-beat') }
-function advanceScene() { viewSceneSummary.value = true; emit('advance-scene') }
+function advanceScene() { emit('advance-scene') }
 function startSession() { emit('start-session') }
 function endSession() { emit('end-session') }
 
@@ -619,51 +617,14 @@ watch(() => activeFilters.value.length, (n, prev) => {
   nextTick(() => scrollToNode(props.currentLocationId))
 })
 
-// The scene's pool: every occupant type, assets included, and deliberately
-// **unfiltered** — the focus chips belong to Prep. The Play screen shows the
-// scene as it is; the GM's own acting-entity chip must not narrow it to them.
-const SCENE_TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
-const sceneOccupants = computed(() =>
-  entities.value.filter((e) => e.type in SCENE_TYPE_PRIORITY)
-)
-
-// Scene scope: the current location only — its parents and zones are drawers in
-// the summary, not part of the roster (the human's call).
-const sceneEntitiesHere = computed(() =>
-  sceneOccupants.value.filter((e) => e.currentLocation === props.currentLocationId)
-)
-
-function _findTreeNode(nodes, id) {
-  for (const n of nodes) {
-    if (n.id === id) return n
-    const hit = _findTreeNode(n.children || [], id)
-    if (hit) return hit
-  }
-  return null
-}
-
-function _sceneEntitiesAt(locationId) {
-  return sceneOccupants.value.filter((e) => e.currentLocation === locationId)
-}
-
-function _placeName(id) {
-  return entities.value.find((e) => e.id === id)?.name || id
-}
-
-// Parents: the ancestor chain, nearest first (the universe is the last step).
-const sceneParentGroups = computed(() => {
-  const path = []
-  if (!findAncestorIds(locationTree.value, props.currentLocationId, path)) return []
-  return path
-    .filter((id) => id !== props.currentLocationId)
-    .reverse()
-    .map((id) => ({ id, name: _placeName(id), entities: _sceneEntitiesAt(id) }))
-})
-
-// Zones: the current location's sub-locations, in tree order.
-const sceneZoneGroups = computed(() => {
-  const node = _findTreeNode(locationTree.value, props.currentLocationId)
-  return (node?.children || []).map((c) => ({ id: c.id, name: c.name, entities: _sceneEntitiesAt(c.id) }))
+// The Play tab's scene is drawn by `GmPlayOverview`, which owns the shape for
+// both of its hosts (this panel and the roaming GM's sheet). The panel supplies
+// the roster it already fetched and the tree it already built; the grouping
+// itself lives in `useSceneOverview` so the two hosts cannot drift.
+const { sceneEntitiesHere, sceneParentGroups, sceneZoneGroups } = useSceneOverview({
+  entities,
+  locationTree,
+  currentLocationId: computed(() => props.currentLocationId),
 })
 
 // ── Entity selection ────────────────────────────────
@@ -953,15 +914,7 @@ onUnmounted(() => {
 .mode-tabs button.active { background: var(--accent); color: var(--text-on-accent); }
 .mode-tabs button:hover:not(.active) { background: var(--overlay-8); }
 
-.gm-shortcuts { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
-.gm-shortcuts .shortcut-btn { flex: 1; padding: 8px 6px; font-size: 11px; white-space: nowrap; }
-/* Per-action border hues (the primitive owns fill/hover/radius). */
-.gm-shortcuts .beat-btn { border-color: var(--accent-32); }
-.gm-shortcuts .beat-btn:hover { border-color: var(--accent); }
-.gm-shortcuts .scene-btn { border-color: var(--success-32); }
-.gm-shortcuts .scene-btn:hover { border-color: var(--success); }
-.gm-shortcuts .session-btn { border-color: var(--warn-32); }
-.gm-shortcuts .session-btn:hover { border-color: var(--warn); }
+/* The Play shortcuts moved to `GmPlayOverview` with their markup. */
 
 .focus-bar { margin-bottom: 8px; }.chip-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
 .filter-chip { display: flex; align-items: center; gap: 2px; font-size: 11px; padding: 3px 8px; background: var(--accent-16); border: 1px solid var(--accent-dim); border-radius: 10px; color: var(--text); }
