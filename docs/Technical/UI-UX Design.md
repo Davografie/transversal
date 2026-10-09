@@ -297,6 +297,22 @@ and the shell routes by it, so no host has to guess:
   property of the *driver*, not of the row, so one surface is sufficient for all
   three.
 
+**The legend is above the scroller, and a roll brings its row into view.** Both
+are about a table longer than the card:
+
+- The column legend used to sit *inside* the scroller, so it stopped being a header
+  the moment a table was taller than the card. It now sits above it: the rows
+  scroll, the legend does not.
+- A roll marks a row; on a long table the marked row is exactly the one that can be
+  off screen. The mark is brought to the **middle** of the scroller (`scrollTo` on
+  the container, so the page never moves), smoothly — and instantly under
+  `prefers-reduced-motion`.
+
+**`fill` mode: the host's height, the rows scrolling.** A host that is itself a
+bounded flex column (the sheet's embedded roll-table slot) passes `fill`, and the
+surface takes the room it is given with `.ct-scroll` scrolling inside it. Without
+it a host with its own scrollbar gives the reader two.
+
 **Flashy, and restrained.** A die-pip key at the content's top-right, tabular so it
 reads as a number rather than as text, a short
 staggered entrance, and a *landing beat* when a roll finds a row — one lift and one
@@ -1203,6 +1219,31 @@ a "here is what changed" must not be two different corners of the screen.
   queue, the dwell and the audience; the component renders the prompt or the head
   of the queue. That is what keeps "1–2 seconds" a decision in one place instead of
   a number in a component.
+
+### Embedding a surface in a panel
+
+A menu that can render **inside** a panel (`RollTableMenu`'s `embedded`, `B268`) has
+to give up the two things an overlay brings for free, and each of them fails
+silently:
+
+- **its width.** The overlay card is `min(560px, 96vw)`; inside the sheet's ~323px
+  slot that is 237px clipped by the slot's `overflow-x: hidden` — measured, and it
+  reads as "the table is cut off on the side" rather than as a broken width.
+- **its scrollbar.** The overlay card is `max-height: min(86vh, 720px); overflow:
+  auto`. Inside a panel that also scrolls, that is **two vertical scrollers** — on a
+  phone, exactly the complaint.
+
+So the embedded variant keeps neither: `width: auto; max-width: 100%; max-height:
+none; overflow: hidden`, and it fills its host (`flex: 1; min-height: 0`) with the
+**rows** as the one scroller — which is also what keeps its header and actions
+visible at any length. Two details worth copying rather than rediscovering:
+
+- **The override must be a compound selector** (`.rtm-root.rtm-embedded`, not
+  `.rtm-embedded`). Declared after `.rtm-root` at equal specificity, a plain
+  `.rtm-embedded { max-height: none }` **loses** — which is what shipped.
+- **The host's slot must stop scrolling for it** (`.sheet-roll-table` is
+  `overflow: hidden; display: flex; min-height: 0`), or the panel's scrollbar
+  returns and the card grows to its content.
 
 ### What the effects layer emits for it
 
