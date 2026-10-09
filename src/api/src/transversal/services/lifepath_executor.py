@@ -51,19 +51,32 @@ from transversal.services.effect_refs import target_value
 
 
 def find_step(lp: Optional[LifePath], step_id: str) -> Optional[LifePathStep]:
-    """The step named by ``step_id``, or a synthesised one for pre-wrapper content.
+    """The step ``step_id`` names — by step id, or by the table it wraps.
 
-    A path that has not been migrated carries no steps and checkpoints itself by
-    bare *table* id (the flow lived in the entries' ``next_step`` effects). Rather
-    than refuse it, treat the id as a one-table step with no bindings — the
-    executor then behaves exactly as it did before the wrapper existed.
+    Two generations of checkpoint reach here and both must resolve:
+
+    * a **step id**, which is what the wrapper writes; and
+    * a bare **table id**, which is what a term stored before ``current_step_id``
+      existed holds. The wrapper migration then gave every path steps, so the
+      "no steps means legacy" case below stopped covering those checkpoints — and
+      resolving one failed with ``step 'rt-…' not found in path 'lp-…'``. The
+      bridge is the table→step mapping, not the absence of steps.
+
+    A step id is checked first, so a table id can never shadow a step. A table
+    wrapped twice is ambiguous by construction; the first step wins, which matches
+    the migration that wraps each table once per path.
     """
     if lp is None or not step_id:
         return None
     for step in lp.steps:
         if step.id == step_id:
             return step
+    for step in lp.steps:
+        if step.table_id == step_id:
+            return step
     if not lp.steps:
+        # A path with no steps at all: pre-wrapper content whose flow still lives
+        # in its entries' effects. One synthesised step, no bindings.
         return LifePathStep(id=step_id, table_id=step_id)
     return None
 
@@ -149,7 +162,16 @@ def resolve_step(
     lp = repo.get_lifepath(pt.path_id)
     step = find_step(lp, step_id)
     if step is None:
-        return {"done": True, "error": f"step '{step_id}' not found in path '{pt.path_id}'"}
+        return {"done": True, "error":
+                f"'{step_id}' is neither a step of path '{pt.path_id}' nor a table "
+                f"it wraps"}
+
+    # Heal a pre-wrapper checkpoint on the way through: it named a table, and now
+    # names the step wrapping it, so the next resolve is by identity rather than
+    # by lookup. Persisted with the rest of the entity by `_persist`.
+    if pt.current_step_id != step.id:
+        pt.current_step_id = step.id
+        pt.current_table_id = step.table_id
 
     table = repo.get_roll_table(step.table_id)
     if table is None:

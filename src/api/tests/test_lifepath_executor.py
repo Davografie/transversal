@@ -541,3 +541,47 @@ def test_a_pre_b271_term_is_adopted_rather_than_stranded():
     result = resolve_step(entity, repo, index=1)
     assert result["done"] is False
     assert entity.pending_terms["body-1"].current_step_id == "s2", "adopted by the acting body"
+
+
+def test_a_checkpoint_naming_a_table_resolves_to_the_step_that_wraps_it():
+    """Regression: `step 'rt-…' not found in path 'lp-…'`.
+
+    A term stored before `current_step_id` existed holds only `current_table_id`.
+    The wrapper migration then gave every path **steps** — which is exactly why the
+    old "a path with no steps is legacy" shim stopped firing: the checkpoint still
+    named a table, the path had step ids, and resolving died. The bridge has to be
+    the table→step mapping, not the absence of steps.
+    """
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-a"] = _wrapped("lp-a", [
+        LifePathStep(id="s1", table_id="tbl-a"),
+        LifePathStep(id="s7", table_id="tbl-escalation", bindings=[
+            LifePathBinding(key="0", next="s1"),
+        ]),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("start", [])])
+    repo.tables["tbl-escalation"] = _table("tbl-escalation", [_entry("escalate", [])])
+
+    entity = _entity()
+    # A pre-wrapper checkpoint: the table, and no step id at all.
+    entity.pending_terms = {"": PendingTerm(
+        faction_id="fac", path_id="lp-a", current_table_id="tbl-escalation")}
+
+    result = resolve_step(entity, repo, index=1)
+    assert result.get("error") is None, result.get("error")
+    # …and the checkpoint heals to the step id on the way through.
+    assert entity.pending_terms[""].current_step_id == "s1"
+    assert entity.pending_terms[""].current_table_id == "tbl-a"
+
+
+def test_find_step_prefers_a_step_id_over_a_table_id():
+    """A step id always wins, so a table id can never shadow one."""
+    repo = ExecutorRepo()
+    lp = _wrapped("lp-a", [
+        LifePathStep(id="tbl-x", table_id="tbl-real"),
+        LifePathStep(id="s2", table_id="tbl-x"),
+    ], entry_step="tbl-x")
+    from transversal.services.lifepath_executor import find_step
+
+    # "tbl-x" is both a step id and another step's table: the id wins.
+    assert find_step(lp, "tbl-x").table_id == "tbl-real"

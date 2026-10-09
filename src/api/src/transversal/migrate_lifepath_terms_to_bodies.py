@@ -29,6 +29,12 @@ Memberships use the same rule per enrollment, keyed by *that enrollment's* path
 rather than one answer for the whole entity — a character's two memberships may
 have been earned in two universes.
 
+It also heals a checkpoint that names only a **table** (predating
+``current_step_id``) into the step that wraps it. The executor bridges such an id
+at resolve time — the wrapper migration gave every path steps, so the old
+"no steps means legacy" case stopped covering these — but the stored value should
+name the step, and an MCP read-back reports it.
+
 Idempotent: entities with nothing to move are skipped, and a body that already
 has a term keeps it. Re-running reports zero without rewriting.
 
@@ -74,12 +80,21 @@ def migrate() -> int:
     repo = EntityRepository()
     docs = list(repo.db.aql.execute(f"FOR e IN {ENTITIES} RETURN e"))
 
-    moved_terms, scoped_enrollments, entities_touched, unresolved = 0, 0, 0, []
+    moved_terms, scoped_enrollments, entities_touched, healed_steps = 0, 0, 0, 0
+    unresolved: list[str] = []
 
     for doc in docs:
         legacy_term = doc.get("pending_term")
         raw_enrollments = doc.get("life_paths") or []
-        needs = bool(legacy_term) or any(
+        # A checkpoint that names only a table also needs work: it predates
+        # `current_step_id`, and the wrapper migration gave every path steps, so
+        # resolving it failed with "step 'rt-…' not found in path 'lp-…'". The
+        # executor bridges that now, but the stored value should name the step.
+        stale_steps = [
+            t for t in (doc.get("pending_terms") or {}).values()
+            if (t.get("current_table_id") or "") and not (t.get("current_step_id") or "")
+        ]
+        needs = bool(legacy_term) or bool(stale_steps) or any(
             not (e.get("projection_id") or "") for e in raw_enrollments
         )
         if not needs:
@@ -107,6 +122,20 @@ def migrate() -> int:
             entity.pending_term = None
             changed = True
 
+        for body, term in entity.pending_terms.items():
+            if term.current_step_id or not term.current_table_id:
+                continue
+            lp = repo.get_lifepath(term.path_id)
+            step = next((s for s in (getattr(lp, "steps", None) or [])
+                         if s.table_id == term.current_table_id), None)
+            if step is None:
+                unresolved.append(f"{entity.id} (step for table {term.current_table_id!r})")
+                continue
+            term.current_step_id = step.id
+            term.current_table_id = step.table_id
+            healed_steps += 1
+            changed = True
+
         for enrollment in entity.life_paths:
             if enrollment.projection_id:
                 continue
@@ -122,6 +151,7 @@ def migrate() -> int:
             entities_touched += 1
 
     print(f"  terms moved onto a body:      {moved_terms}")
+    print(f"  checkpoints healed to a step: {healed_steps}")
     print(f"  memberships given a body:     {scoped_enrollments}")
     print(f"  entities rewritten:           {entities_touched}")
     if unresolved:
