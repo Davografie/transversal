@@ -27,6 +27,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { rollTableIdFromAnswer, rollTableIdOf } from '../src/utils/rollTableMenu.js'
 
 let pass = 0, fail = 0
 const ok = (name, got, want) => {
@@ -395,6 +396,46 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   const picker = read(find('components/gm/GmSfxPickerPanel.vue'))
   ok('the picker still attaches what it creates',
     /'sfx-created': \(created\) => \{\s*emit\('add-sfx', created\.id\)/.test(picker), true)
+}
+
+// ── A roll-table menu opens the table it names ────────────────────
+//
+// The author, 2026-10-09: *"I choose the `rt-earth-regions` roll table, I expect to
+// see the table and be able to roll against it. But the table doesn't appear."*
+// The table is a **reference** (`refs.table`) since the migration, and the client's
+// only gate read the positional `target` the migration emptied — so every menu rule
+// opened nothing, silently. A literal reference names the table outright and opens
+// on the click; a path reference names it by *asking*, so the answer opens it.
+{
+  const literal = { type: 'roll_table', action: 'menu', target: '',
+                    refs: { table: { value: 'rt-earth-regions', spec: null } } }
+  ok('a literal table reference names the table', rollTableIdOf(literal), 'rt-earth-regions')
+  ok('…and the positional field still works for older content',
+    rollTableIdOf({ type: 'roll_table', action: 'menu', target: 'rt-legacy' }), 'rt-legacy')
+
+  const path = { type: 'roll_table', action: 'menu', target: '',
+                 refs: { table: { value: '', spec: { steps: [{ kind: 'select' }, { kind: 'choose' }] } } } }
+  ok('a path reference names no table on its own', rollTableIdOf(path), '')
+  ok('the answer to its last step is the table',
+    rollTableIdFromAnswer({ effect: path, field: 'refs.table',
+                            answers: [{ stepIndex: 1, ids: ['rt-earth-regions'] }] }), 'rt-earth-regions')
+  ok('…an earlier step of the same path is not',
+    rollTableIdFromAnswer({ effect: path, field: 'refs.table',
+                            answers: [{ stepIndex: 0, ids: ['three_realms'] }] }), '')
+  ok('…and another action\'s answer never opens a table',
+    rollTableIdFromAnswer({ effect: { type: 'travel', action: 'move' }, field: 'refs.location',
+                            answers: [{ stepIndex: 1, ids: ['loc-1'] }] }), '')
+
+  const sheet = read(find('components/CharacterSheet.vue'))
+  ok('the sheet asks for its rules\' references',
+    /effects \{ timing type action target entity result refs \}/.test(sheet), true)
+  // Two hosts show a question: the entity sheet and the roaming GM's play surface —
+  // and a GM-bucket rule is pressed on the *latter*.
+  ok('…and opens the table from the answer, on both wizard hosts',
+    (sheet.match(/@resolve="onChoiceResolved"/g) || []).length, 2)
+  ok('…through one shared decision rather than a local copy',
+    /const menu = rollTableMenuEffect\(sfxCatalog\.value\[sfxId\]\)/.test(sheet)
+      && /function rollTableMenuEffect\(/.test(sheet), false)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

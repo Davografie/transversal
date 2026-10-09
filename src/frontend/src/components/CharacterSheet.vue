@@ -205,7 +205,7 @@
           :pending-choices="sfxChoiceRequest"
           title="Choose a target"
           embedded
-          @resolve="(r) => emit('sfx-choice-answer', r)"
+          @resolve="onChoiceResolved"
           @cancel="emit('sfx-choice-cancel')"
           @run-loop="(c) => emit('sfx-choice-loop', c)"
         />
@@ -560,7 +560,7 @@
           :pending-choices="sfxChoiceRequest"
           title="Choose a target"
           embedded
-          @resolve="(r) => emit('sfx-choice-answer', r)"
+          @resolve="onChoiceResolved"
           @cancel="emit('sfx-choice-cancel')"
           @run-loop="(c) => emit('sfx-choice-loop', c)"
         />
@@ -677,6 +677,7 @@ import { useEntityCrud } from '../composables/useEntityCrud.js'
 import { useLocationTree } from '../composables/useLocationTree.js'
 import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, groupRelationRows, relationContinuations, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
 import { splitRefunds } from '../utils/poolSpends.js'
+import { rollTableIdFromAnswer, rollTableIdOf, rollTableMenuEffect } from '../utils/rollTableMenu.js'
 import { DEFAULT_SHEET_TAB, hasSheetTab, sheetProfileFor } from '../utils/sheetProfile.js'
 import { entityTypeBucket, entityTypeRank } from '../constants/entityTypes.js'
 
@@ -2568,13 +2569,8 @@ function sfxCardText(sfxId) {
   return sfxCatalog.value[sfxId]?.cardText || ''
 }
 
-// A roll-table-as-menu SFX carries a single roll_table/menu effect whose
-// ``target`` is the table id. Clicking it opens the picker instead of firing.
-function rollTableMenuEffect(sfxId) {
-  const sfx = sfxCatalog.value[sfxId]
-  if (!sfx) return null
-  return (sfx.effects || []).find(e => e.type === 'roll_table' && e.action === 'menu') || null
-}
+// A roll-table-as-menu SFX carries a single roll_table/menu effect whose table is
+// a **reference** (`refs.table`) — see `utils/rollTableMenu.js`.
 
 // A condition-blocked SFX is owned (it appears on the sheet) but its static
 // conditions (e.g. source_rating, entity_type) fail at this moment, so it can't
@@ -2755,7 +2751,7 @@ async function fetchSfxCatalog() {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `query { sfxs { id name description trigger cardText effects { timing type action target entity result } } }` }),
+      body: JSON.stringify({ query: `query { sfxs { id name description trigger cardText effects { timing type action target entity result refs } } }` }),
     })
     const json = await r.json()
     const map = {}
@@ -3104,12 +3100,29 @@ function findTsIdForSfx(sfxId) {
 // `subjectId` overrides what the rule is run **against**, which is normally the
 // sheet's own entity. The one other case is a GM-owned rule pressed from the
 // roaming GM's play surface: there is no acting entity, so the scene stands in.
+//
+// Answering a question, and the one kind whose answer **is** the thing asked for:
+// a roll-table menu whose table is named by a **path**. That effect has no applier
+// — the client is the actor — so without opening it here the answer resolved to a
+// table id and then went nowhere, which is exactly "the table doesn't appear".
+// Every other answer is passed up as before.
+function onChoiceResolved(resolutions) {
+  for (const r of resolutions || []) {
+    const tableId = rollTableIdFromAnswer(r)
+    if (!tableId) continue
+    const sfxId = r.sourceSfxId || ''
+    rollTableMenu.value = { sfxId, tableId, name: sfxId ? sfxName(sfxId) : 'Roll Table', mode: 'apply' }
+    break
+  }
+  emit('sfx-choice-answer', resolutions)
+}
+
 async function activateSfx(sfxId, sourceId = null, subjectId = null) {
   const subject = subjectId || props.entityId
-  const menu = rollTableMenuEffect(sfxId)
-  if (menu && menu.target) {
+  const menu = rollTableMenuEffect(sfxCatalog.value[sfxId])
+  if (menu) {
     const isSupportCast = sfxId === 'sfx-roll-support-cast'
-    let tableId = menu.target
+    let tableId = rollTableIdOf(menu)
     if (isSupportCast) {
       // B65 — support-cast tables are universe-scoped: resolve from the main's
       // current universe (falling back to the generic table) before opening.
@@ -3121,11 +3134,21 @@ async function activateSfx(sfxId, sourceId = null, subjectId = null) {
       tableId = data?.supportCastTableId || null
       if (!tableId) return
     }
-    rollTableMenu.value = {
-      sfxId, tableId, name: sfxName(sfxId),
-      mode: isSupportCast && props.playerId && props.mainEntityId
-        ? 'create-support' : 'apply',
+    if (tableId) {
+      rollTableMenu.value = {
+        sfxId, tableId, name: sfxName(sfxId),
+        mode: isSupportCast && props.playerId && props.mainEntityId
+          ? 'create-support' : 'apply',
+      }
+      return
     }
+    // No literal table: `refs.table` is a **path**, so the engine names the table
+    // by asking. Fire it and let `onChoiceResolved` open the menu with the answer
+    // — reading the emptied positional `target` here instead is what made every
+    // menu rule, including this one, open nothing at all.
+    await triggerSfx(subject, sfxId, props.universe, {
+      phase: props.phase, ...(sourceId ? { source_id: sourceId } : {}),
+    })
     return
   }
 
