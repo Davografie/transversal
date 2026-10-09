@@ -215,18 +215,26 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
         return Binding(value=text, values=[text], element=element, cardinality="one")
 
     bindings: dict = {}
-    term = getattr(entity, "pending_term", None)
+    # The *body's* term ([[B271]]): the ambient faction and path are facts about
+    # the life being lived, and a character has one body per universe.
+    from transversal.services.lifepath_scope import (
+        active_term, enrollment_for_path, resolve_projection_id,
+    )
+
+    term = active_term(entity, repo)
     term_faction = (getattr(term, "faction_id", "") or "") if term is not None else ""
     term_path = (getattr(term, "path_id", "") or "") if term is not None else ""
 
-    table_path = getattr(table, "life_path", "") or ""
+    # Which path this table is being rolled in. A table that still names its own
+    # path wins: that is a statement about *this table*, and a term running in
+    # some other path must not re-anchor it. Everything else — every shared table,
+    # and every table once the deprecated field goes ([[B270]]) — takes the
+    # invoking term's path, which is what the wrapper made authoritative.
+    table_path = (getattr(table, "life_path", "") or "") or term_path
     enrollment = None
     if table_path:
-        enrollment = next(
-            (e for e in (getattr(entity, "life_paths", None) or [])
-             if (getattr(e, "path_id", "") or "") == table_path),
-            None,
-        )
+        enrollment = enrollment_for_path(
+            entity, table_path, resolve_projection_id(entity, repo))
     if enrollment is not None and getattr(enrollment, "faction_id", ""):
         bindings["path_faction"] = one(enrollment.faction_id, "entity")
         bindings["path_id"] = one(enrollment.path_id or table_path)

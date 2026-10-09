@@ -165,12 +165,23 @@ class Entity(BaseModel):
     # play ([[UI-UX Design#Theming]]). The shape and two worked examples live in
     # `db/universe_palettes.py`; a knob outside that vocabulary does nothing.
     palette: Optional[dict] = None
-    # Life path tracking
-    life_paths: list["Enrollment"] = Field(default_factory=list)  # memberships (faction + path)
+    # Life path tracking — **per body** ([[B271]]).
+    #
+    # A term is served by a body, in that body's universe: it grants its traits,
+    # makes its membership edge and musters. So both the checkpoint and the
+    # memberships it produces are keyed by the projection living them, and a
+    # character mid-term in one universe is *not* mid-term in another. Before
+    # this, one checkpoint sat on the entity and followed the character into every
+    # body — you could advance a Three Realms term while playing an Earth
+    # projection, and the executor, which never checked a universe, would apply
+    # its effects there.
+    life_paths: list["Enrollment"] = Field(default_factory=list)  # memberships (body + faction + path)
     active_universes: list[str] = Field(default_factory=list)  # faction-only: where active
     suitable_life_path_ids: list[str] = Field(default_factory=list)  # faction-only: offered paths
     discovered_life_paths: list[str] = Field(default_factory=list)  # _keys of discovered paths
-    pending_term: Optional["PendingTerm"] = None  # in-progress term state (checkpoint)
+    #: projection id → the term that body is part-way through. Keyed rather than a
+    #: single value because a character has one body per universe.
+    pending_terms: dict[str, "PendingTerm"] = Field(default_factory=dict)
     # Post-roll consequence menu — location/lair moves authored directly on the entity.
     consequence_options: list["ConsequenceOption"] = Field(default_factory=list)
 

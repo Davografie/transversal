@@ -16,6 +16,13 @@ Two flows are therefore possible, and the difference matters:
   the legacy behaviour, where ``next_step`` effects in the entry move the term.
   This is what keeps pre-wrapper content working between the code landing and
   ``migrate_lifepath_wrapper`` running.
+
+**A term belongs to a body** ([[B271]]). It is served by a projection, in that
+projection's universe, and it grants *that* body's traits and membership — so the
+checkpoint is keyed by projection (``Entity.pending_terms``) and every entry point
+resolves which body is asking (``services/lifepath_scope``). Advancing a term
+while playing another body is what this prevents; it was previously possible, and
+the executor never checked a universe.
 """
 
 from __future__ import annotations
@@ -33,6 +40,12 @@ from transversal.domain import (
     PendingTerm,
 )
 from transversal.services.effects_applier import apply_effects, EffectsResult
+from transversal.services.lifepath_scope import (
+    enrollments_for,
+    pending_term_for,
+    resolve_projection_id,
+    UNSCOPED,
+)
 from transversal.services.roll_table import entry_key_for, resolve_applicable_entry
 from transversal.services.effect_refs import target_value
 
@@ -66,8 +79,14 @@ def entry_step(lp: LifePath) -> Optional[LifePathStep]:
     return None
 
 
-def start_term(entity: Entity, faction_id: str, path_id: str, repo) -> PendingTerm:
-    """Begin (or restart) a term in a faction's life path."""
+def start_term(entity: Entity, faction_id: str, path_id: str, repo,
+               projection_id: Optional[str] = None) -> PendingTerm:
+    """Begin (or restart) a term in a faction's life path, for one body.
+
+    ``projection_id`` names the body serving it; omitted, the acting body is
+    resolved (see ``services/lifepath_scope``). The term replaces any the *same*
+    body already had — another body's term is untouched.
+    """
     lp = repo.get_lifepath(path_id)
     if lp is None:
         raise ValueError(f"LifePath '{path_id}' not found")
@@ -75,13 +94,17 @@ def start_term(entity: Entity, faction_id: str, path_id: str, repo) -> PendingTe
     if step is None:
         raise ValueError(f"LifePath '{path_id}' has no entry step")
 
+    pid = resolve_projection_id(entity, repo, projection_id)
     pt = PendingTerm(
         faction_id=faction_id,
         path_id=path_id,
+        projection_id=pid,
         current_step_id=step.id,
         current_table_id=step.table_id,
     )
-    entity.pending_term = pt
+    if getattr(entity, "pending_terms", None) is None:
+        entity.pending_terms = {}
+    entity.pending_terms[pid] = pt
     return pt
 
 
@@ -89,6 +112,7 @@ def resolve_step(
     entity: Entity,
     repo,
     *,
+    projection_id: Optional[str] = None,
     roll: Optional[int] = None,
     tier: Optional[OutcomeTier] = None,
     index: Optional[int] = None,
@@ -102,7 +126,8 @@ def resolve_step(
     immediate. Returns a summary dict with ``done``, ``pending_term``, and any
     pending target choices.
     """
-    pt = entity.pending_term
+    pid = resolve_projection_id(entity, repo, projection_id)
+    pt = pending_term_for(entity, pid)
     if pt is None:
         return {"done": True, "error": "no pending term"}
     step_id = pt.current_step_id or pt.current_table_id
@@ -196,7 +221,7 @@ def resolve_step(
                     if e.timing != EffectTiming.IMMEDIATE]
 
         result: EffectsResult = apply_effects(entity, immediate, repo, effect_context)
-        flow = _process_flow(entity, row_flow + delta_flow, repo,
+        flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
                              binding=binding, step=step, wrapped=wrapped)
         _persist(entity, result, repo, old_razmerit)
 
@@ -209,7 +234,7 @@ def resolve_step(
         # No scheduler available (e.g. direct unit tests) — apply everything now.
         result: EffectsResult = apply_effects(
             entity, row_mutations + delta_mutations, repo, effect_context)
-        flow = _process_flow(entity, row_flow + delta_flow, repo,
+        flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
                              binding=binding, step=step, wrapped=wrapped)
         _persist(entity, result, repo, old_razmerit)
 
@@ -223,13 +248,13 @@ def resolve_step(
         "applied": [a.summary for a in result.applied],
         "scheduled": scheduled,
         "pending_choices": [c.kind for c in result.pending_choices] + flow.get("pending_choices", []),
-        "pending_term": entity.pending_term,
+        "pending_term": pending_term_for(entity, pid),
         "mustered": flow.get("mustered", False),
         "mishap_muster": flow.get("mishap_muster", False),
     }
 
 
-def _process_flow(entity: Entity, legacy_effects: list[Effect], repo, *,
+def _process_flow(entity: Entity, legacy_effects: list[Effect], repo, *, pt,
                   binding=None, step=None, wrapped: bool = False) -> dict:
     """Apply the row's flow: the path's structure, or the legacy effects.
 
@@ -243,84 +268,93 @@ def _process_flow(entity: Entity, legacy_effects: list[Effect], repo, *,
 
     if not wrapped:
         for effect in legacy_effects:
-            if entity.pending_term is None:
+            if not _live(entity, pt):
                 break
 
             if effect.action == "force_muster":
-                _mark_mustered(entity, mishap=True)
+                _mark_mustered(entity, pt, mishap=True)
                 flow["done"] = True
                 flow["mustered"] = True
                 flow["mishap_muster"] = True
                 continue
 
             if effect.action == "muster":
-                _mark_mustered(entity, mishap=False)
+                _mark_mustered(entity, pt, mishap=False)
                 flow["done"] = True
                 flow["mustered"] = True
                 flow["mishap_muster"] = False
                 continue
 
             if effect.action == "enroll":
-                _ensure_enrollment(entity, repo)
+                _ensure_enrollment(entity, pt, repo)
                 continue
 
             if effect.action == "draft":
-                _draft(entity, target_value(effect), repo, flow)
+                _draft(entity, pt, target_value(effect), repo, flow)
                 continue
 
             if effect.action == "next_step":
-                _next_step(entity, effect, flow, repo)
+                _next_step(entity, pt, effect, flow, repo)
 
-    if entity.pending_term is None:
+    if not _live(entity, pt):
         return flow
 
     # Structural flow — the wrapper's answer for this row.
     if binding is not None:
         if binding.enroll:
-            _ensure_enrollment(entity, repo)
+            _ensure_enrollment(entity, pt, repo)
         if binding.next:
-            _advance(entity, binding.next, flow, repo)
+            _advance(entity, pt, binding.next, flow, repo)
         elif binding.exit_kind:
-            _exit(entity, binding.exit_kind, binding.exit_path, repo, flow)
+            _exit(entity, pt, binding.exit_kind, binding.exit_path, repo, flow)
         else:
-            _end_term(entity, flow)  # bound, and the binding says "end here"
+            _end_term(entity, pt, flow)  # bound, and the binding says "end here"
     elif step is not None and step.next:
-        _advance(entity, step.next, flow, repo)
+        _advance(entity, pt, step.next, flow, repo)
     elif wrapped:
         # A wrapped path, a row it bound nothing, and no step default. End rather
         # than sit on the same step for ever; `validate_life_path` is what should
         # have caught it, and looping silently is the worse failure.
-        _end_term(entity, flow)
+        _end_term(entity, pt, flow)
 
     return flow
 
 
-def _end_term(entity: Entity, flow: dict) -> None:
-    """Clear the checkpoint — the term is over."""
-    pt = entity.pending_term
-    if pt is None:
-        return
-    pt.current_step_id = ""
-    pt.current_table_id = ""
+def _live(entity: Entity, pt: PendingTerm) -> bool:
+    """Whether this term is still the one stored for its body.
+
+    Mustering and ending *remove* the checkpoint, so a flow step has to ask rather
+    than assume: the term object it holds may already be detached.
+    """
+    return (getattr(entity, "pending_terms", None) or {}).get(pt.projection_id) is pt
+
+
+def _end_term(entity: Entity, pt: PendingTerm, flow: dict) -> None:
+    """Drop the checkpoint — the term is over.
+
+    A finished term leaves *no* checkpoint rather than an empty one: an empty
+    checkpoint is a thing with no meaning that every reader would then have to
+    treat as absent. Only this body's entry is removed.
+    """
+    terms = getattr(entity, "pending_terms", None) or {}
+    if terms.get(pt.projection_id) is pt:
+        del terms[pt.projection_id]
     flow["done"] = True
 
 
-def _draft(entity: Entity, path_id: str, repo, flow: dict) -> None:
-    """Hand the term to another life path."""
-    pt = entity.pending_term
+def _draft(entity: Entity, pt: PendingTerm, path_id: str, repo, flow: dict) -> None:
+    """Hand the term to another life path — the same body keeps serving it."""
     lp = repo.get_lifepath(path_id) if path_id else None
     step = entry_step(lp) if lp else None
-    if pt is None:
-        return
     if step is None:
-        _end_term(entity, flow)
+        _end_term(entity, pt, flow)
         return
     pt.path_id = path_id
     pt.current_step_id = step.id
     pt.current_table_id = step.table_id
 
 
-def _exit(entity: Entity, kind: str, path_id: str, repo, flow: dict) -> None:
+def _exit(entity: Entity, pt: PendingTerm, kind: str, path_id: str, repo, flow: dict) -> None:
     """Leave the path — how, is what ``kind`` says.
 
     ``muster`` / ``force_muster`` are *destinations* with a meaning, not effects
@@ -329,25 +363,22 @@ def _exit(entity: Entity, kind: str, path_id: str, repo, flow: dict) -> None:
     path; anything else simply ends it.
     """
     if kind == "draft":
-        _draft(entity, path_id, repo, flow)
+        _draft(entity, pt, path_id, repo, flow)
         return
     if kind in ("muster", "force_muster"):
         mishap = kind == "force_muster"
-        _mark_mustered(entity, mishap=mishap)
+        _mark_mustered(entity, pt, mishap=mishap)
         flow["done"] = True
         flow["mustered"] = True
         flow["mishap_muster"] = mishap
         return
-    _end_term(entity, flow)
+    _end_term(entity, pt, flow)
 
 
-def _advance(entity: Entity, step_id: str, flow: dict, repo) -> None:
+def _advance(entity: Entity, pt: PendingTerm, step_id: str, flow: dict, repo) -> None:
     """Move the term to ``step_id`` within the path — or end it when empty."""
-    pt = entity.pending_term
-    if pt is None:
-        return
     if not step_id:
-        _end_term(entity, flow)
+        _end_term(entity, pt, flow)
         return
     lp = repo.get_lifepath(pt.path_id)
     step = find_step(lp, step_id)
@@ -355,18 +386,14 @@ def _advance(entity: Entity, step_id: str, flow: dict, repo) -> None:
         # A binding naming a step the path does not have is an authoring error.
         # End the term rather than loop on a step that cannot be resolved; the
         # validator (`validate_life_path`) is what should have caught it.
-        _end_term(entity, flow)
+        _end_term(entity, pt, flow)
         return
     pt.current_step_id = step.id
     pt.current_table_id = step.table_id
 
 
-def _next_step(entity: Entity, effect: Effect, flow: dict, repo) -> None:
+def _next_step(entity: Entity, pt: PendingTerm, effect: Effect, flow: dict, repo) -> None:
     """Legacy effect-driven flow — used only by paths with no declared steps."""
-    pt = entity.pending_term
-    if pt is None:
-        return
-
     target = target_value(effect)
 
     if target.startswith("{choose"):
@@ -374,37 +401,46 @@ def _next_step(entity: Entity, effect: Effect, flow: dict, repo) -> None:
         return
 
     if not target:
-        _end_term(entity, flow)
+        _end_term(entity, pt, flow)
         return
 
-    _advance(entity, target, flow, repo)
+    _advance(entity, pt, target, flow, repo)
 
 
-def _mark_mustered(entity: Entity, mishap: bool) -> None:
-    pt = entity.pending_term
-    if pt is not None:
-        for enrollment in entity.life_paths:
-            if enrollment.faction_id == pt.faction_id and enrollment.path_id == pt.path_id:
-                enrollment.mustered = True
-                enrollment.mishap_muster = mishap
-                break
-    entity.pending_term = None
+def _mark_mustered(entity: Entity, pt: PendingTerm, mishap: bool) -> None:
+    """Muster the **body** out — its own membership, and only its own.
 
-
-def _ensure_enrollment(entity: Entity, repo) -> None:
-    """Idempotently record the active term as an enrollment.
-
-    Also ensures the character↔faction ``membership`` edge exists so rank and
-    tenure relationship traits have somewhere to attach.
+    Matched on the body as well as the faction and path ([[B271]]): two bodies may
+    serve the same path, and mustering in one must not mark the other mustered.
     """
-    pt = entity.pending_term
-    if pt is None:
-        return
-    for enrollment in entity.life_paths:
+    for enrollment in enrollments_for(entity, pt.projection_id):
         if enrollment.faction_id == pt.faction_id and enrollment.path_id == pt.path_id:
+            enrollment.mustered = True
+            enrollment.mishap_muster = mishap
+            break
+    terms = getattr(entity, "pending_terms", None) or {}
+    if terms.get(pt.projection_id) is pt:
+        del terms[pt.projection_id]
+
+
+def _ensure_enrollment(entity: Entity, pt: PendingTerm, repo) -> None:
+    """Idempotently record the active term as an enrollment for this body.
+
+    The enrollment is scoped to the body serving the term ([[B271]]), so the same
+    character may hold the same membership through two bodies without them being
+    the same fact. Also ensures the character↔faction ``membership`` edge exists
+    so rank and tenure relationship traits have somewhere to attach.
+    """
+    for enrollment in enrollments_for(entity, pt.projection_id):
+        if (enrollment.faction_id == pt.faction_id
+                and enrollment.path_id == pt.path_id):
             break
     else:
-        entity.life_paths.append(Enrollment(faction_id=pt.faction_id, path_id=pt.path_id))
+        entity.life_paths.append(Enrollment(
+            faction_id=pt.faction_id,
+            path_id=pt.path_id,
+            projection_id=pt.projection_id,
+        ))
 
     if repo.get_relationship(entity.id, pt.faction_id, "membership") is None:
         repo.create_relationship(entity.id, pt.faction_id, "membership")

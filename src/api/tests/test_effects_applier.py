@@ -2250,8 +2250,13 @@ def test_gain_relationship_trait():
 
 
 def test_term_faction_relationship_token():
-    """{term_faction} resolves to the current pending term's faction."""
-    entity = _entity(pending_term=PendingTerm(faction_id="fac-current", path_id="lp-1", current_table_id="tbl"))
+    """{term_faction} resolves to the faction the **acting body's** term is in.
+
+    Keyed by body since [[B271]]: the token is about the life being lived, and a
+    character has one body per universe.
+    """
+    entity = _entity(pending_terms={"": PendingTerm(
+        faction_id="fac-current", path_id="lp-1", current_table_id="tbl")})
     captured = {}
 
     class Repo(RelationshipFakeRepo):

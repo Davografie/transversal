@@ -104,9 +104,17 @@ class LifePath(BaseModel):
     entry_table_id: str = ""
 
 class Enrollment(BaseModel):
-    """A character's membership in a faction's life path."""
+    """A character's membership in a faction's life path — **held by a body**.
+
+    ``projection_id`` is the body that served the term ([[B271]]). Membership is a
+    fact about a life lived in a universe, not about the character across all of
+    them: two bodies may serve the same path without colliding, and mustering in
+    one must not mark the other mustered. Empty means the membership predates
+    per-body scoping and is read as belonging to whichever body is asking.
+    """
     faction_id: str
     path_id: str
+    projection_id: str = ""
     mustered: bool = False
     mishap_muster: bool = False
 
@@ -130,6 +138,10 @@ class PendingTerm(BaseModel):
     """
     faction_id: str = ""
     path_id: str = ""
+    #: The body serving this term ([[B271]]). The term is *lived* by a projection
+    #: in a universe, so this is what keys it on the entity and what decides which
+    #: enrollments and mustering it owns.
+    projection_id: str = ""
     current_step_id: str = ""
     current_table_id: str = ""  # derived from current_step_id
     continuation: list[str] = Field(default_factory=list)  # vestigial

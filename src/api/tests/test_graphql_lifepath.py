@@ -153,7 +153,7 @@ def test_start_term_and_resolve_step_wiring():
     assert pt["factionId"] == "fac-1"
     assert pt["pathId"] == "lp-1"
     assert pt["currentTableId"] == "tbl-a"
-    assert repo.entities["char-1"].pending_term.current_table_id == "tbl-a"
+    assert repo.entities["char-1"].pending_terms[""].current_table_id == "tbl-a"
 
     first = _run(repo, """
         mutation($eid: ID!, $index: Int) {

@@ -237,11 +237,13 @@ class MutationsEffects:
 
     @strawberry.mutation
     def start_term(self, info: strawberry.Info, entity_id: strawberry.ID,
-                   faction_id: strawberry.ID, path_id: strawberry.ID) -> GqlPendingTerm:
-        """Begin (or restart) a term in a faction's life path.
+                   faction_id: strawberry.ID, path_id: strawberry.ID,
+                   projection_id: Optional[str] = None) -> GqlPendingTerm:
+        """Begin (or restart) a term in a faction's life path, **for one body**.
 
-        Sets the entity's pending-term checkpoint to the path's entry table and
-        persists it so the term can be resumed later.
+        `projectionId` names the body serving the term ([[B271]]); omitted, the
+        acting body is resolved from `currentProjection`. Only that body's
+        checkpoint is replaced — another body's term is left alone.
         """
         from transversal.services.lifepath_executor import start_term as start_lp_term
 
@@ -250,12 +252,14 @@ class MutationsEffects:
         if entity is None:
             raise ValueError(f"Entity '{entity_id}' not found")
 
-        pt = start_lp_term(entity, str(faction_id), str(path_id), repo)
+        pt = start_lp_term(entity, str(faction_id), str(path_id), repo,
+                           projection_id=projection_id)
         repo.update_entity(entity)
 
         return GqlPendingTerm(
             faction_id=pt.faction_id,
             path_id=pt.path_id,
+            projection_id=pt.projection_id,
             current_step_id=pt.current_step_id,
             current_table_id=pt.current_table_id,
             continuation=pt.continuation,
@@ -263,6 +267,7 @@ class MutationsEffects:
 
     @strawberry.mutation
     def resolve_step(self, info: strawberry.Info, entity_id: strawberry.ID,
+                     projection_id: Optional[str] = None,
                      roll: Optional[int] = None,
                      tier: Optional[GqlOutcomeTier] = None,
                      index: Optional[int] = None) -> LifePathStepResult:
@@ -283,7 +288,8 @@ class MutationsEffects:
 
         domain_tier = DomainOutcomeTier(tier.value) if tier is not None else None
         summary = resolve_lp_step(
-            entity, repo, roll=roll, tier=domain_tier, index=index,
+            entity, repo, projection_id=projection_id,
+            roll=roll, tier=domain_tier, index=index,
             engine=info.context["effects_engine"],
         )
 
@@ -292,6 +298,7 @@ class MutationsEffects:
             GqlPendingTerm(
                 faction_id=pt.faction_id,
                 path_id=pt.path_id,
+                projection_id=pt.projection_id,
                 current_step_id=pt.current_step_id,
                 current_table_id=pt.current_table_id,
                 continuation=pt.continuation,

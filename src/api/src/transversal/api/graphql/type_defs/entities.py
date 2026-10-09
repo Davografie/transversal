@@ -79,7 +79,12 @@ class Attunement:
 
 @strawberry.type
 class PendingTerm:
-    """In-progress life path term checkpoint.
+    """In-progress life path term checkpoint — **for one body** ([[B271]]).
+
+    `projection_id` names the body serving the term. A term is lived by a
+    projection in its own universe, so a character mid-term in one universe is not
+    mid-term in another; `pendingTerm` resolves the acting body unless the caller
+    names one.
 
     `current_step_id` is the checkpoint; `current_table_id` is derived from it
     (the table that step wraps) and kept because the surfaces read it to know
@@ -87,6 +92,7 @@ class PendingTerm:
     """
     faction_id: str
     path_id: str
+    projection_id: str = ""
     current_step_id: str = ""
     current_table_id: str
     continuation: list[str]
@@ -271,16 +277,28 @@ class Entity:
         return build_image_info(entry, role, em.repo.role_image_url(entry, role) or "")
 
     @strawberry.field
-    def pending_term(self, info: strawberry.Info) -> Optional[PendingTerm]:
-        """The entity's in-progress life path term checkpoint, if any."""
+    def pending_term(self, info: strawberry.Info,
+                     projection_id: Optional[str] = None) -> Optional[PendingTerm]:
+        """The in-progress term **for the body asking**, if any ([[B271]]).
+
+        `projectionId` names the body; omitted, the acting body is resolved from
+        `currentProjection` (then from `currentUniverse`). This used to read a
+        single checkpoint off the entity with no body dimension at all, which is
+        why a Three Realms term showed up while playing an Earth projection.
+        """
         em = info.context["entity_manager"]
         entity = em.repo.get_entity(str(self.id))
-        if entity is None or entity.pending_term is None:
+        if entity is None:
             return None
-        pt = entity.pending_term
+        from transversal.services.lifepath_scope import pending_term_for, resolve_projection_id
+
+        pt = pending_term_for(entity, resolve_projection_id(entity, em.repo, projection_id))
+        if pt is None:
+            return None
         return PendingTerm(
             faction_id=pt.faction_id,
             path_id=pt.path_id,
+            projection_id=pt.projection_id,
             current_step_id=pt.current_step_id,
             current_table_id=pt.current_table_id,
             continuation=pt.continuation,

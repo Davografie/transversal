@@ -10,6 +10,7 @@ from transversal.domain import (
     LifePath,
     LifePathBinding,
     LifePathStep,
+    PendingTerm,
     RollTable,
     RollTableEntry,
     RollTableScheme,
@@ -140,7 +141,7 @@ def test_next_step_advances():
     entity = _entity()
     start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=1)
-    assert entity.pending_term.current_table_id == "tbl-b"
+    assert entity.pending_terms[""].current_table_id == "tbl-b"
 
 
 def _wrapped(path_id, steps, entry_step):
@@ -167,8 +168,8 @@ def test_wrapped_step_follows_the_paths_edge_not_the_entrys():
     entity = _entity()
     start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=1)
-    assert entity.pending_term.current_step_id == "s2"
-    assert entity.pending_term.current_table_id == "tbl-b"  # not tbl-elsewhere
+    assert entity.pending_terms[""].current_step_id == "s2"
+    assert entity.pending_terms[""].current_table_id == "tbl-b"  # not tbl-elsewhere
 
 
 def test_multi_exit_needs_no_return_address():
@@ -204,7 +205,7 @@ def test_multi_exit_needs_no_return_address():
     start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=1)
     resolve_step(entity, repo, index=1)
-    assert entity.pending_term.current_table_id == "tbl-advance"
+    assert entity.pending_terms[""].current_table_id == "tbl-advance"
 
     # Injured → mishap. The same wrapped table, a different row, a different
     # destination — with no map on the checkpoint either time.
@@ -212,7 +213,7 @@ def test_multi_exit_needs_no_return_address():
     start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=1)
     resolve_step(entity, repo, index=2)
-    assert entity.pending_term.current_table_id == "tbl-mishap"
+    assert entity.pending_terms[""].current_table_id == "tbl-mishap"
 
 
 def test_binding_next_empty_leaves_the_path():
@@ -227,8 +228,8 @@ def test_binding_next_empty_leaves_the_path():
     entity = _entity()
     start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=1)
-    assert entity.pending_term.current_step_id == ""
-    assert entity.pending_term.current_table_id == ""
+    # A finished term leaves *no* checkpoint rather than an empty one.
+    assert entity.pending_terms == {}
 
 
 def test_exit_kind_musters_without_a_muster_effect():
@@ -250,7 +251,7 @@ def test_exit_kind_musters_without_a_muster_effect():
     entity = _entity(life_paths=[Enrollment(faction_id="fac-1", path_id="lp-1")])
     start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=2)
-    assert entity.pending_term is None
+    assert entity.pending_terms == {}
     assert entity.life_paths[0].mustered is True
     assert entity.life_paths[0].mishap_muster is True
 
@@ -309,7 +310,7 @@ def test_force_muster_marks_enrollment():
     entity = _entity(life_paths=[Enrollment(faction_id="fac-1", path_id="lp-1", mustered=False)])
     start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=1)
-    assert entity.pending_term is None
+    assert entity.pending_terms == {}
     assert entity.life_paths[0].mustered is True
     assert entity.life_paths[0].mishap_muster is True
 
@@ -369,7 +370,7 @@ def test_muster_marks_mustered_without_mishap():
     entity = _entity(life_paths=[Enrollment(faction_id="fac-1", path_id="lp-1", mustered=False)])
     start_term(entity, "fac-1", "lp-1", repo)
     resolve_step(entity, repo, index=1)
-    assert entity.pending_term is None
+    assert entity.pending_terms == {}
     assert entity.life_paths[0].mustered is True
     assert entity.life_paths[0].mishap_muster is False
 
@@ -420,3 +421,98 @@ def test_resolve_step_records_historical_outcome():
     assert rec["data"]["table_name"] == "tbl-a"
     assert rec["data"]["entry_label"] == "Martial Arts"
     assert rec["data"]["index"] == 1
+
+
+# ── a term belongs to the body living it ([[B271]]) ─────────────────────────
+
+def test_starting_a_term_in_one_body_leaves_another_body_alone():
+    """The reported bug, as a test: a term follows the body, not the character.
+
+    Before this, one checkpoint sat on the entity and followed the character into
+    every universe — which is why an Earth projection showed a Three Realms term.
+    """
+    from transversal.services.lifepath_scope import pending_term_for
+
+    repo = ExecutorRepo()
+    for pid, tid in (("lp-a", "tbl-a"), ("lp-b", "tbl-b")):
+        repo.lifepaths[pid] = _wrapped(pid, [LifePathStep(id="s1", table_id=tid)], entry_step="s1")
+        repo.tables[tid] = _table(tid, [_entry("row", [])])
+
+    entity = _entity(current_projection="body-1")
+    start_term(entity, "fac-a", "lp-a", repo)
+
+    assert set(entity.pending_terms) == {"body-1"}
+    assert entity.pending_terms["body-1"].path_id == "lp-a"
+    # The other body is not mid-term, and starting its own does not disturb this.
+    assert pending_term_for(entity, "body-2") is None
+    start_term(entity, "fac-b", "lp-b", repo, projection_id="body-2")
+    assert entity.pending_terms["body-1"].path_id == "lp-a"
+    assert entity.pending_terms["body-2"].path_id == "lp-b"
+
+
+def test_resolving_moves_only_the_acting_bodys_term():
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-a"] = _wrapped("lp-a", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[LifePathBinding(key="0", next="s2")]),
+        LifePathStep(id="s2", table_id="tbl-a2"),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("go", [])])
+    repo.tables["tbl-a2"] = _table("tbl-a2", [_entry("end", [])])
+    repo.lifepaths["lp-b"] = _wrapped("lp-b", [
+        LifePathStep(id="s1", table_id="tbl-b", bindings=[LifePathBinding(key="0", next="s2")]),
+        LifePathStep(id="s2", table_id="tbl-b2"),
+    ], entry_step="s1")
+    repo.tables["tbl-b"] = _table("tbl-b", [_entry("row", [])])
+    repo.tables["tbl-b2"] = _table("tbl-b2", [_entry("end", [])])
+
+    entity = _entity(current_projection="body-1")
+    start_term(entity, "fac-a", "lp-a", repo)
+    entity.current_projection = "body-2"
+    start_term(entity, "fac-b", "lp-b", repo)
+
+    # Acting as body-2: only its term advances.
+    resolve_step(entity, repo, index=1)
+    assert entity.pending_terms["body-2"].current_step_id == "s2"
+    assert entity.pending_terms["body-1"].current_step_id == "s1", "body-1 did not move"
+
+
+def test_mustering_one_body_does_not_muster_another():
+    """Membership is per body ([[B271]]): the same path through two bodies is two facts."""
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-a"] = _wrapped("lp-a", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[
+            LifePathBinding(key="0", enroll=True, exit_kind="muster"),
+        ]),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("muster out", [])])
+
+    entity = _entity(current_projection="body-1")
+    # Both bodies already hold the same membership.
+    entity.life_paths = [
+        Enrollment(faction_id="fac-a", path_id="lp-a", projection_id="body-1"),
+        Enrollment(faction_id="fac-a", path_id="lp-a", projection_id="body-2"),
+    ]
+    start_term(entity, "fac-a", "lp-a", repo)
+    resolve_step(entity, repo, index=1)
+
+    by_body = {e.projection_id: e for e in entity.life_paths}
+    assert by_body["body-1"].mustered is True
+    assert by_body["body-2"].mustered is False, "the other body is still serving"
+    assert entity.pending_terms == {}, "only the acting body's checkpoint is gone"
+
+
+def test_an_unscoped_term_still_serves_whichever_body_asks():
+    """The compatibility shim: pre-migration content is not stranded.
+
+    A term stored under the unscoped key belongs to no particular body, so it is
+    handed to whoever asks — but a *scoped* term is never given to another body.
+    """
+    from transversal.services.lifepath_scope import pending_term_for
+
+    entity = _entity(current_projection="body-1")
+    entity.pending_terms = {"": PendingTerm(faction_id="fac", path_id="lp", current_table_id="t")}
+    assert pending_term_for(entity, "body-2") is not None
+    assert pending_term_for(entity, "body-3") is not None
+
+    entity.pending_terms = {"body-1": PendingTerm(faction_id="fac", path_id="lp", current_table_id="t")}
+    assert pending_term_for(entity, "body-2") is None, "a scoped term is not shared"

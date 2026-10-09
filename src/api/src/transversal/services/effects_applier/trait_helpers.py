@@ -74,9 +74,12 @@ def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
 
     rel_target = (effect.context or {}).get("relationship")
     if rel_target == "{term_faction}":
-        # Shared tables can't hardcode a faction; resolve to the faction the
-        # entity is currently in a term with.
-        rel_target = entity.pending_term.faction_id if entity.pending_term else ""
+        # Shared tables can't hardcode a faction; resolve to the faction **the
+        # acting body** is currently in a term with ([[B271]]).
+        from transversal.services.lifepath_scope import active_term
+
+        term = active_term(entity, repo)
+        rel_target = (term.faction_id or "") if term is not None else ""
     if rel_target:
         rel_type = (_ctx(effect, "relationship_type") or "membership").strip() or "membership"
         rel = repo.get_relationship(entity.id, rel_target, rel_type)

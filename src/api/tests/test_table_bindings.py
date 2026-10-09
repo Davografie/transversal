@@ -14,10 +14,16 @@ from transversal.services.roll_table import table_bindings
 from transversal.services.target_spec import TargetSpec
 
 
-def _entity(*, enrollments=(), term=None):
-    return NS(id="char-1", life_paths=list(enrollments), pending_term=term,
+def _entity(*, enrollments=(), term=None, projection=None):
+    """An entity whose term and memberships hang off the *body* ([[B271]]).
+
+    `projection` is the body id; None means the unscoped body, which is what an
+    entity with no active projection resolves to.
+    """
+    return NS(id="char-1", life_paths=list(enrollments),
+              pending_terms=({projection or "": term} if term is not None else {}),
               current_universe="three_realms", current_location="loc-1", razmerit=0,
-              current_projection=None)
+              current_projection=projection)
 
 
 def _table(table_id="rt-x", life_path=None, declared=()):
@@ -213,7 +219,7 @@ def test_a_table_source_walks_to_the_path_the_term_is_in():
 
     table = NS(id="rt-shared", entries=[])
     wrapped = NS(id="lp-a", entry_table_id="", steps=[NS(table_id="rt-shared")])
-    entity = NS(pending_term=NS(path_id="lp-a"))
+    entity = NS(pending_terms={"": NS(path_id="lp-a")}, current_projection=None)
     repo = NS(get_lifepath=lambda lid: wrapped if lid == "lp-a" else None,
               list_all_lifepaths=lambda: [wrapped])
     spec = TargetSpec.model_validate({"steps": [

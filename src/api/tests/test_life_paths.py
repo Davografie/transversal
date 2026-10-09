@@ -81,7 +81,8 @@ class TestEntityLifePathFields:
         )
         assert e.life_paths == []
         assert e.discovered_life_paths == []
-        assert e.pending_term is None
+        # Keyed by body ([[B271]]), not a single checkpoint on the entity.
+        assert e.pending_terms == {}
 
     def test_with_enrollments(self):
         e = Entity(
