@@ -567,8 +567,8 @@
       </div>
       <div v-else class="sheet-scroll">
         <GmPlayOverview
-          :current-location-id="locationId"
-          :current-location-name="locationName"
+          :current-location-id="placeId"
+          :current-location-name="placeName"
           :entities="sceneEntities"
           :location-tree="locationTree"
           :in-session="inSession"
@@ -635,7 +635,7 @@
 
       <RollTableMenu
         v-if="rollTableMenu"
-        :entity-id="entity?.id || locationId"
+        :entity-id="entity?.id || placeId"
         :table-id="rollTableMenu.tableId"
         :title="rollTableMenu.name"
         :entity-razmerit="entity?.razmerit ?? 0"
@@ -697,11 +697,16 @@ const props = defineProps({
   // shape that does not need height to work.
   traitSetAccordion: { type: Boolean, default: false },
   gmMode: { type: Boolean, default: false },
-  // The place the GM is standing in, and its name. The roaming GM has no entity
-  // to be in the scene *as*, so the scene itself is the subject of the play
-  // surface the sheet now hosts — and the anchor a GM-owned rule is run against.
-  locationId: { type: String, default: '' },
-  locationName: { type: String, default: '' },
+  // The place the GM is standing in, and its name — the **GM's** place, which is
+  // not the sheet's own `locationName` ref (that one resolves from the entity
+  // being viewed). They are deliberately not called the same thing: an earlier cut
+  // of this used `locationId`/`locationName`, and the second silently lost to the
+  // local ref of that name, so the play surface drew the slug where the panel
+  // reads the name (`loc-krasnoyarsk` for "Krasnoyarsk-45"). `place` is the
+  // project's word for the location the fiction is standing in (`placeSfxRules`,
+  // the "Places" tree), so it also says *whose* location this is.
+  placeId: { type: String, default: '' },
+  placeName: { type: String, default: '' },
   inSession: { type: Boolean, default: false },
   externalPoolSources: { type: Array, default: null },
   overrideEntityId: { type: String, default: null },
@@ -745,12 +750,26 @@ const traitPlay = useTraitPlay({
 const entityCache = useEntityCache()
 const { fetchFor: fetchScheduledEvents, formatTimers } = useScheduledEvents()
 const entity = ref(null)
+// **Which entity this sheet is showing** — the perspective, which is what the
+// props say, and the only thing that can say "nobody". `entity` below is a *cache*
+// of the fetch for that id, so it is not the authority on whether there is a sheet
+// to draw: a perspective can be dropped without another being taken up (a GM
+// returning to free-roam), and until this gate existed the stale cache kept the
+// entity branch rendering and the roaming GM's play surface unreachable (the
+// author, 2026-09-29).
+const shownEntityId = computed(() => props.overrideEntityId || props.entityId)
 // A primitive gate for the body's `v-if` chain. Binding the branch to the
 // entity *object* kept a stable identity anyway (Vue keys `v-if` branches by
 // index), but read as if a refresh would remount; `hasEntity` says what is
 // meant, and pairs with the `!hasEntity &&` guards above so a refresh patches
 // in place instead of rebuilding (B125).
-const hasEntity = computed(() => !!entity.value)
+//
+// Both conjuncts carry weight. `shownEntityId` is the decision; `entity` is the
+// payload, and without it the branch would render an entity-shaped hole for the
+// moment a perspective is taken up but not yet fetched. Reading the props here
+// also means the branch flips with the perspective rather than with a watcher or
+// a response — the failure mode this replaces.
+const hasEntity = computed(() => !!shownEntityId.value && !!entity.value)
 const activeProjection = computed(() => {
   const e = entity.value
   if (!e || !e.projections) return null
@@ -901,11 +920,13 @@ function assignIfChanged(ref, next) {
 async function fetchTimers() {
   const eid = props.overrideEntityId || props.entityId
   if (!eid) return
+  const e = epoch()
   const tsIds = (allTraitSettings.value || []).map((t) => t.id)
   const [ent, ts] = await Promise.all([
     fetchScheduledEvents('entity', eid),
     tsIds.length ? fetchScheduledEvents('trait_setting', null, tsIds) : Promise.resolve([]),
   ])
+  if (stale(e)) return
   assignIfChanged(entityTimers, ent || [])
   assignIfChanged(traitSettingTimers, ts || [])
 }
@@ -2601,15 +2622,18 @@ function sfxCardModel(sfxId, variant = 'card') {
 async function fetchAvailableSfxIds() {
   const id = props.overrideEntityId || props.entityId
   if (!id) { availableSfxIds.value = null; return }
+  const e = epoch()
   try {
     const data = await graphql(
       `query($id: ID!, $u: String!) { availableSfxIds(entityId: $id, universe: $u) }`,
       { id, u: props.universe },
     )
+    if (stale(e)) return
     availableSfxIds.value = (data?.availableSfxIds || []).map(String)
     await fetchSfxUnmetReasons(id)
-  } catch (e) {
-    console.error('fetchAvailableSfxIds', e)
+  } catch (err) {
+    console.error('fetchAvailableSfxIds', err)
+    if (stale(e)) return
     availableSfxIds.value = null
     sfxUnmetReasons.value = {}
   }
@@ -2620,6 +2644,7 @@ async function fetchAvailableSfxIds() {
 async function fetchSfxUnmetReasons(entityId) {
   const ids = Object.keys(sfxCatalog.value || {})
   if (!entityId || !ids.length) { sfxUnmetReasons.value = {}; return }
+  const e = epoch()
   try {
     const data = await graphql(
       `query($id: ID!, $u: String!, $ids: [ID!]) {
@@ -2627,11 +2652,13 @@ async function fetchSfxUnmetReasons(entityId) {
        }`,
       { id: entityId, u: props.universe, ids },
     )
+    if (stale(e)) return
     const map = {}
     for (const row of data?.unavailableSfx || []) map[String(row.sfxId)] = row.reasons || []
     sfxUnmetReasons.value = map
-  } catch (e) {
-    console.error('fetchSfxUnmetReasons', e)
+  } catch (err) {
+    console.error('fetchSfxUnmetReasons', err)
+    if (stale(e)) return
     sfxUnmetReasons.value = {}
   }
 }
@@ -2668,12 +2695,14 @@ function clearSfxActivations(sfxIds) {
 async function fetchInFlightSfxIds(reason = 'unspecified') {
   const id = props.overrideEntityId || props.entityId
   if (!id) return
+  const e = epoch()
   _stampFetch('in-flight-sfx-fetch', reason)
   try {
     const data = await graphql(
       `query($id: ID!) { inFlightSfxIds(entityId: $id) entity(id: $id) { razmerit } }`,
       { id },
     )
+    if (stale(e)) return
     const ids = (data?.inFlightSfxIds || []).map(String)
     for (const sfxId of seededInFlight.value) {
       if (!ids.includes(sfxId)) sfxActivations.value[sfxId] = 0
@@ -2692,14 +2721,17 @@ async function fetchInFlightSfxIds(reason = 'unspecified') {
 async function fetchPlaceSfxRules() {
   const id = props.overrideEntityId || props.entityId
   if (!id) { placeRuleGroups.value = []; return }
+  const e = epoch()
   try {
     const data = await graphql(
       `query($id: ID!, $u: String!) { placeSfxRules(entityId: $id, universe: $u) { locationId locationName sfxIds } }`,
       { id, u: props.universe },
     )
+    if (stale(e)) return
     placeRuleGroups.value = data?.placeSfxRules || []
-  } catch (e) {
-    console.error('fetchPlaceSfxRules', e)
+  } catch (err) {
+    console.error('fetchPlaceSfxRules', err)
+    if (stale(e)) return
     placeRuleGroups.value = []
   }
 }
@@ -2749,7 +2781,7 @@ function resetSfxCounts() {
 // particular character asks for one — that question arrives on the same wizard
 // the sheet already hosts, which is why the question host is part of this
 // surface rather than a second mechanism.
-const sfxSubjectId = computed(() => props.entityId || props.locationId)
+const sfxSubjectId = computed(() => props.entityId || props.placeId)
 
 async function fetchGmRules() {
   if (!props.gmMode) { gmSfxIds.value = []; return }
@@ -2908,6 +2940,23 @@ const QUERY = `
 // Console-only; strip this block and the reason arguments once the cause is
 // fixed and the paths are quiet again.
 const _fetchLog = {}
+// ── The perspective epoch ────────────────────────────────────────────
+// Every per-entity read outlives the perspective that started it, and each one
+// writes component state when it lands: the condition-filtered SFX list (what
+// greys a card whose conditions do not hold), the unmet reasons, the place's
+// rules, the timer line, the activation ledger. A perspective can be **dropped**
+// between the request and its answer — a GM going back to roaming is the case
+// that bit (the author, 2026-09-29) — and a late write re-installs exactly what
+// `releaseEntity` cleared. Measured rather than reasoned: the play surface came
+// up with the GM's own rule cards greyed and unpressable, because the previous
+// entity's availability list landed *after* the release that was meant to clear
+// it. One counter, bumped whenever the perspective moves, and each read drops an
+// answer that is no longer the current one — cheaper and far more honest than
+// teaching every reader to distrust the state.
+let perspectiveEpoch = 0
+const epoch = () => perspectiveEpoch
+const stale = (e) => e !== perspectiveEpoch
+
 function _stampFetch(kind, reason) {
   const now = performance.now()
   const s = _fetchLog[kind] || (_fetchLog[kind] = { n: 0, lastAt: 0 })
@@ -2924,10 +2973,15 @@ function _stampFetch(kind, reason) {
 }
 
 async function fetchEntity(reason = 'unspecified') {
-  const id = props.overrideEntityId || props.entityId
+  const id = shownEntityId.value
   if (!id) return
+  const e = epoch()
   _stampFetch('entity-fetch', reason)
   const data = await graphql(QUERY, { id })
+  // A response that settles after the perspective moved would re-install the
+  // entity the release just cleared; whoever holds the new perspective owns
+  // loading it.
+  if (stale(e)) return
   if (data?.entity) {
     entityCache.setSheet(id, data.entity)
     applyEntity(data.entity)
@@ -2940,8 +2994,21 @@ async function fetchEntity(reason = 'unspecified') {
 let inflightLoad = null // { id, promise } — dedupe concurrent cache-miss loads
 
 function loadCachedEntity() {
-  const id = props.overrideEntityId || props.entityId
-  if (!id) return
+  // The perspective is moving: anything already in flight is now about somebody
+  // else and must not write when it lands.
+  perspectiveEpoch++
+  const id = shownEntityId.value
+  // No id at all: the sheet has no entity to draw. Returning here used to leave
+  // the **previous** entity in place, so a GM who stopped acting as someone kept
+  // that character's sheet on screen — `hasEntity` stayed true and the branch
+  // below it (the roaming GM's play surface) was never reached. A perspective can
+  // be dropped without another being taken up, so this has to be a transition of
+  // its own (the author, 2026-09-29).
+  //
+  // The gate above is now derived from this same value, so the two cannot
+  // disagree: the branch flips the moment the perspective does, and this keeps
+  // the state behind it truthful.
+  if (!id) { releaseEntity(); return }
   const cached = entityCache.getSheet(id)
   if (cached) {
     applyEntity(cached)
@@ -2959,6 +3026,25 @@ function loadCachedEntity() {
   promise.finally(() => {
     if (inflightLoad && inflightLoad.id === id) inflightLoad = null
   })
+}
+
+// Let go of the entity and of everything derived from it. The per-entity caches
+// go with it, and two of them are load-bearing rather than tidy:
+// `availableSfxIds` is what greys a card whose conditions do not hold, so the
+// previous entity's list would grey the GM's own rules on the play surface —
+// `null` means "not loaded, do not block optimistically"; and the activation
+// counts (`resetSfxCounts`) belong to the entity that earned them. The rest is
+// what the entity branch renders, so leaving it would show a character's traits
+// again the instant a new entity arrived with a partial payload.
+function releaseEntity() {
+  entity.value = null
+  allTraitSettings.value = []
+  effectiveSettings.value = []
+  placeRuleGroups.value = []
+  sfxUnmetReasons.value = {}
+  availableSfxIds.value = null
+  resetSfxCounts()
+  recomputeTraitSets('entity-released')
 }
 
 function applyEntity(e) {
