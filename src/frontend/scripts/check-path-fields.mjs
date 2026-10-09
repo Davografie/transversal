@@ -373,5 +373,29 @@ const find = (name) => VUE.find((p) => rel(p) === name)
       && /if \(name === 'owner' && ownerFallbackShown\.value\)/.test(effectForm), true)
 }
 
+// ── A rule authored from an owner's screen lands on that owner ────
+//
+// The author, 2026-10-09: *"I just authored `sfx-roll-table`, but apparently it's
+// not in the GM bucket?"* — and it was not. The picker's `+ New SFX` attaches the
+// rule it creates; the management panel's own button created the rule and left it
+// attached to nothing, so a rule authored while standing in a bucket appeared in no
+// bucket. Attachment is a grant on the owner side, so the screen that knows the
+// owner has to make it — and both buttons now do.
+{
+  const mgmt = read(find('components/gm/GmSfxManagementPanel.vue'))
+  ok('creating a rule from an owner screen attaches it to that owner',
+    /'sfx-created': async \(created\) => \{[\s\S]{0,400}addOwnerSfx\(\[\{ ownerType: ref\.ownerType, ownerId: ref\.ownerId \}\], created\.id\)/.test(mgmt), true)
+  ok('…and the editor is told where the rule lives',
+    /props: \{ sfx: null, prefillName: search\.value\.trim\(\), owner: ref \}/.test(mgmt), true)
+  ok('…and the owner is re-read, so the member is on it rather than merely created',
+    /addOwnerSfx\([\s\S]{0,260}fetchOwners\(ownerType\.value\)/.test(mgmt), true)
+
+  // The path that already worked stays working — this is the same guarantee, not a
+  // replacement for it.
+  const picker = read(find('components/gm/GmSfxPickerPanel.vue'))
+  ok('the picker still attaches what it creates',
+    /'sfx-created': \(created\) => \{\s*emit\('add-sfx', created\.id\)/.test(picker), true)
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)

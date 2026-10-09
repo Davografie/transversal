@@ -180,14 +180,30 @@ function openSfx(sfx) {
 }
 
 function newSfx() {
+  // The owner the author is *standing in*, if they picked one. A rule authored
+  // here belongs on it — the same guarantee the picker's "+ New SFX" already
+  // made, and this button did not: it created the rule and left it attached to
+  // nothing, so a rule authored inside the GM bucket never appeared in it.
+  const ref = ownerRef.value
   panel.open({
     component: GmSfxEditPanel,
     title: 'New SFX',
     badge: 'SFX',
     // Whatever is in the search box is the name they were looking for and did not
     // find — making them type it again is the whole friction this removes.
-    props: { sfx: null, prefillName: search.value.trim() },
-    listeners: { 'sfx-created': () => { fetchTraitsConfig() } },
+    // `owner` so the editor says where it lives instead of leaving the
+    // attachment an invisible fact on that screen.
+    props: { sfx: null, prefillName: search.value.trim(), owner: ref },
+    listeners: {
+      'sfx-created': async (created) => {
+        if (ref && created?.id) {
+          await addOwnerSfx([{ ownerType: ref.ownerType, ownerId: ref.ownerId }], created.id)
+          // Re-read the owner so the new member is on it, not merely created.
+          fetchOwners(ownerType.value)
+        }
+        fetchTraitsConfig()
+      },
+    },
   })
 }
 
