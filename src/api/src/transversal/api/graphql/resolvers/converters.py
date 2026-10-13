@@ -541,6 +541,11 @@ def _target_spec_input_to_domain(inp: TargetSpecInput):
                 output=s.output))
         elif kind == "evaluate":
             steps.append(ts.EvaluateStep(operator=s.operator or "exists", field=s.field or "", value=s.value))
+        elif kind == "literal":
+            # A **pin**: one specific thing by id, not a query over a collection. The
+            # only step that resolves to a known `one` without asking the player, so
+            # it is how "this exact location" is authored ([[B281]]).
+            steps.append(ts.LiteralStep(element=s.element or "", value=s.value or "", output=s.output))
         else:
             steps.append(ts.SelectStep(collection=""))
     return ts.TargetSpec(steps=steps)

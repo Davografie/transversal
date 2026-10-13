@@ -560,3 +560,48 @@ def test_a_place_source_can_walk_straight_to_its_occupants():
     # kind closes (an entity is not known to be a place).
     _types, entity_errors = trace(spec, source_element="entity")
     assert entity_errors, "an entity source must not silently reach occupants"
+
+
+# ── The `literal` step: pinning one thing, and the wire that carries it ──
+#
+# A filtered collection keeps the cardinality of the collection it filtered, so
+# "the location India" authored as `select locations → filter name == India` can
+# only ever be `many` — and collapsing it would need `choose`, which asks the
+# *player*. A literal is the one seed that resolves to a known `one`, which is what
+# lets a roll table's row expose a single location ([[B281]]). The gap closed here
+# was on the wire: the GraphQL step input had no `element`, so the editor's own
+# type-checker could not see a literal at all.
+
+def test_a_literal_pins_one_thing_where_a_filter_cannot():
+    from transversal.services.target_spec import LiteralStep
+
+    pinned = spec(LiteralStep(element="location", value="location-india-55a094fc"))
+    types, errors = trace(pinned)
+    assert errors == []
+    assert (types[-1].element, types[-1].cardinality) == ("location", "one")
+
+    # The route the author had to use before, for contrast: still `many`, because a
+    # filtered collection has no size the type-checker can know.
+    filtered = spec(SelectStep(collection="locations"),
+                    FilterStep(field="name", operator="==", value="India"))
+    f_types, _f_errors = trace(filtered)
+    assert f_types[-1].cardinality == "many", "a filter cannot narrow the cardinality"
+
+
+def test_the_graphql_step_input_carries_a_literal_element():
+    """The wire, not the domain: without `element` on the input the resolver
+    rebuilt a literal as an empty `select`, so the builder showed a step that could
+    not type-check however it was authored."""
+    from transversal.api.graphql.resolvers.converters import _target_spec_input_to_domain
+    from transversal.api.graphql.type_defs.targeting import (
+        TargetSpecInput, TargetSpecStepInput,
+    )
+    from transversal.services.target_spec import LiteralStep
+
+    domain = _target_spec_input_to_domain(TargetSpecInput(steps=[
+        TargetSpecStepInput(kind="literal", element="location",
+                            value="location-india-55a094fc"),
+    ]))
+    step = domain.steps[0]
+    assert isinstance(step, LiteralStep)
+    assert (step.element, step.value) == ("location", "location-india-55a094fc")

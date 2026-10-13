@@ -163,9 +163,13 @@ class TargetCatalog:
 @strawberry.input
 class TargetSpecStepInput:
     """One step of a targeting spec (kind discriminates the relevant fields)."""
-    kind: str  # "select" | "filter" | "navigate" | "aggregate" | "choose" | "top" | "evaluate"
+    kind: str  # "select" | "filter" | "navigate" | "aggregate" | "choose" | "top" | "evaluate" | "literal"
     collection: Optional[str] = None
     variable: Optional[str] = None  # for kind == "select" + collection == "variable"
+    #: For kind == "literal": the catalog element of the pinned id, paired with
+    #: `value` (shared with `filter`). A literal names one concrete thing, which is
+    #: what makes a resolved value `one` without asking the player ([[B281]]).
+    element: Optional[str] = None
     output: Optional[str] = None  # bound variable name this step exposes
     field: Optional[str] = None
     operator: str = "=="

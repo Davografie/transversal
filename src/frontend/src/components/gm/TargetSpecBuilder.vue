@@ -58,6 +58,19 @@
           </select>
         </div>
 
+        <!-- literal: name one specific thing, by id — a pin rather than a query.
+             This is the shape that makes a value `one`: a filtered collection has
+             no size the engine can know, so it can only ever be `many` ([[B281]]). -->
+        <div v-else-if="step.kind === 'literal'" class="tsb-config tsb-literal">
+          <select v-model="step.element">
+            <option value="">— element —</option>
+            <option v-for="e in (catalog?.elements || [])" :key="e.name" :value="e.name">
+              {{ e.label || e.name }}
+            </option>
+          </select>
+          <input v-model="step.value" placeholder="id — e.g. location-india-55a094fc" />
+        </div>
+
         <!-- filter: narrow by a comparable field -->
         <div v-else-if="step.kind === 'filter'" class="tsb-config tsb-filter">
           <select v-model="step.field" :disabled="!priorType(i)">
@@ -310,7 +323,7 @@ const variablesMap = computed(() => {
   return map
 })
 
-const { loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections, sourceKinds } = useTargetCatalog()
+const { loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections, sourceKinds, catalog } = useTargetCatalog()
 
 // Free-form fields whose values are data, not schema. The catalog names the
 // source; these are the lists that exist right now. One table, so a new
@@ -445,6 +458,13 @@ function ensureSuggestSource() {
 
 const STEP_KINDS = [
   { kind: 'select', label: 'Select' },
+  // A **pin**, not a query: name one specific thing by id. Without it the only way
+  // to reach "this location" was `select locations → filter name == India`, which
+  // stays `many` because a filtered collection has no size the engine can know —
+  // and collapsing it needs `choose`, which asks the *player*. So a value that is
+  // really one pinned entity could not be authored as `one` at all, which is what
+  // made a location roller's row awkward to expose as a single location ([[B281]]).
+  { kind: 'literal', label: 'Pick one thing' },
   { kind: 'filter', label: 'Filter' },
   { kind: 'navigate', label: 'Navigate' },
   { kind: 'aggregate', label: 'Aggregate' },
@@ -805,6 +825,9 @@ function toggleOutput(i) {
 }
 
 function canInsertAfter(i, kind) {
+  // A literal is a *seed* like `select` — it starts a path rather than narrowing
+  // one — so it is offered only where a seed goes.
+  if (kind === 'literal') return i === -1
   if (i === -1) return kind === 'select'  // first step is always a seed
   if (kind === 'select') return false
   const prior = typeAt(i)
@@ -828,7 +851,9 @@ function toggleInsert(i) {
 }
 
 function insert(i, kind) {
-  const blank = { kind, collection: '', variable: '', output: null, field: kind === 'evaluate' ? 'count' : '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
+  // `value` is shared by `filter` and `literal` on purpose — both name one thing
+  // in the step's own terms, and the resolver reads it the same way.
+  const blank = { kind, collection: '', variable: '', element: '', output: null, field: kind === 'evaluate' ? 'count' : '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
   const next = [...steps.value]
   next.splice(i + 1, 0, blank)
   steps.value = next
