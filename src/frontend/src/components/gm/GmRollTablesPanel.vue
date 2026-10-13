@@ -39,7 +39,6 @@ import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmList from '@/components/ui/GmList.vue'
 import Button from '@/components/ui/Button.vue'
 import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
-import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 import GmRollTableGroupPanel from './GmRollTableGroupPanel.vue'
 
 const panel = usePanel()
@@ -98,8 +97,10 @@ function openDetail(lp) {
 }
 
 function addNew() {
+  // The detail panel *is* the editor now, so creating opens it with a blank
+  // path: an empty id makes `saveLifePath` generate one.
   const blank = { id: '', name: '', description: '', universe: props.universe, entryTableId: '' }
-  panel.open({ component: GmLifePathEditPanel, title: 'New Life Path', badge: 'LIFE-PATH', props: { lp: blank } })
+  panel.open({ component: GmLifePathDetailPanel, title: 'New Life Path', badge: 'LIFE-PATH', props: { lp: blank } })
 }
 </script>
 

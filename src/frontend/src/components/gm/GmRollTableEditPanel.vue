@@ -117,35 +117,74 @@
               </template>
             </div>
 
-            <!-- The life-path connector: what this row means to the path that
-                 wraps the table (a move, an exit, or the term ending). Absent
-                 unless the panel was opened with a path that wraps this table. -->
+            <!-- The life-path connector: everything this row means to the path
+                 that wraps the table — its binding (a move, an exit, or the term
+                 ending), whether taking it enrols, and the delta it applies on
+                 top of the row's own effects. Absent unless the panel was opened
+                 with a path that wraps this table. -->
             <div v-if="connectorEnabled" class="rte-connector">
-              <div class="rte-connector-read">
-                <span class="rte-connector-label">Next</span>
-                <span class="rte-connector-dest">{{ connectorTextFor(i) }}</span>
+              <template v-if="bindingFor(i)">
+                <div class="rte-connector-read">
+                  <span class="rte-connector-label">Binding</span>
+                  <span class="rte-connector-dest">{{ connectorTextFor(i) }}</span>
+                </div>
+
+                <div class="rte-row">
+                  <div class="rte-field">
+                    <label>Next</label>
+                    <GmScopePicker
+                      v-model="bindingFor(i).next"
+                      :options="stepOptions"
+                      empty-label="Leave the path"
+                      placeholder="Next step…"
+                    />
+                  </div>
+                  <!-- `next` and `exitKind` are one or the other: a move needs no
+                       exit, and an exit is only what leaving means. -->
+                  <template v-if="!bindingFor(i).next">
+                    <div class="rte-field">
+                      <label>Exit</label>
+                      <select v-model="bindingFor(i).exitKind" @change="onExitKind(bindingFor(i))">
+                        <option value="">Simply ends</option>
+                        <option value="muster">Muster</option>
+                        <option value="force_muster">Force muster</option>
+                        <option value="draft">Draft</option>
+                      </select>
+                    </div>
+                    <div v-if="bindingFor(i).exitKind === 'draft'" class="rte-field">
+                      <label>Draft to</label>
+                      <GmScopePicker
+                        v-model="bindingFor(i).exitPath"
+                        :options="lifePathOptions"
+                        empty-label="Select path…"
+                        placeholder="Life path…"
+                      />
+                    </div>
+                  </template>
+                </div>
+
+                <label class="rte-enroll">
+                  <input type="checkbox" v-model="bindingFor(i).enroll" />
+                  Taking this row enrols the character in the path
+                </label>
+
+                <div class="rte-binding-effects">
+                  <span class="rte-subtitle">Binding effects</span>
+                  <span class="rte-detail">Applied after the row's own effects.</span>
+                  <EffectEditor
+                    v-model="bindingFor(i).effects"
+                    :universe="bindingUniverse"
+                    :life-path="bindingLifePath"
+                  />
+                </div>
+
+                <Button variant="danger-ghost" size="sm" @click="removeBinding(i)">Remove binding</Button>
+              </template>
+
+              <div v-else class="rte-row-pass">
+                <span class="rte-detail">Passes through to the step's default.</span>
+                <Button variant="secondary" size="sm" @click="addBinding(i)">Bind row</Button>
               </div>
-              <select :value="connectorTokenFor(i)" @change="onConnectorChange(i, $event.target.value)">
-                <option value="follow">Follows the step's default</option>
-                <option v-for="s in stepOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
-                <option v-if="danglingNextFor(i)" :value="danglingNextFor(i)">Unknown step ({{ danglingNextFor(i) }})</option>
-                <option value="end">Ends the term</option>
-                <option value="muster">Muster out</option>
-                <option value="force_muster">Muster out (dishonourably)</option>
-                <option value="draft">Draft to another path…</option>
-              </select>
-              <GmScopePicker
-                v-if="connectorTokenFor(i) === 'draft'"
-                :model-value="(bindingFor(i) || {}).exitPath || ''"
-                :options="lifePathOptions"
-                empty-label="Select path…"
-                placeholder="Life path…"
-                @update:model-value="setDraftPath(i, $event)"
-              />
-              <label v-if="bindingFor(i)" class="rte-enroll">
-                <input type="checkbox" v-model="bindingFor(i).enroll" />
-                Enrols in this path
-              </label>
             </div>
 
             <!-- What the row does, folded in from the read-only panel it
@@ -176,10 +215,11 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
-import { rowKey, connectorToken, connectorText } from '@/composables/lifePathConnector.js'
+import { rowKey, connectorText } from '@/composables/lifePathConnector.js'
 import GmList from '@/components/ui/GmList.vue'
 import Button from '@/components/ui/Button.vue'
 import GmScopePicker from './GmScopePicker.vue'
+import EffectEditor from './EffectEditor.vue'
 import GmRollTableEntryEditPanel from './GmRollTableEntryEditPanel.vue'
 
 const panel = usePanel()
@@ -267,65 +307,40 @@ function bindingFor(i) {
   return stepBindings.value.find(b => b.key === rowKey(e, i)) || null
 }
 
-function connectorTokenFor(i) { return connectorToken(bindingFor(i)) }
-
 function connectorTextFor(i) {
   return connectorText(bindingFor(i), { stepById: stepById.value, pathNameOf: lifePathName })
 }
 
-// A `next` the path no longer has: keep an option for it so the select shows the
-// stored destination instead of silently landing on the first option.
-function danglingNextFor(i) {
-  const b = bindingFor(i)
-  if (!b || !b.next || stepById.value.has(b.next)) return ''
-  return b.next
-}
+// A binding's effects are the *path's* data, so they are scoped like the path:
+// its universe, and its id as the owning life path.
+const bindingUniverse = computed(() => lp.value?.universe || '')
+const bindingLifePath = computed(() => lp.value?.id || props.lifePathId || '')
 
-function setDraftPath(i, value) {
-  const b = bindingFor(i)
-  if (b) b.exitPath = value
-}
+// ── Row binding edits ────────────────────────────────
+// A binding lives in the wrapping step (`step.bindings`), keyed by the row's
+// stable key. This panel holds a copy and writes the whole path back on save.
 
-// The select writes one of the four connector meanings. The existing binding is
-// always spread and only the connector fields (`next`, `exitKind`, `exitPath`)
-// are touched: `enroll` and `effects` (the delta applied after the row's own)
-// are not shown here, and dropping them would be data loss.
-function onConnectorChange(i, token) {
+function addBinding(i) {
   const e = form.entries[i]
   if (!e) return
   const key = rowKey(e, i)
-  const index = stepBindings.value.findIndex(b => b.key === key)
-  const prev = index >= 0 ? stepBindings.value[index] : null
-
-  // `follow` is the *absence* of a binding — this is how one is removed.
-  if (token === 'follow') {
-    if (index >= 0) stepBindings.value.splice(index, 1)
-    return
-  }
-
-  const binding = prev
-    ? { ...prev }
-    : { key, next: '', exitKind: '', exitPath: '', enroll: false, effects: [] }
-  binding.key = key
-  binding.next = ''
-  binding.exitKind = ''
-  binding.exitPath = ''
-  if (token === 'muster' || token === 'force_muster') {
-    binding.exitKind = token
-  } else if (token === 'draft') {
-    binding.exitKind = 'draft'
-    binding.exitPath = (prev && prev.exitKind === 'draft' && prev.exitPath) || ''
-  } else if (token !== 'end') {
-    binding.next = token
-  }
-
+  if (stepBindings.value.some(b => b.key === key)) return
   // A row authored before keys existed has only a derived key, which changes
   // with its band. Pin it when a binding is made so the binding cannot move out
   // from under itself.
   if (!e.key) e.key = key
+  stepBindings.value.push({ key, next: '', exitKind: '', exitPath: '', enroll: false, effects: [] })
+}
 
-  if (index >= 0) stepBindings.value.splice(index, 1, binding)
-  else stepBindings.value.push(binding)
+function removeBinding(i) {
+  const e = form.entries[i]
+  if (!e) return
+  const key = rowKey(e, i)
+  stepBindings.value = stepBindings.value.filter(b => b.key !== key)
+}
+
+function onExitKind(binding) {
+  if (binding.exitKind !== 'draft') binding.exitPath = ''
 }
 
 // Read the wrapping path fresh (the table's deprecated `lifePath` field says
@@ -630,5 +645,10 @@ async function save() {
 .rte-connector-dest { font-size: 11px; color: var(--accent); }
 .rte-enroll { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-dim); }
 .rte-enroll input { width: auto; }
+.rte-row-pass { display: flex; align-items: center; gap: 6px; }
+.rte-row-pass .rte-detail { flex: 1; margin: 0; }
+.rte-binding-effects { display: flex; flex-direction: column; gap: 3px; }
+.rte-binding-effects .rte-subtitle { margin-bottom: 0; }
+.rte-binding-effects .rte-detail { margin: 0; }
 .rte-error { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
 </style>

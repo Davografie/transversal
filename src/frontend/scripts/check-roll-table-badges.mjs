@@ -78,10 +78,14 @@ ok('every opener of the unified panel was found (5 calls)', editCalls.length, 5)
 ok('each passes the badge', editCalls.map(c => /badge:\s*'ROLL-TABLE'/.test(c.block)), [true, true, true, true, true])
 
 // Call order follows FILES above: life-path table, group table, canvas table.
+// The life-path opener now names the *step's* table (`step.tableId`) — the
+// detail panel's steps list is the wrapper, and a path may wrap one table twice,
+// so the step is the identity it holds (B277). The intent is unchanged: an
+// existing-table opener passes the table id the chip copies.
 ok('each existing-table opener passes the table id, which is what the chip copies',
   editCalls.filter(c => /id:\s*\S/.test(c.block))
     .map(c => (c.block.match(/id:\s*([^,\n]+)/) || [])[1].trim()),
-  ['t.id', 't.id', 'tableId'])
+  ['step.tableId', 't.id', 'tableId'])
 ok('only the two create openers omit the id — there is nothing to copy yet',
   editCalls.filter(c => !/id:\s*\S/.test(c.block)).map(c => c.file).sort(),
   ['GmLifePathDetailPanel.vue', 'GmRollTableGroupPanel.vue'])
