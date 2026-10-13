@@ -7,8 +7,17 @@
         </span>
       </div>
       <div class="panel-top-actions">
+        <!-- `actingEntityId` is the LIVE perspective (App's provide), not the
+             `currentEntityId` prop: that prop is a copy taken when this panel was
+             opened, so in a floating or restored panel it reports whatever the
+             perspective was back then. Gating on it was wrong in both directions —
+             hidden while you are *not* acting as the character (the reported bug,
+             when the panel happened to be opened while you were), and offered while
+             you *are*. The sibling Import button already reads its live value the
+             same way; the prop survives only as the fallback for a panel mounted
+             without App's provide. -->
         <Button
-          v-if="(form.type === 'CHARACTER' || form.type === 'GMC') && entityId !== currentEntityId"
+          v-if="(form.type === 'CHARACTER' || form.type === 'GMC') && entityId !== actingEntityId"
           class="assume-btn"
           variant="secondary"
           size="sm"
