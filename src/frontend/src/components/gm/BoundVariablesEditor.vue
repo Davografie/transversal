@@ -4,7 +4,7 @@
          builder every other path uses. Rows are ordered: a later one may start
          from an earlier one (`select variable`), which is how a value is read
          *from* a thing named just above. -->
-    <div v-for="(row, i) in rows" :key="i" class="bv-row">
+    <div v-for="(row, i) in rows" :key="i" class="bv-row" :class="{ 'bv-collide': collisionAt(i) }">
       <div class="bv-row-head">
         <input
           class="bv-name"
@@ -23,7 +23,10 @@
         title="Value path"
         @update:model-value="onSpec(i, $event)"
       />
-      <p v-if="row.name && typeAt(i)" class="bv-reads">
+      <p v-if="collisionAt(i)" class="bv-reads bv-shadows">
+        ⚠ {{ collisionAt(i) }}
+      </p>
+      <p v-else-if="row.name && typeAt(i)" class="bv-reads">
         usable as <code>{{ '{' + row.name + '}' }}</code> anywhere below
       </p>
       <p v-else-if="row.name" class="bv-reads bv-unresolved">
@@ -56,6 +59,12 @@ const props = defineProps({
   // cardinality}` or null). Traced by the panel through the backend checker, so
   // this component never derives a type of its own.
   types: { type: Array, default: () => [] },
+  // Names **already in scope** when this layer resolves — the ambient facts plus
+  // any earlier declaration layer (a roll table's own names, for a row's;
+  // [[B281]]). The engine resolves those first and *refuses* a declaration that
+  // shadows one rather than rebinding it, so a collision has to be visible here:
+  // the alternative is a name that saves and then silently does nothing.
+  reserved: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -96,6 +105,26 @@ function replace(i, next) {
   emit('update:modelValue', list)
 }
 
+/** Why row `i`'s name will not bind, if it will not — "" when it is fine.
+ *
+ *  Two ways to collide, one rule: the engine resolves names in order and refuses a
+ *  declaration whose name is already bound, so the *existing* value stands. Either
+ *  something outside this list already holds the name (``reserved``), or an earlier
+ *  row in this list declared it. Both would otherwise fail silently at runtime. */
+function collisionAt(i) {
+  const name = (rows.value[i]?.name || '').trim()
+  if (!name) return ''
+  if ((props.reserved || []).includes(name)) {
+    return `“${name}” is already in scope here — the existing value wins, so this will not bind`
+  }
+  for (let j = 0; j < i; j++) {
+    if ((rows.value[j]?.name || '').trim() === name) {
+      return `“${name}” is declared above — the first one wins, so this will not bind`
+    }
+  }
+  return ''
+}
+
 function onName(i, name) { replace(i, { name }) }
 function onSpec(i, spec) { replace(i, { spec }) }
 
@@ -123,6 +152,10 @@ function remove(i) {
 .bv-reads { margin: 0; font-size: 10px; color: var(--text-dim); }
 .bv-reads code { font-size: 10px; color: var(--accent-pale); }
 .bv-unresolved { color: var(--warn); }
+/* A name that will be refused is a hard error, not a warning: it saves and then
+   silently does nothing, which is the failure this makes visible. */
+.bv-collide { border-color: var(--danger); }
+.bv-shadows { color: var(--danger); }
 .bv-empty { margin: 0; font-size: 11px; color: var(--text-dim); }
 .bv-add { align-self: flex-start; }
 </style>

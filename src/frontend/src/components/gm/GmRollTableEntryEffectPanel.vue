@@ -5,6 +5,7 @@
       :universe="universe"
       :life-path="lifePath"
       :output-variables="outputVariables"
+      :scope-variables="scopeVariables || {}"
       @save="onSave"
       @cancel="close"
     />
@@ -40,14 +41,19 @@ const panel = usePanel()
 // `Panel.vue`, as siblings of the slot outlet), so the row draft arrives through
 // the spec's `context`.
 const draft = inject('rowDraft', null)
+// The row's resolved scope, taken when this panel opened: the table's names plus
+// the row's own declarations ([[B281]]). Passed as a snapshot because the entry
+// panel is what edits the declarations, so they cannot change while this is open.
+const scopeVariables = inject('scopeVariables', null)
 
 const editingEffect = computed(() => (props.index === null ? null : (draft?.effects?.[props.index] || null)))
 
 const { collectVariables } = useTargetCatalog()
 
 // Typed names this effect may reference: the output variables of every effect
-// *before* it in the row. The engine walks the list in order, so a later effect
-// can name an earlier one's output; the row has no other source of scope.
+// *before* it in the row, plus whatever the enclosing scope already holds — the
+// table's bound variables and this row's ([[B281]]). The engine walks the list in
+// order, so a later effect can name an earlier one's output.
 const outputVariables = ref({})
 
 function priorEffects() {

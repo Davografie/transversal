@@ -295,6 +295,9 @@ const props = defineProps({
   universe: { type: String, default: '' },
   lifePath: { type: String, default: '' },
   variables: { type: Array, default: () => [] },
+  // Names in scope that no earlier effect produced — a roll table's bound
+  // variables ([[B281]]). `{name: {element, cardinality}}`.
+  scopeVariables: { type: Object, default: () => ({}) },
   trigger: { type: String, default: '' },     // the SFX's trigger: an immediate effect reads its context
   placement: { type: String, default: '' },   // "menu" gates on the menu's outcome keys instead
   outputVariables: { type: Object, default: null }, // { name: {element, cardinality} } for `select variable`
@@ -341,8 +344,11 @@ watch(
 )
 
 // Prior effects' outputs (from the panel) plus this effect's own — what the
-// later builders inside this effect may start from.
+// later builders inside this effect may start from. `scopeVariables` are names
+// that are already in scope without any effect producing them (a roll table's
+// bound variables, [[B281]]), so they sit under the outputs.
 const scopedVariables = computed(() => ({
+  ...(props.scopeVariables || {}),
   ...(props.outputVariables || {}),
   ...innerVariables.value,
 }))

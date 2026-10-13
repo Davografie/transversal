@@ -24,6 +24,7 @@ const ROLL_TABLE_FIELDS = `
               duration { timers { event remaining } combine }
               targetSpec entitySpec resultSpec ownerSpec refs output
               conditions { type subject target targets value operator narrative spec } }
+    boundVariables { name spec }
   }
 `
 

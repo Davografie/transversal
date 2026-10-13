@@ -35,6 +35,25 @@
       </div>
 
       <div class="eep-subsection">
+        <span class="eep-subtitle">Bound variables</span>
+        <BoundVariablesEditor
+          v-model="form.boundVariables"
+          :variables="tableScope || {}"
+          :types="declaredTypes"
+          :reserved="reservedNames"
+        />
+        <p class="eep-hint">
+          Names <em>this row</em> resolves once it has been picked — a location, a rival,
+          a value no other row has. Refer to one as <code>{name}</code> in this row's
+          effects and in the life path binding's effects for this row. A name the table
+          already declares (or one an earlier row above already declared) is refused and
+          shows in red — the existing value wins. The row's own
+          <strong>conditions</strong> cannot read these: they are checked before a row is
+          chosen, so they see the <em>table's</em> names instead.
+        </p>
+      </div>
+
+      <div class="eep-subsection">
         <span class="eep-subtitle">Conditions</span>
         <ConditionEditor v-model="form.conditions" />
       </div>
@@ -66,8 +85,10 @@ import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import ConditionEditor from './ConditionEditor.vue'
 import EffectList from './EffectList.vue'
+import BoundVariablesEditor from './BoundVariablesEditor.vue'
 import GmRollTableEntryEffectPanel from './GmRollTableEntryEffectPanel.vue'
 import Button from '@/components/ui/Button.vue'
+import { useBoundVariableScope } from '@/composables/useBoundVariableScope.js'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -91,6 +112,22 @@ const props = defineProps({
 // Without it (e.g. a window restored after a reload) it falls back to the
 // stored table and its whole-table save.
 const draft = inject('rowDraft', null)
+// The scope this row's own declarations start from: the ambient facts plus the
+// table's declarations, which the engine resolves before any row is chosen
+// ([[B281]]). It arrives through the spec's `context` for the same reason the row
+// does — a child panel cannot inject its parent's provide.
+const tableScope = inject('tableScope', null)
+// Names already bound when this row's declarations resolve — the engine refuses a
+// declaration that shadows one rather than rebinding it, so the editor has to show
+// the collision instead of letting the author save a name that does nothing.
+const reservedNames = computed(() => Object.keys(tableScope || {}))
+
+// This row's layer, resolved on top of the table's by the same composable the
+// table panel uses — so what the editor offers is what `table_bindings()` binds.
+const { scope: rowScope, types: declaredTypes } = useBoundVariableScope(
+  computed(() => form.boundVariables),
+  computed(() => tableScope || {}),
+)
 
 const table = ref(null)
 const ready = computed(() => !!draft || !!table.value)
@@ -114,6 +151,9 @@ const form = reactive({
   conditions: [],
   costEffects: [],
   effects: [],
+  // The names this row exposes to its own effects and to the life path binding's
+  // effects for this row ([[B281]]).
+  boundVariables: [],
 })
 
 // One place the local form is seeded from a row, whether the row came from the
@@ -130,6 +170,7 @@ function seedFrom(e) {
   form.conditions = JSON.parse(JSON.stringify(e.conditions || []))
   form.effects = JSON.parse(JSON.stringify(e.effects || []))
   form.costEffects = JSON.parse(JSON.stringify(e.costEffects || []))
+  form.boundVariables = JSON.parse(JSON.stringify(e.boundVariables || []))
 }
 
 onMounted(async () => {
@@ -172,8 +213,12 @@ function openEffectEditor(index) {
     },
     // The row draft, as a live reference, through the spec's `context` — a panel
     // cannot `provide` to its own child panels. The child writes effects back
-    // into this row; nothing is persisted until the row's own Save.
-    context: { rowDraft: form },
+    // into this row; nothing is persisted until the row's own Save. The resolved
+    // scope travels too, so this row's effects may start a path from the names it
+    // exposes and from the table's ([[B281]]); it is a snapshot taken when the
+    // panel opens, which is correct because declarations are edited *here*, not
+    // in the child.
+    context: { rowDraft: form, scopeVariables: rowScope.value },
   })
 }
 
@@ -184,6 +229,7 @@ async function save() {
   if (draft) {
     draft.key = form.key || ''
     draft.costEffects = form.costEffects || []
+    draft.boundVariables = form.boundVariables || []
     draft.label = form.label
     draft.description = form.description
     draft.minValue = form.minValue ?? null
@@ -207,6 +253,10 @@ async function save() {
       // edit them, and the entries map below is a full replace.
       key: form.key || '',
       costEffects: form.costEffects || [],
+      // The row's exposed names ([[B281]]). Carried here rather than dropped for the
+      // same reason `key` and `costEffects` are: the entries map below is a full
+      // replace, so anything missing from this object is erased on save.
+      boundVariables: form.boundVariables || [],
       label: form.label,
       description: form.description,
       minValue: form.minValue ?? null,
@@ -242,6 +292,7 @@ async function save() {
       entries: entries.map(e => ({
         key: e.key || '',
         costEffects: e.costEffects || [],
+        boundVariables: e.boundVariables || [],
         label: e.label,
         description: e.description,
         minValue: e.minValue ?? null,
@@ -281,6 +332,8 @@ async function save() {
 }
 .eep-row { display: flex; gap: 8px; }
 .eep-subsection { margin-top: 2px; }
+.eep-hint { margin: 4px 0 0; font-size: 10px; line-height: 1.45; color: var(--text-dim); }
+.eep-hint code { font-size: 10px; color: var(--accent-pale); }
 .eep-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 .eep-error { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
 </style>

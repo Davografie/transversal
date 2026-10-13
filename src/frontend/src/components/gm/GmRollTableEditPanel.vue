@@ -193,10 +193,17 @@
                 <div class="rte-binding-effects">
                   <span class="rte-subtitle">Binding effects</span>
                   <span class="rte-detail">Applied after the row's own effects.</span>
+                  <!-- The scope a binding effect may start a path from: the table's
+                       names (ambient + its declarations), plus **this row's** own
+                       declarations — which is what lets a path consume the names
+                       the row exposes ([[B281]]). Resolved inside the editor, per
+                       row, in the engine's own order. -->
                   <EffectEditor
                     v-model="bindingFor(i).effects"
                     :universe="bindingUniverse"
                     :life-path="bindingLifePath"
+                    :scope-variables="tableScope"
+                    :scope-declarations="(form.entries[i] || {}).boundVariables || []"
                   />
                 </div>
 
@@ -235,7 +242,7 @@ import { useRollTables } from '@/composables/useRollTables.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
-import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
+import { useBoundVariableScope } from '@/composables/useBoundVariableScope.js'
 import { ROLL_TABLE_AMBIENT_VARIABLES } from '@/composables/rollTableScope.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
@@ -304,10 +311,6 @@ const lifePathOptions = ref([])
 const { traitNameMap, fetchTraitsConfig } = useTraitsConfig()
 const { load: loadEffectActions, summarize: summarizeEffect } = useEffectActions()
 
-// The path builder a bound variable's row opens is typed from the backend, so
-// the panel asks the same tracer the row's own effect paths use.
-const { traceSpec } = useTargetCatalog()
-
 function resolveTarget(t) { return t ? (traitNameMap.value[t] || allTableNames.value[t] || t) : t }
 function effectSummary(eff) { return summarizeEffect(eff, resolveTarget) }
 function conditionSummary(c) {
@@ -323,49 +326,20 @@ function conditionSummary(c) {
 // ambient facts (the paths'/term's faction, the table, the roll, the entry) and
 // *then* the table's own declarations, in order — so a declaration may start
 // from an ambient name or an earlier declaration. The ambient half is mirrored
-// in `rollTableScope.js`; the declared half is traced here.
+// in `rollTableScope.js`; the declared half is traced by the shared composable,
+// which a *row's* layer uses too ([[B281]]).
 //
 // No `source-element` is passed to the editor on purpose: `table_bindings()`
 // resolves the declarations against a `TargetContext` with no source, so a
 // `select source` step would error and resolve nothing. Offering it would
 // promise a value the engine cannot bind.
-const ambientVariables = ref({})
-const declaredTypes = ref([])
-
-async function refreshVariables() {
-  const scope = { ...ROLL_TABLE_AMBIENT_VARIABLES }
-  ambientVariables.value = scope
-  const types = []
-  for (const row of (form.boundVariables || [])) {
-    const name = (row?.name || '').trim()
-    const steps = row?.spec?.steps || []
-    if (!name || !steps.length) { types.push(null); continue }
-    try {
-      // The SFX panel computes this with one `effectVariables` call, but that
-      // resolver's scope seed only knows an SFX's trigger/source names — it
-      // cannot see a roll table's ambient facts. Tracing each row against the
-      // table's own scope is the same backend tracer the builder uses, so what
-      // is offered to the row below is what the engine will bind.
-      const res = await traceSpec(steps, null, null, scope)
-      const last = (res?.types || [])[res.types.length - 1]
-      if (last?.element && !(res.errors || []).length) {
-        const t = { element: last.element, cardinality: last.cardinality || 'one' }
-        types.push(t)
-        scope[name] = t
-      } else {
-        types.push(null)
-      }
-    } catch {
-      types.push(null)
-    }
-  }
-  declaredTypes.value = types
-}
-
-watch(
-  () => [form.subjectKind, form.boundVariables],
-  refreshVariables,
-  { immediate: true, deep: true },
+const ambientVariables = { ...ROLL_TABLE_AMBIENT_VARIABLES }
+// Ambient + the table's declarations, in resolution order. This is the scope a
+// **row's** own declarations start from and may not shadow, and it is what the
+// entry editor is handed so it can offer the table's names ([[B281]]).
+const { scope: tableScope, types: declaredTypes } = useBoundVariableScope(
+  computed(() => form.boundVariables),
+  computed(() => ROLL_TABLE_AMBIENT_VARIABLES),
 )
 
 // ── Life-path connector context ──────────────────────
@@ -556,7 +530,7 @@ onMounted(async () => {
 })
 
 function addEntry() {
-  form.entries.push({ key: '', costEffects: [], label: '', description: '', minValue: null, maxValue: null, weight: null, tier: '', conditions: [], effects: [] })
+  form.entries.push({ key: '', costEffects: [], label: '', description: '', minValue: null, maxValue: null, weight: null, tier: '', conditions: [], effects: [], boundVariables: [] })
 }
 
 // The row's full editor (label, description, band, conditions, effects). The row
@@ -579,7 +553,15 @@ function openEntry(i) {
       universe: form.universe,
       lifePath: form.lifePath,
     },
-    context: { rowDraft: form.entries[i] },
+    context: {
+      rowDraft: form.entries[i],
+      // The scope the row's own declarations resolve against — ambient facts plus
+      // the table's declarations, which the engine resolves *before* any row is
+      // chosen ([[B281]]). The child needs it for two things: a row's name may
+      // start from a table-level one, and a name that collides is refused, so the
+      // editor has to show the collision rather than let it fail silently.
+      tableScope: tableScope.value,
+    },
   })
 }
 
@@ -651,6 +633,14 @@ async function save() {
         tier: e.tier || null,
         conditions: e.conditions || [],
         effects: e.effects || [],
+        // The row's own declared names ([[B281]]). This map is a full replace, so
+        // omitting them erases every name a row exposes — the same class of loss as
+        // `key` and `costEffects` above, and the reason `check-path-fields.mjs`
+        // pins all three.
+        boundVariables: (e.boundVariables || []).map(bv => ({
+          name: bv.name || '',
+          spec: bv.spec || null,
+        })),
       })),
     }
     const result = await saveRollTable(input)

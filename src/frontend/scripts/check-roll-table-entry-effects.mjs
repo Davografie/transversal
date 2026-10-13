@@ -133,12 +133,21 @@ ok('it opens the effect panel through its own panel context',
   /panel\.open\(\{[\s\S]*?component:\s*GmRollTableEntryEffectPanel/.test(ENTRY), true)
 ok('the open passes identity plus the row\'s universe/life-path scope',
   /component:\s*GmRollTableEntryEffectPanel,[\s\S]*?props:\s*\{[\s\S]*?index,[\s\S]*?universe:[\s\S]*?lifePath:/.test(ENTRY), true)
+// The row itself, as the live `form` — not a copy, or the child's edits would land
+// on a snapshot and the row's Save would write the stale one. Other keys may ride
+// along in the same context ([[B281]] adds the resolved scope), so this asserts the
+// reference rather than pinning the object literal to exactly one field.
 ok('the row draft crosses in the spec context, as a live reference',
-  /context:\s*\{\s*rowDraft:\s*form\s*\}/.test(ENTRY), true)
+  /context:\s*\{[^}]*\browDraft:\s*form\b\s*[,}]/.test(ENTRY), true)
+ok('and the row\'s resolved scope crosses with it, so its effects can use its names',
+  /context:\s*\{[^}]*\bscopeVariables:/.test(ENTRY), true)
 ok('the child injects that draft', /inject\('rowDraft'/.test(EFFECT_PANEL), true)
+ok('the child injects the scope too', /inject\('scopeVariables'/.test(EFFECT_PANEL), true)
 ok('the child renders the effect form', /<EffectForm/.test(EFFECT_PANEL), true)
 ok('the form keeps the row\'s universe/life-path scope',
   /:universe="universe"/.test(EFFECT_PANEL) && /:life-path="lifePath"/.test(EFFECT_PANEL), true)
+ok('the form is handed the scope as well',
+  /:scope-variables="scopeVariables/.test(EFFECT_PANEL), true)
 ok('the child panel is told which effect it is editing (identity only)',
   /index:\s*\{\s*type:\s*Number/.test(EFFECT_PANEL), true)
 

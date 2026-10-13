@@ -556,26 +556,27 @@ const find = (name) => VUE.find((p) => rel(p) === name)
 // fetching it writes back a default. This is the third instance of the class
 // ([[B273]] references, [[B274]] row `key`/`costEffects`), so the four writers
 // named in the ticket are pinned here by name.
-{
-  const brace = (src, openIndex) => {
-    let depth = 0
-    for (let i = openIndex; i < src.length; i++) {
-      if (src[i] === '{') depth++
-      else if (src[i] === '}') { depth--; if (!depth) return src.slice(openIndex, i + 1) }
-    }
-    return src.slice(openIndex)
+// Brace matching, a backtick constant's body, and the object literal after
+// `const key = {` / `key: {` — shared by the two blocks below, which check the same
+// round trip at the table level ([[B279]]) and the row level ([[B281]]).
+const brace = (src, openIndex) => {
+  let depth = 0
+  for (let i = openIndex; i < src.length; i++) {
+    if (src[i] === '{') depth++
+    else if (src[i] === '}') { depth--; if (!depth) return src.slice(openIndex, i + 1) }
   }
-  const constBody = (src, name) => {
-    const m = src.match(new RegExp('const\\s+' + name + '\\s*=\\s*`([\\s\\S]*?)`'))
-    return m ? m[1] : null
-  }
-  // The object literal `const key = {` / `key: {`, so a check reads the shipped
-  // input rather than the file's whole text.
-  const objectAfter = (src, key) => {
-    const m = src.match(new RegExp('(?:const\\s+' + key + '\\s*=\\s*|\\b' + key + '\\s*:\\s*)\\{'))
-    return m ? brace(src, src.indexOf('{', m.index + m[0].length - 1)) : ''
-  }
+  return src.slice(openIndex)
+}
+const constBody = (src, name) => {
+  const m = src.match(new RegExp('const\\s+' + name + '\\s*=\\s*`([\\s\\S]*?)`'))
+  return m ? m[1] : null
+}
+const objectAfter = (src, key) => {
+  const m = src.match(new RegExp('(?:const\\s+' + key + '\\s*=\\s*|\\b' + key + '\\s*:\\s*)\\{'))
+  return m ? brace(src, src.indexOf('{', m.index + m[0].length - 1)) : ''
+}
 
+{
   // 1 + 2 + 3 — the shared read and both panels' whole-document saves.
   const fields = constBody(readFileSync(join(SRC, 'composables', 'useRollTables.js'), 'utf8'), 'ROLL_TABLE_FIELDS') || ''
   ok('the shared table read fetches subjectKind', /\bsubjectKind\b/.test(fields), true)
@@ -606,6 +607,63 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   const write = objectAfter(link, 'input')
   ok('linkRollTable saves subjectKind', /(?<![\w.])subjectKind\s*:/.test(write), true)
   ok('linkRollTable saves boundVariables', /(?<![\w.])boundVariables\s*:/.test(write), true)
+}
+
+// ── …and a **row's** own declarations survive the same round trip ─────
+//
+// [[B281]] puts a second, per-row layer inside `entries { … }`. It is the same
+// hazard one level down: every writer above replaces the whole document, so a row's
+// `boundVariables` is erased by anyone who fetches or sends the entries without
+// them — exactly what happened to `key` and `costEffects` ([[B274]]) and to the
+// table's fields ([[B279]]).
+//
+// Checked *inside* the block rather than merely present in the file, because the
+// table's own `boundVariables` sits in the same constant and the same object
+// literal: a bare match would pass with the per-row half missing entirely.
+{
+  // `entries`' own brace body: the first `entries` in each of these strings is the
+  // selection key, and the block follows it.
+  const entriesBody = (src) => {
+    const at = (src || '').indexOf('entries')
+    return at < 0 ? '' : brace(src, at)
+  }
+  const FIELD = /boundVariables\s*\{\s*name\s+spec\s*\}/
+
+  const fields = constBody(readFileSync(join(SRC, 'composables', 'useRollTables.js'), 'utf8'), 'ROLL_TABLE_FIELDS') || ''
+  ok('the shared table read fetches each row\'s bound variables',
+    FIELD.test(entriesBody(fields)), true)
+
+  // Both panels' `input.entries` map: the table panel writes the whole list, and
+  // the entry panel's whole-table contract does; its draft contract writes the row
+  // straight into the parent's live entry, which the table panel then saves.
+  for (const file of ['components/gm/GmRollTableEditPanel.vue', 'components/gm/GmRollTableEntryEditPanel.vue']) {
+    const body = objectAfter(readFileSync(join(SRC, file), 'utf8'), 'input')
+    const at = body.indexOf('entries:')
+    ok(`${file} saves each row's bound variables`,
+      at >= 0 && /(?<![\w.])boundVariables\s*:/.test(body.slice(at)), true)
+  }
+
+  // The entry panel's *draft* contract: it writes the row back into the live entry
+  // the table panel holds, so the field has to be carried there too or the row's
+  // names are dropped before the table panel ever sees them.
+  const entryPanel = readFileSync(join(SRC, 'components/gm/GmRollTableEntryEditPanel.vue'), 'utf8')
+  const draftBlock = entryPanel.slice(
+    entryPanel.indexOf('if (draft) {', entryPanel.indexOf('async function save()')),
+    entryPanel.indexOf('if (!table.value)'),
+  )
+  ok('the entry panel carries a row\'s names into the injected draft',
+    /(?<![\w.])draft\.boundVariables\s*=/.test(draftBlock), true)
+
+  // linkRollTable's read: the entries travel through that write untouched, so
+  // widening the *read* is what protects them here.
+  const canvas = readFileSync(join(SRC, 'composables', 'useCanvas.js'), 'utf8')
+  const link = canvas.slice(
+    canvas.indexOf('async function linkRollTable'),
+    canvas.indexOf('\nasync function toggleTransversalEdge'),
+  )
+  const read = brace(link, link.indexOf('{', link.indexOf('rollTable(id:$id)')))
+  ok('linkRollTable fetches each row\'s bound variables',
+    FIELD.test(entriesBody(read)), true)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

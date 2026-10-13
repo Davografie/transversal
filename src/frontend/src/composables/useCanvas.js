@@ -1333,10 +1333,11 @@ export function useCanvas() {
           // `next_step` effect, and the **whole table is saved back**. A narrow effect
           // selection therefore does not merely display less — it strips every entry
           // effect's references on the way through ([[B273]]). Fetch what is written —
-          // including the table's own `subjectKind` and `boundVariables`, which no
-          // part of this path edits but a whole-table save would otherwise blank
-          // ([[B279]]).
-          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath subjectKind scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } boundVariables { name spec } entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } costEffects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } } } }`,
+          // including `subjectKind`, the table's `boundVariables` and each entry's own
+          // `boundVariables`, none of which this path edits but a whole-table save
+          // would otherwise blank ([[B279]], [[B281]]). The entries travel through
+          // untouched below, so widening the *read* is what protects them.
+          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath subjectKind scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } boundVariables { name spec } entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } costEffects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } boundVariables { name spec } } } } }`,
           variables: { id: sourceTableId },
         }),
       })
