@@ -53,6 +53,11 @@ class LifePathStep:
     label: str = ""
     next: str = ""
     bindings: list[LifePathBinding] = strawberry.field(default_factory=list)
+    #: Effects applied once per activation for this step, whatever row resolved —
+    #: after the row's effects and the binding's delta, in the same scope. The
+    #: effects counterpart of `next`, so an identical effect is authored once
+    #: rather than on every binding.
+    effects: list[Effect] = strawberry.field(default_factory=list)
 
 @strawberry.input
 class LifePathBindingInput:
@@ -72,6 +77,7 @@ class LifePathStepInput:
     label: str = ""
     next: str = ""
     bindings: list[LifePathBindingInput] = strawberry.field(default_factory=list)
+    effects: list[EffectInput] = strawberry.field(default_factory=list)
 
 @strawberry.type
 class LifePath:

@@ -222,6 +222,19 @@ def resolve_step(
     delta = list(binding.effects) if binding is not None else []
     delta_mutations = [e for e in delta if e.type != "life_path"]
     delta_flow = [e for e in delta if e.type == "life_path"]
+    # The **step's** own effects: authored once for the table rather than repeated
+    # on every binding, and applied after both the row's and the binding's, so one
+    # may read whatever they produced or exposed. Flow is deliberately not read
+    # from here — a step's destinations are `next` and its bindings, which is what
+    # keeps "flow is structure, not effects" true.
+    #
+    # An effect whose path names a variable the resolved row never exposed resolves
+    # to nothing, and `apply_effects` applies an effect once per resolved target —
+    # so it is a clean no-op rather than a failure. That is exactly what lets this
+    # be written once for a table whose rows expose different things.
+    step_mutations = [e for e in (getattr(step, "effects", None) or [])
+                      if e.type != "life_path"]
+    all_mutations = row_mutations + delta_mutations + step_mutations
 
     old_razmerit = entity.razmerit
     scheduled = 0
@@ -249,10 +262,8 @@ def resolve_step(
     }
 
     if engine is not None:
-        immediate = [e for e in row_mutations + delta_mutations
-                     if e.timing == EffectTiming.IMMEDIATE]
-        deferred = [e for e in row_mutations + delta_mutations
-                    if e.timing != EffectTiming.IMMEDIATE]
+        immediate = [e for e in all_mutations if e.timing == EffectTiming.IMMEDIATE]
+        deferred = [e for e in all_mutations if e.timing != EffectTiming.IMMEDIATE]
 
         result: EffectsResult = apply_effects(entity, immediate, repo, effect_context)
         flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
@@ -267,7 +278,7 @@ def resolve_step(
     else:
         # No scheduler available (e.g. direct unit tests) — apply everything now.
         result: EffectsResult = apply_effects(
-            entity, row_mutations + delta_mutations, repo, effect_context)
+            entity, all_mutations, repo, effect_context)
         flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
                              binding=binding, step=step, wrapped=wrapped)
         _persist(entity, result, repo, old_razmerit)

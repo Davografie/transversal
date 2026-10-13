@@ -60,7 +60,7 @@ class LifePathStep(BaseModel):
 
     ``id`` is the step's identity, not the table's — which is what lets a path
     wrap the same table twice (two steps, one table), and lets a step live on
-    after its table is re-pointed.
+    after its table being re-pointed.
     """
     id: str
     table_id: str
@@ -68,6 +68,23 @@ class LifePathStep(BaseModel):
     #: Where a row with no binding of its own goes. ``""`` = the term ends.
     next: str = ""
     bindings: list[LifePathBinding] = Field(default_factory=list)
+    #: Effects that apply to **this step whatever row resolved** — once per
+    #: activation, after the row's own effects and the binding's delta, in the same
+    #: scope. The counterpart of ``next``: that is the step's default *flow*, this
+    #: is its default *behaviour*, so a path does not have to repeat an identical
+    #: effect on every binding.
+    #:
+    #: It reads the whole scope, so it may consume a name the resolved row exposed.
+    #: **Consume it as a targeting path** — ``target_spec``/``owner_spec`` with a
+    #: ``select variable <name>`` step — because that form resolves to *zero
+    #: targets* when no row exposed the name, and ``_apply_spec_effect`` then applies
+    #: the effect zero times: a clean no-op. Author it once; it runs where it applies.
+    #:
+    #: ⚠ **Not** by writing ``{name}`` into a flat field (``target``/``result``).
+    #: `_substitute_effect_context` rewrites only the tokens it can resolve and
+    #: leaves the rest verbatim, so a flat reference to an unbound name runs the
+    #: effect against the literal string ``"{name}"`` — a junk target, silently.
+    effects: list[Effect] = Field(default_factory=list)
 
 class LifePath(BaseModel):
     """A life path — **a layer over roll tables**, not an owner of them.

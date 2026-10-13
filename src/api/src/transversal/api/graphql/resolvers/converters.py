@@ -750,6 +750,8 @@ def _life_path_steps_to_gql(lp) -> list:
                 )
                 for b in (st.bindings or [])
             ],
+            # The step's own effects: once per activation, whatever row resolved.
+            effects=[_effect_to_gql(x) for x in (getattr(st, "effects", None) or [])],
         )
         for st in (getattr(lp, "steps", None) or [])
     ]
@@ -775,6 +777,7 @@ def _life_path_step_input_to_domain(st):
             )
             for b in (st.bindings or [])
         ],
+        effects=[_effect_input_to_domain(x) for x in (getattr(st, "effects", None) or [])],
     )
 
 

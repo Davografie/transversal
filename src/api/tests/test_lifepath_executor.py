@@ -30,10 +30,14 @@ class ExecutorRepo:
         self.lifepaths = {}
         self.tables = {}
         self.traits = {}
+        self.entities = {}
         self.created_traitsettings = []
         self.updated_entities = []
         self.historical_records = []
         self.scheduled_events = []
+
+    def get_entity(self, entity_id):
+        return self.entities.get(entity_id)
 
     def get_lifepath(self, path_id):
         return self.lifepaths.get(path_id)
@@ -337,6 +341,77 @@ def test_a_bindings_effect_can_use_a_name_the_row_exposes():
 
     gained = {ts.trait_id for ts in repo.created_traitsettings}
     assert gained == {"t-picked"}, "the binding's effect resolved the row's name"
+
+
+def test_a_step_effect_applies_whatever_row_resolved():
+    """[[B281]]: an effect authored on the **step** rather than on a binding, so it
+    is written once and applies to every row the table can produce."""
+    repo = ExecutorRepo()
+    repo.traits["t-step"] = FakeTrait("t-step", "ts-1")
+    repo.lifepaths["lp-1"] = _wrapped("lp-1", [
+        LifePathStep(id="s1", table_id="tbl-a", effects=[_gain("t-step", "d6")]),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [
+        RollTableEntry(key="a", label="A"),
+        RollTableEntry(key="b", label="B"),
+    ])
+
+    for index in (1, 2):
+        entity = _entity()
+        start_term(entity, "fac-1", "lp-1", repo)
+        before = len(repo.created_traitsettings)
+        resolve_step(entity, repo, index=index)
+        gained = [ts.trait_id for ts in repo.created_traitsettings[before:]]
+        assert gained == ["t-step"], f"row {index}: the step effect ran exactly once"
+
+
+def test_a_step_effect_consumes_a_name_the_row_exposed():
+    """The point of authoring it on the step: **one** effect, for a table whose rows
+    expose different things.
+
+    The resolved row's declarations are in the same scope, so the step effect can
+    target `select variable picked` — and on a row that exposes no such name the
+    path resolves to **zero targets**, which `_apply_spec_effect` applies zero
+    times. That is a clean no-op, and it is what makes "write it once" safe.
+
+    ⚠ This is true of the **path** form (`target_spec` / `owner_spec`), which is the
+    documented way to consume a bound variable — *not* of writing `{picked}` into a
+    flat field like `target`. `_substitute_effect_context` leaves a token it cannot
+    resolve in place, so a flat-field reference to an unbound name runs the effect
+    against the literal string `"{picked}"`. See the note on `LifePathStep.effects`.
+    """
+    from transversal.domain import BoundVariable
+    from transversal.services.target_spec import TargetSpec
+
+    repo = ExecutorRepo()
+    repo.entities["loc-india"] = FakeTrait("loc-india", "ts-loc")
+    step_effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        result="origin",
+        target_spec=TargetSpec.model_validate({"steps": [
+            {"kind": "select", "collection": "variable", "variable": "picked"}]}),
+    )
+    repo.lifepaths["lp-1"] = _wrapped("lp-1", [
+        LifePathStep(id="s1", table_id="tbl-a", effects=[step_effect]),
+    ], entry_step="s1")
+    declared = BoundVariable(name="picked", spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "literal", "element": "location", "value": "loc-india"}]}))
+    repo.tables["tbl-a"] = _table("tbl-a", [
+        RollTableEntry(key="exposes", label="Exposes", bound_variables=[declared]),
+        RollTableEntry(key="silent", label="Silent"),
+    ])
+
+    # The row that exposes it: the step's effect acts on what the row named.
+    exposing = _entity()
+    start_term(exposing, "fac-1", "lp-1", repo)
+    applied = resolve_step(exposing, repo, index=1)["applied"]
+    assert applied, "the step effect resolved the row's name and did something"
+
+    # The row that does not: the same authored effect applies to nobody.
+    silent = _entity()
+    start_term(silent, "fac-1", "lp-1", repo)
+    assert resolve_step(silent, repo, index=2)["applied"] == [], \
+        "no name exposed → the effect is a no-op, not a literal `{picked}`"
 
 
 def test_force_muster_marks_enrollment():
