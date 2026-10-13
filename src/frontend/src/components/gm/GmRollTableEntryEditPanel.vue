@@ -122,13 +122,6 @@ const tableScope = inject('tableScope', null)
 // the collision instead of letting the author save a name that does nothing.
 const reservedNames = computed(() => Object.keys(tableScope || {}))
 
-// This row's layer, resolved on top of the table's by the same composable the
-// table panel uses — so what the editor offers is what `table_bindings()` binds.
-const { scope: rowScope, types: declaredTypes } = useBoundVariableScope(
-  computed(() => form.boundVariables),
-  computed(() => tableScope || {}),
-)
-
 const table = ref(null)
 const ready = computed(() => !!draft || !!table.value)
 const scheme = computed(() => table.value?.scheme || props.scheme)
@@ -155,6 +148,19 @@ const form = reactive({
   // effects for this row ([[B281]]).
   boundVariables: [],
 })
+
+// This row's layer, resolved on top of the table's by the same composable the
+// table panel uses — so what the editor offers is what `table_bindings()` binds.
+//
+// It must stay **below** `form`: the composable's watcher is `immediate`, so it
+// reads `form.boundVariables` during setup, and above the declaration that is a
+// temporal-dead-zone `ReferenceError` — one the build, the check scripts and the
+// API tests all pass straight through. `check-path-fields.mjs` pins the order for
+// exactly that reason.
+const { scope: rowScope, types: declaredTypes } = useBoundVariableScope(
+  computed(() => form.boundVariables),
+  computed(() => tableScope || {}),
+)
 
 // One place the local form is seeded from a row, whether the row came from the
 // injected draft (the unified panel's live entry) or the fetched table.

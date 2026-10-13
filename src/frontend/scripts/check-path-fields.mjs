@@ -664,6 +664,22 @@ const objectAfter = (src, key) => {
   const read = brace(link, link.indexOf('{', link.indexOf('rollTable(id:$id)')))
   ok('linkRollTable fetches each row\'s bound variables',
     FIELD.test(entriesBody(read)), true)
+
+  // ── And the scope composable may not read `form` before it exists ──────
+  //
+  // `<script setup>` runs top-down and the composable's watcher is `immediate`, so
+  // it evaluates `form.boundVariables` *during* setup. Called above the `form`
+  // declaration that is a temporal-dead-zone `ReferenceError` — and the build, the
+  // check scripts and the API tests all pass straight through it. It took a click
+  // on a table row to find, so the order is pinned here rather than trusted.
+  for (const file of ['components/gm/GmRollTableEditPanel.vue',
+                      'components/gm/GmRollTableEntryEditPanel.vue']) {
+    const src = readFileSync(join(SRC, file), 'utf8')
+    const call = src.indexOf('useBoundVariableScope(')
+    const decl = src.indexOf('const form = reactive')
+    ok(`${file} declares \`form\` before the scope composable reads it`,
+      decl >= 0 && call > decl, true)
+  }
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
