@@ -28,10 +28,15 @@ test.beforeAll(async ({ request }) => {
 
 test('a restored life-path window mounts without a setup error', async ({ page }) => {
   const unhandled = []
+  // Vue reports a `setup()` throw as this exact warning before anything else can
+  // see it, and it is what the human's console showed. A `pageerror` listener is
+  // deliberately **not** used: firefox raises a bare
+  // `NetworkError when attempting to fetch resource` when the reload aborts a
+  // background fetch, which has nothing to do with the panel and would make the
+  // guard flaky in the one engine least able to tell them apart.
   page.on('console', (m) => {
     if (m.text().includes('Unhandled error')) unhandled.push(m.text())
   })
-  page.on('pageerror', (e) => unhandled.push(`pageerror: ${e.message}`))
 
   // Boot first, *then* seed, then reload: the case is "a window is already saved,
   // the page loads" — and seeding before boot would restore a window over the top
