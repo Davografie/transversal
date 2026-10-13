@@ -103,6 +103,21 @@ The players begin at Qi Condensation. The Valley's accelerated qi density compre
 > [!tip] Trait Growth as Cultivation
 > Stepping up a die *is* a cultivation breakthrough. The mechanics and the fiction are the same event described two ways. When a player's qi_reserves goes from d6 to d8, they have spent years cycling qi, broken through a bottleneck, and emerged stronger. The SFX they unlock is the technique they developed in the process.
 
+#### Progress inside a realm is SFX, not dice
+
+**Decided 2026-09-28 (human).** Within a single cultivation stage, **SFX are the measure of improvement, not die steps.** A cultivator grows by acquiring techniques, not by getting taller.
+
+- **Trait step-ups are gated behind stringent requirements.** They mark the breakthroughs between stages, so they are rare events rather than the ordinary currency of advancement.
+- **SFX are available at every stage of progression**, and are the intended indicator of growth *within* a realm. They should be **discovered rather than bought** — hidden behind events, so a technique is something that happens to you.
+- **d4 is an available trait rating, and using one yields razmerit** through a dedicated SFX. A low die is therefore not simply worse: acting from weakness is, in the fiction, a way of generating the resource that pays for power. This is what keeps d4 meaningful now that a stage's ceiling is what gates die size.
+
+> [!question] Open, and deliberately not settled
+> **Is this Three Realms-only, or multiversal?** Written for the Three Realms for now; whether d4-as-razmerit-source and SFX-as-advancement apply to every universe is undecided.
+>
+> Two knobs to set when it is authored: whether the razmerit yield scales with *how many* d4s are played or is flat per use, and what the stringent requirements for a trait step-up actually are.
+>
+> **Mechanics note for whoever authors it:** the intended shape is expressible with what exists, and the pieces are named. A rule that fires per played die receives a **`triggered_die_*` context** — `{triggered_die_die}` (the die size, so `d4` is matchable), `{triggered_die_result}`, `{triggered_die_tier}`, `{triggered_die_source_kind}`, `{triggered_die_role}` (`services/roll_deferral.py::_substitute_die_context`) — and `earn_razmerit` takes a numeric `result`, so the yield can be flat or read from the die. Every trait setting already carries `dice` and `sfx_ids`. **No new primitive is needed.**
+
 ### The Immortal Cultivator
 
 The jian's original wielder was a cultivator who reached a level of power that allowed inapposite transversal — physical travel between universes without external technology. They came to Earth for reasons lost to history. They died on Earth — their body, if it still exists, has not been found.
