@@ -665,6 +665,55 @@ const objectAfter = (src, key) => {
   ok('linkRollTable fetches each row\'s bound variables',
     FIELD.test(entriesBody(read)), true)
 
+  // ── A round trip has two halves, and both build a fresh row object ────
+  //
+  // The check above proved the *save* map carried a row's declarations, and it
+  // passed while the panel was dropping them: the **load** map
+  // (`form.entries = (t.entries || []).map(...)`) builds its own object per row, so
+  // a field missing there is lost on read and then written back empty on the next
+  // save. An author's declaration vanished that way, and only a browser test found
+  // it. So the two maps' field sets are compared — checking one half is what let
+  // this through.
+  {
+    // Top-level keys of an object-literal body. Depth-aware, so the `{name, spec}`
+    // inside a nested bound-variable map is not mistaken for a row field — and
+    // comment-stripped first, because prose contains colons too (`…for the same
+    // reason:`, `…vanished: the save side…`) and matched as if they were fields.
+    // No string in these maps contains `//`, so a blunt strip is enough here.
+    const stripComments = (s) =>
+      s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
+    const topLevelKeys = (raw) => {
+      const body = stripComments(raw)
+      const out = []
+      let depth = 0
+      for (let i = 0; i < body.length; i++) {
+        const c = body[i]
+        if (c === '{' || c === '[') { depth++; continue }
+        if (c === '}' || c === ']') { depth--; continue }
+        if (depth !== 1) continue
+        const m = /^([a-zA-Z_]\w*)\s*:/.exec(body.slice(i))
+        if (m) { out.push(m[1]); i += m[0].length - 1 }
+      }
+      return out.sort()
+    }
+    const panel = readFileSync(join(SRC, 'components/gm/GmRollTableEditPanel.vue'), 'utf8')
+    const loadAt = panel.indexOf('form.entries = (t.entries')
+    const saveAt = panel.indexOf('entries: form.entries.map')
+    const bodyAt = (at) => (at < 0 ? '' : brace(panel, panel.indexOf('{', at)))
+    const loaded = topLevelKeys(bodyAt(loadAt))
+    const saved = topLevelKeys(bodyAt(saveAt))
+
+    ok('the panel\'s read and write maps were both found',
+      loadAt >= 0 && saveAt >= 0 && loaded.length > 0 && saved.length > 0, true)
+    ok('the panel reads and writes the same row fields',
+      JSON.stringify(saved) === JSON.stringify(loaded), true)
+    // Named explicitly as well, so a failure says which field went missing.
+    for (const field of ['key', 'costEffects', 'boundVariables', 'conditions', 'effects']) {
+      ok(`the panel's read map carries \`${field}\``, loaded.includes(field), true)
+      ok(`the panel's write map carries \`${field}\``, saved.includes(field), true)
+    }
+  }
+
   // ── And the scope composable may not read `form` before it exists ──────
   //
   // `<script setup>` runs top-down and the composable's watcher is `immediate`, so

@@ -516,6 +516,16 @@ onMounted(async () => {
       // not edit them and the entries map in save() is a full replace.
       key: e.key || '',
       costEffects: e.costEffects || [],
+      // The row's own names ([[B281]]). This map is the *other half* of the save
+      // map below, and it too builds a fresh object per row — so a field missing
+      // here is dropped on **read** and then written back empty. That is exactly
+      // how an author's declaration vanished: the save side had it and this side
+      // did not. `check-path-fields.mjs` now compares the two maps' field sets
+      // rather than trusting either half on its own.
+      boundVariables: (e.boundVariables || []).map(bv => ({
+        name: bv.name || '',
+        spec: bv.spec || null,
+      })),
       label: e.label,
       description: e.description,
       minValue: e.minValue,
