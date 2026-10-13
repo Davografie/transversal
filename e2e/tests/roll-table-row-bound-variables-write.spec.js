@@ -93,6 +93,24 @@ async function openScratchTable(page) {
   await row.waitFor({ state: 'visible', timeout: 20000 })
   await row.click()
   await expect(page.locator('.rte-root')).toBeVisible({ timeout: 20000 })
+  // The panel renders *before* its fetch resolves, and its Save writes whatever
+  // `form.entries` holds — so clicking Save any earlier saves an empty table.
+  // Waiting for the rows is what makes the save meaningful.
+  await expect(page.locator('.rte-entry-body')).toHaveCount(2, { timeout: 20000 })
+}
+
+/** Click the table's Save and wait for the mutation to come back.
+ *
+ *  Waiting matters for the erasure tests: the seeded state already holds the
+ *  declaration, so a poll for it passes before the save has even happened and
+ *  proves nothing. */
+async function saveTable(page) {
+  const done = page.waitForResponse(
+    (r) => r.url().includes('/graphql') && (r.request().postData() || '').includes('saveRollTable'),
+    { timeout: 20000 },
+  )
+  await page.locator('.rte-save').click()
+  await done
 }
 
 test('the row editor reads back a row\'s declaration', async ({ page, request }) => {
@@ -114,7 +132,7 @@ test('saving a table from the panel keeps every row\'s declaration', async ({ pa
   // Touch nothing; just save the document the panel is holding. This is the pure
   // erasure check: the whole `entries` list is replaced on save, so a field the
   // panel read but did not send back is gone.
-  await page.locator('.rte-save').click()
+  await saveTable(page)
 
   await expect.poll(async () => {
     const t = await stored(request)
@@ -141,7 +159,7 @@ test('renaming a row\'s declaration in the editor persists, spec and all', async
   await expect(page.locator('.eep-root')).toBeHidden({ timeout: 20000 })
   // …so the table panel's own Save is the commit point. Both are clicked here on
   // purpose: a person who presses only the first has saved nothing.
-  await page.locator('.rte-save').click()
+  await saveTable(page)
 
   await expect.poll(async () => {
     const t = await stored(request)
@@ -166,7 +184,7 @@ test('the table\'s own declarations survive a save that only touched a row', asy
   await page.locator('.eep-root .bv-name').first().fill('picked_place')
   await page.locator('.eep-save').click()
   await expect(page.locator('.eep-root')).toBeHidden({ timeout: 20000 })
-  await page.locator('.rte-save').click()
+  await saveTable(page)
 
   await expect.poll(async () => {
     const t = await stored(request)
