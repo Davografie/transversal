@@ -161,6 +161,7 @@
         :phase="phase"
         @moved="onMoved"
         @inspect-entity="onInspectEntity"
+        @return-to-self="onReturnToSelf"
         @dragging="occupantDragging = $event"
         @add-to-pool="(d) => diceRef?.addFromSheet(d)"
       />
@@ -459,6 +460,9 @@ function onMoved(data) {
   locationName.value = data.location
   if (data.universe) universe.value = data.universe
   currentLocationId.value = data.location_id || data.location
+  // Arriving somewhere new relinquishes a foreign view: the sheet goes back to the
+  // acting entity, or to nothing for a roaming GM.
+  clearForeignView()
   fetchLocationBg()
   fetchPeers(true)
   // The scene roster reads the entity list's currentLocation.
@@ -474,6 +478,18 @@ const entityId = ref(localStorage.getItem('entityId') || null)  // perspective e
 // state — the faction panel's membership gesture follows it without a reopen.
 provide('actingEntityId', computed(() => entityId.value || ''))
 const editZones = ref(false)
+
+// Relinquish a *foreign view* — the read-only peek at another entity — and put the
+// sheet back on the acting entity (or on nothing, for a roaming GM).
+//
+// Deliberately NOT `returnToSelf()`: that also resets the *perspective*, which would
+// drop a GM's assumption. A view is a read of someone **here**, so arriving somewhere
+// else invalidates it — but who you are acting as is a separate fact and survives the
+// move.
+function clearForeignView() {
+  viewingEntityId.value = null
+  forceSheet.value = true
+}
 
 // The player's own main entity (perspective-neutral). GM has no main: they
 // return to free-roam instead.
@@ -950,6 +966,7 @@ async function setViewLocation(locId) {
 async function switchViewLocation(locId) {
   if (!locId) return { ok: true }
   entityId.value = null
+  clearForeignView()   // free-roam at a new place is not "still reading them"
   return setViewLocation(locId)
 }
 
@@ -965,6 +982,13 @@ function returnToSelf() {
   if (gmMode.value && playerId.value) {
     fetch(`/api/v1/players/${playerId.value}/control`, { method: 'DELETE' }).catch(() => {})
   }
+}
+
+// Clicking the ROAMING GM's dot on the map: back to roaming, and the sheet follows it
+// so a foreign view is dropped in the same gesture (the human, 2026-09-26).
+function onReturnToSelf() {
+  returnToSelf()
+  forceSheet.value = true
 }
 
 function onInspectEntity(id) {

@@ -90,7 +90,7 @@ function navigatePayload(self, extraOccupants = []) {
 }
 
 /** Load the app at a known self position, with every read mocked. */
-async function open(page, self, extraOccupants = []) {
+async function open(page, self, extraOccupants = [], opts = {}) {
   await page.route('**/api/v1/locations/*/navigate*', (route) =>
     route.fulfill({ json: navigatePayload(self, extraOccupants) }))
   await page.route('**/api/v1/locations/*/traits*', (route) =>
@@ -107,7 +107,8 @@ async function open(page, self, extraOccupants = []) {
     localStorage.setItem('playerName', pname)
     localStorage.setItem('entityId', eid)
     localStorage.setItem('currentLocationId', loc)
-  }, [character.playerId, character.playerName, character.entityId, LOC])
+  }, [character.playerId, character.playerName,
+      opts.entityId ?? character.entityId, LOC])
   await establishSession(page)
   await page.goto('/')
 
@@ -288,6 +289,30 @@ test('the drawer is arrange-mode furniture, and needs no unplaced traits', async
   // No architect role: the drawer must not exist at all for a player.
   await open(page, FAR, [UNPLACED_GMC])
   await expect(page.locator('.occ-drawer-chip')).toHaveCount(0)
+})
+
+// ── Reverting a foreign view (the human, 2026-09-26) ──────────────────────────
+//
+// `viewingEntityId` is the read-only peek at another entity; it puts `.viewed` on that
+// occupant's dot (and swaps the open sheet to theirs). Two gestures must drop it: the
+// roaming GM clicking their own dot, and arriving somewhere new.
+
+test('clicking the roaming GM dot drops a foreign view', async ({ page }) => {
+  await asArchitect(page)
+  // Roaming: no acting entity, so the self dot IS the roaming GM's dot.
+  await open(page, FAR, [PLACED_GMC], { entityId: '' })
+
+  const dot = page.locator('.occ-dot', { hasText: 'PP' })
+  await expect(dot).toHaveCount(1)
+
+  // Peek at the foreign occupant. `.viewed` is the same state the foreign sheet keys on.
+  await dot.click()
+  await expect(dot).toHaveClass(/viewed/)
+
+  // The roaming dot has no entity to inspect — it means "back to roaming", which is
+  // what lets go of the peek. Before this it emitted nothing at all.
+  await page.locator('.map-dot.self').click()
+  await expect(page.locator('.occ-dot.viewed')).toHaveCount(0)
 })
 
 // ── The `( x )` unplace target (the human, 2026-09-26) ────────────────────────

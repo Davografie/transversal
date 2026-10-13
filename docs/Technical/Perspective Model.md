@@ -76,6 +76,24 @@ Persisted **in all modes** — the `gmMode` guard is removed. Refresh restores `
 sheet" without becoming B. Never persisted; cleared on any real switch. (Today it is used
 for the location-inspect path; it becomes the *only* sheet-peek mechanism.)
 
+**Its lifetime is "as long as it describes somewhere you are still standing"** (the human,
+2026-09-26). Two gestures let go of a peek, both because the peek stops being true:
+
+- **Arriving at another location.** A peek reads someone *here*; after a travel "here" is
+  somewhere else, so the sheet goes back to the acting entity — or to nothing, for a
+  roaming GM. This is `clearForeignView()` in `App.vue`, called from `onMoved` and from
+  the GM panel's `switchViewLocation`. **It deliberately does not reset the
+  perspective**: dropping an assumption on every travel would be a different (and
+  surprising) rule — who you are acting as survives the move, only the *view* moves.
+- **Clicking the roaming GM's dot.** With `entityId = null` that dot has no entity to
+  inspect, so the click means "back to roaming" — the only gesture that let a roaming GM
+  let go of a peek. It emits `returnToSelf`, the same call a GM's own chip makes, so both
+  routes end in one place. (A GM *acting as* someone already had this: clicking their own
+  dot with a foreign view resets the view and keeps the assumption — see `onPeerClick`.)
+
+Neither gesture opens the panel: `forceSheet` decides *what* the sheet shows, and
+`sheetVisible` is what opens it — unchanged.
+
 ### Derived — no variables
 
 - **"Self" / return-to-main target:** the player's own main (`agency.main`, already in the

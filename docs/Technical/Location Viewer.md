@@ -440,8 +440,11 @@ leave a dot sized up for long.
 ### Click / pop-out
 
 - **Occupant** → always `emit('inspectEntity', id)` (opens the sheet).
-- **Self dot** → `emit('inspectEntity', entityId)`; the GM free-roam dot emits
-  nothing (there is no entity to inspect).
+- **Self dot** → `emit('inspectEntity', entityId)`. With no perspective entity — the GM's
+  roaming dot — there is nothing to inspect, so it emits **`returnToSelf`** instead: back
+  to roaming, which is what drops a foreign view ([[Perspective Model]] § the lifetime of
+  `viewingEntityId`). Before 2026-09-26 it emitted nothing, so a roaming GM who had peeked
+  at someone had no click that let go of them.
 - **Zone / nav dot** → toggle the expanded bubble via `activeElement`.
 - **Expanded zone / nav dot overlay** → `onExpandedClick` triggers travel.
 - **Background click** → dismisses the pop-out, re-popping self.

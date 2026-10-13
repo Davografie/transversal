@@ -338,7 +338,7 @@ const props = defineProps({
   phase: { type: String, default: 'adding' },
 })
 
-const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity', 'dragging', 'addToPool'])
+const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity', 'dragging', 'addToPool', 'returnToSelf'])
 const { toggleTransversalType } = useTransversalLinks()
 
 const currentImage = ref('')
@@ -484,7 +484,10 @@ function onSelfDragStart(e) {
 
 function onSelfClick() {
   if (occSuppressClick) { occSuppressClick = false; return }
-  if (!props.entityId) return  // GM free-roam dot — nothing to inspect
+  // The roaming GM's dot has no entity to inspect — but it is still the way *back to
+  // roaming*, which is what drops a foreign view (the human, 2026-09-26). Without
+  // this a roaming GM who had peeked at someone had no click that let go of them.
+  if (!props.entityId) { emit('returnToSelf'); return }
   emit('inspectEntity', props.entityId)
 }
 
