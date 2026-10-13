@@ -4,6 +4,8 @@ import strawberry
 
 from transversal.api.graphql.types import TraitRef
 from transversal.api.graphql.types import TraitSetRef
+from transversal.api.graphql.type_defs.traits import TraitSetting as GqlTraitSetting
+from transversal.api.graphql.type_defs.traits import _gql_trait_setting
 from transversal.api.graphql.resolvers.converters import (
     _em,
     _trait_to_gql,
@@ -79,4 +81,28 @@ class QueriesTraits:
                         allow_duplicates=ts.allow_duplicates, polarity=ts.polarity,
                         sheet_tab=ts.sheet_tab)
             for ts in tss
+        ]
+
+    @strawberry.field
+    def trait_instances(
+        self, info: strawberry.Info, trait_id: strawberry.ID,
+    ) -> list[GqlTraitSetting]:
+        """Every instance of a trait **definition**, whatever it hangs off.
+
+        The inverse of every other trait-setting read: those walk from a host
+        (``entity.traitSettings``, ``relationship.relationTraits``,
+        ``subTraitSettings``), which cannot answer "who holds this trait?".
+
+        This is the registry's side of a cleanup question — one definition, all of
+        its instances, each with its ``host`` — because a definition is what an
+        author edits and the instances are what a migration leaves behind. It
+        includes instances anchored as a **sub-trait** of another trait (they
+        reference this definition too, so they are instances of it) and instances
+        on **relationship edges**, and it is deliberately *not* scoped to a
+        universe or an entity: seeing the whole spread is the point.
+        """
+        repo = _em(info).repo
+        return [
+            _gql_trait_setting(s)
+            for s in repo.get_traitsettings_by_trait(str(trait_id))
         ]

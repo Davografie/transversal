@@ -237,6 +237,34 @@ def rating_dice(s) -> list:
 
 
 @strawberry.type
+class TraitInstanceHost:
+    """The thing an instance is anchored to, flattened for a list.
+
+    One shape for four kinds, because a panel that lists instances of a trait has
+    to name the owner whatever kind it is — see
+    ``services/trait_instance_hosts.py`` for the rules, including why a sub-trait's
+    entity comes from the root of its parent chain rather than from its own
+    ``entityId`` (which is only inherited, and may be a relationship edge key).
+    """
+
+    kind: str = "entity"  # entity | projection | relationship | traitsetting
+    entity_id: str = ""
+    entity_name: str = ""
+    entity_type: str = ""
+    # Body anchors: which universe that body stands in.
+    universe: str = ""
+    # Relationship anchors: the other party, and the edge's type.
+    about_id: str = ""
+    about_name: str = ""
+    about_type: str = ""
+    relationship_type: str = ""
+    # Sub-trait anchors: the super-trait the instance sits under.
+    parent_traitsetting_id: str = ""
+    parent_trait_id: str = ""
+    parent_trait_name: str = ""
+
+
+@strawberry.type
 class TraitSetting:
     id: strawberry.ID
     entity_id: strawberry.ID
@@ -347,6 +375,20 @@ class TraitSetting:
         entity = em.repo.get_entity(self.entity_id)
         universe = entity.current_universe if entity else ""
         return resolve_trait_display_name(trait, self.dice, universe)
+
+    @strawberry.field
+    def host(self, info: strawberry.Info) -> "TraitInstanceHost":
+        """What this instance hangs off, flattened — see the service that does the job.
+
+        A **resolver** rather than a plain field, deliberately: it costs a few repo
+        reads, and only the surface that asks for it should pay them. It is also
+        why this addition needs no change to either trait-setting converter —
+        `tests/test_trait_setting_converters.py` holds those to the type's *plain*
+        fields, and a resolved one is derived when the query runs.
+        """
+        from transversal.services.trait_instance_hosts import describe_host
+        described = describe_host(info.context["entity_manager"].repo, self)
+        return TraitInstanceHost(**vars(described))
 
     def _set_id(self, info: strawberry.Info) -> str:
         """This setting's trait set — reached through the **registry trait**.
