@@ -393,11 +393,11 @@ An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
 
 There is no frontend test runner: checks are plain `node` scripts in
 `src/frontend/scripts/check-*.mjs`, run against the `transversal2-frontend:latest`
-image (build the same way, in Docker). **31 suites exist** (the count was 14 when
+image (build the same way, in Docker). **32 suites exist** (the count was 14 when
 the shared table component was handed over) and a shared primitive can move
 several — `check-theme-tokens`, `check-combobox`, `check-trait-tree`,
 `check-panel-close`, `check-panel-placement`, `check-panel-persistence`,
-`check-panel-stacking`, `check-admission-panel`, `check-player-filter`, `check-tree-expand/order/locate`,
+`check-panel-stacking`, `check-admission-panel`, `check-trait-instances`, `check-player-filter`, `check-tree-expand/order/locate`,
 `check-place-filter`, `check-trait-explanations`, `check-sheet-profile`,
 `check-sheet-api`, `check-landing`, `check-auth-gate`, `check-entity-create`. **Ping [[gm-panels]]
 when the component lands** and I will re-run them and migrate my 17 call sites —
@@ -418,6 +418,15 @@ chosen, which of the eight capabilities above it covers.
 - Thin consumer panels: `GmPanel.vue` (root), `GmEntityEditPanel.vue`, `GmTraitEditPanel.vue`.
 - Infrastructure: `PanelStack.vue`, `Panel.vue`, `PanelWindow.vue`, `usePanel.js`, `usePanelBus.js`, `usePanelAnchor.js`, `usePanelWindows.js`, `usePanelDiagnostics.js`.
 - Troupe play: `GmTroupeOverview.vue` (recency + active-main groups), `RollTableMenu.vue` (roll-table-as-menu picker), `useRollTableMenu.js`.
+- Trait instances ([[B280]]): `GmTraitInstancesPanel.vue` — every instance of one
+  trait **definition**, each row naming the host it hangs off (an entity, a body,
+  a relationship, or the super-trait of a sub-trait), with the bulk edits a
+  migration cleanup needs. Opened from the trait editor's *Instances* section and
+  keyed by trait, so two traits get two panels. The read is the API's
+  `traitInstances(traitId)`, which exists because every other trait-setting read
+  walks *from* a host and cannot answer "who holds this?". Host wording and the
+  filter predicate are pure (`utils/traitInstanceHost.js`); the fan-out is bounded
+  (6), because one definition carries 547 instances.
 - Admission (SEC-3): `GmAdmissionPanel.vue` — the invitation a GM shows the table. A **block opens it** (`AdmitPlayersBlock` is the Players tab's switch and open list; the QR and the link are the panel), it takes **no props** and reads the shared `useAdmission()` state, so a window closed from the tab cannot leave a QR on screen for a token that no longer admits. A panel that renders a **credential** is never restorable — see *Panel persistence*.
 
 ## Migration backlog — complete
