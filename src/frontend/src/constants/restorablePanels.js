@@ -44,6 +44,7 @@ import GmRollTableEditPanel from '@/components/gm/GmRollTableEditPanel.vue'
 import GmRollTableEntryEditPanel from '@/components/gm/GmRollTableEntryEditPanel.vue'
 import GmLifePathDetailPanel from '@/components/gm/GmLifePathDetailPanel.vue'
 import GmPortalConfigPanel from '@/components/gm/GmPortalConfigPanel.vue'
+import GmTraitInstancesPanel from '@/components/gm/GmTraitInstancesPanel.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 
 export const RESTORABLE_PANELS = {
@@ -55,6 +56,7 @@ export const RESTORABLE_PANELS = {
   GmRollTableEntryEditPanel,
   GmLifePathDetailPanel,
   GmPortalConfigPanel,
+  GmTraitInstancesPanel,
   ImageViewer,
 }
 

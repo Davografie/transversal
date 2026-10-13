@@ -235,7 +235,7 @@ console.log('\nthe registry is an allow-list, and the store is wired\n')
 
 for (const name of ['GmEntityEditPanel', 'GmTraitEditPanel', 'GmTraitsetDetail', 'GmSfxEditPanel',
   'GmRollTableEditPanel', 'GmRollTableEntryEditPanel',
-  'GmLifePathDetailPanel', 'GmPortalConfigPanel', 'ImageViewer']) {
+  'GmLifePathDetailPanel', 'GmPortalConfigPanel', 'GmTraitInstancesPanel', 'ImageViewer']) { f67750eb (feat(gm): the instances of a trait — who holds it, and bulk edits over them)
   ok(`${name} is restorable`, new RegExp(`^\\s*${name},$`, 'm').test(REGISTRY), true)
 }
 

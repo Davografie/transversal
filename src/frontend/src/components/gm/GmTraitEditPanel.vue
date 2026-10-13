@@ -149,6 +149,18 @@
         <Button class="save-btn" @click="addSubtarget" :disabled="!newSubtarget" variant="success" solid>Add</Button>
       </div>
 
+      <!-- Who holds this trait. A definition is what an author edits; its
+           instances are what a migration leaves behind, and the four kinds of
+           host (entity, body, relationship, container) each answer differently —
+           which is what the panel is for. -->
+      <h4 class="ps-section-title">Instances</h4>
+      <p class="section-hint">
+        Every instance of this trait, wherever it hangs — on an entity, a body, a
+        relationship, or inside a container. Open it to see who holds what, and to
+        fix them in bulk.
+      </p>
+      <Button class="ps-add-btn" @click="openInstances" variant="secondary" block>Open instances…</Button>
+
       <div class="danger-zone">
         <DangerButton
           label="Delete Trait"
@@ -278,6 +290,7 @@ import { usePanel } from '@/composables/usePanel.js'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
+import GmTraitInstancesPanel from '@/components/gm/GmTraitInstancesPanel.vue'
 import GmList from '@/components/ui/GmList.vue'
 import DangerButton from '@/components/ui/DangerButton.vue'
 import Button from '@/components/ui/Button.vue'
@@ -509,6 +522,22 @@ async function deleteDisplayName(index) {
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
     { id: trait.value.id, input: { displayNames: updated } }
   )
+}
+
+// ── Instances ──
+// The instances of this definition, as their own child panel. `id` is what makes
+// a second open land on the panel already showing this trait instead of stacking
+// a duplicate (and the id is the trait, so two traits' panels are two panels).
+// No `badge`: the badge is also the copy-ID control, and this panel's id is a
+// composite (`trait-instances:…`) that means nothing to paste anywhere.
+function openInstances() {
+  if (!panel.open || !trait.value?.id) return
+  panel.open({
+    component: GmTraitInstancesPanel,
+    title: `${trait.value.name || 'Trait'} — instances`,
+    id: `trait-instances:${trait.value.id}`,
+    props: { traitId: trait.value.id, traitName: trait.value.name || '' },
+  })
 }
 
 // ── Display Name editor ──
