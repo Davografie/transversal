@@ -157,7 +157,8 @@ test('renaming a row\'s declaration in the editor persists, spec and all', async
 })
 
 test('the table\'s own declarations survive a save that only touched a row', async ({ page, request }) => {
-  await seed(request, { rowVariables: [], tableVariables: ['flagged'] })
+  // Both layers seeded: the point is that editing one does not disturb the other.
+  await seed(request, { rowVariables: [ORIGINAL], tableVariables: ['flagged'] })
   await openScratchTable(page)
 
   await page.locator('.rte-edit').first().click()
@@ -171,4 +172,10 @@ test('the table\'s own declarations survive a save that only touched a row', asy
     const t = await stored(request)
     return (t?.boundVariables || []).map((b) => b.name)
   }, { timeout: 15000, intervals: [500, 1000] }).toEqual(['flagged'])
+
+  // …and the row's edit landed too, so "the table layer survived" is not a
+  // consequence of the save having done nothing at all.
+  const t = await stored(request)
+  expect(t.entries.find((e) => e.key === 'india').boundVariables.map((b) => b.name))
+    .toEqual(['picked_place'])
 })
