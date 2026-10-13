@@ -170,8 +170,11 @@ pure content and can be rolled for anything.
 - `services/roll_table.py` — `row_key`, `entry_key_for`.
 - `services/lifepath_validation.py` — `validate_life_path`.
 - `migrate_lifepath_wrapper.py` — the one-way migration off the old model.
-- Frontend — `composables/lifePathGraph.js` (draws from steps), `GmLifePathEditPanel.vue`
-  (authors steps + bindings).
+- Frontend — `composables/lifePathGraph.js` (draws from steps); `GmLifePathDetailPanel.vue`
+  authors the path and its **steps**; `GmRollTableEditPanel.vue` authors a row and its
+  **binding** (next / exit / draft / enrol / binding effects). The split is by ownership, not
+  by verb — [[B277]] collapsed the old `GmLifePathEditPanel` for the opposite reason: it and
+  the table panel both rendered rows, so the same bindings had two editors.
 
 ## Open items
 

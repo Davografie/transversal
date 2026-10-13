@@ -157,7 +157,8 @@ decision rather than a port:
 - **I need from [[ui-ux]]:** the row vocabulary (is a row an entry, an option, or a step?) and the
   "why not" presentation, since four gates have to render through it.
 - **Not mine to decide:** whether the *authoring* side unifies too. The same overlap exists in the
-  editors (`GmRollTableEditPanel`'s entry list, `GmLifePathEditPanel`, the SFX menu editors); if the
+  editors (`GmRollTableEditPanel`'s entry list — which since [[B277]] owns each row's binding
+  and its effects — plus the SFX menu editors); if the
   component is runtime-only, the *row vocabulary* should still be shared so the two sides do not
   drift.
 
