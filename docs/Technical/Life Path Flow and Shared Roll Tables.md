@@ -167,7 +167,9 @@ pure content and can be rolled for anything.
 - `domain/rolltables.py` — `RollTableEntry.key`, `RollTable.subject_kind`.
 - `services/lifepath_executor.py` — `start_term`, `resolve_step`, `find_step`, `_process_flow`,
   `_advance`, `_exit`. `_next_step` survives **only** for the unwrapped regime.
-- `services/roll_table.py` — `row_key`, `entry_key_for`.
+- `services/roll_table.py` — `row_key`, `entry_key_for`, `table_bindings` (the scope a row's
+  conditions and effects resolve against; it also resolves `RollTable.bound_variables`, the
+  author's names, into that scope).
 - `services/lifepath_validation.py` — `validate_life_path`.
 - `migrate_lifepath_wrapper.py` — the one-way migration off the old model.
 - Frontend — `composables/lifePathGraph.js` (draws from steps); `GmLifePathDetailPanel.vue`
@@ -178,12 +180,21 @@ pure content and can be rolled for anything.
 
 ## Open items
 
-- **`RollTable.life_path` is not yet deleted.** Nothing in the backend reads it; the GM
-  detail panel and the canvas's drag-to-link still touch it. It goes once they read the
-  wrapper ([[B269]]).
+- **`RollTable.life_path` is not yet deleted** ([[B270]]). An earlier version of this line
+  claimed nothing in the backend reads it; **that was wrong**. `table_bindings` reads it, and
+  deliberately **prefers** it over the invoking term's path — a table that names its own path
+  must not be re-anchored by whatever term is running. Two tests assert that, so B270 has to
+  unpick the precedence, not merely delete a field. The GM detail panel and the canvas's
+  drag-to-link are the other two readers.
 - **`useCanvas.linkRollTable` still writes legacy `next_step` effects**, so drag-to-link in
   the life-path canvas is inert under the wrapper.
 - **Forbidding a row** — a path declining a row it does not want — is designed for but not
   built (the human: *"paths forbidding rows sounds interesting, maybe later"*).
+- **Bound variables are table-level only** ([[B279]], [[B281]]). A table's declared names
+  resolve **once per activation**, so every row shares one value — a row cannot yet expose its
+  own. The *consumption* half works and is proven: a declared name is typed by its traced path,
+  and a life path's **binding effects** read it because `resolve_step` hands one scope to both
+  the row's effects and the binding's. The form is a path (`select variable X`), not a
+  `{token}` in a positional field.
 - Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
   ([[B194]]–[[B197]]) are unchanged by this and remain separate gates.
