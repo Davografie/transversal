@@ -68,7 +68,31 @@
               {{ e.label || e.name }}
             </option>
           </select>
-          <input v-model="step.value" placeholder="id — e.g. location-india-55a094fc" />
+          <!-- Pick by name, store the identity — the **universal picker**, the same
+               one every other target field composes rather than a text box
+               ([[UI-UX Design#Pickers]]). It is backed by `targetCandidates(kind)`,
+               so what is offered is the set the engine can actually resolve. -->
+          <TargetPicker
+            v-if="step.element"
+            :kind="step.element"
+            :model-value="step.value"
+            :clearable="false"
+            placeholder="Pick one…"
+            :option-to-value="(opt) => literalOptionToValue(i, opt)"
+            @update:model-value="(v) => onLiteralValue(i, v)"
+          />
+          <!-- …and an id box beside it, deliberately kept. **Nine of the eighteen**
+               catalog elements have no candidate source (`die`, `capacity_die`,
+               `pool`, `contest`, `traitsetting`, `traitsetsetting`, `relationship`,
+               `sfx`, `scheduled_event`), so for those the picker is legitimately
+               empty and without this the step could not be authored at all. It is
+               also the way out when a pickable kind has no candidates in scope. -->
+          <input
+            class="tsb-literal-id"
+            :value="step.value"
+            placeholder="or type an id"
+            @input="onLiteralValue(i, $event.target.value)"
+          />
         </div>
 
         <!-- filter: narrow by a comparable field -->
@@ -629,6 +653,26 @@ function optionToValueFor(i) {
   // (`universe-earth`) — the one kind where the stored value differs from the
   // candidate's id.
   return fieldReferences(i) === 'universe' ? ((opt) => opt?.universe || opt?.id || '') : null
+}
+
+// ── A literal's value: the universal picker, plus an id escape hatch ──
+// The picker is what an author should reach for (`[[UI-UX Design#Pickers]]`), and
+// the id box is what keeps the nine candidate-less elements authorable.
+
+function literalOptionToValue(i, opt) {
+  // A universe holds its *handle* (`earth`), not its entity id — the same single
+  // case a filter's reference value has, for the same reason.
+  return steps.value[i]?.element === 'universe'
+    ? (opt?.universe || opt?.id || '')
+    : (opt?.id || '')
+}
+
+function onLiteralValue(i, val) {
+  const step = steps.value[i]
+  if (!step) return
+  // `one`, never a list: a literal names exactly one thing, which is the whole
+  // reason it exists.
+  step.value = Array.isArray(val) ? (val[0] || '') : (val || '')
 }
 
 function onReferenceValue(i, val) {
