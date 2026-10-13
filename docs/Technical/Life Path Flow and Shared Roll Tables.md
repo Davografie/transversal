@@ -168,15 +168,19 @@ pure content and can be rolled for anything.
 - `services/lifepath_executor.py` — `start_term`, `resolve_step`, `find_step`, `_process_flow`,
   `_advance`, `_exit`. `_next_step` survives **only** for the unwrapped regime.
 - `services/roll_table.py` — `row_key`, `entry_key_for`, `table_bindings` (the scope a row's
-  conditions and effects resolve against; it also resolves `RollTable.bound_variables`, the
-  author's names, into that scope).
+  conditions and effects resolve against; it resolves the table's declared names and then the
+  chosen row's, in that order), `entry_applies` / `resolve_applicable_entry` (which build the
+  table's scope so a row's *conditions* can read it).
 - `services/lifepath_validation.py` — `validate_life_path`.
 - `migrate_lifepath_wrapper.py` — the one-way migration off the old model.
-- Frontend — `composables/lifePathGraph.js` (draws from steps); `GmLifePathDetailPanel.vue`
-  authors the path and its **steps**; `GmRollTableEditPanel.vue` authors a row and its
-  **binding** (next / exit / draft / enrol / binding effects). The split is by ownership, not
-  by verb — [[B277]] collapsed the old `GmLifePathEditPanel` for the opposite reason: it and
-  the table panel both rendered rows, so the same bindings had two editors.
+- Frontend — `composables/lifePathGraph.js` (draws from steps); `composables/useBoundVariableScope.js`
+  (resolves one declaration layer into a scope — shared by the table's layer and a row's, so the
+  two cannot drift); `GmLifePathDetailPanel.vue` authors the path and its **steps**;
+  `GmRollTableEditPanel.vue` authors the table's declarations, a row and its **binding**
+  (next / exit / draft / enrol / binding effects); `GmRollTableEntryEditPanel.vue` authors a row's
+  own declarations. The split is by ownership, not by verb — [[B277]] collapsed the old
+  `GmLifePathEditPanel` for the opposite reason: it and the table panel both rendered rows, so the
+  same bindings had two editors.
 
 ## Open items
 
@@ -190,11 +194,18 @@ pure content and can be rolled for anything.
   the life-path canvas is inert under the wrapper.
 - **Forbidding a row** — a path declining a row it does not want — is designed for but not
   built (the human: *"paths forbidding rows sounds interesting, maybe later"*).
-- **Bound variables are table-level only** ([[B279]], [[B281]]). A table's declared names
-  resolve **once per activation**, so every row shares one value — a row cannot yet expose its
-  own. The *consumption* half works and is proven: a declared name is typed by its traced path,
-  and a life path's **binding effects** read it because `resolve_step` hands one scope to both
-  the row's effects and the binding's. The form is a path (`select variable X`), not a
-  `{token}` in a positional field.
+- **Bound variables are declared at two levels, and the resolution order is the point**
+  ([[B279]], [[B281]]). A **table's** declarations resolve once per activation, *before any row
+  is chosen* — so every row shares one value, and, precisely because they exist before a row
+  does, a row's **conditions** can read them (one declaration instead of an elaborate targeting
+  path repeated on every row). A **row's** own declarations resolve once that row has applied, so
+  a value only one row has — a location, a rival — can be exposed; a row's conditions cannot read
+  *those*, which would be circular, since which row applies is the question being asked. A row's
+  name may start from a table's, and an existing name wins: a collision is refused and logged
+  rather than silently rebound, and the editors mark it.
+  The *consumption* half is proven end to end: a declared name is typed by its traced path, and a
+  life path's **binding effects** read it because `resolve_step` hands one scope to both the row's
+  effects and the binding's. The form is a path (`select variable X`), not a `{token}` in a
+  positional field.
 - Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
   ([[B194]]–[[B197]]) are unchanged by this and remain separate gates.
