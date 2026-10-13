@@ -75,7 +75,9 @@ test('a literal step is a seed, and its value is picked by name', async ({ page 
   await bootApp(page)
   await openPathBuilder(page)
 
-  // A literal starts a path, so it is offered in the empty builder's seed menu…
+  // The empty builder's `＋` opens the seed menu.
+  await page.locator('.tsb-plus').first().click()
+  // A literal starts a path, so it is offered there…
   const seed = page.locator('.tsb-add-btn', { hasText: 'Pick one thing' }).first()
   await expect(seed).toBeVisible({ timeout: 20000 })
   await seed.click()
@@ -110,6 +112,7 @@ test('the id box stays as the way out for an element with no candidates', async 
   await bootApp(page)
   await openPathBuilder(page)
 
+  await page.locator('.tsb-plus').first().click()
   await page.locator('.tsb-add-btn', { hasText: 'Pick one thing' }).first().click()
   const step = page.locator('.tsb-step').first()
   await step.locator('select.tsb-kind').selectOption('literal')
