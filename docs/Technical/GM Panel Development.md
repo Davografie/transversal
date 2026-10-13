@@ -123,6 +123,21 @@ Three properties worth keeping when touching this:
   would write a credential to `localStorage` and restore a QR that admits nobody.
   Whenever a panel's props would be a secret, the answer is "not on the list",
   with the reason recorded beside the others.
+- **A restored panel that throws in `setup()` is a boot crash, not a broken
+  panel.** A window on this list is rebuilt on *every* load, so anything that
+  throws while its `setup()` runs repeats forever — and the close button that
+  would remove the window is drawn by the panel that cannot render. The trap that
+  has actually bitten: Vue runs a getter source **eagerly** at `watch()` time to
+  collect its dependencies, so `watch(() => form, …)` written *above*
+  `const form = reactive(…)` reads a `const` in its temporal dead zone
+  (`ReferenceError: Cannot access 'form' before initialization`); Vue rethrows in
+  dev, so the one error escalates a frame per level — `watcher getter` → `setup
+  function` → `component update` at `PanelStack` — once per reactive flush, which
+  is what the 2026-10-13 "the app won't load" report looked like ([[life-path]]'s
+  `72624e4f`, repaired in `abbe271c`). The corollary is a requirement of this
+  list, not a style note: **a panel added here needs a spec that mounts it**,
+  because no static check and no build can see it — nothing mounted
+  `GmLifePathDetailPanel` until `e2e/tests/life-path-panel-mount.spec.js`.
 
 ## Panel stacking (dynamic z-index)
 
