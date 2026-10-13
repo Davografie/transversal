@@ -32,8 +32,15 @@ test.beforeAll(async ({ request }) => {
   if (!owner) throw new Error(`no player mains ${KAEL} — cannot reach the testing character`)
 })
 
-/** GM panel → Prep → the Earth universe's editor → 🎲 Roll Tables → the table → row 1's ✎. */
-async function openRowEditor(page) {
+/** Seed the identity, load the app as an architect, and let the boot settle.
+ *
+ *  Deliberately *stops* before the GM panel, so a spec can attach its console
+ *  watchers afterwards. Firefox reports `NS_BINDING_ABORTED` as an uncaught
+ *  `NetworkError` for requests the second `goto` cancels mid-flight — browser
+ *  noise on navigation, not the app failing — so listening across the boot would
+ *  make every spec here fail on that engine for a reason that has nothing to do
+ *  with what it is testing. Everything the panels do happens after this. */
+async function bootApp(page) {
   await asArchitect(page)
   await page.addInitScript(([pid, pname]) => {
     localStorage.setItem('playerId', pid)
@@ -45,7 +52,10 @@ async function openRowEditor(page) {
   await establishSession(page)
   await page.goto('/')
   await page.locator('.name-entry.panel').first().waitFor({ state: 'hidden', timeout: 20000 })
+}
 
+/** GM panel → Prep → the Earth universe's editor → 🎲 Roll Tables → the table → row 1's ✎. */
+async function openRowEditor(page) {
   await page.locator('.gm-toggle').click()
   await page.locator('.mode-tabs').waitFor({ state: 'visible', timeout: 20000 })
   await page.locator('.mode-tabs button', { hasText: 'Prep' }).click()
@@ -84,6 +94,9 @@ function watchProblems(page) {
 }
 
 test('the row editor mounts and offers the row its own bound variables', async ({ page }) => {
+  await bootApp(page)
+  // Watchers go on once the boot has settled — see `bootApp`. Everything the
+  // panels do, including the mount under test, happens after this point.
   const problems = watchProblems(page)
   await openRowEditor(page)
 
@@ -103,6 +116,9 @@ test('the row editor mounts and offers the row its own bound variables', async (
 })
 
 test('a name the table already binds is shown refused, not silently saved', async ({ page }) => {
+  await bootApp(page)
+  // Watchers go on once the boot has settled — see `bootApp`. Everything the
+  // panels do, including the mount under test, happens after this point.
   const problems = watchProblems(page)
   await openRowEditor(page)
 
