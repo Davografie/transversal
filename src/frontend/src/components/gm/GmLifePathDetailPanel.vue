@@ -238,12 +238,6 @@ function scheduleSave() {
   _saveTimer = setTimeout(() => { save() }, 700)
 }
 
-watch(
-  () => form,
-  () => scheduleSave(),
-  { deep: true, flush: 'sync' },
-)
-
 onUnmounted(() => {
   // Flush a pending write: an edit made inside the debounce window still lands.
   if (_saveTimer) {
@@ -266,6 +260,17 @@ const form = reactive({
   // panel's own `lp` object — a cancelled edit must not leak into it.
   conditions: (path.value.conditions || []).map(c => ({ ...c })),
 })
+
+// The watch must **follow** the declaration it watches. A getter source is run
+// eagerly, at `watch()` time, to collect its dependencies — so written above
+// `form`, `() => form` reads a `const` still in its temporal dead zone and throws
+// out of `setup()`. The panel then never mounts, and because it is restorable a
+// saved window re-throws on every load.
+watch(
+  () => form,
+  () => scheduleSave(),
+  { deep: true, flush: 'sync' },
+)
 
 const universeOptions = ref([])
 const tableNames = ref({})
