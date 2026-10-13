@@ -107,6 +107,16 @@ Three properties worth keeping when touching this:
 - **The stack's 🛠 open/closed state is not a collapse** and is deliberately not
   persisted ([[GM Panel Positioning Plan]]: closing the 🛠 hides the chain, not
   the windows).
+- **A spec prop is a copy, so a panel must not read live session state from one.**
+  `listeners` and `context` are not the only things a restored window loses: its
+  **props are the values from when the panel was opened**, kept verbatim. Anything
+  the panel gates on that can change while it is open — the perspective, the GM's
+  location — has to come from App's `provide` (`actingEntityId`,
+  `gmCurrentLocationId`), with the prop as the fallback. The bug this rule comes
+  from: an entity panel opened while the GM was acting as a character kept
+  `currentEntityId` = that character forever, so its *Assume* button was hidden
+  even after the GM returned to free roam — visible only in a float, where the
+  copy outlives the fact. `check-panel-live-state.mjs` sweeps for the shape.
 - **A panel holding a credential is never restorable**, and that is a rule rather
   than a case: a window is stored as a name + props, and `GmAdmissionPanel`'s
   subject *is* an admission token — which the API returns exactly once. Storing it
@@ -393,11 +403,11 @@ An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
 
 There is no frontend test runner: checks are plain `node` scripts in
 `src/frontend/scripts/check-*.mjs`, run against the `transversal2-frontend:latest`
-image (build the same way, in Docker). **32 suites exist** (the count was 14 when
+image (build the same way, in Docker). **33 suites exist** (the count was 14 when
 the shared table component was handed over) and a shared primitive can move
 several — `check-theme-tokens`, `check-combobox`, `check-trait-tree`,
 `check-panel-close`, `check-panel-placement`, `check-panel-persistence`,
-`check-panel-stacking`, `check-admission-panel`, `check-trait-instances`, `check-player-filter`, `check-tree-expand/order/locate`,
+`check-panel-stacking`, `check-admission-panel`, `check-trait-instances`, `check-panel-live-state`, `check-player-filter`, `check-tree-expand/order/locate`,
 `check-place-filter`, `check-trait-explanations`, `check-sheet-profile`,
 `check-sheet-api`, `check-landing`, `check-auth-gate`, `check-entity-create`. **Ping [[gm-panels]]
 when the component lands** and I will re-run them and migrate my 17 call sites —
