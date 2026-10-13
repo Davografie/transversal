@@ -93,7 +93,10 @@ test('a literal step is a seed, and its value is picked by name', async ({ page 
   // The universal picker, not a text box: this is the assertion the request was about.
   const picker = step.locator('.tp-root')
   await expect(picker).toBeVisible({ timeout: 20000 })
+  // It is a *search* dropdown, so type rather than scroll: `location` has 400-odd
+  // candidates and India is nowhere near the top of an alphabetical list.
   await picker.locator('input.sd-input').click()
+  await picker.locator('input.sd-input').fill('India')
 
   const option = page.locator('.sd-item', { hasText: /^India/ }).first()
   await option.waitFor({ state: 'visible', timeout: 20000 })
