@@ -138,6 +138,24 @@ yes('a unit is a positioned box spanning the layer, so panel coordinates are unc
 yes('and it is pointer-transparent, like the layer (`.panel-node` re-enables events)',
   /\.panel-unit \{[^}]*pointer-events: none;/.test(STACK))
 
+// ── 4b. opening a panel raises its unit ─────────────────────────────────
+// A click raises whatever unit the pointer was in, which covers the common case
+// and nothing else: a panel opened by keyboard activation, or by another panel's
+// reaction, would otherwise appear *behind* a window sitting over its chain. So an
+// open raises too — and for that, a nested panel has to know its unit, which is
+// what `windowId` now carries all the way down (it used to be passed to a
+// window's root panel only, so every child of a float reported `root`).
+console.log('\nopening a panel raises its unit\n')
+
+const PANEL_SRC = read('../src/components/gm/Panel.vue')
+yes('a child inherits its unit', /:window-id="windowId"/.test(PANEL_SRC))
+yes('opening a child raises the unit', /function openChild[\s\S]{0,900}?raiseUnit\(\)/.test(PANEL_SRC))
+yes('and so does replacing one — the subject changed, so it is what is being worked in',
+  /function replaceChild[\s\S]{0,300}?raiseUnit\(\)/.test(PANEL_SRC))
+yes('the unit is the window id, defaulting to the chain',
+  /function raiseUnit\(\) \{\s*raise\(props\.windowId \|\| 'root'\)/.test(PANEL_SRC))
+yes('and the registry hands `raise` to Panel', /raise, rootZ \}/.test(WINDOWS))
+
 // ── 5. a click raises the unit ──────────────────────────────────────────
 // Capture-phase on the window, not a handler per unit: a panel is full of
 // controls that stop propagation (`@pointerdown.stop` on the badge and the

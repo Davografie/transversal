@@ -84,6 +84,7 @@
         :bridge-right="childBridgeRight"
         :origin-top="wrapperTopPx"
         :origin-left="wrapperLeftPx"
+        :window-id="windowId"
         :on-size="(w, h) => recordChildSize(c.key, w, h)"
         :on-detach="(point) => detachChild(c.key, point)"
         closable
@@ -184,7 +185,15 @@ const emit = defineEmits(['close', 'toggle-collapse', 'dock'])
 
 // Detaching spawns a floating window from the panel-window registry (a module
 // singleton — any panel can spawn one, not just PanelStack).
-const { spawn: spawnWindow } = usePanelWindows()
+const { spawn: spawnWindow, raise } = usePanelWindows()
+
+// The unit this panel belongs to: the root chain, or the floating window it lives
+// in. `windowId` is carried down from the unit's root (PanelStack passes `'root'`,
+// PanelWindow its own id) and children inherit it, so a nested panel knows which
+// unit to bring forward when it opens something.
+function raiseUnit() {
+  raise(props.windowId || 'root')
+}
 
 // Drag-release diagnostics: this panel reports its own layout state (measured
 // rects, bridges, offsets, rail geometry) so a dump can be compared against the
@@ -822,6 +831,13 @@ function normalizeSpec(spec) {
 // Opens a child panel. If a child with the same component + id is already open,
 // replace (refresh) it in place; otherwise append it. Either way it becomes the
 // single active child (all other siblings collapse into chips).
+//
+// **Opening a panel raises its unit.** The panel that was opened is the one being
+// worked in, so the chain (or the window) it belongs to comes forward — that is
+// what the `windowId` is for, and it is why a child knows its unit: a click raises
+// whatever unit the pointer was in, but an open is not always a click (keyboard
+// activation, a child opened by another panel's reaction) and the panel that
+// appeared would otherwise land *behind* a window sitting over its chain.
 function openChild(spec) {
   const normalized = normalizeSpec(spec)
   const idx = children.value.findIndex((c) => {
@@ -839,6 +855,7 @@ function openChild(spec) {
     children.value = [...children.value, { key, spec: normalized }]
     activeKey.value = key
   }
+  raiseUnit()
   panelLog('open', { childId: normalized.id, activeKey: activeKey.value })
 }
 
@@ -878,6 +895,9 @@ function replaceChild(key, spec) {
   children.value = children.value.map((c) =>
     c.key === key ? { ...c, spec: normalizeSpec(spec) } : c
   )
+  // A replacement is an open (the panel's subject changed, so it is what is being
+  // worked in) — the same rule as `openChild`.
+  raiseUnit()
 }
 
 // Detach a child into its own floating window: the window is parked where the

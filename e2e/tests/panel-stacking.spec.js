@@ -131,3 +131,46 @@ test('the stacking order of the floats survives a reload', async ({ page }) => {
     .toEqual(before.map((f) => f.title))
   expect(after[0].z, 'renormalised to a dense run, and still ordered').toBeLessThan(after[1].z)
 })
+
+// A click raises whatever unit the pointer was in — which covers the common case
+// and nothing else. **Opening a panel raises too**: keyboard activation, or a
+// panel opened by another panel's reaction, is not a pointerdown, and the panel
+// that just appeared would otherwise land behind a window sitting over its chain.
+//
+// Both opens here are by keyboard on purpose. `.focus()` + Enter dispatches a
+// `click` with no pointer event, so the click-raise cannot be what moves the unit
+// — which is what makes this test about the rule and not about the listener.
+test('opening a panel brings its unit to the front', async ({ page }) => {
+  await bootGmPanel(page, character)
+  await enterPrep(page)
+
+  // A character's panel in the chain, detached: the window starts on top.
+  await page.locator('.filter-input:visible').first().fill('Kael Drift')
+  await page.waitForTimeout(900)
+  await page.locator('.suggestion-row:visible').first().click()
+  await page.waitForTimeout(1600)
+  await page.locator(DETACH).last().click()
+  await page.waitForTimeout(900)
+
+  const start = await stack(page)
+  const float = Object.keys(start.ranks).find((id) => id !== 'root')
+  expect(start.ranks[float], 'the new window is on top').toBeGreaterThan(start.ranks.root)
+
+  // Open a panel in the chain, by keyboard only.
+  await page.getByRole('button', { name: /manage traits/i }).focus()
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(1400)
+  const inChain = await stack(page)
+  expect(inChain.ranks.root, 'opening a panel in the chain brought the chain forward')
+    .toBeGreaterThan(inChain.ranks[float])
+
+  // …and the other direction: a panel opened *inside* the window raises the window.
+  const sheetBtn = page.locator(`${FLOATS} .section-btn:visible`).first()
+  await expect(sheetBtn, 'the floating entity panel offers its sheet').toBeVisible()
+  await sheetBtn.focus()
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(2000)
+  const inFloat = await stack(page)
+  expect(inFloat.ranks[float], 'opening a panel inside the window brought the window forward')
+    .toBeGreaterThan(inFloat.ranks.root)
+})
