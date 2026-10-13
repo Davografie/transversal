@@ -197,9 +197,13 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
       shared table (``life_path=None``) has no path of its own, so it falls back to
       the term that invoked it; ``term_faction``/``term_path`` are always the
       invoking term's, and ``table_id``/``roll``/``entry_tier`` describe the roll.
-    * **declared** — ``table.bound_variables``: the author's own names, each a
-      targeting path, resolved in declaration order into the same scope (a later
-      declaration may start from an earlier one, and from any ambient name).
+    * **declared** — the author's own names, each a targeting path, resolved in
+      declaration order into the same scope (a later declaration may start from an
+      earlier one, and from any ambient name). There are **two layers** and they
+      resolve in this order: ``table.bound_variables``, then — when a row has been
+      chosen — ``entry.bound_variables`` on that row ([[B281]]). The table's layer
+      is the one a row's *conditions* can read, because it is resolved without
+      knowing which row will apply; see ``entry_applies``.
 
     A name that resolves to nothing is left *unbound*, never bound empty: for every
     reader, "no value" and "no such name" are the same state, and a downstream path
@@ -271,25 +275,33 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
             # perfect d10, fail none. A die, so an effect's ``result`` can name it.
             bindings["entry_effect_die"] = one(getattr(effect_die, "value", effect_die))
 
-    declared = getattr(table, "bound_variables", None) or []
-    if declared and repo is not None:
+    # Two declaration layers, resolved in order so a later one may start from an
+    # earlier one: the **table's** (resolved before any row is chosen, which is what
+    # lets a row's conditions test them) and then the **chosen row's own** ([[B281]]).
+    layers = (("table", getattr(table, "bound_variables", None) or []),
+              ("entry", getattr(entry, "bound_variables", None) or []))
+    if repo is not None and any(declared for _, declared in layers):
         ctx = TargetContext(subject=entity, repo=repo, bindings=dict(bindings))
-        for declared_var in declared:
-            name = (getattr(declared_var, "name", "") or "").strip()
-            spec = getattr(declared_var, "spec", None)
-            if not name or spec is None or not getattr(spec, "steps", None):
-                continue
-            if name in ctx.bindings:
-                log.info("[table_bindings] table=%s variable '%s' shadows an existing "
-                         "name — refused", table.id, name)
-                continue
-            resolution = resolve(spec, ctx)
-            last = resolution.trace[-1] if resolution.trace else None
-            if resolution.errors or not resolution.values or last is None or not last.element:
-                log.info("[table_bindings] table=%s variable '%s' resolved nothing",
-                         table.id, name)
-                continue
-            bind_named(name, resolution.values, ValueType(last.element, last.cardinality), ctx)
+        for owner, declared in layers:
+            for declared_var in declared:
+                name = (getattr(declared_var, "name", "") or "").strip()
+                spec = getattr(declared_var, "spec", None)
+                if not name or spec is None or not getattr(spec, "steps", None):
+                    continue
+                # An existing name wins: the declaration is refused rather than
+                # rebinding something a condition or an earlier layer already read.
+                # The editor flags the collision, so this is the backstop.
+                if name in ctx.bindings:
+                    log.info("[table_bindings] table=%s %s variable '%s' shadows an "
+                             "existing name — refused", table.id, owner, name)
+                    continue
+                resolution = resolve(spec, ctx)
+                last = resolution.trace[-1] if resolution.trace else None
+                if resolution.errors or not resolution.values or last is None or not last.element:
+                    log.info("[table_bindings] table=%s %s variable '%s' resolved nothing",
+                             table.id, owner, name)
+                    continue
+                bind_named(name, resolution.values, ValueType(last.element, last.cardinality), ctx)
         bindings = dict(ctx.bindings)
     return bindings
 
@@ -299,8 +311,15 @@ def entry_applies(entry, entity, repo, bindings: dict | None = None, *,
 
     The conditions read the entry scope ([[B164]]): the ambient facts — the term's
     faction, *this table's* path faction, the table, the roll and tier that reached
-    the entry — plus whatever the table declares. An entry with no conditions
-    always applies, which is every entry today (see [[B179]]).
+    the entry — plus whatever **the table** declares. Not the entry's own
+    declarations: those cannot be known until this row is the row being considered,
+    which is the question being asked ([[B281]]). An entry with no conditions always
+    applies, which is every entry today (see [[B179]]).
+
+    ``bindings`` defaults to ``None``, and a caller that passes nothing gets ``{}``
+    — so pass ``table_bindings(table, entity, repo, roll=…, tier=…, index=…)`` (or
+    go through ``resolve_applicable_entry``, which does it for you) if the row's
+    conditions are meant to read the table's names.
     """
     conditions = list(getattr(entry, "conditions", None) or [])
     if not conditions:
@@ -334,6 +353,14 @@ def resolve_applicable_entry(table, entity, repo, *, roll=None, tier=None, index
     entry = resolve_table(table, roll=roll, tier=tier, index=index)
     if entry is None:
         return None
+    if bindings is None:
+        # The scope a row's conditions are checked against: ambient facts plus the
+        # table's own declarations, resolved *without* an entry because which row
+        # applies is exactly what is being decided ([[B281]]). Doing it here rather
+        # than at each call site is what makes the table-level layer usable in a
+        # condition at all — before this, every caller passed nothing and a row's
+        # conditions saw no declared name.
+        bindings = table_bindings(table, entity, repo, roll=roll, tier=tier, index=index)
     if entry_applies(entry, entity, repo, bindings, source=source,
                      source_element=source_element):
         return entry

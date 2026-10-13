@@ -43,6 +43,19 @@ class RollTableEntry(BaseModel):
     # before ``effects`` so a pick is pay-then-gain.
     cost_effects: list[Effect] = Field(default_factory=list)
     effects: list[Effect] = Field(default_factory=list)
+    #: Values this **row** names and resolves for itself once it has been chosen,
+    #: before its own effects run — the declaration an SFX already has. A row is
+    #: what a life path superimposes meaning on (``LifePathBinding.key``), so a row
+    #: is what exposes the names that binding's effects consume.
+    #:
+    #: The **second** of two declaration layers, and the later one, which is what
+    #: separates it from ``RollTable.bound_variables``. A table's names resolve
+    #: *before* any row is picked, so a row's ``conditions`` can test them; a row's
+    #: names can differ per row but are only known once that row already applies,
+    #: so no row condition can read them — that would be circular. Use this layer
+    #: for a value only this row has (a location, a rival), and the table's for
+    #: something every row is about.
+    bound_variables: list[BoundVariable] = Field(default_factory=list)
 
 class RollTableCheck(BaseModel):
     """Dice-pool check metadata for a TIER-scheme roll table.
@@ -87,11 +100,16 @@ class RollTable(BaseModel):
     die: TableDie = TableDie("d6")
     check: Optional[RollTableCheck] = None  # legacy dice-pool check; unused
     entries: list[RollTableEntry] = Field(default_factory=list)
-    # Values this table names and resolves *for itself* before an entry's effects
-    # run — the declaration an SFX already has, so "the rival this table is about"
-    # is written once rather than in every entry that acts on them. Ambient facts
-    # (the term's faction, this table's path faction, the roll) are in scope
-    # whether or not anything is declared.
+    # Values this table names and resolves *for itself* **before any row is
+    # chosen**, so they are in scope for a row's ``conditions`` as well as its
+    # effects. That is the layer's whole purpose: a row condition can test
+    # ``{rival}`` instead of repeating an elaborate targeting path on every row
+    # ("is the thing this table is about the one I care about?").
+    #
+    # It resolves once per activation, so every row shares one value — which is
+    # exactly why ``RollTableEntry.bound_variables`` also exists, for a value only
+    # one row has. Ambient facts (the term's faction, this table's path faction,
+    # the roll) are in scope whether or not anything is declared.
     bound_variables: list[BoundVariable] = Field(default_factory=list)
     # Canvas layout persistence (GM manual arrangement of life-path nodes).
     canvas_x: Optional[float] = None

@@ -46,6 +46,10 @@ class RollTableEntry:
     conditions: list[Condition]
     cost_effects: list[Effect] = strawberry.field(default_factory=list)
     effects: list[Effect]
+    #: Names this **row** resolves for itself before its effects run. Per row, not
+    #: per table: a table-wide declaration resolves once, before any row is picked,
+    #: so every row would share one value and no row could expose its own ([[B281]]).
+    bound_variables: list[BoundVariable] = strawberry.field(default_factory=list)
 
 @strawberry.type
 class RollTable:
@@ -67,9 +71,11 @@ class RollTable:
     die: str = "d6"
     check: Optional[RollTableCheck] = None
     entries: list[RollTableEntry]
-    # Names the table resolves for itself before an entry's effects run — the
-    # declaration an SFX already has (B164, route 2). Ambient facts (the term's
-    # faction, this table's path faction, the roll) exist without declaring anything.
+    # Names the table resolves for itself **before any row is chosen**, so a row's
+    # conditions can test them as well as its effects ([[B281]]). Resolved once per
+    # activation, so every row shares one value; `RollTableEntry.bound_variables` is
+    # the per-row layer. Ambient facts (the term's faction, this table's path
+    # faction, the roll) exist without declaring anything.
     bound_variables: list[BoundVariable] = strawberry.field(default_factory=list)
     canvas_x: Optional[float] = None
     canvas_y: Optional[float] = None
@@ -92,6 +98,7 @@ class RollTableEntryInput:
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
     cost_effects: list[EffectInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
+    bound_variables: list[BoundVariableInput] = strawberry.field(default_factory=list)
 
 @strawberry.input
 class RollTableInput:

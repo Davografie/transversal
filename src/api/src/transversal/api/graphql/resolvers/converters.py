@@ -266,6 +266,16 @@ def _entry_to_gql(e: DomainRollTableEntry, index: int = 0) -> RollTableEntry:
         conditions=[_condition_to_gql(c) for c in e.conditions],
         cost_effects=[_effect_to_gql(x) for x in e.cost_effects],
         effects=[_effect_to_gql(x) for x in e.effects],
+        # The row's own declared names ([[B281]]). Per row, not per table: the
+        # declaration resolves once a row is picked, so a row can expose a value
+        # no other row in the table has.
+        bound_variables=[
+            BoundVariable(
+                name=bv.name,
+                spec=(bv.spec.model_dump(mode="json", exclude_none=True) if bv.spec else None),
+            )
+            for bv in (getattr(e, "bound_variables", None) or [])
+        ],
     )
 
 def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
@@ -586,10 +596,13 @@ def _entry_input_to_domain(e: RollTableEntryInput) -> DomainRollTableEntry:
         conditions=[_condition_input_to_domain(c) for c in e.conditions],
         cost_effects=[_effect_input_to_domain(x) for x in e.cost_effects],
         effects=[_effect_input_to_domain(x) for x in e.effects],
+        # The row's declared names, dropped when half-typed by the same rule the
+        # SFX's use ([[B281]]): a nameless or pathless entry would read as a live
+        # name that never binds.
+        bound_variables=_bound_variables_from_input(e.bound_variables),
     )
 
 def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
-    from transversal.domain import BoundVariable as DomainBoundVariable
     from transversal.services.roll_table import row_key
 
     table = DomainRollTable(
@@ -599,13 +612,7 @@ def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
         die=t.die,
         check=(_check_input_to_domain(t.check) if t.check is not None else None),
         entries=[_entry_input_to_domain(e) for e in t.entries],
-        bound_variables=[
-            DomainBoundVariable(
-                name=bv.name,
-                spec=_target_spec_from_input(bv.spec) if bv.spec else None,
-            )
-            for bv in (t.bound_variables or [])
-        ],
+        bound_variables=_bound_variables_from_input(t.bound_variables),
     )
 
     # Every row leaves here with a stable key. A life path binding names a row by

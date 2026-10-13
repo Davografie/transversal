@@ -57,6 +57,7 @@ def pick_roll_table_entry(
     """
     from transversal.services.effects_commit import commit_effects
     from transversal.services.effects_engine import resolve_effect_spec_choices
+    from transversal.services.roll_table import table_bindings
 
     table = repo.get_roll_table(table_id)
     if table is None:
@@ -67,7 +68,13 @@ def pick_roll_table_entry(
         raise ValueError(f"no entry at index {index} in '{table_id}'")
     # A *chosen* row is not steered to another one: if its conditions do not hold,
     # say so rather than run something the player did not pick ([[B179]]).
-    if not entry_applies(entry, entity, repo, source=table, source_element="roll_table"):
+    #
+    # Checked against the **table's** scope — ambient facts plus the table's own
+    # declarations — and deliberately not the row's, which cannot be in scope here:
+    # a row's names are only known once that row has already applied ([[B281]]).
+    if not entry_applies(entry, entity, repo,
+                         table_bindings(table, entity, repo, index=index),
+                         source=table, source_element="roll_table"):
         raise ValueError(f"'{entry.label}' is not available right now")
 
     raz_cost = entry_razmerit_cost(entry)
@@ -91,7 +98,6 @@ def pick_roll_table_entry(
     # plus whatever the table declares. Built from the entity paying/picking, so
     # "the faction this table is about" is the same answer here.
     from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
-    from transversal.services.roll_table import table_bindings
 
     from transversal.services.effects_applier.datatypes import (
         SOURCE_CONTEXT_KEY, SOURCE_ELEMENT_CONTEXT_KEY,

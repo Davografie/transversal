@@ -303,6 +303,42 @@ def test_binding_effects_apply_after_the_rows_own():
     assert {"t-row", "t-delta"} <= gained
 
 
+def test_a_bindings_effect_can_use_a_name_the_row_exposes():
+    """[[B281]]'s point, end to end: the **row** declares a name, and the *life path
+    binding's* effect — not the row's own — is what consumes it.
+
+    `resolve_step` applies the row's effects and the binding's in one scope, so a
+    name declared on the entry reaches the binding with no extra plumbing. This is
+    the link that would break *silently*: were `entry` not passed to
+    `table_bindings`, the binding would see the table's names and not the row's, and
+    the effect would simply target nothing.
+    """
+    from transversal.domain import BoundVariable
+    from transversal.services.target_spec import TargetSpec
+
+    repo = ExecutorRepo()
+    repo.traits["t-picked"] = FakeTrait("t-picked", "ts-1")
+    repo.lifepaths["lp-1"] = _wrapped("lp-1", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[
+            LifePathBinding(key="row", next="", effects=[
+                _effect("modify_trait", "gain", target="{picked}", result="d6"),
+            ]),
+        ]),
+    ], entry_step="s1")
+    declared = BoundVariable(name="picked", spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "literal", "element": "trait", "value": "t-picked"}]}))
+    repo.tables["tbl-a"] = _table("tbl-a", [
+        RollTableEntry(key="row", label="row", bound_variables=[declared]),
+    ])
+
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-1", repo)
+    resolve_step(entity, repo, index=1)
+
+    gained = {ts.trait_id for ts in repo.created_traitsettings}
+    assert gained == {"t-picked"}, "the binding's effect resolved the row's name"
+
+
 def test_force_muster_marks_enrollment():
     repo = ExecutorRepo()
     repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")

@@ -74,3 +74,43 @@ def test_a_chosen_row_is_refused_not_steered():
     a refusal, which is what `roll_table_menu.apply_entry` raises."""
     entry = RollTableEntry(label="chosen", conditions=[_always(">=", 5)])
     assert entry_applies(entry, _entity(razmerit=0), repo=NS()) is False
+
+
+def test_a_row_condition_can_read_a_table_level_variable():
+    """[[B281]]: the reason the table-level layer exists.
+
+    A row's condition tests a name the **table** resolved once — *"is the thing this
+    table is about the one I care about?"* — instead of repeating that targeting path
+    on every row. It only works because a table's names resolve **before a row is
+    chosen**: `resolve_applicable_entry` builds that scope and hands it to
+    `entry_applies`. A row's own declarations cannot be here, because which row
+    applies is the question being asked.
+
+    Before this, every caller passed no bindings at all, so a row's conditions saw
+    *no* declared name — table-level included — and this condition could never pass.
+    """
+    from transversal.domain import BoundVariable
+    from transversal.services.target_spec import TargetSpec
+
+    def _reads_the_flag():
+        return Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec.model_validate(
+            {"steps": [{"kind": "select", "collection": "variable", "variable": "flagged"}]}))
+
+    flagged = BoundVariable(name="flagged", spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "literal", "element": "location", "value": "loc-2"}]}))
+
+    entries = [
+        RollTableEntry(label="first", min_value=1, max_value=2),
+        RollTableEntry(label="gated", min_value=3, max_value=4, conditions=[_reads_the_flag()]),
+    ]
+    declaring = _table(entries)
+    declaring.bound_variables = [flagged]
+    silent = _table(entries)
+
+    # A `literal` resolves by fetching the id, so the repo has to know it.
+    repo = NS(get_entity=lambda eid: NS(id=eid))
+
+    assert resolve_applicable_entry(declaring, _entity(), repo=repo, roll=3).label == "gated", \
+        "the table declared `flagged`, so the row's condition passes"
+    assert resolve_applicable_entry(silent, _entity(), repo=repo, roll=3).label == "first", \
+        "nothing declares `flagged`, so the condition is unmet and the roll falls back"

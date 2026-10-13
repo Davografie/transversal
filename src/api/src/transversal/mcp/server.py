@@ -436,7 +436,8 @@ mutation(
 _ROLL_ENTRY_FIELDS = (
     "key label description minValue maxValue weight tier "
     "conditions { type subject target value operator narrative } "
-    "costEffects { %s } effects { %s }"
+    "costEffects { %s } effects { %s } "
+    "boundVariables { name spec }"
 ) % (_EFFECT_FIELDS, _EFFECT_FIELDS)
 
 _MUT_SAVE_ROLL_TABLE = (
@@ -3610,12 +3611,17 @@ TOOL_SCHEMAS = {
         "description": "Create/update a roll table. Pass the full RollTableInput as `input`. "
                        "`subjectKind` is what the table may be rolled for (\"\" = unconstrained; "
                        "e.g. \"entity\", \"projection\"), and each entry's stable `key` is what a "
-                       "life path step's `bindings` name.",
+                       "life path step's `bindings` name. "
+                       "Bound variables exist at **two levels**: the table's `boundVariables` resolve "
+                       "before any row is chosen, so a row's `conditions` can test them; an entry's "
+                       "own `boundVariables` resolve once that row has applied, and may start from the "
+                       "table's. Use the entry's for a value only that row has (a location, a rival), "
+                       "and the table's for something every row is about.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "input": {"type": "object",
-                           "description": "RollTableInput (id,name,universe,lifePath,subjectKind,scheme,rollSource,traitDiceCount,die,check,entries,boundVariables)"},
+                           "description": "RollTableInput (id,name,universe,lifePath,subjectKind,scheme,rollSource,traitDiceCount,die,check,entries,boundVariables); each entries[] item is a RollTableEntryInput (key,label,description,minValue,maxValue,weight,tier,conditions,costEffects,effects,boundVariables)"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["input"],

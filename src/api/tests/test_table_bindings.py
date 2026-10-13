@@ -93,6 +93,64 @@ def test_a_declared_variable_cannot_shadow_an_ambient_name():
     assert bindings["term_faction"].value == "fac-real"
 
 
+# ── The per-row layer ([[B281]]) ─────────────────────────────────────
+# Two declaration layers, resolved in order: the table's (before any row is chosen,
+# so a row's *conditions* can read them) and then the chosen row's own. A value only
+# one row has — a location, a rival — belongs on the row; a table's declaration
+# resolves once for every row and cannot differ between them.
+
+def _self_spec():
+    return TargetSpec.model_validate({"steps": [{"kind": "select", "collection": "self"}]})
+
+
+def test_a_row_declares_its_own_name():
+    declared = BoundVariable(name="picked", spec=_self_spec())
+    entity = _entity()
+    repo = NS(get_entity=lambda eid: entity)
+    row = RollTableEntry(label="e", bound_variables=[declared])
+    table = _table()
+    table.entries = [row]
+
+    assert table_bindings(table, entity, repo, entry=row)["picked"].value == "char-1"
+    # Without the row in hand the name is simply absent — never bound empty, so a
+    # downstream path resolves to nobody rather than to a blank id.
+    assert "picked" not in table_bindings(table, entity, repo)
+
+
+def test_a_row_name_may_start_from_a_table_name():
+    """The layers resolve in order, which is what lets the table state what the whole
+    table is about once and a row narrow it."""
+    anchor = BoundVariable(name="anchor", spec=_self_spec())
+    narrowing = BoundVariable(name="narrowed", spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "select", "collection": "variable", "variable": "anchor"}]}))
+    entity = _entity()
+    repo = NS(get_entity=lambda eid: entity)
+    row = RollTableEntry(label="e", bound_variables=[narrowing])
+    table = _table(declared=[anchor])
+    table.entries = [row]
+
+    bindings = table_bindings(table, entity, repo, entry=row)
+    assert bindings["anchor"].value == "char-1", "the table's layer resolves first"
+    assert bindings["narrowed"].value == "char-1", "and the row's may start from it"
+
+
+def test_a_row_variable_cannot_shadow_a_table_one():
+    """A collision is refused rather than silently rebound: the table's value is what
+    a row's condition may already have read. The editor flags the name, so this is
+    the backstop, not the only notice."""
+    table_var = BoundVariable(name="dupe", spec=_self_spec())
+    row_var = BoundVariable(name="dupe", spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "literal", "element": "location", "value": "loc-2"}]}))
+    entity = _entity()
+    repo = NS(get_entity=lambda eid: NS(id=eid))
+    row = RollTableEntry(label="e", bound_variables=[row_var])
+    table = _table(declared=[table_var])
+    table.entries = [row]
+
+    bindings = table_bindings(table, entity, repo, entry=row)
+    assert bindings["dupe"].value == "char-1", "the table's value stands; the row's is refused"
+
+
 def test_an_effect_anchors_through_the_scope():
     """The point of the scope: an entry's effect names the faction by *name*.
 
