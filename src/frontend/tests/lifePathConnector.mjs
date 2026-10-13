@@ -4,7 +4,9 @@
  * These assertions pin the two things the column depends on and the build
  * cannot check: the row-key fallback mirrors the API's `row_key()` exactly
  * (including the en-dash range separator), and the four meanings a binding can
- * have map to the right select token and to the right words.
+ * have map to the right select token and to the right words. A third block keeps
+ * the bound-variables editor's ambient scope in step with the API's
+ * `table_bindings()`, which is the authority on what names a path may start from.
  *
  * The frontend has no test runner, so this is a standalone script:
  *
@@ -12,6 +14,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   rowKey,
   connectorToken,
@@ -19,6 +22,7 @@ import {
   CONNECTOR_FOLLOW,
   CONNECTOR_END,
 } from '../src/composables/lifePathConnector.js'
+import { ROLL_TABLE_AMBIENT_VARIABLES } from '../src/composables/rollTableScope.js'
 
 // ── row key: the authored key wins, else the scheme-derived fallback ──
 assert.equal(rowKey({ key: 'accepted' }, 7), 'accepted', 'authored key wins')
@@ -72,5 +76,24 @@ assert.equal(
   'Draft to another path',
 )
 assert.equal(connectorText({ next: '', exitKind: '' }), 'Ends the term')
+
+// ── the editor's ambient scope mirrors the API's table_bindings() ──
+// A roll-table bound variable's path starts from the names `table_bindings()`
+// puts in scope before the table's own declarations. Those names are the API's,
+// so the frontend mirror is compared against the function itself: a name added
+// or removed server-side fails here rather than silently offering a start that
+// resolves nothing (or hiding one that would).
+const ROLL_TABLE_PY = readFileSync(
+  new URL('../../api/src/transversal/services/roll_table.py', import.meta.url),
+  'utf8',
+)
+const apiNames = [...new Set(
+  [...ROLL_TABLE_PY.matchAll(/bindings\[\s*["']([^"']+)["']\s*\]\s*=/g)].map((m) => m[1]),
+)].sort()
+assert.deepEqual(
+  Object.keys(ROLL_TABLE_AMBIENT_VARIABLES).sort(),
+  apiNames,
+  'the editor offers exactly the names table_bindings() binds',
+)
 
 console.log('lifePathConnector: all assertions passed')

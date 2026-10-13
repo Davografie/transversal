@@ -224,6 +224,16 @@ async function save() {
       name: table.value.name,
       universe: table.value.universe,
       lifePath: table.value.lifePath || null,
+      // The table's own declarations, carried through untouched: this panel does
+      // not edit them, and `RollTableInput` replaces the whole document, so
+      // omitting them would erase what the fetch just read ([[B279]]). The
+      // injected-draft path above writes only the *row* into the parent's live
+      // entry, so the parent's own save carries these instead.
+      subjectKind: table.value.subjectKind || '',
+      boundVariables: (table.value.boundVariables || []).map(bv => ({
+        name: bv.name || '',
+        spec: bv.spec || null,
+      })),
       scheme: table.value.scheme,
       die: table.value.die,
       check: table.value.check

@@ -73,6 +73,28 @@
       Applies to Range, Tier, and Index tables.
     </p>
 
+    <!-- Values the table is about, named *before* a row's conditions run, and
+         resolved into the scope that row's conditions and effects use. Placed
+         with the scheme/die fields, above the entries, because it is a property
+         of the table rather than of any one row. -->
+    <div class="rte-subsection">
+      <span class="rte-subtitle">Bound variables</span>
+      <BoundVariablesEditor
+        v-model="form.boundVariables"
+        :variables="ambientVariables"
+        :types="declaredTypes"
+      />
+      <p class="rte-detail">
+        Names this table resolves for itself, once per roll, in order, before a row's
+        conditions. Refer to one as <code>{name}</code>; a later row may start from an
+        earlier one. A path may also read the table's own facts: the faction the table
+        is about starts a path, while <code>{roll}</code>, <code>{entry_tier}</code>,
+        <code>{entry_effect_die}</code> and the entry's band are values a filter can
+        compare against. Not <em>select source</em> — a table's bindings are resolved
+        before any source exists.
+      </p>
+    </div>
+
     <div class="rte-subsection">
       <span class="rte-subtitle">Entries</span>
       <!-- Why a connector column is (or is not) shown: the table was opened
@@ -213,6 +235,8 @@ import { useRollTables } from '@/composables/useRollTables.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
+import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
+import { ROLL_TABLE_AMBIENT_VARIABLES } from '@/composables/rollTableScope.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { rowKey, connectorText } from '@/composables/lifePathConnector.js'
@@ -220,6 +244,7 @@ import GmList from '@/components/ui/GmList.vue'
 import Button from '@/components/ui/Button.vue'
 import GmScopePicker from './GmScopePicker.vue'
 import EffectEditor from './EffectEditor.vue'
+import BoundVariablesEditor from './BoundVariablesEditor.vue'
 import GmRollTableEntryEditPanel from './GmRollTableEntryEditPanel.vue'
 
 const panel = usePanel()
@@ -248,10 +273,22 @@ const form = reactive({
   name: '',
   universe: props.universe || '',
   lifePath: props.lifePathId || '',
+  // The table's declared subject kind — what it may be rolled *for*
+  // ([[B269]]). No UI authors it yet, but it is table-level, so the round trip
+  // must carry it or a save from here blanks it ([[B279]]).
+  subjectKind: '',
   scheme: 'INDEX',
   rollSource: 'FIXED_DIE',
   traitDiceCount: 1,
   die: 'd6',
+  // A TIER table's dice-pool check (trait ids / difficulty / free choice). It has
+  // no editor here, but it is part of the document: `check: null` on save would
+  // wipe it, which is the same erasure as `boundVariables` below ([[B279]]) --
+  // and two live tables (`rt-verdant-survive`, `rt-ironroots-test`) carry one.
+  check: null,
+  // The names the table resolves for itself, before a row's conditions. Read
+  // back and sent as `{ name, spec }`, the same shape an SFX uses.
+  boundVariables: [],
   entries: [],
 })
 
@@ -267,6 +304,10 @@ const lifePathOptions = ref([])
 const { traitNameMap, fetchTraitsConfig } = useTraitsConfig()
 const { load: loadEffectActions, summarize: summarizeEffect } = useEffectActions()
 
+// The path builder a bound variable's row opens is typed from the backend, so
+// the panel asks the same tracer the row's own effect paths use.
+const { traceSpec } = useTargetCatalog()
+
 function resolveTarget(t) { return t ? (traitNameMap.value[t] || allTableNames.value[t] || t) : t }
 function effectSummary(eff) { return summarizeEffect(eff, resolveTarget) }
 function conditionSummary(c) {
@@ -276,6 +317,56 @@ function conditionSummary(c) {
   if (c.narrative) parts.push(`"${c.narrative}"`)
   return parts.join(' ')
 }
+
+// ── Bound variables: the scope their paths start from ────────────────
+// A table's activation scope is not an SFX's. `table_bindings()` binds the
+// ambient facts (the paths'/term's faction, the table, the roll, the entry) and
+// *then* the table's own declarations, in order — so a declaration may start
+// from an ambient name or an earlier declaration. The ambient half is mirrored
+// in `rollTableScope.js`; the declared half is traced here.
+//
+// No `source-element` is passed to the editor on purpose: `table_bindings()`
+// resolves the declarations against a `TargetContext` with no source, so a
+// `select source` step would error and resolve nothing. Offering it would
+// promise a value the engine cannot bind.
+const ambientVariables = ref({})
+const declaredTypes = ref([])
+
+async function refreshVariables() {
+  const scope = { ...ROLL_TABLE_AMBIENT_VARIABLES }
+  ambientVariables.value = scope
+  const types = []
+  for (const row of (form.boundVariables || [])) {
+    const name = (row?.name || '').trim()
+    const steps = row?.spec?.steps || []
+    if (!name || !steps.length) { types.push(null); continue }
+    try {
+      // The SFX panel computes this with one `effectVariables` call, but that
+      // resolver's scope seed only knows an SFX's trigger/source names — it
+      // cannot see a roll table's ambient facts. Tracing each row against the
+      // table's own scope is the same backend tracer the builder uses, so what
+      // is offered to the row below is what the engine will bind.
+      const res = await traceSpec(steps, null, null, scope)
+      const last = (res?.types || [])[res.types.length - 1]
+      if (last?.element && !(res.errors || []).length) {
+        const t = { element: last.element, cardinality: last.cardinality || 'one' }
+        types.push(t)
+        scope[name] = t
+      } else {
+        types.push(null)
+      }
+    } catch {
+      types.push(null)
+    }
+  }
+  declaredTypes.value = types
+}
+
+watch(
+  () => [form.subjectKind, form.boundVariables],
+  refreshVariables,
+  { immediate: true, deep: true },
+)
 
 // ── Life-path connector context ──────────────────────
 // The connector is a property of the *path*, not the table: it lives in the
@@ -431,6 +522,19 @@ onMounted(async () => {
     // The wire value is the notation (`d6`, `d20`, `d66`); normalise so a table
     // saved before the field was a string still lands on a known value.
     form.die = String(t.die || 'd6').toLowerCase()
+    // The table's own declarations, read back so a save can send them: an
+    // omitted field is a deleted one on a whole-document replace ([[B279]]).
+    form.subjectKind = t.subjectKind || ''
+    // Carried, not edited: this panel has no check UI, so the only safe thing to
+    // do with it is send back what was read. The entry panel already does this.
+    form.check = t.check
+      ? { traitIds: t.check.traitIds || [], difficulty: t.check.difficulty,
+          freeChoice: t.check.freeChoice }
+      : null
+    form.boundVariables = (t.boundVariables || []).map(bv => ({
+      name: bv.name || '',
+      spec: bv.spec || { steps: [] },
+    }))
     form.entries = (t.entries || []).map(e => ({
       // `key` is the row's stable identity and a life-path binding names it, so
       // it must survive the round trip. An empty one is filled by the API on
@@ -517,11 +621,22 @@ async function save() {
       name: form.name,
       universe: form.universe,
       lifePath: form.lifePath || null,
+      // Table-level declarations travel back untouched (except the bound
+      // variables this panel authors). `RollTableInput` replaces the whole
+      // document, so omitting either would erase what the read just fetched —
+      // the bug this round trip is the last writer of ([[B279]]).
+      subjectKind: form.subjectKind || '',
+      boundVariables: (form.boundVariables || []).map(bv => ({
+        name: bv.name || '',
+        spec: bv.spec || null,
+      })),
       scheme: form.scheme,
       rollSource: form.rollSource,
       traitDiceCount: form.traitDiceCount ?? 1,
       die: form.die,
-      check: null,
+      // Read back and returned untouched -- see the form's `check`. Hardcoding
+      // null here erased a TIER table's check on every save from this panel.
+      check: form.check,
       entries: form.entries.map(e => ({
         // Carried through untouched: the API fills an empty one on save, and a
         // binding names a row by it. The map is a full replace, so dropping it
@@ -614,6 +729,7 @@ async function save() {
 .rte-subsection { margin-top: 4px; }
 .rte-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 .rte-detail { font-size: 10px; color: var(--text-dim); }
+.rte-detail code { font-family: monospace; font-size: 10px; color: var(--accent-pale); }
 .rte-entry-body { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .rte-entry-head { display: flex; align-items: center; gap: 4px; }
 .rte-entry-index { font-size: 9px; color: var(--text-dim); }

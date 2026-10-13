@@ -1332,8 +1332,11 @@ export function useCanvas() {
           // This one is a read-modify-write: the table is fetched, one entry gains a
           // `next_step` effect, and the **whole table is saved back**. A narrow effect
           // selection therefore does not merely display less — it strips every entry
-          // effect's references on the way through ([[B273]]). Fetch what is written.
-          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } costEffects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } } } }`,
+          // effect's references on the way through ([[B273]]). Fetch what is written —
+          // including the table's own `subjectKind` and `boundVariables`, which no
+          // part of this path edits but a whole-table save would otherwise blank
+          // ([[B279]]).
+          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath subjectKind scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } boundVariables { name spec } entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } costEffects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } } } }`,
           variables: { id: sourceTableId },
         }),
       })
@@ -1360,6 +1363,14 @@ export function useCanvas() {
               name: table.name,
               universe: table.universe,
               lifePath: table.lifePath,
+              // Table-level declarations this path read but does not edit.
+              // `RollTableInput` is a whole-document replace, so an omitted field
+              // is a deleted one ([[B279]]).
+              subjectKind: table.subjectKind || '',
+              boundVariables: (table.boundVariables || []).map(bv => ({
+                name: bv.name || '',
+                spec: bv.spec || null,
+              })),
               scheme: table.scheme,
               rollSource: table.rollSource,
               traitDiceCount: table.traitDiceCount,

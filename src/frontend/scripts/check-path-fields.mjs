@@ -548,5 +548,65 @@ const find = (name) => VUE.find((p) => rel(p) === name)
   ok('a table round trip fetches an effect\'s references', offenders, [])
 }
 
+// ── …and the table's own declarations are read *and* sent ─────────
+//
+// The same hazard, one field over ([[B279]]): `subjectKind` and `boundVariables`
+// are table-level fields and every save is a whole-document replace, so a writer
+// that fetches one without sending it erases it — and one that sends it without
+// fetching it writes back a default. This is the third instance of the class
+// ([[B273]] references, [[B274]] row `key`/`costEffects`), so the four writers
+// named in the ticket are pinned here by name.
+{
+  const brace = (src, openIndex) => {
+    let depth = 0
+    for (let i = openIndex; i < src.length; i++) {
+      if (src[i] === '{') depth++
+      else if (src[i] === '}') { depth--; if (!depth) return src.slice(openIndex, i + 1) }
+    }
+    return src.slice(openIndex)
+  }
+  const constBody = (src, name) => {
+    const m = src.match(new RegExp('const\\s+' + name + '\\s*=\\s*`([\\s\\S]*?)`'))
+    return m ? m[1] : null
+  }
+  // The object literal `const key = {` / `key: {`, so a check reads the shipped
+  // input rather than the file's whole text.
+  const objectAfter = (src, key) => {
+    const m = src.match(new RegExp('(?:const\\s+' + key + '\\s*=\\s*|\\b' + key + '\\s*:\\s*)\\{'))
+    return m ? brace(src, src.indexOf('{', m.index + m[0].length - 1)) : ''
+  }
+
+  // 1 + 2 + 3 — the shared read and both panels' whole-document saves.
+  const fields = constBody(readFileSync(join(SRC, 'composables', 'useRollTables.js'), 'utf8'), 'ROLL_TABLE_FIELDS') || ''
+  ok('the shared table read fetches subjectKind', /\bsubjectKind\b/.test(fields), true)
+  ok('…and the table\'s bound variables',
+    /boundVariables\s*\{\s*name\s+spec\s*\}/.test(fields), true)
+  ok('…and the TIER check it must send back', /\bcheck\s*\{/.test(fields), true)
+
+  for (const file of ['components/gm/GmRollTableEditPanel.vue', 'components/gm/GmRollTableEntryEditPanel.vue']) {
+    const body = objectAfter(readFileSync(join(SRC, file), 'utf8'), 'input')
+    ok(`${file} saves subjectKind`, /(?<![\w.])subjectKind\s*:/.test(body), true)
+    ok(`${file} saves boundVariables`, /(?<![\w.])boundVariables\s*:/.test(body), true)
+    // A hardcoded `check: null` is how the panel used to erase a TIER table's
+    // check metadata on every save -- and two live tables carry one.
+    ok(`${file} does not hardcode check`,
+      /\bcheck\s*:\s*null\s*(?![\w.])/.test(body), false)
+  }
+
+  // 4 — the canvas's own read-modify-write ([[B273]]'s path, one field over).
+  const canvas = readFileSync(join(SRC, 'composables', 'useCanvas.js'), 'utf8')
+  const link = canvas.slice(
+    canvas.indexOf('async function linkRollTable'),
+    canvas.indexOf('\nasync function toggleTransversalEdge'),
+  )
+  const read = brace(link, link.indexOf('{', link.indexOf('rollTable(id:$id)')))
+  ok('linkRollTable fetches subjectKind', /\bsubjectKind\b/.test(read), true)
+  ok('linkRollTable fetches boundVariables',
+    /boundVariables\s*\{\s*name\s+spec\s*\}/.test(read), true)
+  const write = objectAfter(link, 'input')
+  ok('linkRollTable saves subjectKind', /(?<![\w.])subjectKind\s*:/.test(write), true)
+  ok('linkRollTable saves boundVariables', /(?<![\w.])boundVariables\s*:/.test(write), true)
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)
