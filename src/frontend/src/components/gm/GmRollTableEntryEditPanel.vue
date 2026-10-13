@@ -72,14 +72,25 @@
         />
       </div>
 
-      <Button class="eep-save" variant="success" solid :loading="saving" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save entry' }}</Button>
+      <!-- No Save button (B211's convention; the human 2026-10-13). Opened from the
+           table panel, this row's edits land in that panel's live draft on every
+           keystroke and its own auto-save writes them. Opened on its own (a window
+           restored after a reload) there is no parent to save, so this panel
+           auto-saves the table itself. Either way the author never presses Save. -->
+      <div class="eep-save-state" :class="{ 'eep-save-error': !!error }">
+        <span v-if="error" class="eep-save-msg">{{ error }}</span>
+        <span v-else-if="saving" class="eep-save-msg">Saving…</span>
+        <span v-else-if="savedAt" class="eep-save-msg eep-saved">Saved</span>
+        <span v-else-if="draft" class="eep-save-msg">Saves with the table.</span>
+        <span v-else class="eep-save-msg">Edits save as you make them.</span>
+      </div>
       <div v-if="error" class="eep-error">{{ error }}</div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, computed, inject, onMounted, onUnmounted } from 'vue'
+import { reactive, ref, computed, inject, onMounted, onUnmounted, watch } from 'vue'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
@@ -87,7 +98,6 @@ import ConditionEditor from './ConditionEditor.vue'
 import EffectList from './EffectList.vue'
 import BoundVariablesEditor from './BoundVariablesEditor.vue'
 import GmRollTableEntryEffectPanel from './GmRollTableEntryEffectPanel.vue'
-import Button from '@/components/ui/Button.vue'
 import { useBoundVariableScope } from '@/composables/useBoundVariableScope.js'
 
 const panel = usePanel()
@@ -189,19 +199,58 @@ onMounted(async () => {
   // Edit it in place and never touch the stored table — fetching it and saving
   // it back would clobber the sibling rows that panel is still holding unsaved.
   if (draft) {
+    _suppressEdits = true
     seedFrom(draft)
+    _suppressEdits = false
     return
   }
 
   try {
+    _suppressEdits = true
     table.value = await fetchTable(props.tableId)
     seedFrom(table.value?.entries?.[props.index])
   } catch (e) {
     error.value = e?.message || 'Failed to load entry'
+  } finally {
+    _suppressEdits = false
   }
 })
 
-onUnmounted(() => { offChildClose?.() })
+// ── Auto-save: no Save button (B211's convention, the human 2026-10-13) ──
+//
+// Two contracts, one rule — the author never presses Save:
+//   * **with a draft** the row is written into the table panel's live entry as it is
+//     edited, and *that* panel's auto-save persists it. No debounce here: these are
+//     plain field assignments into a reactive object, and the network write is the
+//     parent's to schedule.
+//   * **without one** (a window restored after a reload) there is no parent holding
+//     this row, so this panel saves the table itself — same debounce, and the same
+//     flush on close so an edit made in the last moment is not lost.
+let _saveTimer = null
+let _suppressEdits = false
+const savedAt = ref(null)
+
+watch(
+  () => form,
+  () => {
+    if (_suppressEdits) return
+    if (draft) { writeIntoDraft(); return }
+    if (!table.value) return
+    savedAt.value = null
+    clearTimeout(_saveTimer)
+    _saveTimer = setTimeout(() => { save() }, 700)
+  },
+  { deep: true, flush: 'sync' },
+)
+
+onUnmounted(() => {
+  offChildClose?.()
+  if (_saveTimer) {
+    clearTimeout(_saveTimer)
+    _saveTimer = null
+    save()
+  }
+})
 
 // ── Effect editor (child panel) ──
 // The row's effects are edited by a *child* panel, as the SFX editor's are: an
@@ -219,7 +268,7 @@ function openEffectEditor(index) {
     },
     // The row draft, as a live reference, through the spec's `context` — a panel
     // cannot `provide` to its own child panels. The child writes effects back
-    // into this row; nothing is persisted until the row's own Save. The resolved
+    // into this row; the table panel's auto-save is what persists it. The resolved
     // scope travels too, so this row's effects may start a path from the names it
     // exposes and from the table's ([[B281]]); it is a snapshot taken when the
     // panel opens, which is correct because declarations are edited *here*, not
@@ -228,23 +277,31 @@ function openEffectEditor(index) {
   })
 }
 
+/** Copy the edited row into the table panel's live entry.
+ *
+ *  A plain assignment per field, not a spread: `draft` is the row object the table
+ *  panel holds, and replacing it would detach the reference the parent is watching. */
+function writeIntoDraft() {
+  if (!draft) return
+  draft.key = form.key || ''
+  draft.costEffects = form.costEffects || []
+  draft.boundVariables = form.boundVariables || []
+  draft.label = form.label
+  draft.description = form.description
+  draft.minValue = form.minValue ?? null
+  draft.maxValue = form.maxValue ?? null
+  draft.weight = form.weight ?? null
+  draft.tier = form.tier || ''
+  draft.conditions = form.conditions
+  draft.effects = form.effects
+}
+
 async function save() {
   // Draft path (opened from the unified roll-table panel): write the local form
-  // back into the injected row and close. Nothing is persisted here — the table
-  // panel's own Save writes the whole table, including this row.
+  // back into the injected row. Nothing is persisted *here* — the table panel's own
+  // auto-save writes the whole table, including this row.
   if (draft) {
-    draft.key = form.key || ''
-    draft.costEffects = form.costEffects || []
-    draft.boundVariables = form.boundVariables || []
-    draft.label = form.label
-    draft.description = form.description
-    draft.minValue = form.minValue ?? null
-    draft.maxValue = form.maxValue ?? null
-    draft.weight = form.weight ?? null
-    draft.tier = form.tier || ''
-    draft.conditions = form.conditions
-    draft.effects = form.effects
-    panel.close()
+    writeIntoDraft()
     return
   }
 
@@ -313,7 +370,8 @@ async function save() {
     const result = await saveRollTable(input)
     if (result?.id) {
       bus.emit('lifepath-saved', { id: table.value.lifePath })
-      panel.close()
+      // No `panel.close()`: this is an auto-save now, not a commit-and-dismiss.
+      savedAt.value = new Date()
     } else {
       error.value = 'Save failed'
     }
@@ -338,6 +396,15 @@ async function save() {
 }
 .eep-row { display: flex; gap: 8px; }
 .eep-subsection { margin-top: 2px; }
+/* The auto-save readout that replaced the Save button: information, not an action —
+   and the only place a failed write can appear now. */
+.eep-save-state { display: flex; align-items: center; min-height: 18px; }
+.eep-save-msg { font-size: 10px; color: var(--text-dim); }
+.eep-saved { color: var(--success); }
+.eep-save-error .eep-save-msg {
+  font-size: 11px; color: var(--danger); background: var(--danger-8);
+  padding: 6px 10px; border-radius: 4px;
+}
 .eep-hint { margin: 4px 0 0; font-size: 10px; line-height: 1.45; color: var(--text-dim); }
 .eep-hint code { font-size: 10px; color: var(--accent-pale); }
 .eep-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }

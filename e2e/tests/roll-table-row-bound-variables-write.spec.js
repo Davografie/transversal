@@ -1,16 +1,14 @@
-// A row's bound variables, read and written **through the UI** (B281).
+// A row's bound variables, read and written **through the UI**, with auto-save (B281).
 //
-// The mount spec next door proves the panel opens; this one proves the panel's
-// save reaches the database and does not drop what it read. That distinction is
-// the whole point: the row editor has *two* contracts — opened from the table
-// panel it edits that panel's live row draft and persists nothing, and the table
-// panel's own Save is the only commit point — and every writer here replaces the
-// whole document, which is how a field gets erased ([[B273]], [[B274]], [[B279]],
-// and [[B281]] one level down).
+// The mount spec next door proves the panel opens; this one proves an edit reaches
+// the database and does not drop what the panel read. Both halves matter: every
+// writer here replaces the whole document, which is how a field gets erased
+// ([[B273]], [[B274]], [[B279]], and [[B281]] one level down — where the *read* map
+// was the half that was missing and an author's work vanished).
 //
-// The declaration is seeded through the API and then only *renamed* in the UI,
-// deliberately: driving the target-path builder from a spec is brittle, and what
-// needs proving is the round trip, not the builder.
+// There are **no Save buttons** any more: the panels auto-save (B211's convention,
+// the human 2026-10-13). So each test makes an edit and waits for the write it
+// triggers, rather than pressing anything.
 //
 // It runs against a **scratch table** created and deleted by the spec, so it never
 // touches authored content.
@@ -43,7 +41,7 @@ async function stored(request) {
 }
 
 async function seed(request, { rowVariables = [ORIGINAL], tableVariables = [] } = {}) {
-  const res = await gql(
+  await gql(
     request,
     `mutation($input: RollTableInput!){ saveRollTable(input:$input){ id } }`,
     { input: {
@@ -59,7 +57,6 @@ async function seed(request, { rowVariables = [ORIGINAL], tableVariables = [] } 
       ],
     } },
   )
-  if (res.errors) throw new Error('seed: ' + JSON.stringify(res.errors))
 }
 
 test.afterEach(async ({ request }) => {
@@ -93,30 +90,28 @@ async function openScratchTable(page) {
   await row.waitFor({ state: 'visible', timeout: 20000 })
   await row.click()
   await expect(page.locator('.rte-root')).toBeVisible({ timeout: 20000 })
-  // The panel renders *before* its fetch resolves, and its Save writes whatever
-  // `form.entries` holds — so clicking Save any earlier saves an empty table.
-  // Waiting for the rows is what makes the save meaningful.
+  // The panel renders before its fetch resolves; wait for the rows so an edit
+  // cannot be made against a half-loaded document.
   await expect(page.locator('.rte-entry-body')).toHaveCount(2, { timeout: 20000 })
 }
 
-/** Click the table's Save and wait for the mutation to come back.
+/** Arm a waiter for the next auto-save, do `act`, and let the write land.
  *
- *  Waiting matters for the erasure tests: the seeded state already holds the
- *  declaration, so a poll for it passes before the save has even happened and
- *  proves nothing. */
-async function saveTable(page) {
+ *  Waiting for the *response* is what makes these tests mean something: the seeded
+ *  state already holds what some of them assert, so a poll for the value alone would
+ *  pass before the save had happened. */
+async function editAndWaitForSave(page, act) {
   const done = page.waitForResponse(
     (r) => r.url().includes('/graphql') && (r.request().postData() || '').includes('saveRollTable'),
     { timeout: 20000 },
   )
-  await page.locator('.rte-save').click()
+  await act()
   await done
 }
 
 test('the row editor reads back a row\'s declaration', async ({ page, request }) => {
   await seed(request)
   await openScratchTable(page)
-  await expect(page.locator('.rte-root')).toBeVisible({ timeout: 20000 })
 
   await page.locator('.rte-edit').first().click()
   await expect(page.locator('.eep-root')).toBeVisible({ timeout: 20000 })
@@ -125,14 +120,14 @@ test('the row editor reads back a row\'s declaration', async ({ page, request })
   await expect(page.locator('.eep-root .bv-name').first()).toHaveValue(ORIGINAL)
 })
 
-test('saving a table from the panel keeps every row\'s declaration', async ({ page, request }) => {
+test('adding a row does not erase another row\'s declaration', async ({ page, request }) => {
   await seed(request)
   await openScratchTable(page)
 
-  // Touch nothing; just save the document the panel is holding. This is the pure
-  // erasure check: the whole `entries` list is replaced on save, so a field the
-  // panel read but did not send back is gone.
-  await saveTable(page)
+  // The pure erasure check, in its auto-save form. `entries` is replaced whole on
+  // every write, so a read map that dropped `boundVariables` loses it the moment
+  // anything else in the table is edited — which is how the author's work vanished.
+  await editAndWaitForSave(page, () => page.locator('.rte-add').click())
 
   await expect.poll(async () => {
     const t = await stored(request)
@@ -142,8 +137,7 @@ test('saving a table from the panel keeps every row\'s declaration', async ({ pa
   // …and the *path* survives, not just the name: a declaration that persists
   // nameless, or with its spec emptied, would resolve to nothing at run time.
   const t = await stored(request)
-  const india = t.entries.find((e) => e.key === 'india')
-  expect(india.boundVariables[0].spec).toEqual(SPEC)
+  expect(t.entries.find((e) => e.key === 'india').boundVariables[0].spec).toEqual(SPEC)
 })
 
 test('renaming a row\'s declaration in the editor persists, spec and all', async ({ page, request }) => {
@@ -152,14 +146,12 @@ test('renaming a row\'s declaration in the editor persists, spec and all', async
 
   await page.locator('.rte-edit').first().click()
   await expect(page.locator('.eep-root')).toBeVisible({ timeout: 20000 })
-  await page.locator('.eep-root .bv-name').first().fill('picked_place')
 
-  // "Save entry" only writes into the table panel's live draft…
-  await page.locator('.eep-save').click()
-  await expect(page.locator('.eep-root')).toBeHidden({ timeout: 20000 })
-  // …so the table panel's own Save is the commit point. Both are clicked here on
-  // purpose: a person who presses only the first has saved nothing.
-  await saveTable(page)
+  // No Save entry any more: the row writes into the table panel's live draft as it
+  // is edited, and *that* panel's auto-save is the write. So the edit is made and
+  // the write awaited — nothing is pressed in between.
+  await editAndWaitForSave(page, () =>
+    page.locator('.eep-root .bv-name').first().fill('picked_place'))
 
   await expect.poll(async () => {
     const t = await stored(request)
@@ -174,17 +166,15 @@ test('renaming a row\'s declaration in the editor persists, spec and all', async
   expect(t.boundVariables).toEqual([])
 })
 
-test('the table\'s own declarations survive a save that only touched a row', async ({ page, request }) => {
+test('the table\'s own declarations survive an edit that only touched a row', async ({ page, request }) => {
   // Both layers seeded: the point is that editing one does not disturb the other.
   await seed(request, { rowVariables: [ORIGINAL], tableVariables: ['flagged'] })
   await openScratchTable(page)
 
   await page.locator('.rte-edit').first().click()
   await expect(page.locator('.eep-root')).toBeVisible({ timeout: 20000 })
-  await page.locator('.eep-root .bv-name').first().fill('picked_place')
-  await page.locator('.eep-save').click()
-  await expect(page.locator('.eep-root')).toBeHidden({ timeout: 20000 })
-  await saveTable(page)
+  await editAndWaitForSave(page, () =>
+    page.locator('.eep-root .bv-name').first().fill('picked_place'))
 
   await expect.poll(async () => {
     const t = await stored(request)
@@ -192,7 +182,7 @@ test('the table\'s own declarations survive a save that only touched a row', asy
   }, { timeout: 15000, intervals: [500, 1000] }).toEqual(['flagged'])
 
   // …and the row's edit landed too, so "the table layer survived" is not a
-  // consequence of the save having done nothing at all.
+  // consequence of the write having done nothing at all.
   const t = await stored(request)
   expect(t.entries.find((e) => e.key === 'india').boundVariables.map((b) => b.name))
     .toEqual(['picked_place'])

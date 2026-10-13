@@ -230,13 +230,21 @@
       <Button class="rte-add" variant="secondary" @click="addEntry">＋ Add entry</Button>
     </div>
 
-    <Button class="rte-save" variant="success" solid :loading="saving" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save roll table' }}</Button>
-    <div v-if="error" class="rte-error">{{ error }}</div>
+    <!-- No Save button: every edit persists on its own (B211's convention, the
+         human 2026-10-13). What replaces it is the *feedback* — the SFX panel's
+         button doubled as this readout, and with the button gone the author needs
+         somewhere to see that the write landed, and that it failed if it did. -->
+    <div class="rte-save-state" :class="{ 'rte-save-error': !!error }">
+      <span v-if="error" class="rte-save-msg">{{ error }}</span>
+      <span v-else-if="saving" class="rte-save-msg">Saving…</span>
+      <span v-else-if="savedAt" class="rte-save-msg rte-saved">Saved</span>
+      <span v-else class="rte-save-msg">Edits save as you make them.</span>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, computed, onMounted, watch } from 'vue'
+import { reactive, ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
@@ -481,6 +489,9 @@ onMounted(async () => {
   if (!Object.keys(traitNameMap.value).length) fetchTraitsConfig()
   if (!props.tableId) return
   try {
+    // Loading a document is not an edit: without this the assignments below wake
+    // the auto-save and write back what was just read.
+    _suppressEdits = true
     const t = await fetchTable(props.tableId)
     if (!t) return
     form.id = t.id
@@ -536,7 +547,57 @@ onMounted(async () => {
       effects: e.effects || [],
     }))
   } catch {}
-  await loadPathContext()
+  finally {
+    // `loadPathContext` reads the path and its step's bindings — more loading, so it
+    // happens inside the guard, and the guard is lifted in a `finally` because the
+    // early return above would otherwise leave editing suppressed forever.
+    await loadPathContext()
+    _suppressEdits = false
+  }
+})
+
+// ── Auto-save: the panels have no Save button (B211's convention) ─────
+//
+// The human: *"Saves should always, everywhere be automatic. So I don't want to see
+// a save-button in the roll table GM panels."* Every edit persists on its own.
+//
+// The **whole draft** is watched rather than a list of its field names. A list is a
+// promise to keep in step with the document, and the SFX panel's version had already
+// fallen behind twice — a newly added field simply never saved, which reads as
+// "auto-save is broken" rather than as a missing name in a list.
+//
+// Three things this has to get right, all of them learned elsewhere:
+//   * loading is not an edit (`_suppressEdits`);
+//   * a queued write is dropped on load, or it fires against the state it was
+//     queued from and overwrites what was just read;
+//   * a pending write is **flushed on close**. The SFX panel can leave that to its
+//     Save button; with the button gone, closing inside the debounce window would
+//     silently drop the last edit — which is the trap this whole change is about.
+let _saveTimer = null
+let _suppressEdits = false
+const savedAt = ref(null)
+
+function scheduleSave() {
+  if (_suppressEdits) return
+  if (!form.id) return
+  savedAt.value = null
+  clearTimeout(_saveTimer)
+  _saveTimer = setTimeout(() => { save() }, 700)
+}
+
+watch(
+  () => [form, stepBindings.value, step.value, lp.value],
+  scheduleSave,
+  { deep: true, flush: 'sync' },
+)
+
+onUnmounted(() => {
+  // The flush: an edit made in the last 700ms still reaches the server.
+  if (_saveTimer) {
+    clearTimeout(_saveTimer)
+    _saveTimer = null
+    save()
+  }
 })
 
 function addEntry() {
@@ -694,7 +755,9 @@ async function save() {
     }
 
     bus.emit('lifepath-saved', { id: lp.value?.id || form.lifePath, universe: lp.value?.universe })
-    panel.close()
+    // No `panel.close()`: this runs on every edit now, and the panel is the
+    // author's surface until they close it themselves.
+    savedAt.value = new Date()
   } catch (e) {
     error.value = e?.message || 'Save failed'
   } finally {
@@ -767,4 +830,14 @@ async function save() {
 .rte-binding-effects .rte-subtitle { margin-bottom: 0; }
 .rte-binding-effects .rte-detail { margin: 0; }
 .rte-error { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
+/* The auto-save readout that replaced the Save button. Quiet by default — it is
+   information, not an action — and it becomes the error surface when a write fails,
+   because the failure has nowhere else to appear now. */
+.rte-save-state { display: flex; align-items: center; min-height: 18px; }
+.rte-save-msg { font-size: 10px; color: var(--text-dim); }
+.rte-saved { color: var(--success); }
+.rte-save-error .rte-save-msg {
+  font-size: 11px; color: var(--danger); background: var(--danger-8);
+  padding: 6px 10px; border-radius: 4px;
+}
 </style>

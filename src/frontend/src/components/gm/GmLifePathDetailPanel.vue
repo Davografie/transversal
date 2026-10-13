@@ -69,6 +69,27 @@
           />
           <span class="lpd-hint">Where a row with no binding of its own goes.</span>
         </div>
+
+        <!-- The effects counterpart of `next`: that is this step's default *flow*,
+             this is its default *behaviour*. Applied once whenever any row of this
+             step resolves, after the row's own effects and the binding's — so an
+             effect several rows would otherwise repeat is written once here. One
+             that depends on a name only some rows expose runs on those and does
+             nothing on the rest, which is the point ([[B281]]). -->
+        <div class="lpd-field">
+          <label>Step effects</label>
+          <EffectEditor
+            v-model="step.effects"
+            :universe="form.universe"
+            :life-path="path.id"
+          />
+          <span class="lpd-hint">
+            Runs once for <strong>any</strong> row this step resolves — after the row's
+            own effects and its binding's. Consume a bound variable as a
+            <em>targeting path</em> (<em>Start from → Variable → …</em>); a row that
+            exposes no such name simply does nothing here.
+          </span>
+        </div>
       </div>
 
       <GmScopePicker
@@ -119,15 +140,29 @@
       </table>
     </div>
 
-    <Button class="lpd-save" variant="success" solid :loading="saving" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save life path' }}</Button>
-    <div v-if="error" class="lpd-error">{{ error }}</div>
+    <!-- Auto-save, so no Save button — except in **create** mode, where there is
+         nothing to write onto yet. One deliberate act creates the path, and the
+         auto-save arms from then on (B225's shape: a create that silently did
+         nothing is the failure that rule exists to prevent). -->
+    <template v-if="isNew">
+      <Button class="lpd-create" variant="success" solid :loading="saving" :disabled="saving || !form.name.trim() || !form.universe.trim()" @click="save">
+        {{ saving ? 'Creating…' : 'Create life path' }}
+      </Button>
+      <span class="lpd-hint">Name it and choose a universe. Steps and their effects appear once it exists, and save as you edit from then on.</span>
+    </template>
+    <div v-else class="lpd-save-state" :class="{ 'lpd-save-error': !!error }">
+      <span v-if="error" class="lpd-save-msg">{{ error }}</span>
+      <span v-else-if="saving" class="lpd-save-msg">Saving…</span>
+      <span v-else-if="savedAt" class="lpd-save-msg lpd-saved">Saved</span>
+      <span v-else class="lpd-save-msg">Edits save as you make them.</span>
+    </div>
 
-    <Button v-if="path.id" class="lpd-delete" variant="danger-ghost" size="sm" block @click="onDeleteConfirmed">Delete life path</Button>
+    <Button v-if="pathId" class="lpd-delete" variant="danger-ghost" size="sm" block @click="onDeleteConfirmed">Delete life path</Button>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -136,6 +171,7 @@ import Button from '@/components/ui/Button.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import GmScopePicker from './GmScopePicker.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
+import EffectEditor from './EffectEditor.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -178,8 +214,44 @@ function copySteps(steps) {
       enroll: !!b.enroll,
       effects: JSON.parse(JSON.stringify(b.effects || [])),
     })),
+    // The step's own effects ([[B281]]) — this panel is now their editor, so they
+    // are copied like everything else the form mutates in place.
+    effects: JSON.parse(JSON.stringify(s.effects || [])),
   }))
 }
+
+// A path that does not exist yet cannot auto-save: there is nothing to write onto.
+// B225's rule, and the same shape the SFX panel uses — create mode asks for one
+// deliberate act, and arms the auto-save from then on.
+const createdId = ref('')
+const pathId = computed(() => createdId.value || props.lp.id || '')
+const isNew = computed(() => !pathId.value)
+
+// ── Auto-save: no Save button (B211's convention, the human 2026-10-13) ──
+let _saveTimer = null
+const savedAt = ref(null)
+
+function scheduleSave() {
+  if (isNew.value) return
+  savedAt.value = null
+  clearTimeout(_saveTimer)
+  _saveTimer = setTimeout(() => { save() }, 700)
+}
+
+watch(
+  () => form,
+  () => scheduleSave(),
+  { deep: true, flush: 'sync' },
+)
+
+onUnmounted(() => {
+  // Flush a pending write: an edit made inside the debounce window still lands.
+  if (_saveTimer) {
+    clearTimeout(_saveTimer)
+    _saveTimer = null
+    save()
+  }
+})
 
 const form = reactive({
   name: path.value.name || '',
@@ -251,6 +323,7 @@ function onPickNewStep(tableId) {
     label: tableNames.value[tableId] || '',
     next: '',
     bindings: [],
+    effects: [],
   })
   newStepTableId.value = ''
 }
@@ -352,9 +425,13 @@ async function save() {
         enroll: !!b.enroll,
         effects: b.effects || [],
       })),
+      // Sent for every step, not only the edited one: `steps` replaces the stored
+      // list, so an omitted `effects` is a deleted one ([[B279]]'s class, and the
+      // reason `bindings` travels whole too).
+      effects: s.effects || [],
     }))
     const result = await saveLifePath({
-      id: props.lp.id || '',
+      id: pathId.value,
       name: form.name,
       universe: form.universe,
       description: form.description,
@@ -367,8 +444,12 @@ async function save() {
       conditions: form.conditions,
     })
     if (result?.ok) {
+      // A create becomes an edit in place: the same panel keeps the path open and
+      // the auto-save arms, which is what B225 asks for rather than closing and
+      // making the author find it again.
+      if (result.isNew && result.id) createdId.value = result.id
       bus.emit('lifepath-saved', { id: result.id, universe: form.universe, isNew: result.isNew })
-      panel.close()
+      savedAt.value = new Date()
     }
   } catch (e) {
     error.value = e?.message || 'Save failed'
@@ -393,6 +474,15 @@ async function save() {
 .lpd-field textarea { resize: vertical; min-height: 48px; }
 .lpd-hint { font-size: 9px; color: var(--text-dim); }
 .lpd-error { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
+/* The auto-save readout that replaced the Save button: information, not an action,
+   and the only place a failed write can appear now. */
+.lpd-save-state { display: flex; align-items: center; min-height: 18px; }
+.lpd-save-msg { font-size: 10px; color: var(--text-dim); }
+.lpd-saved { color: var(--success); }
+.lpd-save-error .lpd-save-msg {
+  font-size: 11px; color: var(--danger); background: var(--danger-8);
+  padding: 6px 10px; border-radius: 4px;
+}
 
 .lpd-section { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .lpd-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }

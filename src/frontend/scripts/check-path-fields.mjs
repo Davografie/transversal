@@ -645,14 +645,19 @@ const objectAfter = (src, key) => {
 
   // The entry panel's *draft* contract: it writes the row back into the live entry
   // the table panel holds, so the field has to be carried there too or the row's
-  // names are dropped before the table panel ever sees them.
+  // names are dropped before the table panel's auto-save ever sees them. The write
+  // lives in its own function now that it happens per keystroke rather than on a
+  // Save press, so the check follows the *write*, not the place it used to be.
   const entryPanel = readFileSync(join(SRC, 'components/gm/GmRollTableEntryEditPanel.vue'), 'utf8')
-  const draftBlock = entryPanel.slice(
-    entryPanel.indexOf('if (draft) {', entryPanel.indexOf('async function save()')),
-    entryPanel.indexOf('if (!table.value)'),
+  const writeBlock = entryPanel.slice(
+    entryPanel.indexOf('function writeIntoDraft()'),
+    entryPanel.indexOf('async function save()'),
   )
   ok('the entry panel carries a row\'s names into the injected draft',
-    /(?<![\w.])draft\.boundVariables\s*=/.test(draftBlock), true)
+    writeBlock.length > 0 && /(?<![\w.])draft\.boundVariables\s*=/.test(writeBlock), true)
+  // …and that write is actually reached on an edit, not merely defined.
+  ok('…and the edit path calls it',
+    /if \(draft\) \{ writeIntoDraft\(\); return \}/.test(entryPanel), true)
 
   // linkRollTable's read: the entries travel through that write untouched, so
   // widening the *read* is what protects them here.
