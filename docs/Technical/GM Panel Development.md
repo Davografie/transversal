@@ -147,6 +147,16 @@ Four properties carry this, and each is load-bearing:
   (already the top), which also keeps a click from writing storage. The chain has
   **no window record** — its spec is a prop of `PanelStack` — so its rank lives in
   the registry (`rootZ`) and starts at the back on a fresh load.
+- **Opening a panel raises its unit.** `openChild` (and `replaceChild`) call
+  `raise(props.windowId)` — the panel that just appeared is the one being worked
+  in, so its chain or its window comes forward. This is why a nested panel has to
+  know its unit: `windowId` is carried down the tree (`PanelStack` passes
+  `'root'`, `PanelWindow` its own id, children inherit), where it used to reach a
+  window's *root* panel only — which left every child of a float reporting
+  `data-panel-window="root"` and nothing able to say which unit to raise. A click
+  raises too, but a click is not an open: keyboard activation dispatches `click`
+  with no pointerdown, and a panel opened by another panel's reaction has no
+  pointer near it at all.
 - **Capture-phase `pointerdown` on `window`.** Not a handler per unit: a panel is
   full of controls that stop propagation (`@pointerdown.stop` on the badge and on
   the collapsed chip's buttons), and any of them would be a dead spot. Capture
