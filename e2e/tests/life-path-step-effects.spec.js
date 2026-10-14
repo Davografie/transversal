@@ -36,15 +36,19 @@ test.beforeAll(async ({ request }) => {
   if (!owner) throw new Error(`no player mains ${KAEL} — cannot reach the testing character`)
 })
 
-/** The scratch path wraps the scratch table, so the step has a real scope to offer. */
-async function seedPath(request) {
+/** The scratch path wraps the scratch table, so the step has a real scope to offer.
+ *
+ *  `stepEffects` seeds the step's own list — the field a *restored* window's prop
+ *  snapshot will not have. */
+async function seedPath(request, stepEffects = []) {
   await gql(
     request,
     `mutation($id:String!,$name:String!,$universe:String!,$description:String!,$entryStep:String,$steps:[LifePathStepInput!]) {
        saveLifePath(id:$id, name:$name, universe:$universe, description:$description,
                     entryStep:$entryStep, steps:$steps) }`,
     { id: PATH, name: PATH_NAME, universe: 'earth', description: '',
-      entryStep: 's1', steps: [{ id: 's1', tableId: 'rt-e2e-scratch', label: 'Start', next: '' }] },
+      entryStep: 's1', steps: [{ id: 's1', tableId: 'rt-e2e-scratch', label: 'Start', next: '',
+                                 effects: stepEffects }] },
   )
 }
 
@@ -81,6 +85,41 @@ test('an effect authored on a step is there again after a reload', async ({ page
   await page.reload()
   await page.waitForTimeout(2500)
   if (!(await page.locator('.lpd-root').count())) await openPathPanel(page)
+  await expect(page.locator('.lpd-step').first().locator('.ee-summary'))
+    .toHaveCount(1, { timeout: 20000 })
+})
+
+test('a *restored* panel shows the step effects it was not handed', async ({ page, request }) => {
+  // The human's reproduction, and the one my other specs could not see: the path
+  // panel is a **floating window**, so it is rebuilt from the window record in
+  // localStorage — whose `props.lp` is a snapshot from when it was parked. Clicking
+  // through always hands a current copy; restoring hands the old one. The panel
+  // seeded its form from that and never re-seeded, so effects authored since it was
+  // parked were invisible — and, being auto-saving, it would then write the stale
+  // document back.
+  await bootApp(page)
+  await seedScratch(page.request, { rowVariables: [ROW_DECLARED] })
+  await seedPath(page.request, [{ timing: 'IMMEDIATE', type: 'modify_trait', action: 'gain',
+                                  target: '', result: 'd8' }])
+
+  // Park a floating window holding a snapshot of the path **without** its effects.
+  await page.addInitScript(
+    ([key, rec]) => localStorage.setItem(key, JSON.stringify(rec)),
+    ['gmPanelWindows', [{
+      name: 'GmLifePathDetailPanel',
+      props: { lp: { id: PATH, name: PATH_NAME, universe: 'earth', description: '',
+                     entryTableId: '', entryStep: 's1',
+                     steps: [{ id: 's1', tableId: 'rt-e2e-scratch', label: 'Start',
+                               next: '', bindings: [] }],
+                     conditions: [] } },
+      x: 300, y: 200, direction: 'down', collapsed: false, dock: 'right',
+      sourceParentKey: null, z: 1,
+    }]],
+  )
+  await page.reload()
+  await page.waitForTimeout(2500)
+
+  await expect(page.locator('.lpd-root'), 'the restored panel mounted').toHaveCount(1)
   await expect(page.locator('.lpd-step').first().locator('.ee-summary'))
     .toHaveCount(1, { timeout: 20000 })
 })

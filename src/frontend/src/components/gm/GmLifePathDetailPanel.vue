@@ -188,7 +188,7 @@ import GmDraftEffectPanel from './GmDraftEffectPanel.vue'
 const panel = usePanel()
 const bus = usePanelBus()
 const { graphql } = useApi()
-const { saveLifePath, deleteLifePath, pathsByUniverse } = useLifePaths()
+const { saveLifePath, deleteLifePath, pathsByUniverse, fetchLifePath } = useLifePaths()
 
 const props = defineProps({
   lp: { type: Object, required: true },
@@ -241,9 +241,11 @@ const isNew = computed(() => !pathId.value)
 
 // ── Auto-save: no Save button (B211's convention, the human 2026-10-13) ──
 let _saveTimer = null
+let _suppressEdits = false
 const savedAt = ref(null)
 
 function scheduleSave() {
+  if (_suppressEdits) return
   if (isNew.value) return
   savedAt.value = null
   clearTimeout(_saveTimer)
@@ -260,17 +262,29 @@ onUnmounted(() => {
   }
 })
 
+/** Fill the form from a path. Called at setup, and again on mount when the stored
+ *  copy arrives — see `onMounted`. */
+function seedForm(p) {
+  form.name = p.name || ''
+  form.universe = p.universe || ''
+  form.description = p.description || ''
+  // Deprecated and no longer offered as a control — inert now that the flow is
+  // declared by the steps. The stored value is carried so a save cannot blank it.
+  form.entryTableId = p.entryTableId || ''
+  form.entryStep = p.entryStep || ''
+  form.steps = copySteps(p.steps)
+  // Copied, not aliased: the editor mutates in place, and the prop is the
+  // panel's own `lp` object — a cancelled edit must not leak into it.
+  form.conditions = (p.conditions || []).map(c => ({ ...c }))
+}
+
 const form = reactive({
   name: path.value.name || '',
   universe: path.value.universe || '',
   description: path.value.description || '',
-  // Deprecated and no longer offered as a control — inert now that the flow is
-  // declared by the steps. The stored value is carried so a save cannot blank it.
   entryTableId: path.value.entryTableId || '',
   entryStep: path.value.entryStep || '',
   steps: copySteps(path.value.steps),
-  // Copied, not aliased: the editor mutates in place, and the prop is the
-  // panel's own `lp` object — a cancelled edit must not leak into it.
   conditions: (path.value.conditions || []).map(c => ({ ...c })),
 })
 
@@ -328,8 +342,23 @@ async function loadOptions() {
 }
 
 let optionsReady = null
-onMounted(() => {
+onMounted(async () => {
   optionsReady = loadOptions()
+  // A **restored** window is handed the `lp` snapshot from when it was parked, not
+  // the current path — so the form must be re-seeded from storage. Without this a
+  // floating panel shows a stale document (the step effects authored since it was
+  // parked are simply not in it) and, being auto-saving, would then write that
+  // staleness back. `_suppressEdits` keeps the re-seed from counting as an edit.
+  if (props.lp?.id) {
+    try {
+      const fresh = await fetchLifePath(props.lp.id)
+      if (fresh) {
+        _suppressEdits = true
+        seedForm(fresh)
+        _suppressEdits = false
+      }
+    } catch { /* keep what we were opened with */ }
+  }
   // The row highlight follows the open effect, and shutting the editor is the one
   // path every *close* takes (a detach is deliberately not a close).
   offStepEffectClose = panel.onChildClose(() => { editingStepEffect.value = null })
