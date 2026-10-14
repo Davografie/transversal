@@ -202,9 +202,13 @@ def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | 
 
     # Relationship edges produced by the applier.
     for rel in result.new_relationships:
-        repo.create_relationship(
+        created_edge = repo.create_relationship(
             rel["from"], rel["to"], rel["type"], rel.get("description", ""),
         )
+        # The edge's own key, so an effect that names its result (`output`) binds the
+        # tie rather than the person. `new_relationships` carried only from/to/type,
+        # so nothing identified the edge an effect had just made.
+        rel["key"] = (created_edge or {}).get("_key", "") if isinstance(created_edge, dict) else ""
         from transversal.services.scheduled_events import dispatch_event
         dispatch_event(None, "relationship_created", entity_id=rel["from"], universe=entity.current_universe,
                        context={"target_entity": rel["to"], "relationship_type": rel["type"]})

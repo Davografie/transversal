@@ -1061,6 +1061,10 @@ def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:
         return _maybe(repo.get_traitset_by_id(value))
     if element == "projection":
         return _maybe(repo.get_projection(value))
+    if element == "relationship":
+        # An edge, by its own key: what a created tie is exposed as, and how a path
+        # filters a specific edge without picking it by its contact.
+        return _maybe(repo.get_relationship_by_key(value))
     if element == "life_path":
         return _maybe(repo.get_lifepath(value))
     if element == "roll_table":

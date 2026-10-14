@@ -32,6 +32,13 @@ def _produced_id(result, element: str) -> str:
     elif element == "projection":
         for p in (*result.new_projections, *result.updated_projections):
             return getattr(p, "id", "")
+    elif element == "relationship":
+        # A created edge is named by its Arango key, which the commit records on the
+        # way in (`new_relationships[i]["key"]`).
+        for rel in result.new_relationships:
+            key = rel.get("key") if isinstance(rel, dict) else None
+            if key:
+                return key
     return ""
 
 

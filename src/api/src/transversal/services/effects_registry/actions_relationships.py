@@ -28,6 +28,11 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="description", label="Description", field_type="text", required=False),
         ],
         target_kind="entity",
+        # What this action *produces* is the **edge**, not the person: a relationship
+        # trait hangs on the tie (`owner`), and the contact is reachable by navigating
+        # it (`relationship → contact`). Declaring it is what offers "Output name" and
+        # gives the bound name its element.
+        output_element="relationship",
     ),
     EffectActionMeta(
         action_id="entity_targeting_ban",
