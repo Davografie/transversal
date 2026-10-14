@@ -202,6 +202,12 @@ class TraitSetting(BaseModel):
     locations_disabled: list[str] = Field(default_factory=list)
     enabled: bool = True  # false = disabled; contributes no dice until re-enabled
     known_to: list[str] = Field(default_factory=list)
+    #: The trait picture this instance uses, when it has picked one of its registry
+    #: trait's own ([[B288]]). A **pointer, not a copy**: the instance names a
+    #: picture owned by the trait, so a variant made on that picture — a matte, a
+    #: loop — is seen by every instance that uses it, and nothing has to be kept in
+    #: sync. Empty means the definition picture, i.e. the ordinary ladder.
+    picked_image_id: str = ""
     # Provenance — how this trait was acquired
     source_type: Optional[str] = None
         # "taught" | "gifted" | "taken" | "life_path_term" | "event" | null

@@ -151,6 +151,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         sfx_ids=s.sfx_ids,
         known_to=s.known_to,
         enabled=s.enabled,
+        picked_image_id=s.picked_image_id,
     )
 
 def _trait_to_gql(t) -> TraitRef:

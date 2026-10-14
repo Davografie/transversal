@@ -82,6 +82,9 @@ def _trait_entry(repo, ts, location_id: str, viewer: str):
         "inherited": ts.entity_id != location_id,
         "hidden": hidden,
         "known_to": known_to,
+        # The picture this instance picked among its trait's own ([[B288]]), so the
+        # chip resolves the same one the sheet does.
+        "picked_image_id": ts.picked_image_id or "",
     }
 
 
@@ -105,7 +108,10 @@ def _attach_navdot_markers(repo, entries: list[dict]) -> list[dict]:
         return entries
     by_owner = repo.get_images_for_owners(owner_ids)
     for entry in entries:
-        image = pick_role_image(by_owner.get(entry["trait_id"], []), "navdot", entry["id"])
+        image = pick_role_image(
+            by_owner.get(entry["trait_id"], []), "navdot", entry["id"],
+            picked_id=entry.get("picked_image_id", ""),
+        )
         if image is not None:
             # Via the shared map, so a navdot cannot drift from what the entity
             # resolver would serve for the same role.

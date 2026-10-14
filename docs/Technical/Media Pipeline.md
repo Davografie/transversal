@@ -422,21 +422,48 @@ The **sole-image rule applies here too**, so a trait's first image takes all
 three roles and renders in all three places without its author thinking about
 roles at all.
 
+#### The instance's pick is a pointer, not a copy ([[B288]])
+
+Slice 2's override used to be a **copy**: the instance editor wrote the trait
+picture's files onto the setting's rung so a role could point at it. That made one
+click in the editor a state change, and it made every variant produced afterwards —
+a matte, a loop — belong to the *copy*, so it was visible to that instance alone.
+
+`TraitSetting.picked_image_id` replaces it: the setting **names** one of its
+trait's owner-level pictures, and `pick_role_image` prefers it. The rung order is
+
+1. the instance's **own** picture (the variant rung);
+2. the **picked** owner-level picture — `picked_image_id`, for the roles it carries;
+3. an owner-level picture in the setting's universe;
+4. any owner-level picture.
+
+An instance's own art is therefore never hidden by a pointer at shared art, and a
+variant made on the picked picture is a render **of that picture**, so every
+instance that picks it gets it. A pick that names nothing — a deleted picture, or a
+variant-owned one — is ignored rather than fatal, because a stale pointer must not
+blank a surface; and a pick answers only the roles its picture carries, so it can
+never make a picture render where nobody tagged it.
+
+`POST /media/copy`, the editor's `copyImage` and their tests were retired with it.
+
 A trait's images are **cascaded on deletion**: `delete_trait` removes the rows
 and the files, because an owner that can own images has to clean them up —
 without that, deleting a trait seeds exactly the orphan class
 [[data-migration]] is already carrying 25 rows of.
 
-> [!note] Built so far
+> [!note] Built so far (corrected 2026-09-26)
 > Slice 1's media half has **landed**: the owner model, the collection rename and
 > backfill, owner-aware resolution and upload, GraphQL `Trait.image(role)`, and
-> the registry editor's Image section — upload, remove, and **cut out**. Nothing
-> else in slice 1 is media's.
+> the registry editor's Image section — upload, remove, and **cut out**.
+> **Slice 2 landed too** ([[B212]]): a setting carries its own picture, and since
+> [[B288]] it can also **pick** one of the trait's own by pointer instead of copying
+> it. A trait picture is **auto-matted** like an occupant's, on upload or on
+> generation ([[B214]]) — so the old note that nothing auto-cuts a trait image is
+> history, as is the idea that the three partner surfaces are missing.
 >
-> Not built: the trait-shaped **generation** entry point, slice 2's traitsetting
-> override, and the three partner surfaces above. Nothing *auto*-cuts a trait
-> image, because that rule hangs off a first *generated* image and trait
-> generation does not exist yet.
+> **Not built:** the trait-shaped **generation** entry point. Animation rides on it:
+> the viewer hides Animate for a non-entity owner, so "cutout or animation" on a
+> trait picture is cutout today ([[B288]]).
 
 ### Migrating the collection (`B200`)
 
@@ -484,18 +511,12 @@ what makes the cleanup independent of the enum it is cleaning up.
 
 ## REST API
 
-- `POST /media/copy` — body is query params `image_id`, `owner_kind`, `owner_id`,
-  `variant_id`: put an existing picture on another rung by copying its files and
-  record ([[B215]]). The trait-instance editor uses it to take one of the trait's
-  own pictures as an instance's override. It **copies** rather than references —
-  a rung's URL comes from its own record's filename, so two records sharing one
-  would share a file and deleting either would remove it from under the other —
-  and the copy carries the provenance (`image_type`, `flags`, `credits`,
-  `license`, `credit_text`) and the matte ladder with it. Roles: an empty rung
-  takes all three, a rung that already has pictures hands the copy **their** roles,
-  and because assigning a role strips it from the siblings the tags *move* — a pick
-  takes over from the picture that was rendering, which stays in the gallery
-  untagged.
+- ~~`POST /media/copy`~~ — **retired with [[B288]]**. It put an existing picture on
+  another rung by copying its files and record, and the instance editor used it to
+  take one of the trait's own pictures as an instance's override. Copying made a
+  click a state change and scoped every later variant to the copy, so picking is now
+  a **pointer** — `TraitSetting.picked_image_id`, written through
+  `updateTraitSetting(id, input: { pickedImageId })`, `""` to clear.
 - `POST /media/upload` — upload a file; convert to WebP, save variants, register
   a `MediaImage`, auto-select all three roles when it is the sole image on its
   rung. Takes `owner_kind` (`entity` | `trait`), `owner_id`, `variant_id`,

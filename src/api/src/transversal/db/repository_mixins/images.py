@@ -23,13 +23,16 @@ def pick_role_image(
     role: str,
     variant_id: str | None = None,
     universes: Callable[[], list[str]] | None = None,
+    picked_id: str = "",
 ) -> MediaImage | None:
     """The image carrying ``role``, from an already-loaded list — the ladder.
 
     1. the **variant's** own image carrying ``role`` (newest first) — a
        projection's for an entity, a traitsetting's for a trait;
-    2. an owner-level image in one of ``universes``;
-    3. any owner-level image carrying ``role``.
+    2. the **picked** owner-level image carrying ``role`` ([[B288]]) — the picture
+       this instance chose among its owner's own;
+    3. an owner-level image in one of ``universes``;
+    4. any owner-level image carrying ``role``.
 
     The list is a parameter so a caller that already holds the images can use the
     ladder without re-reading them: the sheet's trait rows come from the
@@ -42,10 +45,25 @@ def pick_role_image(
     skipping it when step 1 already matched is the whole reason the original code
     tried the variant first. A trait's variant is a traitsetting rather than a
     projection, so its lookup answers empty and one picture serves every universe.
+
+    ``picked_id`` is a **pointer** at one of the owner's pictures, and it is placed
+    *after* the variant rung on purpose: an instance's own picture is more specific
+    than a pointer at shared art, so picking can never hide something the instance
+    owns. It answers only the roles the picked picture carries — a pick cannot make
+    a picture render where nobody tagged it — and an id that names nothing (a
+    picture since deleted, or a variant-owned one) is ignored rather than fatal,
+    which is what keeps a stale pointer from blanking a surface.
     """
     if variant_id:
         for img in images:
             if (img.variant_id or None) == variant_id and role in img.roles:
+                return img
+    # The instance's picked picture ([[B288]]) — a pointer at one of the owner's
+    # own, preferred over the rest of the owner level. Restricted to owner-level
+    # pictures so a pointer can never drag in another instance's rung.
+    if picked_id:
+        for img in images:
+            if img.id == picked_id and not img.variant_id and role in img.roles:
                 return img
     for u in (universes() if universes else []):
         for img in images:

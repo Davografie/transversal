@@ -210,6 +210,12 @@ class MutationsTraitSettings:
             ts.known_to = [str(k) for k in input.known_to]
         if input.enabled is not None:
             ts.enabled = input.enabled
+        # The instance's picked picture ([[B288]]) — a pointer at one of the
+        # registry trait's own pictures, replacing the copy `B215` used to write.
+        # `""` clears it; the resolver treats an id that names nothing as no pick,
+        # so a deleted picture cannot leave the instance blank.
+        if input.picked_image_id is not None:
+            ts.picked_image_id = str(input.picked_image_id)
         updated = _em(info).update_traitsetting(ts)
         return _ts_to_gql(updated)
 

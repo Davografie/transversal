@@ -284,6 +284,13 @@ class TraitSetting:
     sfx_ids: list[strawberry.ID]
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
     enabled: bool = True
+    #: The trait picture this instance uses, when it has picked one of its registry
+    #: trait's own ([[B288]]). A pointer, not a copy — `""` means "the definition
+    #: picture", i.e. the ordinary ladder. A plain string, not an optional id,
+    #: because both converters must forward the domain value **unchanged**:
+    #: `test_trait_setting_converters` walks every exposed field and fails on a
+    #: coercion as readily as on a drop.
+    picked_image_id: str = ""
     # Relationship-anchored traits carry their edge's contact for display.
     relationship_contact_id: Optional[strawberry.ID] = None
     relationship_contact_name: Optional[str] = None
@@ -486,7 +493,7 @@ class TraitSetting:
             return None
         em = info.context["entity_manager"]
         images = await info.context["loaders"].images.load(str(self.trait_id))
-        return em.repo.role_image_url(pick_role_image(images, role, str(self.id)), role)
+        return em.repo.role_image_url(pick_role_image(images, role, str(self.id), picked_id=str(self.picked_image_id or "")), role)
 
     @strawberry.field
     async def image_info(self, info: strawberry.Info, role: str = "sheet") -> Optional[ImageInfo]:
@@ -495,7 +502,7 @@ class TraitSetting:
             return None
         em = info.context["entity_manager"]
         images = await info.context["loaders"].images.load(str(self.trait_id))
-        entry = pick_role_image(images, role, str(self.id))
+        entry = pick_role_image(images, role, str(self.id), picked_id=str(self.picked_image_id or ""))
         if entry is None:
             return None
         return build_image_info(entry, role, em.repo.role_image_url(entry, role) or "")
@@ -507,7 +514,7 @@ class TraitSetting:
         if role not in _ROLE_RENDER:
             return False
         images = await info.context["loaders"].images.load(str(self.trait_id))
-        entry = pick_role_image(images, role, str(self.id))
+        entry = pick_role_image(images, role, str(self.id), picked_id=str(self.picked_image_id or ""))
         return entry.transparent if entry is not None else False
 
     @strawberry.field
@@ -558,6 +565,11 @@ class TraitSettingUpdateInput:
     sfx_ids: Optional[list[strawberry.ID]] = None
     known_to: Optional[list[strawberry.ID]] = None
     enabled: Optional[bool] = None
+    #: Pick one of the **registry trait's** pictures for this instance, or `""` to
+    #: stop using one ([[B288]]). Omit to leave the current pick alone. The id must
+    #: name an owner-level picture of this setting's trait; a pointer, so a matte or
+    #: a loop made on that picture is seen by every instance using it.
+    picked_image_id: Optional[strawberry.ID] = None
     # Change the instance's *definition* (its registry trait). The set follows the
     # new definition; everything the instance owns — dice, statement, notes, tags,
     # grants, children — is untouched. The rules (container↔container, no
@@ -587,6 +599,7 @@ def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
         # makes it read as its default everywhere — which is how `enabled` came to
         # report True for disabled settings.
         enabled=s.enabled,
+        picked_image_id=s.picked_image_id,
         relationship_contact_id=contact.get("contact_id"),
         relationship_contact_name=contact.get("contact_name"),
         relationship_contact_type=contact.get("contact_type"),

@@ -370,6 +370,7 @@
           @update:definitionTraitsetFilter="definitionTraitsetFilter = $event"
           @change-definition="changeDefinition"
           @image-changed="fetchEntity('trait-image')"
+          @pick-image="pickTraitImage"
         />
 
         <!-- Trait detail (read-only) — the row's "elsewhere" click zone.
@@ -1085,6 +1086,9 @@ const RELATION_TRAIT_FIELDS = `
   sheetImage: image(role: "sheet")
   backgroundImage: image(role: "background")
   imageTransparent
+  # Which of the trait's own pictures this instance uses, when it has picked one
+  # (B288) — a pointer, not a copy, so a variant made on that picture is shared.
+  pickedImageId
 `
 
 // ── Incoming ties (B134) ────────────────────────────────────────
@@ -2310,10 +2314,35 @@ async function changeDefinition(traitId) {
   }
 }
 
+/**
+ * Point the edited instance at one of its trait's own pictures ([[B288]]).
+ *
+ * A **pointer, not a copy**: the setting records the picture's id and the
+ * resolver prefers it, so a matte or a loop made on that picture belongs to the
+ * picture and every instance using it gets the variant. `imageId` is `''` to stop
+ * using one. Opening a picture in the panel is separate and changes nothing — this
+ * is the only action that picks.
+ */
+async function pickTraitImage(imageId) {
+  const t = editingTrait.value
+  if (!t) return
+  try {
+    const result = await graphql(`mutation($id: ID!, $imageId: ID!) {
+      updateTraitSetting(id: $id, input: { pickedImageId: $imageId }) { id pickedImageId }
+    }`, { id: t.id, imageId: imageId || '' })
+    if (!result?.updateTraitSetting) {
+      console.error('[sheet] picking a trait picture failed:', error.value || 'unknown error')
+      return
+    }
+    await fetchEntity('trait-image-pick')
+  } catch (e) {
+    console.error('[sheet] picking a trait picture failed:', e)
+  }
+}
+
 function closeTraitDetail() {
   detailTrait.value = null
 }
-
 // The detail panel sits ahead of the tab branches in the render chain, so a tab
 // change would otherwise leave it covering the newly chosen view.
 watch(activeSheetView, () => { detailTrait.value = null })
@@ -2899,6 +2928,7 @@ const QUERY = `
     sheetImage: image(role: "sheet")
     backgroundImage: image(role: "background")
     imageTransparent
+    pickedImageId
   }
   # GraphQL requires every nesting level spelled out, so the chain is linear and
   # each link adds exactly one level: Depth2 = 2 levels, Depth3 = 3. The sheet

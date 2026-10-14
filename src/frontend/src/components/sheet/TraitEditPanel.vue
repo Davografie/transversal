@@ -172,25 +172,41 @@
               the first picture takes every role, so it overrides at once
             </span>
           </div>
-          <!-- The trait's own pictures, as a pool this instance can draw from:
-               the trait carries the canonical art, and an instance picks which
-               of it is its own rather than uploading another copy by hand. -->
+          <!-- The trait's own pictures. Opening one is **selection, not a copy**
+               ([[B288]]): the viewer then acts on the trait's record, so a matte or
+               a loop made here belongs to the picture and every instance using it
+               gets it. Choosing one *for this instance* is the separate button —
+               a click used to copy the file onto this rung, which made a click a
+               state change and scoped every variant to this instance alone. -->
           <div v-if="definitionImages.length" class="edit-image-picks">
-            <span class="edit-image-hint">or take one of the trait's own:</span>
+            <span class="edit-image-hint">
+              the trait's own pictures — open one to tag, cut out or upscale it (that
+              changes it for every instance):
+            </span>
             <ImageGallery
               :images="definitionImages"
+              :selected-id="openedImageId"
               empty=""
               :draggable="false"
-              @open="useDefinitionImage"
+              @open="openDefinitionImage"
             />
           </div>
+          <span v-if="trait.pickedImageId" class="edit-image-hint">
+            this instance uses one of the trait's own pictures
+            <Button variant="link" size="sm" @click="pickInstanceImage('')">clear</Button>
+          </span>
           <span v-if="imagesError" class="edit-image-error">{{ imagesError }}</span>
-          <span v-if="pickError" class="edit-image-error">{{ pickError }}</span>
           <!-- The shared viewer, rendered **inline**: this panel is mounted both
                inside a GM panel and directly by the player app, and only the
                former has a panel stack to push a child panel onto. -->
           <div v-if="openedImageId" class="edit-image-viewer">
             <Button variant="link" size="sm" @click="openedImageId = ''">← Done with this picture</Button>
+            <Button
+              v-if="openedIsDefinition"
+              variant="neutral"
+              size="sm"
+              @click="pickInstanceImage(openedIsPicked ? '' : openedImageId)"
+            >{{ openedIsPicked ? 'Stop using this picture' : 'Use for this instance' }}</Button>
             <ImageViewer
               owner-kind="trait"
               :owner-id="trait.traitId"
@@ -226,7 +242,7 @@ import { computed, ref } from 'vue'
 import Button from '@/components/ui/Button.vue'
 import TagInput from '@/components/ui/TagInput.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
-import { copyImage, useImageGallery } from '@/composables/useImageGallery.js'
+import { useImageGallery } from '@/composables/useImageGallery.js'
 import ImageGallery from '@/components/image/ImageGallery.vue'
 import ImageUpload from '@/components/image/ImageUpload.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
@@ -316,7 +332,7 @@ const emit = defineEmits([
   'back', 'delete', 'toggle-sfx', 'toggle-ego', 'toggle-polarity',
   'toggle-projection-picker', 'select-projection', 'add-subtrait', 'remove-subtrait',
   'toggle-definition-picker', 'update:definitionFilter', 'change-definition',
-  'update:definitionTraitsetFilter', 'image-changed',
+  'update:definitionTraitsetFilter', 'image-changed', 'pick-image',
 ])
 
 // ── The instance's own picture ───────────────────────
@@ -324,7 +340,6 @@ const emit = defineEmits([
 // projection has against an entity, and the reason one canonical definition
 // picture can serve every instance until an instance wants its own.
 const openedImageId = ref('')
-const pickError = ref('')
 const {
   images: traitImages,
   error: imagesError,
@@ -343,24 +358,33 @@ const instanceImages = computed(
 //: The trait's definition pictures — the pool an instance may pick from.
 const definitionImages = computed(() => traitImages.value.filter(i => !i.variant_id))
 
-async function useDefinitionImage(img) {
-  if (!img || !props.trait) return
-  pickError.value = ''
-  try {
-    await copyImage({
-      imageId: img.id,
-      ownerKind: 'trait',
-      ownerId: props.trait.traitId,
-      variantId: props.trait.id,
-    })
-    onInstanceImageChanged()
-  } catch (e) {
-    pickError.value = e?.message || 'Could not use that picture'
-  }
+/**
+ * Open one of the trait's own pictures. **Selection only** ([[B288]]).
+ *
+ * This used to copy the picture onto this instance's rung ([[B215]]), so a click
+ * was a state change and every variant made afterwards — a matte, a loop — landed
+ * on the copy and was visible to this instance alone. Opening it instead means the
+ * viewer's Cut out / Upscale / Animate act on the **trait's** record: the variant
+ * is part of the picture, and every instance using that picture gets it.
+ */
+function openDefinitionImage(img) {
+  openedImageId.value = img.id
+}
+
+/** Point this instance at one of the trait's own pictures, or `''` to stop. */
+function pickInstanceImage(imageId) {
+  emit('pick-image', imageId || '')
 }
 
 const openedImageRecord = computed(
-  () => instanceImages.value.find(i => i.id === openedImageId.value) || null,
+  () => traitImages.value.find(i => i.id === openedImageId.value) || null,
+)
+//: Whether the opened picture is one of the trait's own — the case the pick applies to.
+const openedIsDefinition = computed(
+  () => definitionImages.value.some(i => i.id === openedImageId.value),
+)
+const openedIsPicked = computed(
+  () => !!openedImageId.value && props.trait?.pickedImageId === openedImageId.value,
 )
 
 function openInstanceImage(img) {

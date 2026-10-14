@@ -72,11 +72,12 @@ def _image(image_id, *, variant_id=None, roles=("sheet",), transparent=False):
     )
 
 
-def _setting(setting_id=SETTING):
+def _setting(setting_id=SETTING, picked_image_id=None):
     return TraitSetting(
         id=setting_id, entity_id="character-probe", trait_id=TRAIT,
          rating_type=RatingType.STATIC, dice=[DieType.D6],
         statement="", sfx_ids=[], polarity="POSITIVE",
+        picked_image_id=picked_image_id,
     )
 
 
@@ -151,3 +152,60 @@ async def test_the_registry_trait_reads_through_the_same_loader():
     info = _info([_image("def")])
     assert await trait.image(info, "sheet") == "def:Small"
     assert info.context["loaders"].images.keys == [TRAIT]
+
+
+# ── The pick ([[B288]]) ──────────────────────────────
+# The instance names one of its trait's own pictures instead of the editor copying
+# the file onto the setting's rung. A pointer, so a matte or a loop made on that
+# picture belongs to the picture and every instance using it gets the variant.
+
+async def test_a_picked_picture_wins_the_owner_level():
+    info = _info([_image("def"), _image("pick")])
+    assert await _setting(picked_image_id="pick").image(info, "sheet") == "pick:Small"
+
+
+async def test_the_instances_own_picture_beats_a_pick():
+    """An override the instance uploaded is more specific than a pointer at shared
+    art — picking must never hide something the instance owns."""
+    info = _info([_image("def"), _image("pick"), _image("mine", variant_id=SETTING)])
+    assert await _setting(picked_image_id="pick").image(info, "sheet") == "mine:Small"
+
+
+async def test_a_pick_answers_only_the_roles_it_carries():
+    """A pick cannot make a picture render where nobody tagged it: a role it does
+    not carry falls through to the rest of the ladder."""
+    info = _info([_image("def", roles=("sheet",)), _image("pick", roles=("navdot",))])
+    setting = _setting(picked_image_id="pick")
+    assert await setting.image(info, "navdot") == "pick:Large"
+    assert await setting.image(info, "sheet") == "def:Small"
+
+
+async def test_a_pick_that_names_nothing_is_ignored():
+    """A picture since deleted must not blank the surface."""
+    info = _info([_image("def")])
+    assert await _setting(picked_image_id="gone").image(info, "sheet") == "def:Small"
+
+
+async def test_a_pick_cannot_reach_another_settings_rung():
+    """The pointer is restricted to owner-level pictures, so it can never drag in a
+    sibling instance's override."""
+    info = _info([_image("def"), _image("theirs", variant_id=OTHER)])
+    assert await _setting(picked_image_id="theirs").image(info, "sheet") == "def:Small"
+
+
+def test_the_converter_carries_the_pick():
+    """`_gql_trait_setting` feeds every read path, and a field dropped there reads
+    as its default everywhere — how `enabled` once reported True for disabled
+    settings. `""` is the no-pick value the client sees (the domain value, unchanged;
+    `test_trait_setting_converters` requires that)."""
+    from transversal.api.graphql.type_defs.traits import _gql_trait_setting
+    from transversal.domain.traits import TraitSetting as DomainSetting
+
+    def domain(picked):
+        return DomainSetting(
+            id=SETTING, entity_id="character-probe", trait_id=TRAIT,
+            picked_image_id=picked,
+        )
+
+    assert _gql_trait_setting(domain("pick")).picked_image_id == "pick"
+    assert _gql_trait_setting(domain("")).picked_image_id == ""
