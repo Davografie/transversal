@@ -659,9 +659,11 @@ function pushSplashNote(note) {
  * lines. The chip itself is the map's ([[B92]]), so the splash and the location
  * cannot drift apart.
  *
- * `statement` is read when the payload carries it. It does not yet — `PoolDieIn` has
- * no such field — so the chip degrades to name + dice, which is the visible half.
- * Asked of [[applied-mechanics]], whose payload and roller this is ([[B287]]).
+ * `statement`, `navdot_image` and `navdot_transparent` are read when the payload carries
+ * them, and it does not yet — `PoolDieIn` has none of the three — so the chip degrades to
+ * name + dice, which is the visible half. Asked of [[applied-mechanics]], whose payload
+ * and roller this is ([[B287]]); the surface is already wired for all three, so the day
+ * the field lands it renders.
  */
 function pushSplashTarget(difficulty, dice = []) {
   const rolled = (dice || []).filter(d => d.result !== null && d.result !== undefined)
@@ -669,7 +671,17 @@ function pushSplashTarget(difficulty, dice = []) {
   for (const d of rolled) {
     const key = d.ts_id || d.source_id || d.label || 'die'
     if (!byTrait.has(key)) {
-      byTrait.set(key, { name: d.label || d.die, statement: d.statement || '', dice: [] })
+      byTrait.set(key, {
+        name: d.label || d.die,
+        statement: d.statement || '',
+        // The trait's own picture, exactly as the map's chip draws it ([[B200]]).
+        // Accepted in either spelling because the pool die is REST-shaped
+        // (`navdot_image`) and the rest of the client is camelCase. **Not sent yet** —
+        // see the note above — so the chip renders without it today.
+        navdotImage: d.navdot_image || d.navdotImage || '',
+        navdotTransparent: !!(d.navdot_transparent ?? d.navdotTransparent),
+        dice: [],
+      })
     }
     byTrait.get(key).dice.push({ die: d.die, result: d.result, hitch: !!d.hitch })
   }

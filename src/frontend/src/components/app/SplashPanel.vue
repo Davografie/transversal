@@ -274,11 +274,15 @@ const kindLabel = computed(() => KIND_LABELS[currentNote.value?.kind] || KIND_LA
   letter-spacing: 0.22em;
   color: var(--text-dim);
 }
-/* A wash behind the number, so the eye lands there before anything else. */
+/* A wash behind the number, so the eye lands there before anything else.
+   Vertically out-of-flow only: a negative *horizontal* inset bleeds past the card's
+   padding box, and because the card scrolls one axis it scrolls both — measured as
+   exactly 28px of horizontal scroll on a card that fits easily (the author's report).
+   The gradient fades to transparent well inside the box, so nothing is lost. */
 .sp-target::before {
   content: '';
   position: absolute;
-  inset: -10px -28px;
+  inset: -10px 0;
   background: radial-gradient(ellipse at center,
     color-mix(in srgb, var(--accent) 24%, transparent) 0%,
     transparent 72%);

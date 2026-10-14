@@ -36,10 +36,10 @@ const KAEL = 'character-kael-drift-e555ccde'
 test.use({ viewport: { width: 390, height: 844 } })
 
 const dice = [
-  { die: 'd8', label: 'Sword', source_id: 'ts-sword', source_kind: 'trait', result: 6 },
+  { die: 'd8', label: 'Root-Weave Repository', source_id: 'ts-sword', source_kind: 'trait', result: 6 },
   // A second die from the *same* trait: one chip, two faces — the case whose numbers
   // the map's fanned staircase hides (the author, 2026-10-14).
-  { die: 'd8', label: 'Sword', source_id: 'ts-sword', source_kind: 'trait', result: 2 },
+  { die: 'd8', label: 'Root-Weave Repository', source_id: 'ts-sword', source_kind: 'trait', result: 2 },
   { die: 'd6', label: '2d6', source_id: 'difficulty', source_kind: 'difficulty', result: 3 },
 ]
 const streamFor = (difficulty, at) => `event: difficulty_set\ndata: ${JSON.stringify({
@@ -130,7 +130,7 @@ test('a difficulty dealt to the player splashes its dice, and the tap opens the 
   const chips = splash.locator('.sp-chip')
   await expect(chips).toHaveCount(2)
   const sword = chips.nth(0)
-  await expect(sword.locator('.trait-chip-name')).toHaveText('Sword')
+  await expect(sword.locator('.trait-chip-name')).toHaveText('Root-Weave Repository')
   await expect(sword.locator('.die-icon')).toHaveCount(2)
   await expect(sword.locator('.die-text'), 'the faces rolled, not the die type').toHaveText(['6', '2'])
   await expect(sword.locator('.die-icon').first()).toHaveAttribute('class', /die-d8/)
@@ -148,6 +148,19 @@ test('a difficulty dealt to the player splashes its dice, and the tap opens the 
 
   // The chips are **centred** under the number, and the row wraps rather than widening
   // the card (the author). Asserted as geometry: the row's midpoint is the card's.
+  // Nothing overflows. The card is sized to its content, so a scrollbar on either axis
+  // is a layout fault rather than a long list (the author's report at "Root-Weave
+  // Repository": "an unnecessary overflow (scroll both horizontal and vertical) where the
+  // splash panel should fit easily").
+  const overflow = await splash.evaluate((el) => ({
+    x: el.scrollWidth - el.clientWidth,
+    y: el.scrollHeight - el.clientHeight,
+    docX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  }))
+  expect(overflow.x, 'no horizontal scroll on the card').toBeLessThanOrEqual(0)
+  expect(overflow.y, 'no vertical scroll on the card').toBeLessThanOrEqual(0)
+  expect(overflow.docX, 'and nothing spills the page').toBeLessThanOrEqual(0)
+
   const centred = await splash.evaluate((el) => {
     const row = el.querySelector('.sp-chips').getBoundingClientRect()
     const card = el.getBoundingClientRect()

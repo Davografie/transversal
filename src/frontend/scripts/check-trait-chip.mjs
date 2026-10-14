@@ -75,6 +75,14 @@ const splash = readFileSync(SPLASH, 'utf8')
     /dice-layout="spread"/.test(splash))
 }
 
+// ── 3c. the trait's picture, when the payload carries one ───────────────────
+{
+  yes('a chip is built with the trait\'s picture, in either spelling',
+    /navdotImage: d\.navdot_image \|\| d\.navdotImage/.test(readFileSync('src/App.vue', 'utf8')))
+  yes('…and the chip draws it (the map\'s marker, reused)',
+    /trait\.navdotImage/.test(chip) && /class="trait-chip-marker"/.test(chip))
+}
+
 // ── 4. the two call sites ───────────────────────────────────────────────────
 {
   yes('the location viewer still draws the chip', /<TraitChip/.test(viewer))
