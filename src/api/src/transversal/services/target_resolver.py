@@ -455,7 +455,7 @@ def _coerce(value: Any, field_type: str | None) -> Any:
 _UNSET: Any = object()
 
 
-def _bound_value(value: Any, context: TargetContext | None) -> Any:
+def _bound_value(value: Any, context: TargetContext | None, as_set: bool = False) -> Any:
     """A step's comparison value, resolving a ``{name}`` reference to its binding.
 
     This is what lets a step compare against something decided elsewhere in the
@@ -474,6 +474,12 @@ def _bound_value(value: Any, context: TargetContext | None) -> Any:
     binding = bindings.get(name)
     if binding is None:
         return value  # unknown name: leave it, so the step plainly matches nothing
+    if as_set and getattr(binding, "cardinality", "") == "many":
+        # A `many` binding *is* the set the author declared, and `in` / `not in` is
+        # where this language promises one-or-several. Without this the set was thrown
+        # away and only its first id tested: `filter id in {locations}` degraded to
+        # `id == <first>`, so fifteen of sixteen locations failed to match ([[B292]]).
+        return list(getattr(binding, "values", None) or [])
     return getattr(binding, "value", binding)
 
 
@@ -878,7 +884,7 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 values, current_type = [], None
             else:
                 values = [v for v in values
-                          if _match(v, step, f.type, _bound_value(step.value, context),
+                          if _match(v, step, f.type, _bound_value(step.value, context, as_set=step.operator in ("in", "not in")),
                                     current_type.element, context.repo)]
                 # A type-proving filter narrows the element, so the next step may
                 # be one only the narrower element has (see
