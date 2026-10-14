@@ -1346,6 +1346,32 @@ splash shows *what is opposing you*, not just how much; the tap opens the sheet 
 be rolled against. The player who has to answer it is the one at that location — the GM
 who set it already watched it happen, and everyone else just reads the toast.
 
+**A target is stated, not reported** ([[B289]]; the author: *"the target number needs to be
+big and daunting … the trait instance (statement and trait name) should be rendered as chips
+below, including the die icons, showing the rolled result face. Re-use the LocationViewer
+trait chips"*). It is the one face allowed to be loud:
+
+- **The number has its own element**, not a title string — `value` on the note, which is
+  also what tells the surface to skip the head (`your target` over an already-labelled
+  number is a second label for the same thing). 64px, heavy, accent with a glow, tabular.
+- **It lands rather than fades**: a pop on a spring curve with a ring punching out from
+  behind it, then the chips staggering in. The drama is **on descendants, never on
+  `.sp-root`** — a transformed ancestor becomes the containing block for `position: fixed`
+  descendants — and every bit of it is off under `prefers-reduced-motion`, with the ring
+  removed outright since it is pure decoration.
+- **The dice are the map's own chips**, one per **trait instance** (a trait rolled as two
+  d8s is one thing opposing you, not two lines), each showing the face that die actually
+  rolled. `location/TraitChip.vue` ([[B92]]) already existed, so nothing was extracted: it
+  gained a second accepted input — a rolled die (`{ die, result, hitch }`) beside the plain
+  type string the location viewer passes — and hands `result`/`isHitch` to the `DieIcon`
+  that already knew how to draw a face. One chip, two inputs, so the two surfaces cannot
+  drift.
+- **What it cannot show yet is the statement**, and that is a payload gap rather than a
+  surface one: `PoolDieIn` carries `die` / `label` / `ts_id` and no statement, so the chip
+  degrades to name + dice. The client cannot fill it in honestly — the dice belong to the
+  roller's pool, and only the server has the trait setting in hand where it already resolves
+  the label. **Requested of [[applied-mechanics]].**
+
 ### A sticky message the engine was told to deliver
 
 An authored **client action** ([[B132]]) — *open this sheet*, *show this message* —
