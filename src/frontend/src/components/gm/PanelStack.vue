@@ -257,6 +257,12 @@ function onToggleClick() {
   }
   logToggleAnchor('open-click')
   show.value = true
+  // The 🛠 is *outside* the panel layer — it is the thing that opens the chain, so
+  // it has no `[data-panel-unit]` ancestor for the capture-phase raise to read, and
+  // the chain itself never goes through `openChild`. So the open asks for the front
+  // here. Without it a restored float parks over the chain that was just opened:
+  // "opening a panel raises its unit", and the 🛠 is an open like any other.
+  raise('root')
 }
 
 function toggleRect() {

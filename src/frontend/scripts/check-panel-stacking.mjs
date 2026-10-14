@@ -156,6 +156,18 @@ yes('the unit is the window id, defaulting to the chain',
   /function raiseUnit\(\) \{\s*raise\(props\.windowId \|\| 'root'\)/.test(PANEL_SRC))
 yes('and the registry hands `raise` to Panel', /raise, rootZ \}/.test(WINDOWS))
 
+// The 🛠 is an open too, and the one open neither rule above can reach: it sits
+// outside the layer (no `[data-panel-unit]` ancestor for the capture-phase
+// listener) and the chain never goes through `openChild`. Left out, a float
+// restored on load parks over the chain the 🛠 just opened.
+{
+  const toggleOpen = STACK.match(/function onToggleClick\(\)[\s\S]*?\n\}/)?.[0] || ''
+  yes('the 🛠 opening the chain raises the chain itself',
+    /show\.value = true[\s\S]*?raise\('root'\)/.test(toggleOpen))
+  yes('and it is a real open — the toggle only exists while the chain is closed',
+    /v-if="!show"[\s\S]{0,120}class="gm-toggle"/.test(STACK))
+}
+
 // ── 5. a click raises the unit ──────────────────────────────────────────
 // Capture-phase on the window, not a handler per unit: a panel is full of
 // controls that stop propagation (`@pointerdown.stop` on the badge and the

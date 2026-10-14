@@ -19,7 +19,7 @@
 // the order of the gestures below matters.
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
-import { bootGmPanel, enterPrep } from '../helpers/gm.js'
+import { bootGmPanel, enterPrep, openStack } from '../helpers/gm.js'
 
 const TEST_CHARACTER = 'character-kael-drift-e555ccde'
 const DETACH = '[title="Detach into a floating window"]'
@@ -130,6 +130,41 @@ test('the stacking order of the floats survives a reload', async ({ page }) => {
   expect(after.map((f) => f.title), 'in the same stacking order, bottom-first')
     .toEqual(before.map((f) => f.title))
   expect(after[0].z, 'renormalised to a dense run, and still ordered').toBeLessThan(after[1].z)
+})
+
+// The one open that is not a panel's `openChild`: the 🛠 itself. It sits *outside*
+// the panel layer — it is what opens the chain — so neither the capture-phase
+// raise (no `[data-panel-unit]` ancestor) nor the child-open rule can see it. A
+// float left over from earlier stays where it is, and the chain that was just
+// reopened comes back at the rank it had, which is behind the float: the panel
+// you just opened, hidden by one you opened before it.
+//
+// The reopen here follows a reload on purpose. Closing the chain with a *click* on
+// its rail would not show the bug: the capture-phase pointerdown raises the chain
+// on the way out, so it happens to reopen in front — which is how this passed
+// before the fix was written. A reload is also the ordinary way to arrive here:
+// the floats are restored, the chain starts closed, and the first 🛠 draws it
+// under them.
+test('opening the chain with the 🛠 raises it above a window already open', async ({ page }) => {
+  await bootGmPanel(page, character)
+  await enterPrep(page)
+  await detachChild(page, 0)
+
+  const start = await stack(page)
+  const float = Object.keys(start.ranks).find((id) => id !== 'root')
+  expect(start.ranks[float], 'the new window starts on top').toBeGreaterThan(start.ranks.root)
+
+  // Reload: the window is restored, the chain starts closed — the state the 🛠 is for.
+  await page.reload()
+  await page.waitForTimeout(2600)
+  await expect(page.locator(ROOT), 'the chain starts closed').toHaveCount(0)
+  await expect(page.locator(FLOATS), 'and the window came back').toHaveCount(1)
+
+  await openStack(page)
+  const reopened = await stack(page)
+  const back = Object.keys(reopened.ranks).find((id) => id !== 'root')
+  expect(reopened.ranks.root, 'the chain you just opened is in front of the window')
+    .toBeGreaterThan(reopened.ranks[back])
 })
 
 // A click raises whatever unit the pointer was in — which covers the common case
