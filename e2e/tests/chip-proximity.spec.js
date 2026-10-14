@@ -221,7 +221,9 @@ test('arrange mode opens every chip, and a chip can then be dragged', async ({ p
   // of it is over the map at all, which is what keeps a placed chip behind it draggable.
   await expect(page.locator('.loc-traits')).toHaveCount(0)
   const handle = page.locator('.top-control')
-  await expect(handle).toContainText('unplaced')
+  // EXACT text, not `toContainText`: a substring match happily passes a prefix, which is
+  // how `unplaced · 1[object Object]` shipped — the count was a number plus an array.
+  await expect(handle).toHaveText('unplaced · 1')   // ts-stacked, the one unplaced trait
 
   // …and the drag below must work with the rail closed. This is the guard for a real
   // regression: a rail that took pointer events unconditionally swallowed the drag, and
@@ -408,14 +410,18 @@ test('the unplaced rail is opened by the handle, capped to the viewer, and scrol
     ...TRAITS,
     ...Array.from({ length: 40 }, (_, i) => trait(`ts-many-${i}`, { name: `filler trait ${i}` })),
   ]
-  await open(page, FAR, [], { traits: many })
+  // An unplaced OCCUPANT rides along on purpose: the count sums two lists, and with an
+  // empty second list a `number + array` concatenation still reads as a clean number
+  // (`41 + []` is `"41"`), which is exactly how the bug shipped past the first version of
+  // this assertion. One occupant makes the mistake visible.
+  await open(page, FAR, [UNPLACED_GMC], { traits: many })
   await page.locator('.arrange-btn').click()
 
   // Closed until asked for — that is what keeps the map underneath usable.
   const rail = page.locator('.loc-traits')
   await expect(rail).toHaveCount(0)
   const handle = page.locator('.top-control')
-  await expect(handle).toContainText(`unplaced · ${many.length - 2}`)  // 2 of them are placed
+  await expect(handle).toHaveText(`unplaced · ${many.length - 2 + 1}`)  // 2 traits placed
   await handle.click()
   await expect(rail).toHaveCount(1)
   await expect(handle).toHaveClass(/open/)   // and it reads as pressed

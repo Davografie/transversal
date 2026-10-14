@@ -383,7 +383,11 @@ const railEl = ref(null)
 // map blocks what is behind it — acceptable for a panel you asked for, not for one that
 // is always there. Closed, nothing of the rail is over the map at all.
 const railOpen = ref(false)
-const unplacedCount = computed(() => unplacedTraits.value.length + unplacedOccupants.value)
+// NOTE `.length` on BOTH: a number plus an array is string concatenation in JS, so the
+// missing one on the right rendered `unplaced · 25[object Object]` (found 2026-09-26).
+const unplacedCount = computed(
+  () => unplacedTraits.value.length + unplacedOccupants.value.length
+)
 
 // Leaving arrange mode forgets it: "closed until asked for" has to survive the mode
 // being toggled, or the next arrange session would start with the rail already open.
