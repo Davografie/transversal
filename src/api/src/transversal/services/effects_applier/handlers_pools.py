@@ -467,7 +467,11 @@ def _apply_resolve_pool(entity, effect, repo, result):
         event_bus.publish(StreamEvent(
             event="difficulty_set",
             session_id=s.id,
-            data={"difficulty": total, "location_id": location_id},
+            # The dice are sent with the target, as on the manual path — an
+            # effect-set difficulty is read by the same splash, and it is the
+            # only place these dice exist (the pool belongs to *owner_id*, not
+            # to the location, so the receiver could not go and fetch them).
+            data={"difficulty": total, "location_id": location_id, "dice": enriched},
         ))
 
     result.applied.append(AppliedEffect(effect, f"resolved {owner_id} pool → difficulty {total}"))

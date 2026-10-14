@@ -187,13 +187,20 @@ async def clear_pool(location_id: str, entity_id: str):
 @router.put("/{location_id}/difficulty")
 async def set_difficulty(location_id: str, req: DifficultyRequest):
     """Persist (in-memory) the current test difficulty for a location."""
-    get_scene_store().set_difficulty(location_id, req.difficulty)
+    store = get_scene_store()
+    store.set_difficulty(location_id, req.difficulty)
+
+    # The dice the target was rolled from travel with it. The player receiving a
+    # difficulty has to judge *what* is opposing them, and the number alone does
+    # not say — the roller's difficulty pool is keyed by the location id, and only
+    # its rolled dice are worth sending (an unrolled pool is not an opposition).
+    dice = [d for d in store.get_pool(location_id, location_id) if d.get("result") is not None]
 
     for s in session_manager.list_active():
         event_bus.publish(StreamEvent(
             event="difficulty_set",
             session_id=s.id,
-            data={"difficulty": req.difficulty, "location_id": location_id},
+            data={"difficulty": req.difficulty, "location_id": location_id, "dice": dice},
         ))
     return {"saved": True}
 

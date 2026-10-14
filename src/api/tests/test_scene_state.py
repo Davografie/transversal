@@ -202,6 +202,63 @@ class TestSceneStateEndpoints:
         r = client.get("/api/v1/locations/loc-1/difficulty")
         assert r.json()["difficulty"] is None
 
+    def test_the_difficulty_event_carries_the_dice_it_was_rolled_from(self, client, monkeypatch):
+        """A player receiving a target sees what opposed them, not a bare number.
+
+        The roller's difficulty pool is keyed by the location id, and only its
+        *rolled* dice are an opposition — hence the result filter below.
+        """
+        from types import SimpleNamespace
+
+        from transversal.api.rest import scene_state as ss_rest
+        from transversal.api.sse import bus as bus_mod
+        from transversal.services.scene_state import get_scene_store
+
+        published = []
+        monkeypatch.setattr(bus_mod.event_bus, "publish", lambda evt: published.append(evt))
+        monkeypatch.setattr(
+            ss_rest.session_manager, "list_active", lambda: [SimpleNamespace(id="session-x")],
+        )
+
+        # Rolled dice, as the GM's difficulty roll leaves them in the pool.
+        get_scene_store().save_pool("loc-1", "loc-1", [
+            {**_die(die="d8"), "result": 5},
+            {**_die(die="d6", kind="difficulty", sid="difficulty", label="2d6", ts_id=None), "result": 2},
+            {**_die(die="d10"), "result": None},   # still in the pool, never thrown
+        ])
+
+        client.put("/api/v1/locations/loc-1/difficulty", json={"difficulty": 11})
+
+        evt = next(e for e in published if e.event == "difficulty_set")
+        assert evt.session_id == "session-x"
+        assert evt.data["difficulty"] == 11
+        assert evt.data["location_id"] == "loc-1"
+        assert [d["die"] for d in evt.data["dice"]] == ["d8", "d6"]
+        assert [d["label"] for d in evt.data["dice"]] == ["Hacking", "2d6"]
+        assert all(d["result"] is not None for d in evt.data["dice"])
+
+    def test_the_difficulty_event_has_no_dice_when_nothing_was_rolled(self, client, monkeypatch):
+        """A target can be set with no dice behind it; the splash then shows the
+        number alone rather than crashing on an empty list."""
+        from types import SimpleNamespace
+
+        from transversal.api.rest import scene_state as ss_rest
+        from transversal.api.sse import bus as bus_mod
+        from transversal.services.scene_state import get_scene_store
+
+        published = []
+        monkeypatch.setattr(bus_mod.event_bus, "publish", lambda evt: published.append(evt))
+        monkeypatch.setattr(
+            ss_rest.session_manager, "list_active", lambda: [SimpleNamespace(id="session-x")],
+        )
+
+        get_scene_store().save_pool("loc-1", "loc-1", [_die(die="d8")])   # assembled, never rolled
+        client.put("/api/v1/locations/loc-1/difficulty", json={"difficulty": 8})
+
+        evt = next(e for e in published if e.event == "difficulty_set")
+        assert evt.data["difficulty"] == 8
+        assert evt.data["dice"] == []
+
     def test_next_beat_clears_difficulty(self, client):
         client.put("/api/v1/locations/loc-1/difficulty", json={"difficulty": 12})
         r = client.post("/api/v1/locations/loc-1/next-beat")
