@@ -41,14 +41,67 @@ The arrival point of every consciousness transversal that uses the jian as an an
 
 ## The four factions, and what each is becoming
 
-The human's characterisation, 2026-09-29. These are **arcs**, not labels: each sect is failing in a different way, and the failure modes are what the players will be moving through.
+The human's characterisation, 2026-09-29. These are **arcs**, not labels: each sect is failing in a different way, and the failure modes are what the players will be moving through. **Rosters re-measured 2026-09-29** after the human populated Silent Fang and the Wang family.
 
 | Faction | Id | Members | Ties | Becoming |
 |---|---|---|---|---|
 | **The Azure Dawn Sect** | `faction-40725783` | **38** | 24 | **Corrupted by pride and revelry** |
 | **Iron Roots** | `faction-41014575` | **29** | 29 | **Declining by stagnation and isolation** |
-| **Silent Fang** | `faction-159266724` | **0** | 11 | **Resorting to tyranny through lack of oversight** |
-| **Wang family** | `faction-133378037` | **1** | 26 | **Behind it** — capturing influence for its descendants |
+| **Silent Fang** | `faction-159266724` | **6** | 11 | **Resorting to tyranny through lack of oversight** |
+| **Wang family** | `faction-133378037` | **8** | 26 | **Behind it** — capturing influence for its descendants |
+
+**Silent Fang's roster:** `"Weasel" Feng` · `Silent Fang guard` · `Shang Mu` · `Lan Qing` · `Iron Claw` · `Staliairtm Tra`. Two of those are not names — **`Staliairtm Tra` reads like a migration mangle**, and `Silent Fang guard` is a role, not a person.
+
+**The Wang family's roster:** `Wang Yanjin` · `Wang Luo` · `Wang Shan` · `Wang Xiaoyu` · `Wang Yuanliang` · `Wang Min` · `Wang Ritualist Pod` · `Wang Ancestor`. **`Wang Ancestor` and `Wang Ritualist Pod`** are the two that tell you what the family really is.
+
+**`Banished Wang Branch` is still empty** — 0 traits, 0 members, 1 tie.
+
+## Zhu Yan is the Emperor
+
+**`gmc-207814498` is Zhu Yan**, and he was already identified in this campaign as the **holder of the Aegis of the Unspoken Pact** — the sixth artifact the Transportation Array's event names. He is the **`role: "Valley Lord"`**, resident at **The Nine Heavens Pagoda** in Tan Gang.
+
+So the man the human describes as an evil emperor who lures cultivators in and sacrifices them **already holds the soul-binding contract artifact, rules the city, and calls himself Lord of the Valley.** That is not a coincidence to be designed around — it is the plot, already in place: *the contract is the harvesting tool, and the man enforcing it is the ruler.*
+
+## The demonic cultivators — the cast survived, the conspyramid did not
+
+**The conspyramid did NOT survive the migration.** Zero `commands` edges have ever existed. What migrated is a **roster of individuals**, confirmed by the human from the archetype `Entities/335897730` in the old app:
+
+| Demonic cultivator | Id | Where |
+|---|---|---|
+| **Beggar Douchi** | `gmc-338666720` | Wangnuo Gate |
+| **Kestrel Xu** | `gmc-338673352` | Wangnuo Village |
+| **Zhang** | `gmc-335974687` | **Fading Vein** |
+| **Jin Mu** | `gmc-344199386` | Wilderness |
+| **Liao Yulian** | `gmc-344373745` | Wilderness |
+| **Seven Wounds Zhang** | `gmc-344250133` | Wilderness |
+| **Mist-Weaver Shen** | `gmc-344405382` | Misty Mountain |
+| **Si Youyou** | `gmc-123858524` | **Mud-Silk Weavers (Iron Roots)** |
+
+**There is no Valley demonic faction yet — the eight are unfactioned by design, not by omission.** The three existing dark factions (`demon clan`, `Demon Race`, `Devilish Path`) predate this work, each still has **0 members**, and the human confirmed on 2026-09-29 that **the Valley's demonic cultivator faction has not been created.** So the conspyramid's home is a thing to author, not a thing to find. And more importantly:
+
+> [!warning] Nothing in the live data marks a demonic cultivator as demonic
+> I checked three of them. **There is no `demon` trait, no faction membership, no tag** — the affiliation exists only in the *old application's archetype* (`Entities/335897730`), which did not migrate. What the three do share is a **technique signature**, and that is the real tell:
+>
+> - **`foundation` / "Essence Leeching"** — on Si Youyou, Seven Wounds Zhang *and* Zhang
+> - **`cursed` / "Qi Blood Addiction"** — on all three
+> - **`foundation` / "Spirit Stone Blood Enhancement"** (Zhang), **`art` / "spirit stitching"**, **`transformation art` / "shadow weave"**, **`cursed` / "Stone-Wood Manacles"** (Si Youyou)
+>
+> **So "who is a demonic cultivator" is currently answerable only by that pair of traits, or by asking the old app.** Note what that means for the faction when it exists: **a membership edge is the missing mark**, and until it is written the conspyramid cannot be queried and neither can its reach — which is the check the human will want next.
+
+### They are already planted, and that is the finding
+
+Placed on the map, the eight span the whole Valley:
+
+- **Wangnuo** — Beggar Douchi (*Gate*), Kestrel Xu (*Village*), **Zhang (*Fading Vein*, the mine with the Mountain Root Drake*)**
+- **Wilderness** — Jin Mu, Liao Yulian, Seven Wounds Zhang (where the **Transportation Array** is)
+- **Misty Mountain** — Mist-Weaver Shen
+- **Iron Roots** — Si Youyou (*Mud-Silk Weavers*)
+
+**And Seven Wounds Zhang is inside a sect:** he carries **`subordinate` / "TBD Iron Roots Disciple"** and **`vulnerability` / "Disciple Jiang"** — a planted agent with a named lever held over him, already written.
+
+**The party is standing in the middle of it.** Three PCs are at Azure Dawn, Andy is at Iron Roots with Si Youyou, and Filip is at Wangnuo Village with Kestrel Xu.
+
+## The four factions in detail
 
 ### Iron Roots — decline is already written
 
@@ -85,20 +138,6 @@ Its `duty` set reads **Preserve the Eternal Flame**, **Burn Away Corruption**, *
 
 **Wang family members are scattered across other rosters** — `Wang Pagoda`, `Wang Family Member`, `Wangnuo Village`, `Wang family` as a Valley-level node — so the family is already a cross-cutting presence. Whether that is deliberate infiltration or drift is a design call.
 
-## The demonic cultivators — the cast survived, the structure did not
-
-**Answering the human's question directly: the conspyramid did NOT survive the migration.**
-
-| | |
-|---|---|
-| `commands` edges (conspyramid authority) | **0 — none have ever existed** |
-| Demonic factions | **3**: `demon clan`, `Demon Race`, `Devilish Path` |
-| Members of all three | **0 each** |
-| Demonic GMCs | `demonic golden core cultivator`, `Demonic Cultivator`, `Old Devil Mou`, `Devil Lord`, `Demon King`, `Transformed Demon`, `Demon Ape`, … |
-| Demonic locations | `demon emperor yang temple`, `demon emperor yin lake`, `Demonic Sea` |
-
-**The characters and places migrated; the hierarchy between them did not.** So the wild cards exist as a **roster with no chain of command, no roster edges, and no agenda** — three faction *names* and a scattering of individually-authored demons.
-
 This is also why [[B147]] exists: `commands` is the relationship type that carried conspyramid authority, and it is **advertised in the MCP surface but has never had a row written**. The retirement decision (fold to `relation`, or hard-remove) is [[mcp-architect]]'s and [[Overseer]]'s, and it is now entangled with this: **if the demonic conspyramid is to be rebuilt, `commands` is the edge type that would carry it.**
 
 ## The Valley's assets — what is in place
@@ -117,12 +156,13 @@ This is also why [[B147]] exists: `commands` is the relationship type that carri
 
 ## The holes, in the order they matter
 
-1. **Silent Fang has no content.** 2 traits, 0 members. Its arc cannot be authored until the faction is, and the three `Silent Fang` names (faction / location / guard) need separating.
+1. **Silent Fang has no content worth the name.** 6 members now, but **2 traits total** and no arc-bearing stat block. Its arc cannot be authored until the faction is, and the three `Silent Fang` names (faction / location / guard) need separating.
 2. **Azure Dawn has no agenda and no portents**, while the smaller Iron Roots has both. The dominant sect states no intention, and **revelry is unwritten** — the authored sect is arrogant and paranoid only.
-3. **The demonic hierarchy does not exist.** The roster and places are there; the conspyramid, rosters and agenda are not — and rebuilding it touches [[B147]]'s `commands` decision.
+3. **The Valley's demonic faction does not exist, and neither does the conspyramid.** The eight individuals are placed and unfactioned; the home for them has to be authored. **A membership edge is the missing mark** — without one, no query can find the Valley's demonic cultivators. Rebuilding authority on top of it touches [[B147]]'s `commands` decision.
 4. **`Banished Wang Branch` is an empty faction** with one tie. Either it gets content or it should not be a faction.
-5. **The Wang family's influence is unmeasured.** 26 ties and 1 member is the right *shape*, but nobody has checked whether those ties actually reach the positions that matter — sect benches, gates, the Bazaar.
-6. **Tan Gang's emperor does not exist as an entity.** The city is authored — 13 children, three houses, a guard corps, the Pagoda — but **there is no emperor anywhere in the Three Realms**: the only `emperor` entities are two locations (`demon emperor yang temple`, `demon emperor yin lake`). The human has described an evil emperor who lures cultivators in and sacrifices them for his own advancement, and there is no one authored to be him.
+5. **The Wang family's influence is unmeasured.** 26 ties and 8 members is the right *shape*, but nobody has checked whether those ties actually reach the positions that matter — sect benches, gates, the Bazaar, the three houses of Tan Gang.
+6. **Zhu Yan needs a stat block worthy of a Valley Lord.** He is the Emperor and holds the Aegis, but his sheet is **five settings** — `role: Valley Lord`, the artifact, `appearance`, an empty `description`. The antagonist of the Valley is currently thinner than his own guards.
+7. **Tan Gang has no emperor-shaped *position* in its structure.** It has three houses and a Jade-Seal Guard, but nothing that says who rules it and how — which is why the ruler reads as one more GMC in a city rather than the head of a hierarchy.
 
 ## Related
 
