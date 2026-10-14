@@ -263,5 +263,56 @@ pure content and can be rolled for anything.
   `useBoundVariableScope.js` is the one definition of "what is a slot", the frontend twin of
   `is_reservation`; `useCanvas.linkRollTable` and both panels' whole-document maps carry the two
   fields, so a save that never touched a reservation cannot erase it.
+- **A path and a step declare variables too** ([[B290]], designed). The wrapper nests — a path
+  wraps steps, a step wraps a table, a table wraps rows — so the declaration layers resolve
+  outermost first, and a **shared** table can read the context its caller supplies:
+
+  ```
+  path  →  step  →  table  →  row
+  ```
+
+  `table_bindings` already walks its `layers` tuple in order, so this is the same rule over a
+  larger nesting, not a new one ([[B285]] left one definition of what a declaration is). What it
+  buys: `rt-verdant-advance` and `rt-ironroots-standing` are **mechanically identical row for row**
+  once the faction id is masked — the only differences are that id and the row labels — so one
+  shared `rt-advance` reading `{sect}` replaces both. That is the content half of the wrapper, and
+  what [[P5.5]]'s shared tables have been waiting on.
+
+  **Precedence is *not* "the more specific wins", and the reason is structural.** On a collision the
+  earlier layer wins and the later declaration is refused, because for **table → row** the general
+  value has *already been read*: a row's conditions are evaluated against the table's scope (built
+  with no entry — which row applies is the question being asked), so a row that rebound the name
+  would make the condition and the effect disagree about what `{name}` means inside one activation.
+  That is the guarantee the table layer exists for. For **step/path → table**, "which is more
+  specific" cuts the other way — the path's value is specific to the term, the table's to the table
+  — and the existing rule already gives the **caller** precedence over the shared content, which is
+  what sharing wants; flipping it would hand precedence to the callee. So:
+  1. **values — outer resolves first and wins**, one value per name per activation;
+  2. **slots — the inner layer fills the outer's reservation**: a reservation binds no value, so an
+     assignment is a *fill*, never a shadow. This is the one place where "the specific overrules the
+     general" is unambiguous, and it already works at table → row;
+  3. **plus an explicit override** for path and step over table: a declaration marked as an override
+     suppresses the outer declaration of that name **before any layer resolves**, so there is one
+     value for the whole activation and the editor can say *"overrides the table's `{sect}`"*
+     instead of *"will not bind"*. It cannot work for row-over-table, for the structural reason
+     above — the row does not exist yet when its conditions run.
+
+  **Two implementation facts.** `table_bindings` must be *handed the step* (a table may be two steps
+  in one path, so it cannot be inferred), and `roll_table_menu` has no step and may run outside any
+  term — so the path/step layers are **optional, absent rather than empty**, like the ambient facts.
+  And the round trip is where this surface keeps losing data: both whole-`steps` writers must carry
+  each step's declarations, `LIFE_PATH_FIELDS` must select them at both levels, and `stepScopeFor()`
+  must fold them into the scope it offers or the names are never authorable ([[B281]]'s bug). Row
+  labels stay per-table (the human's call): two paths wanting the same mechanics under different
+  fiction get different tables.
+- **The offering gate is not the same thing as the enrolling faction** (measured 2026-10-13, on
+  [[B41]]). `LifePath.factionIds` is derived read-only from each faction's `suitable_life_path_ids`,
+  which is **write-only on the wire**; `LifePathWizard` locks a path that no faction offers — **7 of
+  10 live paths** — and that is currently the *only* gate on the player surface, because nothing in
+  the frontend reads `walkable` while [[B196]] is pending. But `startTerm` *requires* a `factionId`,
+  and on an enrolling row `_ensure_enrollment` uses it to create the `entity → faction`
+  `membership` edge that rank and tenure hang off (3 live settings, 15 effects). So the gate is
+  removable and the faction is not: it wants a picker over the character's memberships, or a
+  `startTerm` that takes the membership edge.
 - Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
   ([[B194]]–[[B197]]) are unchanged by this and remain separate gates.
