@@ -581,17 +581,36 @@ const objectAfter = (src, key) => {
   const fields = constBody(readFileSync(join(SRC, 'composables', 'useRollTables.js'), 'utf8'), 'ROLL_TABLE_FIELDS') || ''
   ok('the shared table read fetches subjectKind', /\bsubjectKind\b/.test(fields), true)
   ok('…and the table\'s bound variables',
-    /boundVariables\s*\{\s*name\s+spec\s*\}/.test(fields), true)
+    /boundVariables\s*\{\s*name\s+element\s+cardinality\s+spec\s*\}/.test(fields), true)
   ok('…and the TIER check it must send back', /\bcheck\s*\{/.test(fields), true)
 
+  // The declared type is what makes a name a **reservation** ([[B285]]): a name with
+  // an element and no value. Fetching or sending it without those two fields turns a
+  // reservation into a pathless declaration, which the API drops — so the name the
+  // table reserved vanishes, which is [[B279]]'s erasure wearing a new hat.
+  const TYPED = (s) => /element\s*:/.test(s) && /cardinality\s*:/.test(s)
   for (const file of ['components/gm/GmRollTableEditPanel.vue', 'components/gm/GmRollTableEntryEditPanel.vue']) {
     const body = objectAfter(readFileSync(join(SRC, file), 'utf8'), 'input')
     ok(`${file} saves subjectKind`, /(?<![\w.])subjectKind\s*:/.test(body), true)
     ok(`${file} saves boundVariables`, /(?<![\w.])boundVariables\s*:/.test(body), true)
+    ok(`${file} carries a reservation's declared type back`, TYPED(body), true)
     // A hardcoded `check: null` is how the panel used to erase a TIER table's
     // check metadata on every save -- and two live tables carry one.
     ok(`${file} does not hardcode check`,
       /\bcheck\s*:\s*null\s*(?![\w.])/.test(body), false)
+  }
+  // …and the read half, which is the one that keeps being forgotten: this load map
+  // builds a fresh object per declaration, so a field missing here is gone before any
+  // save runs. (The entry panel has no table-level load map to check — it carries
+  // `table.boundVariables` straight through, which the check above covers.)
+  {
+    const src = readFileSync(join(SRC, 'components/gm/GmRollTableEditPanel.vue'), 'utf8')
+    const at = src.indexOf('form.boundVariables = ')
+    let load = at < 0 ? '' : src.slice(at)
+    const nextField = load.slice(1).search(/\n\s*form\./)
+    if (nextField >= 0) load = load.slice(0, nextField + 1)
+    ok('the table panel\'s declaration load map was found', load.length > 0, true)
+    ok('…and it reads a reservation\'s declared type', TYPED(load), true)
   }
 
   // 4 — the canvas's own read-modify-write ([[B273]]'s path, one field over).
@@ -603,10 +622,11 @@ const objectAfter = (src, key) => {
   const read = brace(link, link.indexOf('{', link.indexOf('rollTable(id:$id)')))
   ok('linkRollTable fetches subjectKind', /\bsubjectKind\b/.test(read), true)
   ok('linkRollTable fetches boundVariables',
-    /boundVariables\s*\{\s*name\s+spec\s*\}/.test(read), true)
+    /boundVariables\s*\{\s*name\s+element\s+cardinality\s+spec\s*\}/.test(read), true)
   const write = objectAfter(link, 'input')
   ok('linkRollTable saves subjectKind', /(?<![\w.])subjectKind\s*:/.test(write), true)
   ok('linkRollTable saves boundVariables', /(?<![\w.])boundVariables\s*:/.test(write), true)
+  ok('linkRollTable carries a reservation\'s declared type back', TYPED(write), true)
 }
 
 // ── …and a **row's** own declarations survive the same round trip ─────

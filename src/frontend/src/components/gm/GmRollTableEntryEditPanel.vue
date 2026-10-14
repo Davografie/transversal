@@ -346,6 +346,11 @@ async function save() {
       boundVariables: (table.value.boundVariables || []).map(bv => ({
         name: bv.name || '',
         spec: bv.spec || null,
+        // A **reservation** ([[B285]]) — a name with a type and no value — has to be
+        // sent back by this writer too, or its whole-document save erases one it
+        // never authored ([[B279]]).
+        element: bv.element || '',
+        cardinality: bv.cardinality || '',
       })),
       scheme: table.value.scheme,
       die: table.value.die,

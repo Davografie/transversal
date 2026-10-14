@@ -33,10 +33,28 @@ class BoundVariable(BaseModel):
 
     ``name`` is the author's; ``spec`` resolves against the resolved activation
     source, so ``select source`` is the usual seed.
+
+    ``element``/``cardinality`` are the author's **declared type**, and they exist
+    for one job: a roll table may **reserve** a name — a type and no path — so every
+    row assigning that name is checked against it rather than trusted. Without a
+    declared type a name's type is whatever path was written for it, so the same
+    name can be ``location/one`` on one row and ``location/many`` on another and
+    nothing objects ([[B285]]). Empty on both means "trace the path", which is what
+    every SFX declaration does — a rule has no layer that could check it.
     """
 
     name: str
-    spec: TargetSpec
+    spec: Optional[TargetSpec] = None
+    #: The type the author states for this name: an element from the target catalog
+    #: (``location``, ``entity``, …) and the cardinality it resolves to. Set on a
+    #: **reservation** (a table's typed slot) and, optionally, beside a path to
+    #: have the trace checked against what was intended.
+    #:
+    #: Read through ``services.roll_table.is_reservation`` / ``declared_type_of``,
+    #: which is the one definition of what the two fields mean — a second reader
+    #: here would be a second opinion.
+    element: str = ""
+    cardinality: str = ""
 
 
 class ReachFlavour(str, Enum):

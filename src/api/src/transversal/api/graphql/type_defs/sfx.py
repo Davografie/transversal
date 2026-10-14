@@ -36,14 +36,23 @@ class BoundVariable:
     ``spec`` is a targeting path as JSON, the same wire shape ``listenerSpec``
     uses. The name is the author's; the path usually starts at
     ``select source``.
+
+    ``element``/``cardinality`` are the declared type. A roll table **reserves** a
+    name by declaring them and leaving ``spec`` empty, so every row assigning it is
+    checked rather than trusted ([[B285]]). Empty on both = trace the path, which
+    is what an SFX does.
     """
     name: str
     spec: Optional[strawberry.scalars.JSON] = None
+    element: str = ""
+    cardinality: str = ""
 
 @strawberry.input
 class BoundVariableInput:
     name: str
     spec: Optional[strawberry.scalars.JSON] = None
+    element: str = ""
+    cardinality: str = ""
 
 @strawberry.type
 class UnavailableSfx:

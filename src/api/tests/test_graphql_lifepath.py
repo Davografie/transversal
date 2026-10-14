@@ -286,6 +286,70 @@ def test_a_roll_table_die_takes_the_table_notation():
         assert str(repo.tables[saved["id"]].die) == kept, sent
 
 
+def test_a_reserved_variable_is_refused_when_a_row_breaks_it():
+    """The write boundary, end to end ([[B285]]).
+
+    A table reserves `picked_location` as `location/one`; a row assigning it from a
+    collection resolves `location/many`. That mutation is refused rather than stored,
+    because every caller shares this boundary and a reservation nobody enforces is
+    decoration. The read half is asserted too: the declared type round-trips, which is
+    what stops the editor's next save erasing it.
+    """
+    from transversal.services.effects_engine import EffectsEngine
+
+    repo = _build()
+
+    created = _run(repo, """
+        mutation($input: RollTableInput!) {
+            saveRollTable(input: $input) {
+                id
+                boundVariables { name element cardinality spec }
+            }
+        }
+    """, {"input": {
+        "name": "Regions", "universe": "earth", "scheme": "RANGE", "die": "d100",
+        "boundVariables": [{"name": "picked_location", "element": "location",
+                            "cardinality": "one"}],
+        "entries": [{"label": "India", "minValue": 1, "maxValue": 100, "boundVariables": [{
+            "name": "picked_location",
+            "spec": {"steps": [{"kind": "literal", "element": "location",
+                                "value": "loc-india"}]},
+        }]}],
+    }})
+
+    table = created["saveRollTable"]
+    assert table["boundVariables"] == [
+        {"name": "picked_location", "element": "location", "cardinality": "one", "spec": None}
+    ], "a reservation is a type with no value, and its type survives the round trip"
+
+    before = dict(repo.tables)
+    result = graphql_sync(
+        schema._schema,
+        "mutation($input: RollTableInput!) { saveRollTable(input: $input) { id } }",
+        context_value={
+            "entity_manager": FakeEM(repo),
+            "razmerit_service": None,
+            "effects_engine": EffectsEngine(),
+        },
+        variable_values={"input": {
+            "id": table["id"], "name": "Regions", "universe": "earth",
+            "scheme": "RANGE", "die": "d100",
+            "boundVariables": [{"name": "picked_location", "element": "location",
+                                "cardinality": "one"}],
+            "entries": [{"label": "India", "minValue": 1, "maxValue": 100,
+                         "boundVariables": [{
+                             "name": "picked_location",
+                             "spec": {"steps": [{"kind": "select", "collection": "locations"}]},
+                         }]}],
+        }},
+    )
+
+    assert result.errors, "a row that breaks the reservation must not save"
+    message = str(result.errors[0])
+    assert "location/many" in message and "India" in message, message
+    assert repo.tables == before, "nothing was written"
+
+
 def test_a_roll_table_die_rejects_a_value_that_is_not_a_notation():
     """The authoring surface may be a text field, so the edge is validated."""
     from transversal.services.effects_engine import EffectsEngine

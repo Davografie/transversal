@@ -519,6 +519,12 @@ onMounted(async () => {
     form.boundVariables = (t.boundVariables || []).map(bv => ({
       name: bv.name || '',
       spec: bv.spec || { steps: [] },
+      // A **reservation** ([[B285]]) is a name with a type and no value, so both
+      // fields must survive this map: the entry that is dropped here is the one the
+      // write below cannot send, which is how `check` and `subjectKind` were erased
+      // ([[B279]]). The editor authors them later; the round trip carries them now.
+      element: bv.element || '',
+      cardinality: bv.cardinality || '',
     }))
     form.entries = (t.entries || []).map(e => ({
       // `key` is the row's stable identity and a life-path binding names it, so
@@ -687,6 +693,10 @@ async function save() {
       boundVariables: (form.boundVariables || []).map(bv => ({
         name: bv.name || '',
         spec: bv.spec || null,
+        // Sent back so a reservation survives a save that does not touch it — the
+        // read half alone would still erase it here ([[B285]]).
+        element: bv.element || '',
+        cardinality: bv.cardinality || '',
       })),
       scheme: form.scheme,
       rollSource: form.rollSource,

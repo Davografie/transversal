@@ -265,9 +265,93 @@ def test_an_entry_effect_can_name_the_entry_effect_die_in_a_flat_field():
     assert result.new_trait_settings[0].dice[0].value == "d8", "exceptional carries d8"
 
 
+# ── A reserved name, and the row that assigns it ([[B285]]) ──────────
+# A table may **reserve** a name: a type with no value. The reservation binds
+# nothing; it fixes the type of the name, so every row assigning it is checked
+# instead of trusted. Without it a name's type is only as consistent as every
+# hand-written path that happens to use it — one row starting from a collection
+# where the rest pinned a value makes the same name `many` for that row alone, and
+# nothing objects.
+
+def _locations_repo(*ids):
+    class Repo:
+        def get_entity(self, eid):
+            return NS(id=eid)
+        def list_entities_by_type(self, entity_type):
+            return [NS(id=i) for i in ids]
+    return Repo()
+
+
+def _literal_spec(value="loc-1"):
+    return TargetSpec.model_validate(
+        {"steps": [{"kind": "literal", "element": "location", "value": value}]})
+
+
+def test_a_reserved_name_is_assigned_by_a_row():
+    reserved = BoundVariable(name="picked", element="location", cardinality="one")
+    row_var = BoundVariable(name="picked", spec=_literal_spec())
+    row = RollTableEntry(label="e", bound_variables=[row_var])
+    table = _table(declared=[reserved])
+    table.entries = [row]
+
+    bindings = table_bindings(table, _entity(), _locations_repo(), entry=row)
+    assert bindings["picked"].value == "loc-1"
+    assert (bindings["picked"].element, bindings["picked"].cardinality) == ("location", "one")
+
+
+def test_a_reserved_name_cannot_be_made_many_by_one_row():
+    """The author's case, and both halves are asserted so the test cannot pass
+    vacuously: the same row binds as `location/many` when nobody has reserved the
+    name, and is refused once the table says it is `location/one`."""
+    # `select locations` is a many-cardinality collection and nothing collapses it,
+    # which is exactly how a row ends up a different type from its siblings.
+    row_var = BoundVariable(name="picked", spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "select", "collection": "locations"}]}))
+    row = RollTableEntry(label="e", bound_variables=[row_var])
+    entity, repo = _entity(), _locations_repo("loc-1", "loc-2")
+
+    unreserved = _table()
+    unreserved.entries = [row]
+    drifted = table_bindings(unreserved, entity, repo, entry=row)
+    assert (drifted["picked"].element, drifted["picked"].cardinality) == ("location", "many"), \
+        "without a reservation the row is trusted — this is the drift"
+
+    reserved = BoundVariable(name="picked", element="location", cardinality="one")
+    table = _table(declared=[reserved])
+    table.entries = [row]
+    assert "picked" not in table_bindings(table, entity, repo, entry=row), \
+        "the reservation is the promise, so a path that breaks it is refused"
+
+
+def test_a_reservation_binds_no_value_of_its_own():
+    """A reservation is a slot, not a default: the table declares one and the name
+    is still absent without a row, so a row's conditions cannot read a value nobody
+    assigned."""
+    reserved = BoundVariable(name="picked", element="location", cardinality="one")
+    table = _table(declared=[reserved])
+
+    assert "picked" not in table_bindings(table, _entity(), _locations_repo("loc-1"))
+
+
+def test_an_unreserved_row_name_still_binds_at_run_time():
+    """The deliberate asymmetry: the **write** boundary refuses a row name the table
+    never reserved, and the read tolerates what is already stored.
+
+    Refusing here instead would blank the names of live content the moment this
+    landed, before any editor could author the reservation — the same "read old
+    data, enforce on write" split the unwrapped-path and legacy-term shims use.
+    """
+    row_var = BoundVariable(name="picked", spec=_literal_spec())
+    row = RollTableEntry(label="e", bound_variables=[row_var])
+    table = _table()          # reserves nothing
+    table.entries = [row]
+
+    bindings = table_bindings(table, _entity(), _locations_repo(), entry=row)
+    assert bindings["picked"].value == "loc-1"
+
+
 def test_a_table_source_walks_to_the_path_the_term_is_in():
     """A table is the source of its row's effects, but it no longer owns a path.
-
     Several paths may wrap the same table, or none ([[B266]]), so `navigate
     life_path` cannot read an ownership field — the answer is the path the term is
     actually in, from the acting entity's checkpoint, which is also what makes the

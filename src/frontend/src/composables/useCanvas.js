@@ -1337,7 +1337,7 @@ export function useCanvas() {
           // `boundVariables`, none of which this path edits but a whole-table save
           // would otherwise blank ([[B279]], [[B281]]). The entries travel through
           // untouched below, so widening the *read* is what protects them.
-          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath subjectKind scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } boundVariables { name spec } entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } costEffects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } boundVariables { name spec } } } } }`,
+          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath subjectKind scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } boundVariables { name element cardinality spec } entries { key label description minValue maxValue weight tier conditions { type subject target targets value operator narrative spec } costEffects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } effects { timing type action target entity result dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec resultSpec ownerSpec refs output conditions { type subject target targets value operator narrative spec } } boundVariables { name spec } } } } }`,
           variables: { id: sourceTableId },
         }),
       })
@@ -1371,6 +1371,11 @@ export function useCanvas() {
               boundVariables: (table.boundVariables || []).map(bv => ({
                 name: bv.name || '',
                 spec: bv.spec || null,
+                // A **reservation** ([[B285]]) is a name with a type and no value, so
+                // this writer must send both fields back: it replaces the whole
+                // document, and no editor authors them yet.
+                element: bv.element || '',
+                cardinality: bv.cardinality || '',
               })),
               scheme: table.scheme,
               rollSource: table.rollSource,

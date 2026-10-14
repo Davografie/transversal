@@ -100,11 +100,23 @@ class MutationsLifepath:
 
     @strawberry.mutation
     def save_roll_table(self, info: strawberry.Info, input: RollTableInput) -> RollTable:
-        """Create or update a roll table. Empty ``id`` generates a new key."""
+        """Create or update a roll table. Empty ``id`` generates a new key.
+
+        Refuses a table that contradicts itself — a row assigning a name the table
+        never **reserved**, or an assignment resolving a different type than the
+        reservation states ([[B285]]). The check is here rather than in the editor
+        because this is the write boundary every caller shares, and a reservation
+        nobody enforces is decoration.
+        """
         import uuid
+
+        from transversal.services.roll_table import roll_table_problems
 
         repo = _em(info).repo
         table = _roll_table_input_to_domain(input)
+        problems = roll_table_problems(table)
+        if problems:
+            raise ValueError("Roll table is inconsistent: " + "; ".join(problems))
         if not table.id:
             table.id = f"rt-{uuid.uuid4().hex[:8]}"
 

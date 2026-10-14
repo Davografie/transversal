@@ -273,6 +273,8 @@ def _entry_to_gql(e: DomainRollTableEntry, index: int = 0) -> RollTableEntry:
             BoundVariable(
                 name=bv.name,
                 spec=(bv.spec.model_dump(mode="json", exclude_none=True) if bv.spec else None),
+                element=getattr(bv, "element", "") or "",
+                cardinality=getattr(bv, "cardinality", "") or "",
             )
             for bv in (getattr(e, "bound_variables", None) or [])
         ],
@@ -298,6 +300,8 @@ def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
             BoundVariable(
                 name=bv.name,
                 spec=(bv.spec.model_dump(mode="json", exclude_none=True) if bv.spec else None),
+                element=getattr(bv, "element", "") or "",
+                cardinality=getattr(bv, "cardinality", "") or "",
             )
             for bv in (t.bound_variables or [])
         ],
@@ -409,12 +413,17 @@ def _reach_to_json(reach) -> list:
     ]
 
 
-def _bound_variables_from_input(raw) -> list:
-    """Validate an SFX's declared bound variables into domain models.
+def _bound_variables_from_input(raw, *, allow_reservation: bool = False) -> list:
+    """Validate declared bound variables into domain models.
 
-    A nameless or pathless entry is dropped rather than persisted: the editor can
-    hold a half-typed row, and a stored variable that resolves to nothing would
-    look like a live name that never binds.
+    A nameless entry is dropped rather than persisted: the editor can hold a
+    half-typed row, and a stored variable that resolves to nothing would look like
+    a live name that never binds.
+
+    ``allow_reservation`` additionally keeps a **typed slot with no path** — a
+    roll table's reservation ([[B285]]). Only the table level passes it: a row
+    *assigns* a reserved name, so a pathless row declaration is still half-typed
+    input, and an SFX has no layer that could check one.
     """
     from transversal.domain import BoundVariable as DomainBoundVariable
 
@@ -422,9 +431,21 @@ def _bound_variables_from_input(raw) -> list:
     for item in raw or []:
         name = (getattr(item, "name", "") or "").strip()
         spec = _target_spec_from_input(getattr(item, "spec", None))
-        if not name or spec is None:
+        element = (getattr(item, "element", "") or "").strip()
+        if not name:
             continue
-        out.append(DomainBoundVariable(name=name, spec=spec))
+        if spec is None and not (allow_reservation and element):
+            continue
+        out.append(DomainBoundVariable(
+            name=name,
+            spec=spec,
+            element=element,
+            # "one" is the catalog's default cardinality, and the same one a bare
+            # element means everywhere else (see `_coerce_variables`) — so a
+            # reservation that names an element and stops is a single value, not a
+            # third state.
+            cardinality=(getattr(item, "cardinality", "") or "").strip() or ("one" if element else ""),
+        ))
     return out
 
 def _consequence_option_to_gql(o: DomainConsequenceOption) -> ConsequenceOption:
@@ -595,6 +616,13 @@ def _check_input_to_domain(c: RollTableCheckInput) -> DomainRollTableCheck:
     return DomainRollTableCheck(trait_ids=c.trait_ids, difficulty=c.difficulty, free_choice=c.free_choice)
 
 def _entry_input_to_domain(e: RollTableEntryInput) -> DomainRollTableEntry:
+    assignments = _bound_variables_from_input(e.bound_variables)
+    # A row **assigns** a name the table reserved; it does not state a type. The type
+    # belongs to the reservation, stated once and checked once for every row, rather
+    # than restated on each — two places to state it is two places to disagree, and
+    # the mutation does not validate a row's own statement ([[B285]]).
+    for bv in assignments:
+        bv.element = bv.cardinality = ""
     return DomainRollTableEntry(
         key=e.key, label=e.label, description=e.description,
         min_value=e.min_value, max_value=e.max_value, weight=e.weight, tier=e.tier,
@@ -604,7 +632,7 @@ def _entry_input_to_domain(e: RollTableEntryInput) -> DomainRollTableEntry:
         # The row's declared names, dropped when half-typed by the same rule the
         # SFX's use ([[B281]]): a nameless or pathless entry would read as a live
         # name that never binds.
-        bound_variables=_bound_variables_from_input(e.bound_variables),
+        bound_variables=assignments,
     )
 
 def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
@@ -617,7 +645,7 @@ def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
         die=t.die,
         check=(_check_input_to_domain(t.check) if t.check is not None else None),
         entries=[_entry_input_to_domain(e) for e in t.entries],
-        bound_variables=_bound_variables_from_input(t.bound_variables),
+        bound_variables=_bound_variables_from_input(t.bound_variables, allow_reservation=True),
     )
 
     # Every row leaves here with a stable key. A life path binding names a row by
@@ -660,6 +688,8 @@ def _sfx_ref(sfx, resolve=None) -> SfxRef:
             BoundVariable(
                 name=bv.name,
                 spec=bv.spec.model_dump() if getattr(bv, "spec", None) else None,
+                element=getattr(bv, "element", "") or "",
+                cardinality=getattr(bv, "cardinality", "") or "",
             )
             for bv in (getattr(sfx, "bound_variables", None) or [])
         ],

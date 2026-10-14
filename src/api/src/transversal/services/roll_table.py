@@ -184,6 +184,73 @@ AMBIENT_TABLE_BINDINGS = ("term_faction", "term_path", "path_faction", "path_id"
                           "table_id", "roll", "entry_tier")
 
 
+def declared_type_of(declared) -> Optional["ValueType"]:
+    """The type a declaration **states** about itself, or None when it states none.
+
+    The one definition of what ``element``/``cardinality`` mean, so the engine and
+    the save-time validator cannot disagree about whether a name is typed.
+    """
+    from transversal.services.target_spec import ValueType
+
+    element = (getattr(declared, "element", "") or "").strip()
+    if not element:
+        return None
+    cardinality = (getattr(declared, "cardinality", "") or "").strip() or "one"
+    return ValueType(element, cardinality)
+
+
+def is_reservation(declared) -> bool:
+    """A typed slot with **no value** — a table's promise to its own rows.
+
+    Distinct from a typed *declaration*, which has both a type and a path: that
+    resolves a value, and its path is checked against the type it stated.
+    """
+    spec = getattr(declared, "spec", None)
+    return declared_type_of(declared) is not None and not (
+        spec is not None and getattr(spec, "steps", None)
+    )
+
+
+def _table_scope_types(table) -> dict:
+    """The types a table's **own** declarations put in scope, in declaration order.
+
+    Built by tracing rather than resolving, because the question is only what type
+    each name reaches — which is what lets a later declaration start from an
+    earlier one (``select variable``) without a repo or an entity in hand. A
+    **reservation** contributes nothing: it has no value, so a path cannot start
+    from it, and pretending otherwise would validate a path that can never resolve.
+    """
+    from transversal.services.target_spec import trace
+
+    scope: dict = {}
+    for declared in (getattr(table, "bound_variables", None) or []):
+        name = (getattr(declared, "name", "") or "").strip()
+        spec = getattr(declared, "spec", None)
+        if not name or spec is None or not getattr(spec, "steps", None):
+            continue
+        reached = traced_type(spec, scope)
+        if reached is not None:
+            scope[name] = reached
+    return scope
+
+
+def traced_type(spec, scope: Optional[dict] = None) -> Optional["ValueType"]:
+    """The type a path reaches, or None when the walk cannot say.
+
+    None is deliberately **not** a failure: a path that starts from a name this
+    table does not state cannot be typed here, and "I cannot tell" must never be
+    reported as "you are wrong" — the same rule that keeps a name resolving to
+    nothing unbound rather than bound empty. Callers that must be sure of a type
+    ask a question this cannot answer by refusing, not by guessing.
+    """
+    from transversal.services.target_spec import trace
+
+    types, errors = trace(spec, None, dict(scope or {}))
+    if errors or not types:
+        return None
+    return types[-1]
+
+
 def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
                    index=None) -> dict:
     """The scope a roll-table entry's conditions and effects resolve against.
@@ -278,15 +345,34 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
     # Two declaration layers, resolved in order so a later one may start from an
     # earlier one: the **table's** (resolved before any row is chosen, which is what
     # lets a row's conditions test them) and then the **chosen row's own** ([[B281]]).
+    #
+    # A table-level declaration may also be a **reservation**: a type with no value,
+    # which binds nothing but fixes the type of the name it reserves. Every row that
+    # assigns that name is then checked against the reservation instead of being
+    # trusted, because a name's type was otherwise only as consistent as every
+    # hand-written path that happened to use it — one row starting from a collection
+    # where the rest pinned a value made the same name `many` for that row alone,
+    # and nothing objected ([[B285]]).
     layers = (("table", getattr(table, "bound_variables", None) or []),
               ("entry", getattr(entry, "bound_variables", None) or []))
     if repo is not None and any(declared for _, declared in layers):
+        reservations: dict = {}
         ctx = TargetContext(subject=entity, repo=repo, bindings=dict(bindings))
         for owner, declared in layers:
             for declared_var in declared:
                 name = (getattr(declared_var, "name", "") or "").strip()
                 spec = getattr(declared_var, "spec", None)
-                if not name or spec is None or not getattr(spec, "steps", None):
+                if not name:
+                    continue
+                stated = declared_type_of(declared_var)
+                if is_reservation(declared_var):
+                    # Only a table reserves, and first one wins. The reservation
+                    # deliberately does **not** join the value scope: it is a slot
+                    # for a row to fill, and a name with no value stays unbound.
+                    if owner == "table" and name not in reservations:
+                        reservations[name] = stated
+                    continue
+                if spec is None or not getattr(spec, "steps", None):
                     continue
                 # An existing name wins: the declaration is refused rather than
                 # rebinding something a condition or an earlier layer already read.
@@ -301,7 +387,17 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
                     log.info("[table_bindings] table=%s %s variable '%s' resolved nothing",
                              table.id, owner, name)
                     continue
-                bind_named(name, resolution.values, ValueType(last.element, last.cardinality), ctx)
+                reached = ValueType(last.element, last.cardinality)
+                # The reservation is the promise, so it is what a mismatch is
+                # measured against — and the value is bound with the **reserved**
+                # type, so a reader cannot see the traced one by accident.
+                wanted = reservations.get(name) or stated
+                if wanted is not None and not wanted.matches(reached):
+                    log.info("[table_bindings] table=%s %s variable '%s' is declared "
+                             "%s/%s but resolves %s/%s — refused", table.id, owner, name,
+                             wanted.element, wanted.cardinality, reached.element, reached.cardinality)
+                    continue
+                bind_named(name, resolution.values, wanted or reached, ctx)
         bindings = dict(ctx.bindings)
     return bindings
 
@@ -377,3 +473,118 @@ def resolve_applicable_entry(table, entity, repo, *, roll=None, tier=None, index
                      candidate.label)
             return candidate
     return None
+
+
+def roll_table_problems(table) -> list[str]:
+    """What a roll table states about itself that cannot all be true ([[B285]]).
+
+    Pure and catalog-driven, so it runs where the table is **authored** rather than
+    where it is rolled: a reservation is a promise to every reader of that name, and
+    a row whose path resolves something else has to be refused at the write boundary
+    or the promise is decoration.
+
+    What it checks:
+
+    * a statement must be meaningful — a name, a known element, a cardinality of
+      ``one`` or ``many``, and no name reserved twice;
+    * a declaration that states a type **and** has a path must reach that type;
+    * within a table that reserves **anything**, every **row** assignment must name a
+      reserved name, and must reach the reserved type. That second half is the point:
+      a table that reserves is a table that has stated what its names mean, so a row
+      cannot introduce one behind its back.
+
+    The leak check is scoped to a *governed* table — one that reserves at least one
+    name — rather than to every table, and that is narrower than the ticket first
+    proposed. Closing it globally would refuse the next save of every table whose
+    rows declare anything, on live content, before the editors can author a
+    reservation at all: the panel writes the whole table, so the refusal would take
+    the author's unrelated in-flight edits with it ([[B285]]). A table that reserves
+    nothing is the free-form table that exists today, and it cannot break a promise
+    it never made.
+
+    What it deliberately does **not** check: whether a path resolves to anything.
+    That needs values, a repo and a subject, and it is the run time's job — a name
+    resolving to nothing stays unbound. Nor does it report a path it cannot type
+    (one starting from a name the table does not state); the trace is evidence, and
+    missing evidence must not read as a verdict.
+
+    Returns human-readable problems; an empty list means the table is consistent.
+    """
+    from transversal.services import target_catalog as tc
+
+    problems: list[str] = []
+    reserved: dict = {}
+    for i, declared in enumerate(getattr(table, "bound_variables", None) or []):
+        name = (getattr(declared, "name", "") or "").strip()
+        if not name:
+            problems.append(f"table variable {i + 1} has no name — nothing can refer to it")
+            continue
+        stated = declared_type_of(declared)
+        if stated is not None:
+            problems.extend(_type_problems(f"table variable '{name}'", stated, tc))
+        if is_reservation(declared):
+            if name in reserved:
+                problems.append(f"table variable '{name}' is reserved twice")
+            else:
+                reserved[name] = stated
+            continue  # a reservation: a type, no path, nothing to trace
+        if name in reserved:
+            # A slot and a default for it at once: the table's own value binds first,
+            # so the shadow rule refuses every row's assignment and the reservation is
+            # a slot nothing can fill. Say it rather than shipping a dead name.
+            problems.append(
+                f"table variable '{name}' is both reserved and given a value — a row "
+                f"assigning it would be refused")
+        spec = getattr(declared, "spec", None)
+        if spec is None or not getattr(spec, "steps", None):
+            continue
+        # Traced against the scope of the declarations **before** it: computed inside
+        # the loop rather than hoisted, because a declaration may only start from an
+        # earlier one — a scope built from the whole list would let it start from a
+        # later one, which the resolver would then fail to resolve.
+        reached = traced_type(spec, _table_scope_types(table))
+        if reached is not None and stated is not None and not stated.matches(reached):
+            problems.append(
+                f"table variable '{name}' is declared {stated.element}/{stated.cardinality} "
+                f"but its path resolves {reached.element}/{reached.cardinality}")
+
+    # A row **assigns** a reserved name; it cannot introduce one. Checked only where
+    # the table reserves something — see the docstring on why this is scoped.
+    governed = bool(reserved)
+    scope = _table_scope_types(table)
+    for row in (getattr(table, "entries", None) or []):
+        where = getattr(row, "label", "") or getattr(row, "key", "") or "?"
+        for i, declared in enumerate(getattr(row, "bound_variables", None) or []):
+            name = (getattr(declared, "name", "") or "").strip()
+            if not name:
+                problems.append(f"row '{where}' variable {i + 1} has no name")
+                continue
+            spec = getattr(declared, "spec", None)
+            if spec is None or not getattr(spec, "steps", None):
+                problems.append(
+                    f"row '{where}' variable '{name}' has no path — it assigns nothing")
+                continue
+            if name not in reserved:
+                if governed:
+                    problems.append(
+                        f"row '{where}' assigns '{name}', which the table does not reserve")
+                continue
+            reached = traced_type(spec, scope)
+            if reached is not None and not reserved[name].matches(reached):
+                problems.append(
+                    f"row '{where}' assigns '{name}' as {reached.element}/{reached.cardinality}, "
+                    f"but the table reserves it as "
+                    f"{reserved[name].element}/{reserved[name].cardinality}")
+    return problems
+
+
+def _type_problems(where: str, stated, tc) -> list[str]:
+    """A stated type has to be a type the catalog knows, in the vocabulary it uses."""
+    problems = []
+    if tc.element(stated.element) is None:
+        problems.append(f"{where} declares an unknown element '{stated.element}'")
+    if stated.cardinality not in ("one", "many"):
+        problems.append(
+            f"{where} declares an unknown cardinality '{stated.cardinality}' "
+            f"(one or many)")
+    return problems

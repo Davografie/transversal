@@ -12,7 +12,7 @@ const loading = ref(false)
 const ROLL_TABLE_FIELDS = `
   id name universe lifePath subjectKind scheme rollSource traitDiceCount die
   check { traitIds difficulty freeChoice }
-  boundVariables { name spec }
+  boundVariables { name element cardinality spec }
   entries {
     key label description minValue maxValue weight tier
     conditions { type subject target targets value operator narrative spec }
