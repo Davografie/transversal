@@ -110,25 +110,62 @@ Placed on the map, the seven span the whole Valley:
 - **A seat is something you *feed*, not something you *hold*.** The seat outlives its holder, which is what makes the cult genuinely demonic rather than a third sect with a roster: members are replaceable, the seats are not.
 - **Empty seats are the point.** Most are unfilled, so the cult is visibly *recruiting* — and the seats it lacks are a scene and a target list rather than a gap.
 
-### The crown — desire is the Valley Lord's seat
+### The crown — desire is first among equals
 
-**Settled 2026-09-29: "desire" is the crown, not a peer.** The overlap between the two lists was the answer rather than the problem — *desire* is emotion #7 **and** the category the six desires belong to, so it sits above both.
+**Corrected 2026-09-29.** An earlier chart here put the emotions *below* desire. **They are on the same level.** Only the six desires are subordinate to desire.
 
 ```
-                        desire  ←  the crown
-                       Zhu Yan, gmc-207814498 — "Valley Lord"
-                        /                    \
-        6 PEERS: emotions                6 SUBORDINATES: desires
-   joy · anger · sorrow · fear ·        survival · pleasure · belonging ·
-        love · hate                     recognition · power · meaning
+        desire  ─┬─  joy · anger · sorrow · fear · love · hate        ← PEERS
+   Zhu Yan,     │
+   the crown    └─  survival · pleasure · belonging ·                  ← SUBORDINATE
+                    recognition · power · meaning
 ```
 
-**Thirteen seats: one crown, six peers, six subordinates.** The hierarchy is mechanically real rather than flavour — the six emotions are peers of one another and of the crown's tier, the six desires answer to them.
+**So desire is first among equals, and only the six desires answer to it.** That asymmetry is the faction's politics: **desire crowns the emotions but rules the desires.**
+
+**And the crown's character explains it.** The human's read: *Zhu Yan is bored and spoiled — nothing satisfies him for long.* That is a man who has **lost the emotions and kept only the desires.** He cannot feel joy, anger, love or hate any more; what is left is appetite, and appetite does not last.
+
+- **The six emotions are his peers because they are what he has lost** — he is one of them, hollowed out.
+- **The six desires are subordinate because they are his instruments**, and they are **mostly in Tan Gang** so they can feed him.
+- **"Nothing satisfies him for long" is the faction's engine, not a character note.** An insatiable crown must keep escalating, which is exactly what the faction clock measures.
+
+The cult is therefore not evil for its own sake: it is **a bored god's appetite, and a doctrine that tells everyone else their wanting is his.**
 
 **And the crown is already seated.** *Zhu Yan* holds `role: **Valley Lord**`, rules Tan Gang from the Nine Heavens Pagoda, and holds the **Aegis of the Unspoken Pact** — the soul-binding contract artifact. **The head of the cult is the ruler of the city and the holder of the contract.** Nothing needs inventing for the top of this hierarchy; it needs a stat block.
 
-> [!note] One thing this settles
-> The earlier worry that "desire" duplicated itself is resolved: the crown is desire-as-principle, and the six subordinates are desire-as-appetite. The cult's own doctrine writes itself — *the Lord is what all wanting is; the six are the shapes it takes.*
+### The clock lives on the faction, and the members do not know
+
+**Decided 2026-09-29.** The escalation clock sits **on the faction**, not on individual members — which is what *"a seat is something you feed"* means literally: **the seat outlives the holder.**
+
+**The demonic techniques are tied directly to that clock.** They are already written as extractions — *Essence Leeching*, *Qi Blood Addiction*, *Living Corpse Refinement*, *Spirit Stone Blood Enhancement* — so **practising the art feeds the clock by definition.** No separate action, and no intent, is required.
+
+**And most members will not know.** They are the *weak but ambitious*: people who wanted something and found a shortcut. They believe they learned a technique; they are in fact **the pump.** Three consequences worth holding onto:
+
+- **Killing a member does not stop the clock** — the seat is fed by whoever holds it next.
+- **Telling a member what they are doing is a weapon**, because they genuinely did not know.
+- **The faction's clock is also the players' clock, and they do not know it either** — the cult's own trick, turned on the table.
+
+### The multiverse hook — the corruption is a bridge
+
+**The human's proposal, 2026-09-29:** *"another universe is bleeding in the corruption in order to strengthen the resonance between two universes, making it cheaper to cross over and harvest the infection."*
+
+**This has an existing home: [[Razmerit Resonance]]**, which already models universes as **frequency domains** with razmerit as amplitude — and asks exactly this under *Open questions*: *"**Universe traits** — should universes contribute their own fundamental/harmonics? Deferred."*
+
+In that doc's own vocabulary:
+
+1. **The cult's techniques emit a signature** — leeching, addiction, discord. There it is a waveform, not a metaphor; the model is additive synthesis over trait waves.
+2. **Each escalation of the faction clock injects more of it into the Three Realms' composite signature.**
+3. **Resonance between two domains is what makes crossing cheap** — so a signature deliberately reinforced toward another universe's frequency *is* the bridge.
+4. **The infection is the bridge. You harvest across it once it is strong enough to cross on.**
+
+**So the cult is not the antagonist — it is the beachhead, and the faction clock is a construction project whose completion is an arrival.** That answers how the Valley's politics tie to the transversal premise, and it needs no new mechanic.
+
+> [!warning] Whichever universe is doing this needs a link, and there isn't one
+> The Three Realms has **three cross-universe edges and no more**: `Yinling Outskirts ↔ earth's basement` (both directions) and `The Floating Vagabond → Fractured Moon`. **No other universe touches it.** So either a connection is authored, or **the resonance itself is the connection** — the stronger reading, and the one the proposal implies.
+>
+> **Ælor Cıtar is the strongest candidate in the corpus** (`genre: alien`, `technology: distributed sentient AI`, `ecology: Smart-Matter Enhanced`) and it **already has a missionary in the Valley** — **Phaos Tyish**, whose `conviction` is *"spread Ælor Cıtar's philosophy"*. A civilisation that propagates a philosophy through sentient matter is a good shape for a corruption that arrives as an idea. **But it reads as alien, not demonic**, so the flavour may be wrong. **The alternative is a universe not yet authored — more work, no inherited baggage.**
+>
+> **Unsettled, and it decides the cult's nature:** is the cult being *used* by something, or is it the *front* of it?
 
 > [!question] Still open
 > **The roster needs work, and it is the real bill.** The human's call: *"the current roster (i.e. every demonic GMC) needs work"*, and more GMCs are needed to fill the seats. Every remaining member has to be re-authored as a *seat-holder* rather than a character who happens to be demonic — and **six of the thirteen seats are open** (joy · anger · love · hate among the peers; belonging · meaning among the subordinates).
