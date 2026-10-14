@@ -93,8 +93,9 @@
           <span class="lpd-hint">
             Runs once for <strong>any</strong> row this step resolves — after the row's
             own effects and its binding's. Consume a bound variable as a
-            <em>targeting path</em> (<em>Start from → Variable → …</em>); a row that
-            exposes no such name simply does nothing here.
+            <em>targeting path</em> (<em>Start from → Variable → …</em>); the names
+            offered are the table's and its rows', and a name only some rows expose
+            resolves on those and does nothing on the rest.
           </span>
         </div>
       </div>
@@ -294,7 +295,12 @@ const newStepTableId = ref('')
 async function loadOptions() {
   try {
     const [tables, lps, unis] = await Promise.all([
-      graphql(`{ rollTables { id name universe lifePath boundVariables { name spec } } }`),
+      // A step effect draws on the wrapped table's declarations **and its rows'**:
+      // "this row is India" is a *row* declaration, and it is the name a step effect
+      // is written against. `entries` carries only the declarations — the row fields
+      // are not needed here.
+      graphql(`{ rollTables { id name universe lifePath boundVariables { name spec }
+                            entries { key boundVariables { name spec } } } }`),
       graphql(`{ lifePaths { id name } }`),
       graphql(`query($type: EntityType){ entities(type: $type){ id name currentUniverse } }`, { type: 'UNIVERSE' }),
     ])
@@ -305,6 +311,13 @@ async function loadOptions() {
     // step's effects may start a path from, once per table.
     tableDeclarations.value = Object.fromEntries(
       (tables?.rollTables || []).map(t => [t.id, t.boundVariables || []]))
+    // Flattened in row order, so the precedence matches the engine's when two rows
+    // declare the same name.
+    rowDeclarations.value = Object.fromEntries(
+      (tables?.rollTables || []).map(t => [
+        t.id,
+        (t.entries || []).flatMap(e => e.boundVariables || []),
+      ]))
     entryTableOptions.value = (tables?.rollTables || []).map(t => ({
       value: t.id,
       label: t.name + (t.lifePath
@@ -341,19 +354,32 @@ let offStepEffectClose = null
  *  answer only changes when the table does.
  */
 const { traceSpec } = useTargetCatalog()
-const tableDeclarations = ref({})   // tableId -> [{name, spec}]
+const tableDeclarations = ref({})   // tableId -> [{name, spec}]  (the table's own)
+const rowDeclarations = ref({})     // tableId -> [{name, spec}]  (every row's, flattened)
 const stepScopeCache = ref({})      // tableId -> {name: {element, cardinality}}
 
+/** The names a step effect may be written against, resolved as one layer.
+ *
+ *  Both layers, in the engine's own order: the **table's** declarations, then its
+ *  **rows'**. A step effect is written against a name some *row* exposes (that is the
+ *  whole design — "the picked entry exposes the variable this depends on"), and
+ *  `resolveLayer` refuses a name already bound, so the precedence is the engine's:
+ *  the table wins over a row, and the first row wins over a later one.
+ *
+ *  The consequence to know: a row-only name resolves on the rows that declare it and
+ *  nowhere else. That is intended — the effect runs only where its input exists — and
+ *  the hint beside the list says so. */
 async function stepScopeFor(tableId) {
   if (stepScopeCache.value[tableId]) return stepScopeCache.value[tableId]
   // The table list arrives asynchronously, and a panel opened straight after mount
   // would otherwise resolve the scope before it lands — offering ambient names only
-  // and then **caching** that, so the table's own names never appear for the rest of
-  // the session. Wait for it, and only cache once the declarations are known.
+  // and then **caching** that, so the tables' names never appear for the rest of the
+  // session. Wait for it, and only cache once the declarations are known.
   await (optionsReady || Promise.resolve())
-  const known = tableId in tableDeclarations.value
+  const known = tableId in tableDeclarations.value || tableId in rowDeclarations.value
   const { scope } = await resolveLayer(
-    tableDeclarations.value[tableId] || [], ROLL_TABLE_AMBIENT_VARIABLES, traceSpec)
+    [...(tableDeclarations.value[tableId] || []), ...(rowDeclarations.value[tableId] || [])],
+    ROLL_TABLE_AMBIENT_VARIABLES, traceSpec)
   if (known) stepScopeCache.value = { ...stepScopeCache.value, [tableId]: scope }
   return scope
 }

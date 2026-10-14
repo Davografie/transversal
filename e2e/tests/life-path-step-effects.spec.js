@@ -23,7 +23,11 @@ import { NAME, SPEC, dropScratch, seedScratch } from '../helpers/rollTableScratc
 const KAEL = 'character-kael-drift-e555ccde'
 const PATH = 'lp-e2e-step-effects'
 const PATH_NAME = 'E2E Step Effects'
-const DECLARED = 'table_pick'
+// One name on each layer. The **row** one is the case that was broken: a table like
+// `rt-earth-regions` keeps "this row is India" on the row, so a scope built from the
+// table's declarations alone offers nothing the author actually wrote against.
+const TABLE_DECLARED = 'table_pick'
+const ROW_DECLARED = 'row_pick'
 
 let owner
 test.beforeAll(async ({ request }) => {
@@ -85,7 +89,7 @@ async function openPathPanel(page) {
 test('a step effect opens in a child panel, not inline', async ({ page }) => {
   await bootApp(page)
   // Seeded *after* the boot: `saveLifePath` is a mutation and needs the session.
-  await seedScratch(page.request, { tableVariables: [DECLARED] })
+  await seedScratch(page.request, { tableVariables: [TABLE_DECLARED], rowVariables: [ROW_DECLARED] })
   await seedPath(page.request)
   await openPathPanel(page)
 
@@ -107,7 +111,7 @@ test('a step effect opens in a child panel, not inline', async ({ page }) => {
 
 test('the step effect is offered the table\'s declarations, not just ambient names', async ({ page }) => {
   await bootApp(page)
-  await seedScratch(page.request, { tableVariables: [DECLARED] })
+  await seedScratch(page.request, { tableVariables: [TABLE_DECLARED], rowVariables: [ROW_DECLARED] })
   await seedPath(page.request)
   await openPathPanel(page)
 
@@ -133,10 +137,15 @@ test('the step effect is offered the table\'s declarations, not just ambient nam
   const config = step.locator('.tsb-config').first()
   await config.locator('select').first().selectOption('variable')
 
-  // The table's own declaration is on offer — resolved by the same tracer the engine
-  // binds with, so what is offered is what will resolve at run time. Without it the
-  // variable dropdown is empty and a step effect cannot consume a row's name at all.
-  await expect(config.locator('select').nth(1).locator('option', { hasText: DECLARED }))
+  // **Both** layers are on offer, resolved by the same tracer the engine binds with,
+  // so what is offered is what will resolve at run time. The row one is the point: a
+  // step effect is written against whatever the *picked row* exposes, and building
+  // this scope from the table's declarations alone silently offered nothing for
+  // `rt-earth-regions` — whose only declaration is on its India row.
+  const variables = config.locator('select').nth(1)
+  await expect(variables.locator('option', { hasText: TABLE_DECLARED }))
+    .toHaveCount(1, { timeout: 20000 })
+  await expect(variables.locator('option', { hasText: ROW_DECLARED }))
     .toHaveCount(1, { timeout: 20000 })
 })
 
