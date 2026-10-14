@@ -997,6 +997,15 @@ setting, so their order is not welded together.
 | `on` | enters on the next interaction, on any input device — that is what On means. |
 | `auto` | enters only on a **touch** device. |
 
+**"The next interaction" is a `click`, and it is worth being exact about** (measured, not
+inferred): a load with `auto` already stored leaves the app **not** fullscreen — a browser
+grants fullscreen only to a real gesture, so there is nothing to hook at load — and then
+**the next tap anywhere enters**, including a tap on blank space (the listener is a capture
+`click` on `document`, so it does not matter what was tapped, and it does not consume the
+tap). What does **not** trigger it: a swipe or scroll (no `click` is dispatched), returning
+to the tab (`visibilitychange` only *re-arms* the suppression — there is no transient
+activation to enter with), and any device whose last input was a mouse or keyboard.
+
 **The device kind is remembered, from the last input actually used**
 (`localStorage.inputKind`): `(hover: none) and (pointer: coarse)` is the guess on
 load, and the first real `pointerdown` / `keydown` overwrites it — a pen counts as
