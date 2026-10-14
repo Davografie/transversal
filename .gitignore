@@ -42,3 +42,7 @@ htmlcov/
 
 # Obsidian vault state
 docs/.obsidian/
+
+# Playwright output (e2e/) — screenshots, traces, error contexts
+test-results/
+playwright-report/
