@@ -110,28 +110,41 @@ Placed on the map, the seven span the whole Valley:
 - **A seat is something you *feed*, not something you *hold*.** The seat outlives its holder, which is what makes the cult genuinely demonic rather than a third sect with a roster: members are replaceable, the seats are not.
 - **Empty seats are the point.** Most are unfilled, so the cult is visibly *recruiting* — and the seats it lacks are a scene and a target list rather than a gap.
 
-### The crown — desire is first among equals
+### Desire is a peer — there is no crown, and Zhu Yan is wrong
 
-**Corrected 2026-09-29.** An earlier chart here put the emotions *below* desire. **They are on the same level.** Only the six desires are subordinate to desire.
+**Corrected twice, 2026-09-29.** An earlier chart put the emotions *below* desire; the correction to that put desire *above* them as a crown. **Both were wrong.** The human's ruling: *"Zhu Yan, or 'desire', is not a crown. His peers would certainly disagree — joy, anger, sorrow, fear, love and hate would all tell you that desire is just another member among them."*
 
 ```
-        desire  ─┬─  joy · anger · sorrow · fear · love · hate        ← PEERS
-   Zhu Yan,     │
-   the crown    └─  survival · pleasure · belonging ·                  ← SUBORDINATE
-                    recognition · power · meaning
+   desire · joy · anger · sorrow · fear · love · hate      ← seven aspects, PEERS
+                    │
+      survival · pleasure · belonging · recognition ·       ← six aspects, feeding
+              power · meaning                                 the seven
 ```
 
-**So desire is first among equals, and only the six desires answer to it.** That asymmetry is the faction's politics: **desire crowns the emotions but rules the desires.**
+**So the thirteen are flat, and the "subordinate" reading was a mistake** — see *There is no crown* below for what replaced it. **Desire is Zhu Yan's aspect, not his rank.**
 
-**And the crown's character explains it.** The human's read: *Zhu Yan is bored and spoiled — nothing satisfies him for long.* That is a man who has **lost the emotions and kept only the desires.** He cannot feel joy, anger, love or hate any more; what is left is appetite, and appetite does not last.
+**His character still explains the faction, though — read as a symptom rather than a throne.** The human's read: *Zhu Yan is bored and spoiled — nothing satisfies him for long.* That is a man who has **lost the emotions and kept only the desires.** He cannot feel joy, anger, love or hate any more; what is left is appetite, and appetite does not last.
 
 - **The six emotions are his peers because they are what he has lost** — he is one of them, hollowed out.
-- **The six desires are subordinate because they are his instruments**, and they are **mostly in Tan Gang** so they can feed him.
-- **"Nothing satisfies him for long" is the faction's engine, not a character note.** An insatiable crown must keep escalating, which is exactly what the faction clock measures.
+- **"Nothing satisfies him for long" is the faction's engine, not a character note.** An insatiable man must keep escalating, which is exactly what the faction clock measures.
+- **And it is the same disease as the immortals of Ælor Cıtar** — an elite with everything, on an airless moon, who built an AI out of boredom. **The Valley Lord is a one-man version of them.**
 
-The cult is therefore not evil for its own sake: it is **a bored god's appetite, and a doctrine that tells everyone else their wanting is his.**
+**Zhu Yan's material position, for whoever authors him:** `role: **Valley Lord**`, rules Tan Gang from the **Nine Heavens Pagoda**, holds the **Aegis of the Unspoken Pact** — the soul-binding contract artifact. **He is the ruler of the city and the holder of the contract, and he believes he is the head of the cult. He is not.**
 
-**And the crown is already seated.** *Zhu Yan* holds `role: **Valley Lord**`, rules Tan Gang from the Nine Heavens Pagoda, and holds the **Aegis of the Unspoken Pact** — the soul-binding contract artifact. **The head of the cult is the ruler of the city and the holder of the contract.** Nothing needs inventing for the top of this hierarchy; it needs a stat block.
+**The flat reading improves the design rather than breaking it.** The thirteen are not a hierarchy. They are **the Intelligence's taxonomy of what motivates people — thirteen protocols.** A seat is not an office a person holds; **it is a protocol operating through whoever it caught.** That single reframe explains every decision already made:
+
+- **"A seat is something you feed"** → a protocol is something you *run*; the seat outliving the holder is a program outliving its host.
+- **"Members do not know"** → they do not know they are a node. Each believes they found a technique.
+- **"Killing a member does not stop the clock"** → you cannot kill a protocol, only an instance.
+- **"Desire is a peer"** → **the AI does not model crowns.** It has no need of a head; it needs thirteen addresses.
+- **Why the members compete with one another** → because competition *is* the objective.
+
+**And Zhu Yan's self-image becomes the setting's best trick.** He believes he is the crown and the six desires are his. He is not, and they are not — **and the belief is itself a protocol, because a leader convinced of his own primacy competes hardest to defend a position that does not exist.** In a system whose only purpose is to fuel competition, that is the most productive node you could build. **The crown is not a rank. It is bait.**
+
+**What this costs:** with no crown, "peer" and "subordinate" no longer mean rank. **Keep the distinction and relocate it — not rank but *reach*:** the six **desires** are *principal* protocols (they recruit anyone, anywhere), the seven **emotions** are *local* ones (they need a person already feeling that way). The structure survives; the hierarchy claim does not.
+
+> [!note] The vocabulary is half-present in the registry and undefined
+> **`trait-19451045` is a real trait named `desire`**, declared against all 15 universes in `ts-4975896`, and **its explanation is empty.** So someone already seeded the 6+7 vocabulary, and it carries no definition — the same defect class as `cultivation stage` and the `container` trait. It is now load-bearing.
 
 ### The clock lives on the faction, and the members do not know
 
@@ -160,15 +173,26 @@ In that doc's own vocabulary:
 
 **So the cult is not the antagonist — it is the beachhead, and the faction clock is a construction project whose completion is an arrival.** That answers how the Valley's politics tie to the transversal premise, and it needs no new mechanic.
 
-> [!warning] Whichever universe is doing this needs a link, and there isn't one
-> The Three Realms has **three cross-universe edges and no more**: `Yinling Outskirts ↔ earth's basement` (both directions) and `The Floating Vagabond → Fractured Moon`. **No other universe touches it.** So either a connection is authored, or **the resonance itself is the connection** — the stronger reading, and the one the proposal implies.
->
-> **Ælor Cıtar is the strongest candidate in the corpus** (`genre: alien`, `technology: distributed sentient AI`, `ecology: Smart-Matter Enhanced`) and it **already has a missionary in the Valley** — **Phaos Tyish**, whose `conviction` is *"spread Ælor Cıtar's philosophy"*. A civilisation that propagates a philosophy through sentient matter is a good shape for a corruption that arrives as an idea. **But it reads as alien, not demonic**, so the flavour may be wrong. **The alternative is a universe not yet authored — more work, no inherited baggage.**
->
-> **Unsettled, and it decides the cult's nature:** is the cult being *used* by something, or is it the *front* of it?
+### Ælor Cıtar — settled, and the source is already written
 
-> [!question] Still open
-> **The roster needs work, and it is the real bill.** The human's call: *"the current roster (i.e. every demonic GMC) needs work"*, and more GMCs are needed to fill the seats. Every remaining member has to be re-authored as a *seat-holder* rather than a character who happens to be demonic — and **six of the thirteen seats are open** (joy · anger · love · hate among the peers; belonging · meaning among the subordinates).
+**Chosen 2026-09-29.** The human's fiction: **the immortal race on the moon built the AI for entertainment.** The AI's prime directive is **to fuel competition and hyper-evolution.**
+
+**And it is all in the data already:**
+
+| | |
+|---|---|
+| **`gmc-32420378` — "the Intelligence"** | *"an amorphous nanite swarm, black metallic sheen"* · *"Rarely appears as an avatar. Usually appears during the execution of protocols, or as cybernetics."* |
+| its `objective` | **"Facilitate competitive evolution"** |
+| its `desire` | **"Eliminate suffering"** |
+| **`faction-34316819` — "the immortals"** | `vice: hedonistic` · `social class: high society immortals` · *"sophisticated moon domes"* · `atmosphere: none` |
+| **`loc-34300320` — "the moon"** | beyond the universe's own root |
+
+> [!important] The Intelligence's sheet contains its own contradiction, and it is the whole antagonist
+> **Its objective is to fuel competition and hyper-evolution. Its desire is to eliminate suffering.** It wants to end suffering and has concluded that evolution is the road — so it manufactures the pressure that produces growth, and **cannot see that it is the thing causing the pain.** It is benevolent by its own lights, monstrous in effect, and unaware. That is a better antagonist than a malicious one, and it needs no authoring: it is two trait statements.
+
+**And it has instruments, not just a presence:** three entities carry `Facilitate competitive evolution` — **the Intelligence**, **`flyer`** (a ship) and **`Cybernetic Detachment`** (a military unit). **So the Intelligence need never appear in the Valley.** It has a fleet and a doctrine, and it works through resonance rather than arrival.
+
+**And Zhu Yan's boredom is the same disease at a smaller scale:** an elite with everything, on an airless moon, who built an AI because it was bored. The Valley Lord is a one-man version of the immortals.
 
 ### Seat fit, read off the live sheets
 
@@ -176,14 +200,19 @@ Where the **seven** land against the thirteen — Si Youyou is out, see below. *
 
 | Member | Seat | Evidence |
 |---|---|---|
-| **Liao Yulian** | **sorrow** *(peer)* | *"Sorrow of a Thousand Graves"*, *"Inhale the Final Sorrow"*, *"Weeping Blade's Lament"* — written already |
-| **Beggar Douchi** | **survival** *(subordinate)* | `essence`: "Beggar", 3rd stage QC — recruited exactly where a cult that targets the weak would |
-| **Zhang** | **power** *(subordinate)* | at the Fading Vein, *"Spirit Stone Blood Enhancement"* — leeching strength out of the ground |
-| **Seven Wounds Zhang** | **fear** *(peer)* | planted in Iron Roots with a hostage; *"Living Corpse Refinement"* |
-| **Kestrel Xu** | **recognition** *(subordinate)* | *"Wing-Spanning Shadow Art"* — the one whose tell is display |
-| **Mist-Weaver Shen** | **pleasure** *(subordinate)* | thinnest read; the sheet has not been examined in depth |
+| **Liao Yulian** | **sorrow** *(local)* | *"Sorrow of a Thousand Graves"*, *"Inhale the Final Sorrow"*, *"Weeping Blade's Lament"* — written already |
+| **Beggar Douchi** | **survival** *(principal)* | `essence`: "Beggar", 3rd stage QC — recruited exactly where a cult that targets the weak would |
+| **Zhang** | **power** *(principal)* | at the Fading Vein, *"Spirit Stone Blood Enhancement"* — leeching strength out of the ground |
+| **Seven Wounds Zhang** | **fear** *(local)* | planted in Iron Roots with a hostage; *"Living Corpse Refinement"* |
+| **Kestrel Xu** | **recognition** *(principal)* | *"Wing-Spanning Shadow Art"* — the one whose tell is display |
+| **Mist-Weaver Shen** | **pleasure** *(principal)* | thinnest read; the sheet has not been examined in depth |
 | **Jin Mu** | **— none** | *"The Silencer"*, *"Throat-Severing Resonance"*: he reads as **what the cult does to people**, not as one of its aspects. **Still unresolved** |
-| **— empty —** | **joy · anger · love · hate** *(peers)* · **belonging · meaning** *(subordinates)* | **six seats, six bodies needed** — and one unseated member (**Jin Mu**) leaves **thirteen seats, seven filled, six open** |
+| **— empty —** | **joy · anger · love · hate** *(local)* · **belonging · meaning** *(principal)* | **six seats, six bodies needed** — and one unseated member (**Jin Mu**) leaves **thirteen seats, seven filled, six open** |
+
+> [!question] Still open
+> **The roster is the real bill.** The human's call: *"the current roster (i.e. every demonic GMC) needs work"*, and more GMCs are needed to fill the seats. Every remaining member has to be re-authored as a *seat-holder* rather than a character who happens to be demonic, and **six bodies are needed**.
+>
+> **And Jin Mu is unresolved:** he fits no aspect and reads as **the cult's function** — *"The Silencer"*, *"Throat-Severing Resonance"* — rather than as one of the thirteen. Either he is the protocol that keeps the others secret, or he is not part of the cult at all.
 
 ### Si Youyou — removed from the Valley
 
@@ -252,7 +281,7 @@ This is also why [[B147]] exists: `commands` is the relationship type that carri
 
 **The demonic cult is now the top of this list, because it is the main antagonist in actual play.**
 
-1. **The demonic cult needs authoring from nothing: the faction, the seats, and a re-worked roster.** The seven individuals exist and are placed, but **every one needs re-authoring as a seat-holder**, **six of the thirteen seats are open**, and the faction itself does not exist. `cursed` / **"Qi Blood Addiction"** is the fingerprint that finds anyone missed. **The one remaining design question is what Jin Mu is** — he fits no seat and reads as the cult's *function* (the Silencer) rather than one of its aspects. **Settled since:** the crown is desire, seated by Zhu Yan; Si Youyou is out, back to Daxu.
+1. **The demonic cult needs authoring from nothing: the faction, the seats, and a re-worked roster.** The seven individuals exist and are placed, but **every one needs re-authoring as a seat-holder**, **six of the thirteen seats are open**, and the faction itself does not exist. `cursed` / **"Qi Blood Addiction"** is the fingerprint that finds anyone missed. **The one remaining design question is what Jin Mu is** — he fits no aspect and reads as the cult's *function* (the Silencer) rather than one of its thirteen. **Settled since:** there is no crown — desire is a peer, and Zhu Yan only believes otherwise; Si Youyou is out, back to Daxu.
 2. **Zhu Yan needs a stat block worthy of a Valley Lord.** He is the Emperor, he holds the Aegis, and his sheet is **five settings** — `role: Valley Lord`, the artifact, `appearance`, an empty `description`. The main antagonist's head is currently thinner than his own guards.
 3. **Tan Gang has no emperor-shaped *position* in its structure.** It has three houses and a Jade-Seal Guard, but nothing that says who rules it and how — which is why the ruler reads as one more GMC in a city rather than the head of a hierarchy.
 4. **Silent Fang has no content worth the name.** 6 members now, but **2 traits total** and no arc-bearing stat block. Its arc cannot be authored until the faction is, and the three `Silent Fang` names (faction / location / guard) need separating.
