@@ -236,7 +236,14 @@ Singleton composables (the reference implementations):
 Derivation/helper composables take inputs as parameters and expose computeds
 (no shared state):
 
-- `useEntityFilter(entities)` — filter bar, suggestions, filtered projections.
+- `useEntityFilter(entities, playerHoldings?, agencyByEntity?)` — filter bar,
+  suggestions, filtered projections. Its **suggestion list** is the whole match
+  set, in the canonical order (below) and revealed a page at a time
+  (`pageSize: 20`; `GmPanel` calls `loadMore` when the box is scrolled to its
+  end, and the combobox's own `move` does at the end of the keyboard's walk).
+  It used to be `maxResults: 10`, which **truncated** the list in database order:
+  measured live, "wang" matched 21 rows and the last ten Wang GMCs could not be
+  surfaced by typing anything at all. Never cap a suggestion list — page it.
 - `useEffectActions()` — effect-action metadata + summarization helpers (module-level cache + in-flight dedup).
 
 One-time side effects (watchers, timers) inside a singleton composable are
@@ -424,6 +431,9 @@ An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
   blanks the list and re-renders it under the cursor; that was [[P7.17]]/`82cb2949`.
 - **Ordering must be a total order.** The entity list has no `SORT`, so where a
   table's order matters it is rank → name → id (or position), never arrival order.
+  `compareEntityOrder(a, b, agency)` in `constants/entityTypes.js` is that
+  comparison, named; the location tree, the sheet's contacts and the peer strip
+  each open-code the same three keys from `entityTypeRank`.
 - **`.entity-row` and `useDragDrop` are shared with the location tree.** The tree
   is **not** a table consumer — its rows come from `useLocationTree.flattenTree`
   (depth, `more`/`add` rows, three reveal states) — so do not try to fold it in,
