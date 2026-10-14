@@ -236,14 +236,19 @@ Singleton composables (the reference implementations):
 Derivation/helper composables take inputs as parameters and expose computeds
 (no shared state):
 
-- `useEntityFilter(entities, playerHoldings?, agencyByEntity?)` — filter bar,
-  suggestions, filtered projections. Its **suggestion list** is the whole match
-  set, in the canonical order (below) and revealed a page at a time
+- `useEntityFilter(entities, playerHoldings?, agencyByEntity?, { sortMode, distances })`
+  — filter bar, suggestions, filtered projections. Its **suggestion list** is the
+  whole match set, in the canonical order (below) and revealed a page at a time
   (`pageSize: 20`; `GmPanel` calls `loadMore` when the box is scrolled to its
   end, and the combobox's own `move` does at the end of the keyboard's walk).
   It used to be `maxResults: 10`, which **truncated** the list in database order:
   measured live, "wang" matched 21 rows and the last ten Wang GMCs could not be
   surfaced by typing anything at all. Never cap a suggestion list — page it.
+  **`sortMode: 'distance'`** is the *nearest* alternative, with `distances` the
+  `locationDistances` map for the GM's current place. Nearest first, the canonical
+  order breaking ties, and **no route sorts last** — 194 of 466 places have no
+  route live, so an absence must never be read as a number. With no map at all the
+  alternative degrades to the standard order, never to arrival order.
 - `useEffectActions()` — effect-action metadata + summarization helpers (module-level cache + in-flight dedup).
 
 One-time side effects (watchers, timers) inside a singleton composable are
@@ -434,6 +439,18 @@ An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
   `compareEntityOrder(a, b, agency)` in `constants/entityTypes.js` is that
   comparison, named; the location tree, the sheet's contacts and the peer strip
   each open-code the same three keys from `entityTypeRank`.
+- **A *distance* order is the same rule with one key in front.** The filter's
+  ordering toggle (`A–Z` ⇄ `Nearest`, a per-device preference) puts
+  `distance → rank → name → id` — the standard order is the *tiebreak* and the
+  tail, so the list stays total and a row cannot wander as the data is re-read.
+  The measure is the shared one (`_location_adjacency`), read in bulk:
+  `locationDistances(locationId:)` is **one** Dijkstra from the GM's current place
+  for the whole map, never a query per candidate, and it returns only what is
+  reachable. Worth knowing before touching it: from the app's default origin, **194
+  of 466 places and 417 of 998 placed entities have no route at all**, so nearest
+  first is really "nearest first, then a large no-route tail" — which is why
+  `null` distance must never be read as a number, and why the mode *sorts* rather
+  than filters.
 - **`.entity-row` and `useDragDrop` are shared with the location tree.** The tree
   is **not** a table consumer — its rows come from `useLocationTree.flattenTree`
   (depth, `more`/`add` rows, three reveal states) — so do not try to fold it in,

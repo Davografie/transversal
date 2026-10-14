@@ -239,6 +239,9 @@ type Query {
   entityFactions(entityIds: [ID!]!): [EntityFactionRef!]!
   factionDistances(locationId: ID!): [FactionDistance!]!
 
+  # Locations — the whole distance map from one origin
+  locationDistances(locationId: ID!): [LocationDistance!]!
+
   # Effect authoring (served vocabularies + candidate resolution)
   effectActions: [EffectActionMeta!]!
   triggers: [TriggerOption!]!
@@ -272,6 +275,11 @@ type Query {
 > Distance is a **weighted step count along the location graph** — `super` **and** `transversal` edges, walked **undirected**. Each step costs 1, except a `transversal` that **crosses a universe boundary**, which costs `CROSS_UNIVERSE_WEIGHT` (10, a named constant in `db/repository_mixins/canvas.py` — a dial, not a finding). A `super` edge always costs 1: measured live, **0** of them cross a universe boundary, while **14** portals do.
 >
 > Values were measured before the design was fixed, and they shape what a surface should render: **195 of 410** locations are unreachable from the single authored control point (47 components), so `null` is common and must read as *"none known"*, not as a number. The read is **computed per request, not materialized** — a full recompute for all 74 factions is ~2.4 ms — with the scale trigger to revisit recorded in [[Factions and Organizations Design Log]] §6.6.
+
+> [!note] `locationDistances(locationId)` — the whole distance map from one origin
+> `LocationDistance { locationId distance }`, **nearest first, ties on id**, over the same graph and weights `factionDistances` uses. The origin scores `0`. The point-to-point sibling: one Dijkstra from the origin for the whole map, so a caller orders hundreds of candidates by joining entity → place → distance rather than asking a query each. Built for the GM panel filter's *nearest* ordering ([[GM Panel Development]] § *Ordering*), and additive — nothing else consumes it.
+>
+> **Unreachable locations are absent**, exactly as `get_location_distances_from` returns them: no sentinel, no `null`. That is the contract's own rule about reading an absence as a number, and it is not hypothetical — measured live 2026-10-13 from the app's default origin (`loc-krasnoyarsk`): **272 of 466 places reachable, 194 with no route**, which leaves **417 of 998 placed entities** without a distance. A caller sorting by it must give the tail its own bucket and its own order.
 
 ### Mutations
 
