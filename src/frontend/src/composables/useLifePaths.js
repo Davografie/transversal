@@ -20,7 +20,17 @@ const STEP_EFFECT_FIELDS = `
 
 // ── The wrapper model ────────────────────────────────
 // A path declares the tables it wraps (`steps`) and what each row of those
-// tables means to *it* (`bindings`). A step's `id` is its own identity, not the
+// tables means to *it* (`bindings`).
+//
+// ⚠ A step carries **two** effect lists and both must be selected: its own
+// ([[B281]]) and each binding's. This store is what the path panel seeds its form
+// from, so a missing one shows the author an empty list after a refresh — and the
+// next save writes that emptiness back over what they authored. The read half is
+// the one that keeps being forgotten ([[B279]], [[B281]]).
+//
+// ⚠ And keep prose **out** of these templates: `//` is not a comment in GraphQL, so
+// a note placed inside the document is a syntax error that takes the whole query —
+// and therefore the path list — with it. A step's `id` is its own identity, not the
 // table's; a binding's `key` names a row of the step's table (`RollTableEntry.key`).
 const LIFE_PATH_FIELDS = `
   id name universe description entryTableId
@@ -32,11 +42,6 @@ const LIFE_PATH_FIELDS = `
       key next exitKind exitPath enroll
       effects { ${STEP_EFFECT_FIELDS} }
     }
-    // The step's own effects ([[B281]]). **Must be read**, not merely written: this
-    // store is what the path panel seeds its form from, so a missing field here shows
-    // the author an empty list after a refresh — and the next save writes that
-    // emptiness back over what they authored. The read half is the one that keeps
-    // being forgotten ([[B279]], [[B281]]).
     effects { ${STEP_EFFECT_FIELDS} }
   }
   conditions { type subject target targets value operator narrative spec }
