@@ -719,20 +719,38 @@ const objectAfter = (src, key) => {
     }
   }
 
-  // ── And the scope composable may not read `form` before it exists ──────
+  // ── An eager reader may not precede the `form` it reads ────────────────
   //
-  // `<script setup>` runs top-down and the composable's watcher is `immediate`, so
-  // it evaluates `form.boundVariables` *during* setup. Called above the `form`
-  // declaration that is a temporal-dead-zone `ReferenceError` — and the build, the
-  // check scripts and the API tests all pass straight through it. It took a click
-  // on a table row to find, so the order is pinned here rather than trusted.
+  // `<script setup>` runs top-down, and two things here read `form` *during* setup:
+  // `watch()` runs a getter source eagerly to collect its dependencies, and
+  // `useBoundVariableScope`'s internal watcher is `immediate`. Written above
+  // `const form = reactive(…)`, either one reads a `const` in its temporal dead zone
+  // and throws out of `setup()` — invisible to the build, the check scripts and the
+  // API suite, because a TDZ error does not exist until the line runs.
+  //
+  // It has now happened **twice**, in two different panels, hours apart
+  // (`GmRollTableEntryEditPanel`, then `GmLifePathDetailPanel` — where the panel is
+  // on the restore allow-list, so a saved window re-threw on every page load). The
+  // first guard named one reader and two panels; this one names the *class*.
+  const EAGER_READERS = ['watch(', 'useBoundVariableScope(']
   for (const file of ['components/gm/GmRollTableEditPanel.vue',
-                      'components/gm/GmRollTableEntryEditPanel.vue']) {
+                      'components/gm/GmRollTableEntryEditPanel.vue',
+                      'components/gm/GmLifePathDetailPanel.vue']) {
     const src = readFileSync(join(SRC, file), 'utf8')
-    const call = src.indexOf('useBoundVariableScope(')
     const decl = src.indexOf('const form = reactive')
-    ok(`${file} declares \`form\` before the scope composable reads it`,
-      decl >= 0 && call > decl, true)
+    ok(`${file} declares \`form\``, decl >= 0, true)
+    for (const reader of EAGER_READERS) {
+      let at = src.indexOf(reader)
+      while (at >= 0) {
+        // Only the readers that actually touch `form` — a watcher on props is free
+        // to sit anywhere.
+        if (/form/.test(src.slice(at, at + 200))) {
+          ok(`${file}: \`${reader}\` reading \`form\` follows the declaration`,
+            at > decl, true)
+        }
+        at = src.indexOf(reader, at + 1)
+      }
+    }
   }
 }
 
