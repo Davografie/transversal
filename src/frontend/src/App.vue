@@ -649,19 +649,35 @@ function pushSplashNote(note) {
 /**
  * The difficulty this player has been dealt, as a splash they can act on.
  *
- * It shows the number **and the dice it was rolled from** — "what is opposing me"
- * is the question the number alone does not answer — and holds the surface until
- * it is tapped, because a target that faded before it was read would lose both
- * the number and the way through to the sheet.
+ * It shows the number **and what it was rolled from** — "what is opposing me" is the
+ * question the number alone does not answer — and holds the surface until it is
+ * tapped, because a target that faded before it was read would lose both the number
+ * and the way through to the sheet.
+ *
+ * The dice become **trait chips**, one per trait instance and carrying the face each
+ * die actually rolled: a trait rolled as two d8s is one thing opposing you, not two
+ * lines. The chip itself is the map's ([[B92]]), so the splash and the location
+ * cannot drift apart.
+ *
+ * `statement` is read when the payload carries it. It does not yet — `PoolDieIn` has
+ * no such field — so the chip degrades to name + dice, which is the visible half.
+ * Asked of [[applied-mechanics]], whose payload and roller this is ([[B287]]).
  */
 function pushSplashTarget(difficulty, dice = []) {
-  const lines = (dice || [])
-    .filter(d => d.result !== null && d.result !== undefined)
-    .map(d => `${d.die}${d.label ? ` · ${d.label}` : ''} — ${d.result}`)
+  const rolled = (dice || []).filter(d => d.result !== null && d.result !== undefined)
+  const byTrait = new Map()
+  for (const d of rolled) {
+    const key = d.ts_id || d.source_id || d.label || 'die'
+    if (!byTrait.has(key)) {
+      byTrait.set(key, { name: d.label || d.die, statement: d.statement || '', dice: [] })
+    }
+    byTrait.get(key).dice.push({ die: d.die, result: d.result, hitch: !!d.hitch })
+  }
   pushSplashNote({
     kind: 'target',
-    title: `Difficulty ${difficulty}`,
-    lines,
+    title: 'Difficulty',
+    value: String(difficulty),
+    chips: [...byTrait.values()],
     action: 'Open character sheet',
     sticky: true,
   })

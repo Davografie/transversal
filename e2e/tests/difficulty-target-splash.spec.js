@@ -117,11 +117,21 @@ test('a difficulty dealt to the player splashes its dice, and the tap opens the 
   const splash = page.locator('.sp-note-action')
   await splash.waitFor({ state: 'visible', timeout: 30_000 })
 
-  // The number, and behind it the dice and traits it was rolled from.
-  await expect(splash.locator('.sp-note-title')).toHaveText('Difficulty 9')
-  await expect(splash.locator('.sp-note-kind')).toHaveText('your target')
-  for (const d of dice) {
-    await expect(splash, `the ${d.die} and the trait behind it`).toContainText(`${d.die} · ${d.label} — ${d.result}`)
+  // The number as the loudest thing on the surface, and behind it the traits and the
+  // dice it was rolled from, as the map's own trait chips.
+  await expect(splash.locator('.sp-target-label')).toHaveText('Difficulty')
+  await expect(splash.locator('.sp-target-value')).toHaveText('9')
+
+  // One chip per trait instance, each carrying the face its die actually rolled.
+  const chips = splash.locator('.sp-chip')
+  await expect(chips).toHaveCount(dice.length)
+  for (const [i, d] of dice.entries()) {
+    const chip = chips.nth(i)
+    await expect(chip.locator('.trait-chip-name'), `the ${d.die}'s trait`).toHaveText(d.label)
+    // The rolled face, not the die's type: DieIcon prints the result when it has one.
+    await expect(chip.locator('.die-icon'), `the ${d.die} ${d.result} face`)
+      .toHaveAttribute('class', new RegExp(`die-${d.die}`))
+    await expect(chip.locator('.die-text')).toHaveText(String(d.result))
   }
   await expect(splash.locator('.sp-note-cue')).toHaveText('Open character sheet')
 

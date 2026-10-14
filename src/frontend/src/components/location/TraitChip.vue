@@ -27,14 +27,19 @@
     </Transition>
     <!-- The rating: the whole chip when the trait has no picture, and part of the open
          chip when it has one. It renders exactly as the sheet's trait rows do — one
-         fanned staircase per die type, not a flat row. -->
+         fanned staircase per die type, not a flat row. A die entry may carry a `result`
+         (and `hitch`), which draws the face it *rolled* rather than its type — that is
+         what the activation splash's target needs ([[B287]]); the location's chips pass
+         plain types and are unchanged. -->
     <div v-if="trait.dice && trait.dice.length" class="trait-chip-rating">
       <div class="trait-die-groups">
         <div v-for="(group, gi) in traitDiceGroups(trait)" :key="gi" class="trait-die-group">
           <DieIcon
             v-for="(die, i) in group"
             :key="i"
-            :die="die"
+            :die="die.die"
+            :result="die.result"
+            :is-hitch="die.hitch"
             class="trait-die-icon"
             :style="i ? { marginLeft: FAN_X, marginTop: `${i * FAN_Y}px` } : null"
           />
@@ -109,19 +114,30 @@ const ratingWidth = computed(() => {
 // `CharacterSheet.vue`), so `d6 d8 d6` draws a pair of d6s and a d8. Mirrored from
 // the sheet rather than imported because the sheet keeps it component-local; this
 // is now the second copy, so it is the one that should move to a shared util.
+//
+// A die is either a plain type (`'d8'`, what the map's chips pass) or a **rolled**
+// one (`{ die, result, hitch }`, what the splash's target passes), so one component
+// serves both rather than a second chip growing beside it.
+function normaliseDie(d) {
+  return typeof d === 'string'
+    ? { die: String(d).toLowerCase(), result: null, hitch: false }
+    : { die: String(d?.die || '').toLowerCase(), result: d?.result ?? null, hitch: !!d?.hitch }
+}
+
 function traitDiceGroups(trait) {
   const groups = []
   const byType = new Map()
-  for (const d of (trait.dice || [])) {
-    const die = String(d).toLowerCase()
-    if (!byType.has(die)) {
+  for (const raw of (trait.dice || [])) {
+    const die = normaliseDie(raw)
+    if (!die.die) continue
+    if (!byType.has(die.die)) {
       const group = []
-      byType.set(die, group)
+      byType.set(die.die, group)
       groups.push(group)
     }
-    byType.get(die).push(die)
+    byType.get(die.die).push(die)
   }
-  groups.sort((a, b) => parseInt(a[0].slice(1), 10) - parseInt(b[0].slice(1), 10))
+  groups.sort((a, b) => parseInt(a[0].die.slice(1), 10) - parseInt(b[0].die.slice(1), 10))
   return groups
 }
 </script>

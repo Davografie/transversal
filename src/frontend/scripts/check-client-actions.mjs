@@ -139,5 +139,27 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
     /KIND_LABELS = \{ summary: 'resolved', target: 'your target', change: 'changed' \}/.test(splash))
 }
 
+// ── 8. the target is the loud one ───────────────────────────────────────────
+// "The target number needs to be big and daunting" (the author). The drama has to
+// stay on *descendants*: `.sp-root` must remain transform-free, because a transformed
+// ancestor becomes the containing block for `position: fixed` descendants — the trap
+// the landscape dock records, re-checked in §6.
+{
+  yes('the number is its own element, not part of the title',
+    /v-if="currentNote\.value" class="sp-target"/.test(splash) && /sp-target-value/.test(splash)
+      && /value: String\(difficulty\)/.test(app))
+  yes('…and the head is skipped with it, so the number is not labelled twice',
+    /<div v-else class="sp-note-head">/.test(splash))
+  yes('…the number is stated large, with the accent glow',
+    /\.sp-target-value \{[\s\S]{0,400}font-size: 64px/.test(splash) && /text-shadow:/.test(splash))
+  yes('…and the entrance is a pop plus a ring, not a fade',
+    /@keyframes sp-target-pop/.test(splash) && /@keyframes sp-target-ring/.test(splash))
+  yes('the flash never lands on the fixed root', rootRule.length > 0 && !/animation:/.test(rootRule))
+  yes('…and it is all off under reduced motion',
+    /prefers-reduced-motion: reduce\) \{[\s\S]{0,200}\.sp-target-value, \.sp-target-ring, \.sp-chip \{ animation: none/.test(splash))
+  yes('the ring is decoration: out of the flow and never eating the press',
+    /\.sp-target-ring \{[\s\S]{0,300}pointer-events: none/.test(splash))
+}
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)

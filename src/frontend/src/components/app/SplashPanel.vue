@@ -64,13 +64,36 @@
           :role="currentNote.action ? undefined : 'status'"
           @click="currentNote.action && emit('act', currentNote)"
         >
-          <div class="sp-note-head">
+          <!-- A **target**: the number is the whole point, so it is the biggest thing
+               on the surface and it lands with a ring rather than fading in. The head
+               is skipped — "your target" over a number that is already labelled is a
+               second label for the same thing. -->
+          <div v-if="currentNote.value" class="sp-target">
+            <span class="sp-target-ring" aria-hidden="true"></span>
+            <span class="sp-target-label">{{ currentNote.title }}</span>
+            <span class="sp-target-value">{{ currentNote.value }}</span>
+          </div>
+          <div v-else class="sp-note-head">
             <span class="sp-note-title">{{ currentNote.title }}</span>
             <span class="sp-note-kind">{{ kindLabel }}</span>
           </div>
           <ul v-if="currentNote.lines?.length" class="sp-note-lines">
             <li v-for="(line, i) in currentNote.lines" :key="i" :class="{ 'is-silent': line.silent }">{{ line.text || line }}</li>
           </ul>
+          <!-- What is opposing you, as the location's own trait chips ([[B92]]) —
+               name, statement, and the face each die actually rolled. Re-using the
+               chip is the point: it is the same object the map draws, so the two
+               cannot drift apart. -->
+          <div v-if="currentNote.chips?.length" class="sp-chips">
+            <TraitChip
+              v-for="(chip, i) in currentNote.chips"
+              :key="i"
+              class="sp-chip"
+              :style="{ '--sp-chip-delay': `${120 + i * 70}ms` }"
+              :trait="chip"
+              expanded
+            />
+          </div>
           <span v-if="currentNote.action" class="sp-note-cue">{{ currentNote.action }}</span>
         </component>
         <!-- A target is dismissed *by* its action, so it needs no Cancel. A sticky
@@ -91,6 +114,7 @@
 <script setup>
 import { computed } from 'vue'
 import EffectTargetWizard from '@/components/gm/EffectTargetWizard.vue'
+import TraitChip from '@/components/location/TraitChip.vue'
 
 // The shape rules, which are different on purpose:
 //
@@ -224,6 +248,88 @@ const kindLabel = computed(() => KIND_LABELS[currentNote.value?.kind] || KIND_LA
   cursor: pointer;
 }
 .sp-note-close:hover { color: var(--text); border-color: var(--border); }
+
+/* ── The target: the loudest thing the surface ever draws ────────────────────
+   A target is the number you are about to be measured against, so it is stated
+   rather than reported: oversized, glowing, and it *lands* — a ring punches out
+   from behind it as it pops in. The drama is on descendants, never on `.sp-root`
+   (a transformed ancestor would re-parent every `position: fixed` inside it), and
+   all of it is off under `prefers-reduced-motion`. */
+.sp-target {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0 4px;
+}
+.sp-target-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--text-dim);
+}
+.sp-target-value {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 0 22px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 0 4px color-mix(in srgb, var(--accent) 80%, transparent),
+    0 2px 0 rgba(0, 0, 0, 0.5);
+  animation: sp-target-pop 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+/* The ring is decoration, so it is out of the flow and never eats a press. */
+.sp-target-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: sp-target-ring 0.75s ease-out both;
+}
+@keyframes sp-target-pop {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes sp-target-ring {
+  0%   { transform: scale(0.25); opacity: 0.85; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+/* The trait chips, staggered in behind the number: the number lands, then what is
+   opposing you arrives one trait at a time. */
+.sp-chips {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 2px;
+}
+.sp-chip {
+  animation: sp-chip-in 0.35s ease-out both;
+  animation-delay: var(--sp-chip-delay, 120ms);
+}
+@keyframes sp-chip-in {
+  from { transform: translateY(-4px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+/* Decorative here, not a control: the chip is the map's, and on the map it is
+   clickable. The card around it is the thing you press. */
+.sp-chip :deep(.trait-chip) { cursor: inherit; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-target-value, .sp-target-ring, .sp-chip { animation: none; }
+  .sp-target-ring { display: none; }
+}
 
 /* Arrival and departure only — the dwell belongs to the shell, which decides how
    long a note lives (and gives a target none). */
