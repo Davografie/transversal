@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import field
 from transversal.domain import Effect
 from transversal.domain import SFX
@@ -17,13 +18,35 @@ from transversal.services.effects_engine.events import (
 )
 
 
-def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | None = None) -> Effect:
+# A ``{name}`` token — the flat form of a bound variable. Matched after
+# substitution to find the names nothing filled ([[B282]]).
+_TOKEN_RE = re.compile(r"\{([^{}]+)\}")
+
+
+def _substitute_effect_context(
+    effect: Effect,
+    context: dict,
+    bindings: dict | None = None,
+    unresolved: list[str] | None = None,
+) -> Effect:
     """Replace ``{context_key}`` placeholders across an effect's string fields.
 
     Covers ``result`` (the original behaviour), plus ``target``, ``entity``, and
     string ``context`` values so entity/string trigger variables can drive where
     an effect points, not just a numeric/string result. ``bindings`` (per-
     activation output variables) override the event context on name collision.
+
+    ``unresolved``, when given, is an **accumulator**: every ``{name}`` that
+    survives substitution in a field that *names something or carries a value
+    into an id* — ``target``, ``entity``, ``result`` and each reference's value —
+    is appended to it. A caller uses that to refuse the effect instead of running
+    it against the literal ``"{name}"``, which is a junk id that looks like
+    success ([[B282]]). It is optional so every existing caller is untouched.
+
+    Two places are deliberately **not** checked, because a leftover token there is
+    not a fault: ``context`` values (``{last_projection}`` is a *policy keyword*,
+    and a ``{return_to}``-style event name may legitimately be absent) and
+    ``die_filter`` (a selector, which already fails closed by matching nothing).
     """
     source: dict = {}
     if context:
@@ -36,10 +59,10 @@ def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | N
             for name, b in bindings.items()
             if getattr(b, "cardinality", "one") != "many"
         })
-    if not source:
+    if not source and unresolved is None:
         return effect
 
-    def _sub(s: Optional[str]) -> Optional[str]:
+    def _sub(s: Optional[str], check: bool = True) -> Optional[str]:
         if not s:
             return s
         out = s
@@ -47,6 +70,11 @@ def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | N
             placeholder = "{" + key + "}"
             if placeholder in out:
                 out = out.replace(placeholder, str(value) if value is not None else "")
+        if check and unresolved is not None:
+            for match in _TOKEN_RE.finditer(out):
+                name = match.group(1)
+                if name not in source and name not in unresolved:
+                    unresolved.append(name)
         return out
 
     updates: dict = {}
@@ -73,7 +101,7 @@ def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | N
     context_changed = False
     for k, v in (effect.context or {}).items():
         if isinstance(v, str):
-            nv = _sub(v)
+            nv = _sub(v, check=False)
             if nv != v:
                 context_changed = True
                 new_context[k] = nv
@@ -95,7 +123,7 @@ def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | N
         new_filter = {}
         filter_changed = False
         for k, v in effect.die_filter.items():
-            nv = _sub(v) if isinstance(v, str) else v
+            nv = _sub(v, check=False) if isinstance(v, str) else v
             if nv != v:
                 filter_changed = True
             new_filter[k] = nv

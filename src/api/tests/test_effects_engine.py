@@ -404,6 +404,100 @@ def test_substitute_effect_context_skips_many_bindings():
     assert out.target == "{friends}"  # many binding is not stringified into a string field
 
 
+# ── B282 — an unbound ``{token}`` must not run against the literal string ──
+
+def test_substitute_effect_context_reports_the_names_it_could_not_fill():
+    """The accumulator a caller uses to refuse the effect ([[B282]]).
+
+    Only the fields that **name something or carry a value into an id** count: a
+    reference's value is one, while ``context`` (a policy keyword lives there) and
+    ``die_filter`` (a selector, which fails closed) are deliberately exempt.
+    """
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="{picked}", entity="{owner}", result="{effect_die}",
+        refs={"recipient": TargetRef(value="{giver}")},
+        context={"projection": "{last_projection}"},
+        die_filter={"ts_id": "{trait_setting}"},
+    )
+    unresolved: list[str] = []
+    out = _substitute_effect_context(effect, {"owner": "char-2"}, unresolved=unresolved)
+
+    assert set(unresolved) == {"effect_die", "picked", "giver"}
+    assert out.entity == "char-2"          # the bound name still resolves
+    assert out.target == "{picked}"        # the returned effect is unchanged
+    assert "{last_projection}" not in unresolved
+    assert "{trait_setting}" not in unresolved
+
+
+def test_the_path_form_is_not_reported_as_an_unbound_token():
+    """``select variable picked`` already resolves to zero targets on its own — it
+    must not be mistaken for a flat ``{picked}`` ([[B282]])."""
+    from transversal.services.effects_engine import _substitute_effect_context
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target_spec=TargetSpec(steps=[SelectStep(collection="variable", variable="picked")]),
+    )
+    unresolved: list[str] = []
+    _substitute_effect_context(effect, {}, unresolved=unresolved)
+    assert unresolved == []
+
+
+def test_an_unbound_flat_token_skips_the_effect_and_records_why():
+    """An effect naming a value nothing bound applies **zero** times, and says so
+    on the outcome — never against the literal ``"{picked}"`` as if it were an id."""
+    _reset()
+    engine = EffectsEngine()
+    engine.register(_make_sfx("sfx-picked", "Picked", "manual", effects=[
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+               target="{picked}", result="d6"),
+    ]))
+    event = GameEvent(type="manual", entity_id="char-1", universe="earth")
+    outcome = engine.process_event_outcome(event, ["sfx-picked"], 0)
+
+    assert _test_applied == []
+    assert outcome.applied == []
+    notes = [n for n in outcome.notes if n.get("action") == "gain"]
+    assert notes, outcome.notes
+    assert "{picked}" in notes[0]["note"]
+
+
+def test_the_same_effect_applies_once_the_name_is_bound():
+    """The other half: the *same* authored effect runs where the name exists."""
+    _reset()
+    engine = EffectsEngine()
+    engine.register(_make_sfx("sfx-picked", "Picked", "manual", effects=[
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+               target="{picked}", result="d6"),
+    ]))
+    event = GameEvent(type="manual", entity_id="char-1", universe="earth",
+                      context={"picked": "trait-x"})
+    outcome = engine.process_event_outcome(event, ["sfx-picked"], 0)
+
+    assert [e.action for e in _test_applied] == ["gain"]
+    assert [e.target for e in outcome.applied] == ["trait-x"]
+
+
+def test_a_context_policy_token_does_not_skip_the_effect():
+    """``{last_projection}`` is a *keyword* the travel handler reads, not a bound
+    name — the exemption that keeps banish/transverse firing ([[B282]])."""
+    _reset()
+    engine = EffectsEngine()
+    engine.register(_make_sfx("sfx-banish", "Banish", "manual", effects=[
+        Effect(timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+               target="loc-1", context={"projection": "{last_projection}"}),
+    ]))
+    event = GameEvent(type="manual", entity_id="char-1", universe="earth")
+    outcome = engine.process_event_outcome(event, ["sfx-banish"], 0)
+
+    assert [e.action for e in _test_applied] == ["move"]
+    assert len(outcome.applied) == 1
+
+
 def test_resolve_effect_spec_choices_resolves_all_refs():
     from types import SimpleNamespace as NS
     from transversal.domain import TargetRef

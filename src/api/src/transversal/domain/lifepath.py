@@ -81,10 +81,12 @@ class LifePathStep(BaseModel):
     #: targets* when no row exposed the name, and ``_apply_spec_effect`` then applies
     #: the effect zero times: a clean no-op. Author it once; it runs where it applies.
     #:
-    #: ⚠ **Not** by writing ``{name}`` into a flat field (``target``/``result``).
-    #: `_substitute_effect_context` rewrites only the tokens it can resolve and
-    #: leaves the rest verbatim, so a flat reference to an unbound name runs the
-    #: effect against the literal string ``"{name}"`` — a junk target, silently.
+    #: A flat ``{name}`` in ``target``/``result`` is safe now, but only because the
+    #: engine refuses it: `_substitute_effect_context` reports the names it could
+    #: not fill and the dispatch **skips** such an effect, logging it and noting it
+    #: on the outcome ([[B282]]). It used to run against the literal string
+    #: ``"{name}"`` — a junk target, silently. Prefer the path: a skip is a visible
+    #: failure, which is better than a wrong write but worse than a clean no-op.
     effects: list[Effect] = Field(default_factory=list)
     #: Names this **step** supplies to the tables it wraps ([[B290]]), resolved
     #: before the table's own declarations so a *shared* table can read the context

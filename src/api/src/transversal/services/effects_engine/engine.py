@@ -498,7 +498,31 @@ class EffectsEngine:
                 if effect.timing in _deferred_timings:
                     continue  # armed above (raw; substituted at fire time)
 
-                effect = _substitute_effect_context(effect, effect_context, bindings)
+                unresolved: list[str] = []
+                effect = _substitute_effect_context(effect, effect_context, bindings, unresolved)
+                if unresolved:
+                    # A field names a value nothing bound. Substitution leaves the
+                    # token verbatim, so applying the effect would point it at the
+                    # literal ``"{name}"`` — a junk id, and silence on the way out
+                    # is what made this look like success ([[B282]]). Skip *this*
+                    # effect (the rest of the rule still runs where it applies) and
+                    # record it twice: the server log, and the outcome's notes,
+                    # which the activation summary already shows.
+                    names = ", ".join(f"{{{n}}}" for n in unresolved)
+                    log.warning(
+                        "[process_event] sfx=%s effect=%s/%s names unbound: %s — skipped",
+                        sfx.id, effect.type, effect.action, names,
+                    )
+                    notes.append({
+                        "type": effect.type,
+                        "action": effect.action,
+                        "target": effect.target,
+                        "note": f"skipped: no value for {names}",
+                    })
+                    # Report it: an all-skipped rule must still reach the wire, or
+                    # the warning dies in the server log.
+                    sfx_applied = True
+                    continue
                 # Resolve any authored ``entity_spec`` against this activation's
                 # variable scope before dispatch, so every handler — the razmerit
                 # service included — receives a concrete entity id rather than a

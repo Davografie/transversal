@@ -251,7 +251,10 @@ def test_manual_source_binding_resolves_source_variable(monkeypatch):
     assert [e.target for e in applied] == ["char-1:martial"]
 
 
-def test_manual_source_binding_without_source_id_is_noop(monkeypatch):
+def test_manual_source_binding_without_source_id_skips_the_effect(monkeypatch):
+    """[[B282]] — with no source id the ``{trait_setting}`` name cannot be filled,
+    so the effect is **skipped** rather than applied against the literal
+    placeholder (which used to point `step_up` at a trait called `"{trait_setting}"`)."""
     from transversal.domain import Effect, EffectTiming, SFX
     from transversal.services import effects_applier
 
@@ -269,6 +272,9 @@ def test_manual_source_binding_without_source_id_is_noop(monkeypatch):
             applied.append(effect)
     monkeypatch.setattr(effects_applier, "effect_registry", FakeRegistry())
 
-    # No source_id in context → the {trait_setting} placeholder survives untouched.
-    engine.process_event_outcome(GameEvent(type="manual", entity_id="char-1", universe="earth"), ["sfx-x"], 0)
-    assert [e.target for e in applied] == ["{trait_setting}"]
+    # No source_id in context → the {trait_setting} placeholder cannot resolve.
+    outcome = engine.process_event_outcome(
+        GameEvent(type="manual", entity_id="char-1", universe="earth"), ["sfx-x"], 0)
+    assert applied == []
+    assert outcome.applied == []
+    assert any("{trait_setting}" in n.get("note", "") for n in outcome.notes), outcome.notes
