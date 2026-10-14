@@ -26,6 +26,7 @@ Run it in the API container (it needs a database connection):
 from __future__ import annotations
 
 from transversal.domain import EntityType
+from transversal.services.lifepath_executor import ENROLLING_FACTION_VARIABLE
 
 #: For each finding, what it means for a removal. Kept next to the code that
 #: produces it rather than in the ticket, because the two drift apart otherwise.
@@ -50,6 +51,10 @@ NOTES = {
     "deprecated_pending_term": "the unscoped pre-[[B271]] checkpoint and its read shim",
     "continuation": "vestigial since the wrapper; kept alive only by `LifePathWizard`'s query",
     "offering": "the faction-offering gate; `startTerm` cannot start a path nobody offers",
+    "enrolment": "a path whose rows **enrol** needs a faction to join: the caller's at "
+                 "term start, else the path's own `{sect}` ([[B290]]). A path with "
+                 "neither is listed below — its enrolling row admits nobody and the "
+                 "executor can only log it. This is the Emberline gap, made visible",
 }
 
 #: How a table's deprecated `life_path` relates to the wrapper that replaced it.
@@ -170,6 +175,29 @@ def lifepath_drift(repo) -> dict:
     dangling = sorted(pid for pid in offered if pid not in known)
     offered_by_nobody = sorted(lp.id for lp in paths if lp.id not in offered)
 
+    # Which paths enrol, and whether anything can tell them **which faction to join**
+    # ([[B41]]). This is the finding that would have named the Emberline gap years ago:
+    # a path whose rows enrol, that nobody offers, and that declares no `{sect}`, has
+    # no faction anywhere — the cursor starts fine and the enrolling row then admits
+    # nobody, which the executor can only log.
+    enrolling = []
+    for lp in paths:
+        rows = [(s.id, b.key) for s in (getattr(lp, "steps", None) or [])
+                for b in (getattr(s, "bindings", None) or []) if getattr(b, "enroll", False)]
+        if not rows:
+            continue
+        declares = any((getattr(d, "name", "") or "").strip() == ENROLLING_FACTION_VARIABLE
+                       for d in (getattr(lp, "bound_variables", None) or []))
+        enrolling.append({
+            "id": lp.id,
+            "name": lp.name,
+            "rows": len(rows),
+            "offered_by": sorted(offered.get(lp.id, [])),
+            "declares_sect": declares,
+        })
+    no_faction_source = [e for e in enrolling
+                         if not e["offered_by"] and not e["declares_sect"]]
+
     return {
         "paths": {
             "total": len(paths),
@@ -198,12 +226,17 @@ def lifepath_drift(repo) -> dict:
             "offered_by_nobody": offered_by_nobody,
             "dangling": dangling,
         },
+        "enrolment": {
+            "enrolling": enrolling,
+            "no_faction_source": no_faction_source,
+        },
     }
 
 
 def format_report(report: dict) -> str:
     """The report as text — counts, the items behind the ones that matter, and why."""
     p, t, m, o = report["paths"], report["tables"], report["terms"], report["offering"]
+    en = report["enrolment"]
     lines = ["Life-path drift — what the iterations left in the store (B291)", ""]
 
     lines.append(f"PATHS ({p['total']})")
@@ -262,6 +295,14 @@ def format_report(report: dict) -> str:
             lines.append(f"      DANGLING offering names a path that does not exist: {pid}")
     else:
         lines.append("      dangling offerings: none")
+
+    lines.append("ENROLMENT")
+    lines.append(f"  {len(en['enrolling'])} paths enrol "
+                 f"({sum(e['rows'] for e in en['enrolling'])} enrolling rows)")
+    lines.append(f"  enrolling paths with NO faction source: {len(en['no_faction_source'])}  — "
+                 f"{NOTES['enrolment']}")
+    for row in en["no_faction_source"]:
+        lines.append(f"      {row['id']:34} {row['name']:28} {row['rows']} enrolling rows")
     return "\n".join(lines)
 
 

@@ -27,6 +27,7 @@ the executor never checked a universe.
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from transversal.domain import (
@@ -48,6 +49,17 @@ from transversal.services.lifepath_scope import (
 )
 from transversal.services.roll_table import entry_key_for, resolve_applicable_entry
 from transversal.services.effect_refs import target_value
+
+log = logging.getLogger("transversal.lifepath")
+
+#: The name a life path declares to say **which faction its enrolments join** ([[B41]]).
+#:
+#: A term begun without a faction — the case for every path no faction offers — still
+#: records a cursor, because the cursor needs nothing else. But an enrolling row does
+#: need somewhere to attach the membership, and the *path* is the party that knows:
+#: the caller may not ([[B290]] is how it says so). One name, in one place, so the
+#: executor and the panel's hint cannot drift — the panel is told to say `sect`.
+ENROLLING_FACTION_VARIABLE = "sect"
 
 
 def find_step(lp: Optional[LifePath], step_id: str) -> Optional[LifePathStep]:
@@ -94,11 +106,21 @@ def entry_step(lp: LifePath) -> Optional[LifePathStep]:
 
 def start_term(entity: Entity, faction_id: str, path_id: str, repo,
                projection_id: Optional[str] = None) -> PendingTerm:
-    """Begin (or restart) a term in a faction's life path, for one body.
+    """Begin (or restart) a term in a life path, for one body.
 
     ``projection_id`` names the body serving it; omitted, the acting body is
     resolved (see ``services/lifepath_scope``). The term replaces any the *same*
     body already had — another body's term is untouched.
+
+    **``faction_id`` may be empty**, and that is the point ([[B41]]): the checkpoint
+    is a *cursor* — ``path_id`` + ``current_step_id`` — and a cursor needs no faction.
+    The faction answers a different question, *whose sect this term serves*, and only
+    one thing needs the answer: an **enrolling** row, which creates the
+    ``entity → faction`` membership that rank and tenure hang off. So a path no
+    faction offers can now be walked, and when its enrolling row resolves the faction
+    is resolved then — the caller's if one was given, else the path's own ``{sect}``
+    (see ``enrolment_faction``). With neither there is nothing to join, and the
+    enrolment is skipped rather than pointed at a faction that does not exist.
     """
     lp = repo.get_lifepath(path_id)
     if lp is None:
@@ -109,7 +131,7 @@ def start_term(entity: Entity, faction_id: str, path_id: str, repo,
 
     pid = resolve_projection_id(entity, repo, projection_id)
     pt = PendingTerm(
-        faction_id=faction_id,
+        faction_id=faction_id or "",
         path_id=path_id,
         projection_id=pid,
         current_step_id=step.id,
@@ -276,7 +298,8 @@ def resolve_step(
 
         result: EffectsResult = apply_effects(entity, immediate, repo, effect_context)
         flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
-                             binding=binding, step=step, wrapped=wrapped)
+                             binding=binding, step=step, wrapped=wrapped,
+                             bindings=effect_context[BINDINGS_CONTEXT_KEY])
         _persist(entity, result, repo, old_razmerit)
 
         from transversal.services.scheduled_events import schedule_deferred
@@ -289,7 +312,8 @@ def resolve_step(
         result: EffectsResult = apply_effects(
             entity, all_mutations, repo, effect_context)
         flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
-                             binding=binding, step=step, wrapped=wrapped)
+                             binding=binding, step=step, wrapped=wrapped,
+                             bindings=effect_context[BINDINGS_CONTEXT_KEY])
         _persist(entity, result, repo, old_razmerit)
 
     return {
@@ -309,7 +333,8 @@ def resolve_step(
 
 
 def _process_flow(entity: Entity, legacy_effects: list[Effect], repo, *, pt,
-                  binding=None, step=None, wrapped: bool = False) -> dict:
+                  binding=None, step=None, wrapped: bool = False,
+                  bindings: Optional[dict] = None) -> dict:
     """Apply the row's flow: the path's structure, or the legacy effects.
 
     Two regimes, and ``wrapped`` picks between them. A path that declares steps
@@ -317,6 +342,9 @@ def _process_flow(entity: Entity, legacy_effects: list[Effect], repo, *, pt,
     entirely — two sources of truth for one edge is how a canvas and a runtime
     end up disagreeing. A path with no steps is pre-wrapper content: its flow
     still lives in those effects, and they are processed exactly as before.
+
+    ``bindings`` is the activation's resolved scope, carried only so an **enrolling**
+    row can find the faction the *path* supplies when the term has none ([[B41]]).
     """
     flow: dict = {"done": False, "pending_choices": []}
 
@@ -340,7 +368,7 @@ def _process_flow(entity: Entity, legacy_effects: list[Effect], repo, *, pt,
                 continue
 
             if effect.action == "enroll":
-                _ensure_enrollment(entity, pt, repo)
+                _ensure_enrollment(entity, pt, repo, bindings)
                 continue
 
             if effect.action == "draft":
@@ -356,7 +384,7 @@ def _process_flow(entity: Entity, legacy_effects: list[Effect], repo, *, pt,
     # Structural flow — the wrapper's answer for this row.
     if binding is not None:
         if binding.enroll:
-            _ensure_enrollment(entity, pt, repo)
+            _ensure_enrollment(entity, pt, repo, bindings)
         if binding.next:
             _advance(entity, pt, binding.next, flow, repo)
         elif binding.exit_kind:
@@ -477,27 +505,61 @@ def _mark_mustered(entity: Entity, pt: PendingTerm, mishap: bool) -> None:
         del terms[pt.projection_id]
 
 
-def _ensure_enrollment(entity: Entity, pt: PendingTerm, repo) -> None:
+def enrolment_faction(pt: PendingTerm, bindings: Optional[dict] = None) -> str:
+    """The faction an enrolling row admits this body to: the term's, else the path's.
+
+    The **term's faction wins**, which is the caller-over-shared-content precedence
+    the whole wrapper uses: a caller that named a faction meant it. A path no faction
+    offers has no term faction, so it states its own by declaring
+    ``{ENROLLING_FACTION_VARIABLE}`` ([[B290]]'s layer), and the resolved scope is
+    where that arrives.
+
+    Returns ``""`` when neither says — there is then nothing to join, and the caller
+    decides what to do about it (``_ensure_enrollment`` skips rather than inventing
+    an edge to a faction that does not exist).
+    """
+    if getattr(pt, "faction_id", ""):
+        return pt.faction_id
+    binding = (bindings or {}).get(ENROLLING_FACTION_VARIABLE)
+    return getattr(binding, "value", "") or ""
+
+
+def _ensure_enrollment(entity: Entity, pt: PendingTerm, repo,
+                       bindings: Optional[dict] = None) -> None:
     """Idempotently record the active term as an enrollment for this body.
 
     The enrollment is scoped to the body serving the term ([[B271]]), so the same
     character may hold the same membership through two bodies without them being
     the same fact. Also ensures the character↔faction ``membership`` edge exists
     so rank and tenure relationship traits have somewhere to attach.
+
+    ``bindings`` is the activation's resolved scope, which is where a faction-less
+    term finds the **path's own** faction (see ``enrolment_faction``). When neither
+    the term nor the path names one, nothing is enrolled and that is **said in the
+    log**: an enrolling row that silently admitted nobody is exactly the failure this
+    role keeps meeting, and a `membership` edge to the empty string would be worse.
     """
+    faction_id = enrolment_faction(pt, bindings)
+    if not faction_id:
+        log.warning(
+            "[lifepath] path %s enrols on a resolved row, but neither the term nor the "
+            "path's `{%s}` names a faction — no membership was created",
+            pt.path_id, ENROLLING_FACTION_VARIABLE)
+        return
+
     for enrollment in enrollments_for(entity, pt.projection_id):
-        if (enrollment.faction_id == pt.faction_id
+        if (enrollment.faction_id == faction_id
                 and enrollment.path_id == pt.path_id):
             break
     else:
         entity.life_paths.append(Enrollment(
-            faction_id=pt.faction_id,
+            faction_id=faction_id,
             path_id=pt.path_id,
             projection_id=pt.projection_id,
         ))
 
-    if repo.get_relationship(entity.id, pt.faction_id, "membership") is None:
-        repo.create_relationship(entity.id, pt.faction_id, "membership")
+    if repo.get_relationship(entity.id, faction_id, "membership") is None:
+        repo.create_relationship(entity.id, faction_id, "membership")
 
 
 def _persist(entity: Entity, result: EffectsResult, repo, old_razmerit: Optional[int] = None) -> None:

@@ -540,3 +540,22 @@ def test_an_override_is_kept_only_where_a_layer_can_honour_it():
     table = created["saveRollTable"]
     assert table["boundVariables"][0] == {"name": "sect", "override": False}
     assert table["entries"][0]["boundVariables"][0] == {"name": "sect", "override": False}
+
+
+def test_start_term_needs_no_faction():
+    """[[B41]]: the checkpoint is a **cursor**, so a path no faction offers can begin.
+    The faction is resolved when a row actually enrols — the caller's if one was given,
+    else the path's own `{sect}` — which is what lets the offering lock come off."""
+    repo = _build()
+
+    data = _run(repo, """
+        mutation($eid: ID!, $pid: ID!) {
+            startTerm(entityId: $eid, pathId: $pid) { factionId pathId currentTableId }
+        }
+    """, {"eid": "char-1", "pid": "lp-1"})
+
+    pt = data["startTerm"]
+    assert pt["factionId"] == ""
+    assert pt["pathId"] == "lp-1"
+    assert pt["currentTableId"] == "tbl-a"
+    assert repo.entities["char-1"].pending_terms[""].faction_id == ""

@@ -90,6 +90,12 @@ def _seed(repo):
          [Condition(type=ConditionType.SOURCE_RATING, operator=">=", value="d8")]),
     ):
         repo.create_lifepath(LifePath(id=pid, name=name, universe=U,
+                                      # A path that cannot begin a term is unwalkable
+                                      # for everyone regardless of its conditions
+                                      # ([[B291]]), so the fixture paths have to be
+                                      # startable for the gate to be the thing under
+                                      # test.
+                                      entry_table_id=f"rt-{pid}",
                                       conditions=conditions))
 
 
@@ -186,6 +192,28 @@ def test_a_satisfied_condition_is_walkable():
         walker = repo.get_entity(WALKER)
         assert unwalkable_reasons(repo, walker, [repo.get_lifepath(UNIVERSE_PATH)]) == {}
         assert unwalkable_reasons(repo, walker, [repo.get_lifepath(TYPE_PATH)]) == {}
+    finally:
+        _cleanup(repo)
+
+
+def test_a_path_that_cannot_begin_a_term_is_unwalkable():
+    """[[B291]] found one live: no steps, no `entry_step`, no `entry_table_id` — an
+    empty shell that `start_term` raises on. It matters here because removing the
+    offering gate ([[B41]]) leaves **this** read as the only thing between the player
+    and the path, so offering one that can only fail turns a disabled row with a
+    reason into an error on click."""
+    repo = _repo
+    _seed(repo)
+    try:
+        shell = repo.get_lifepath(OPEN_PATH)
+        shell.entry_step = ""
+        shell.entry_table_id = ""
+        shell.steps = []
+
+        reasons = unwalkable_reasons(repo, repo.get_entity(WALKER), [shell])
+
+        assert OPEN_PATH in reasons
+        assert "no entry step" in reasons[OPEN_PATH][0]
     finally:
         _cleanup(repo)
 

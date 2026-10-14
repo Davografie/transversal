@@ -61,15 +61,23 @@ def evaluable_conditions(conditions: Optional[list["Condition"]]) -> list["Condi
 def unwalkable_reasons(
     repo: "EntityRepository", entity: Optional["Entity"], paths: list["LifePath"]
 ) -> dict[str, list[str]]:
-    """``path_id →`` the conditions that stop this entity walking it.
+    """``path_id →`` the reasons this entity cannot walk the path.
 
     A path absent from the result is walkable. One entry per failing condition,
     phrased as the author wrote it and framed as **unmet**: ``condition_text``
     renders the *positive* form ("you are in Three Realms"), which on a failing
     condition reads as its opposite, so a bare phrase would state the reverse of
     the truth. Same framing, and same reason, as ``unavailable_sfx_reasons``.
+
+    **A path that cannot begin a term is unwalkable for everyone**, and that is a
+    structural reason rather than a condition: no entry step means `start_term`
+    raises for any caller ([[B291]] found one live — an empty shell). It matters here
+    because removing the offering gate ([[B41]]) made this read the *only* thing
+    between the player and a path: offering one that can only fail is how a disabled
+    row with a reason becomes an error on click.
     """
     from transversal.services.conditions import evaluate_condition
+    from transversal.services.lifepath_executor import entry_step
     from transversal.services.sfx_text import condition_text, repo_name_resolver
 
     if entity is None:
@@ -77,6 +85,9 @@ def unwalkable_reasons(
     resolve = repo_name_resolver(repo)
     reasons: dict[str, list[str]] = {}
     for path in paths:
+        if entry_step(path) is None:
+            reasons[str(path.id)] = ["this path has no entry step — it cannot begin a term"]
+            continue
         gate = evaluable_conditions(getattr(path, "conditions", None))
         if not gate:
             continue

@@ -237,13 +237,21 @@ class MutationsEffects:
 
     @strawberry.mutation
     def start_term(self, info: strawberry.Info, entity_id: strawberry.ID,
-                   faction_id: strawberry.ID, path_id: strawberry.ID,
+                   path_id: strawberry.ID, faction_id: Optional[strawberry.ID] = None,
                    projection_id: Optional[str] = None) -> GqlPendingTerm:
-        """Begin (or restart) a term in a faction's life path, **for one body**.
+        """Begin (or restart) a term in a life path, **for one body**.
 
         `projectionId` names the body serving the term ([[B271]]); omitted, the
         acting body is resolved from `currentProjection`. Only that body's
         checkpoint is replaced — another body's term is left alone.
+
+        **`factionId` is optional** ([[B41]]). The checkpoint is a cursor and needs no
+        faction; the faction says *whose sect the term serves*, which only an
+        **enrolling** row needs — and by then the path's own `{sect}` can supply it
+        ([[B290]]). Pass one when the caller knows it (an offering faction, a
+        membership); omit it for a path nobody offers and the row that enrols resolves
+        it instead. Omitted is a real value here, unlike the leave-alone convention on
+        the content mutations: a term's faction is set when the term begins.
         """
         from transversal.services.lifepath_executor import start_term as start_lp_term
 
@@ -252,7 +260,7 @@ class MutationsEffects:
         if entity is None:
             raise ValueError(f"Entity '{entity_id}' not found")
 
-        pt = start_lp_term(entity, str(faction_id), str(path_id), repo,
+        pt = start_lp_term(entity, str(faction_id or ""), str(path_id), repo,
                            projection_id=projection_id)
         repo.update_entity(entity)
 

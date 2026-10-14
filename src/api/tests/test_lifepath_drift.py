@@ -94,6 +94,7 @@ def test_a_modern_store_reports_nothing_deprecated():
     assert report["terms"]["continuation_or_return_map"] == []
     assert report["offering"]["offered_by_nobody"] == []
     assert report["offering"]["dangling"] == []
+    assert report["enrolment"]["no_faction_source"] == []
     assert report["terms"]["live"] == [{"entity": "char-1", "projection": "", "path": "lp-a"}]
 
 
@@ -224,6 +225,35 @@ def test_the_remaining_path_and_table_findings_are_reported():
     assert report["paths"]["with_discovery"] == ["lp-a"]
     assert report["tables"]["legacy_check"] == ["rt-a"]
     assert report["tables"]["subject_kind"] == [{"id": "rt-a", "subject_kind": "projection"}]
+
+
+def test_an_enrolling_path_with_no_faction_source_is_reported():
+    """The Emberline gap, made visible: rows that enrol, a path nobody offers, and no
+    `{sect}` declaration — so nothing anywhere can say which faction the row joins.
+    This is the finding that would have caught it without the human noticing."""
+    from transversal.services.lifepath_executor import ENROLLING_FACTION_VARIABLE
+
+    def enrolling(pid, *, sect=False):
+        lp = _path(pid, steps=[_step("s1", "rt-a", bindings=[NS(key="0", enroll=True)])])
+        if sect:
+            lp.bound_variables = [NS(name=ENROLLING_FACTION_VARIABLE)]
+        return lp
+
+    report = lifepath_drift(FakeRepo(
+        paths=[enrolling("lp-offered"), enrolling("lp-declared", sect=True),
+               enrolling("lp-silent"),
+               _path("lp-walking", steps=[_step("s1", "rt-a",
+                                                bindings=[NS(key="0", enroll=False)])])],
+        factions=[NS(id="fac-1", suitable_life_path_ids=["lp-offered"])],
+    ))
+
+    assert [e["id"] for e in report["enrolment"]["no_faction_source"]] == ["lp-silent"]
+    by_id = {e["id"]: e for e in report["enrolment"]["enrolling"]}
+    assert by_id["lp-offered"]["offered_by"] == ["fac-1"]
+    assert by_id["lp-declared"]["declares_sect"] is True
+    assert "lp-walking" not in by_id, "a path that never enrols needs no faction"
+    text = format_report(report)
+    assert "NO faction source: 1" in text and "lp-silent" in text
 
 
 def test_factions_are_read_from_the_entity_list_when_the_repo_cannot_list_by_type():

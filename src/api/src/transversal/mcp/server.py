@@ -2442,7 +2442,7 @@ mutation($playerId: ID!, $mainEntityId: ID!, $tableId: ID!, $index: Int!) {
 """
 
 _MUT_START_TERM = """
-mutation($entityId: ID!, $factionId: ID!, $pathId: ID!) {
+mutation($entityId: ID!, $factionId: ID, $pathId: ID!) {
   startTerm(entityId: $entityId, factionId: $factionId, pathId: $pathId) {
     factionId pathId currentStepId currentTableId continuation
   }
@@ -2691,14 +2691,20 @@ def create_support_character(args: dict) -> dict:
 
 
 def start_term(args: dict) -> dict:
-    """Begin (or restart) a term in a faction's life path.
+    """Begin (or restart) a term in a life path.
 
-    Sets the entity's ``pendingTerm`` checkpoint to the path's entry table and
+    Sets the entity's ``pendingTerm`` checkpoint to the path's entry step and
     persists it, so the term can be resumed in a later session. The returned
     ``continuation`` is where the term will go next.
+
+    ``faction_id`` is optional ([[B41]]): the checkpoint is a cursor and needs no
+    faction. The faction says whose sect the term serves, which only an **enrolling**
+    row needs — and the path's own ``{sect}`` ([[B290]]) can supply it then. Omit it
+    for a path no faction offers.
     """
     return _call_mutation("startTerm", _MUT_START_TERM,
-                          {"entityId": args["entity_id"], "factionId": args["faction_id"],
+                          {"entityId": args["entity_id"],
+                           "factionId": args.get("faction_id"),
                            "pathId": args["path_id"]},
                           args.get("dry_run", True), "startTerm")
 
@@ -4266,17 +4272,23 @@ TOOL_SCHEMAS = {
     },
     "start_term": {
         "name": "start_term",
-        "description": "Begin or restart a term in a faction's life path, setting the entity's "
-                       "pending-term checkpoint to the path's entry table.",
+        "description": "Begin or restart a term in a life path, setting the entity's "
+                       "pending-term checkpoint to the path's entry step. `faction_id` "
+                       "is optional: the checkpoint is a cursor and needs no faction, "
+                       "and an enrolling row resolves it later — from the caller's "
+                       "faction if one was given, else the path's own `{sect}` "
+                       "declaration. Omit it for a path no faction offers.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "entity_id": {"type": "string"},
-                "faction_id": {"type": "string"},
+                "faction_id": {"type": "string",
+                    "description": "Optional. Whose sect this term serves; an enrolling "
+                                   "row needs one, and the path's `{sect}` can supply it."},
                 "path_id": {"type": "string"},
                 "dry_run": _dry_run_property(),
             },
-            "required": ["entity_id", "faction_id", "path_id"],
+            "required": ["entity_id", "path_id"],
         },
     },
     "step_up_trait": {

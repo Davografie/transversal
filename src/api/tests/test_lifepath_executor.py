@@ -474,6 +474,107 @@ def test_enroll_creates_membership_edge():
     assert ("char-1", "fac-1", "membership") in repo.created_relationships
 
 
+# ── A term with no faction, and where an enrolling row finds one ([[B41]]) ──
+# The checkpoint is a cursor and needs no faction; the faction answers "whose sect
+# does this term serve", which only an **enrolling** row needs. A path no faction
+# offers states its own by declaring `{sect}` ([[B290]]'s layer), and the term's
+# faction still wins when a caller gave one.
+
+def _sect_path(path_id, faction_id, *, enroll=True):
+    """A wrapped path that enrols on its row and declares the faction it joins."""
+    from transversal.domain import BoundVariable
+    from transversal.services.target_spec import TargetSpec
+
+    lp = _wrapped(path_id, [
+        LifePathStep(id="s1", table_id="tbl-a",
+                     bindings=[LifePathBinding(key="0", enroll=enroll)]),
+    ], entry_step="s1")
+    lp.bound_variables = [BoundVariable(name="sect", spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "literal", "element": "entity", "value": faction_id}]}))]
+    return lp
+
+
+def test_a_term_needs_no_faction_to_begin():
+    """The cursor is `path_id` + `current_step_id`; a faction is a different fact."""
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth",
+                                      entry_table_id="tbl-a")
+    entity = _entity()
+    pt = start_term(entity, "", "lp-1", repo)
+
+    assert pt.faction_id == ""
+    assert pt.current_step_id and pt.current_table_id == "tbl-a"
+    assert entity.pending_terms[""].path_id == "lp-1"
+
+
+def test_an_enrolling_row_joins_the_faction_the_path_declares():
+    repo = EnrollEdgeRepo()
+    repo.entities["fac-path"] = _entity(id="fac-path", type=EntityType.FACTION, name="The Sect")
+    repo.lifepaths["lp-sect"] = _sect_path("lp-sect", "fac-path")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("join", [])])
+
+    entity = _entity()
+    start_term(entity, "", "lp-sect", repo)
+    resolve_step(entity, repo, index=1)
+
+    assert ("char-1", "fac-path", "membership") in repo.created_relationships
+    assert [e.faction_id for e in entity.life_paths] == ["fac-path"]
+
+
+def test_the_terms_faction_beats_the_paths_own():
+    """A caller that named a faction meant it — the same caller-over-content
+    precedence the wrapper uses everywhere."""
+    repo = EnrollEdgeRepo()
+    repo.entities["fac-path"] = _entity(id="fac-path", type=EntityType.FACTION, name="The Sect")
+    repo.lifepaths["lp-sect"] = _sect_path("lp-sect", "fac-path")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("join", [])])
+
+    entity = _entity()
+    start_term(entity, "fac-term", "lp-sect", repo)
+    resolve_step(entity, repo, index=1)
+
+    assert ("char-1", "fac-term", "membership") in repo.created_relationships
+    assert [e.faction_id for e in entity.life_paths] == ["fac-term"]
+
+
+def test_an_enrolling_row_with_no_faction_anywhere_invents_nothing():
+    """The property that makes "optional" safe: with neither a term faction nor a
+    `{sect}`, there is nothing to join. A `membership` edge to the empty string would
+    be worse than no edge, and an enrolling row that silently admitted nobody is
+    logged rather than passed over."""
+    repo = EnrollEdgeRepo()
+    repo.lifepaths["lp-nofac"] = _wrapped("lp-nofac", [
+        LifePathStep(id="s1", table_id="tbl-a",
+                     bindings=[LifePathBinding(key="0", enroll=True)]),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("join", [])])
+
+    entity = _entity()
+    start_term(entity, "", "lp-nofac", repo)
+    resolve_step(entity, repo, index=1)
+
+    assert repo.created_relationships == [], "no edge, and certainly not one to ''"
+    assert entity.life_paths == []
+
+
+def test_a_non_enrolling_row_needs_no_faction():
+    """A path nobody offers is walkable even when it never enrols — the cursor is all
+    it takes. Nothing about starting or advancing asks for a faction."""
+    repo = EnrollEdgeRepo()
+    repo.lifepaths["lp-plain"] = _wrapped("lp-plain", [
+        LifePathStep(id="s1", table_id="tbl-a", bindings=[LifePathBinding(key="0", enroll=False)]),
+    ], entry_step="s1")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("walk on", [])])
+
+    entity = _entity()
+    start_term(entity, "", "lp-plain", repo)
+    result = resolve_step(entity, repo, index=1)
+
+    assert result.get("error") is None, result.get("error")
+    assert repo.created_relationships == []
+    assert entity.life_paths == []
+
+
 def test_muster_marks_mustered_without_mishap():
     repo = ExecutorRepo()
     repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")
