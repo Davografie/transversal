@@ -345,34 +345,55 @@ export function usesFlatTraitList(traitSets, limit = FLAT_TRAIT_LIMIT) {
 }
 
 /**
- * Rows whose `→ contact` label a predecessor already states.
+ * The row that **heads** each run of rows about one relationship, and the label it
+ * carries.
  *
- * Consecutive rows about the same relationship are one group, so the label is
- * stated once at the top of it — the rule the Blue Book already applies to
- * consecutive entries from one sender (`entryContinuations`), where repeating the
- * name on every line is noise rather than information.
+ * Consecutive rows about the same relationship are one group, and the group states
+ * whom the relationship concerns once — at its top, as a header, with its traits
+ * under it. That is the rule the Blue Book applies to consecutive entries from one
+ * sender (`entryContinuations`), taken one step further: the name is not a marker
+ * on a line, it names the block.
  *
- * Returns the ids of the rows that should **not** repeat the label. Only
- * relationship-anchored rows participate, so an ordinary trait between two of
- * them breaks the run — which is what makes "consecutive" mean consecutive.
+ * **Why a header rather than `→ name` on the first row** (the shape this replaced,
+ * `relationContinuations`): the marker moved with the run's order, and nothing
+ * pinned that order. `sortSetTraits` is a stable sort on rank alone, so the
+ * tiebreak is the order the API returned the settings in — and within one edge
+ * that order is not defined (measured on `character-20809`: the two settings of
+ * edge `26767096` come back `…:trait-62763626` then `…:trait-338957761`, the
+ * *opposite* of their key order). Whichever row was drawn first stated the
+ * contact, so a trait could stop showing its relationship — and did, to the
+ * author, who read it as the notes edit having dropped it (2026-09-29). A header
+ * per group cannot move: every relationship states its contact, exactly once,
+ * whichever of its rows happens to be drawn first.
+ *
+ * Returns a `Map` from row id to the head that row should draw. A row that does
+ * not start a group is absent from it, and so is a row that is not a relationship
+ * row — or one whose contact has no name, since a header reading `→ gmc-1234`
+ * would be worse than the marker it replaces.
  *
  * The relationship's identity is its contact **and** its edge type: one entity can
  * be both a place you have a `relation` with and a faction you hold `membership`
  * in, and those are two different relationships that happen to share a contact.
  */
-export function relationContinuations(traits) {
-  const items = traits || []
-  const repeating = new Set()
-  for (let i = 1; i < items.length; i++) {
-    const prev = items[i - 1]
-    const curr = items[i]
-    if (prev?.fromType !== 'relationship' || curr?.fromType !== 'relationship') continue
-    if (!prev.relationshipContactId) continue
-    if (prev.relationshipContactId !== curr.relationshipContactId) continue
-    if ((prev.relationshipType || '') !== (curr.relationshipType || '')) continue
-    repeating.add(curr.id)
+export function relationGroups(traits) {
+  const heads = new Map()
+  let run = null // the key the rows currently being read belong to
+  for (const t of (traits || [])) {
+    const contact = t?.fromType === 'relationship' ? t.relationshipContactId : null
+    const named = !!contact && !!t.relationshipContactName
+    const key = named ? `${contact}|${t.relationshipType || ''}` : null
+    if (!key) { run = null; continue }
+    if (run === key) continue // the same run — its head is already set
+    run = key
+    heads.set(t.id, {
+      name: t.relationshipContactName,
+      type: t.relationshipType || '',
+      // The id, so a host can make the header a way to the contact's sheet
+      // without re-deriving which entity the group is about.
+      contactId: contact,
+    })
   }
-  return repeating
+  return heads
 }
 
 /**

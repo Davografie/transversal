@@ -30,7 +30,7 @@ import {
   canPickUp,
   findSetting,
   groupRelationRows,
-  relationContinuations,
+  relationGroups,
   rootAnchor,
   showsChildren,
   sortSetTraits,
@@ -315,37 +315,47 @@ ok('a sub-trait does not count — it rides its parent',
 ok('an absent list is flat rather than a crash', usesFlatTraitList(undefined), true)
 ok('the limit is overridable', usesFlatTraitList([setOf('a', 5)], 4), false)
 
-// ── `→ contact` repeats only when the relationship changes ──────────────
-// Consecutive rows about one relationship read as a group; the label belongs at
-// the top of it, not on every line (the Blue Book's `entryContinuations` rule).
+// ── a relationship states whom it concerns, once, as its group's header ──
+// The head is the first row of a run; its traits follow. A header cannot move
+// with the run's order the way the old per-row marker could, which is what the
+// author hit: a trait stopped stating its relationship and read as if the
+// anchoring had been lost (2026-09-29).
 const rel = (id, contactId, contactName, type = 'relation') => ({
   id, fromType: 'relationship', relationshipContactId: contactId,
   relationshipContactName: contactName, relationshipType: type,
 })
 const plain = (id) => ({ id, fromType: 'entity' })
+// id -> the name its header states, which is the whole of what the row draws.
+const heads = (rows) => Object.fromEntries([...relationGroups(rows)].map(([id, h]) => [id, h.name]))
 
-ok('a lone relationship states its contact',
-   [...relationContinuations([rel('a', 'gmc-1', 'Bai')])], [])
-ok('the second row about the same relationship does not repeat it',
-   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-1', 'Bai')])], ['b'])
-ok('a third row is a continuation too',
-   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-1', 'Bai'), rel('c', 'gmc-1', 'Bai')])],
-   ['b', 'c'])
-ok('a different contact starts a new group',
-   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-2', 'Dvalov')])], [])
-ok('and the row after it continues that new group',
-   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-2', 'Dvalov'), rel('c', 'gmc-2', 'Dvalov')])],
-   ['c'])
-ok('an ordinary trait between two breaks the run',
-   [...relationContinuations([rel('a', 'gmc-1', 'Bai'), plain('x'), rel('c', 'gmc-1', 'Bai')])], [])
-ok('two ordinary traits are never continuations',
-   [...relationContinuations([plain('a'), plain('b')])], [])
+ok('a lone relationship heads its own group',
+   heads([rel('a', 'gmc-1', 'Bai')]), { a: 'Bai' })
+ok('the second row about the same relationship is not a second header',
+   heads([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-1', 'Bai')]), { a: 'Bai' })
+ok('a third row is under the same header',
+   heads([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-1', 'Bai'), rel('c', 'gmc-1', 'Bai')]),
+   { a: 'Bai' })
+ok('a different contact heads its own group',
+   heads([rel('a', 'gmc-1', 'Bai'), rel('b', 'gmc-2', 'Dvalov')]), { a: 'Bai', b: 'Dvalov' })
+ok('an ordinary trait between two breaks the run, so the second heads afresh',
+   heads([rel('a', 'gmc-1', 'Bai'), plain('x'), rel('c', 'gmc-1', 'Bai')]),
+   { a: 'Bai', c: 'Bai' })
+ok('ordinary traits never head anything',
+   heads([plain('a'), plain('b')]), {})
 ok('the same contact through a different edge type is a different relationship',
-   [...relationContinuations([rel('a', 'f-1', 'Iron Roots', 'membership'), rel('b', 'f-1', 'Iron Roots', 'relation')])], [])
-ok('a row with no contact id never matches',
-   [...relationContinuations([rel('a', null, ''), rel('b', null, '')])], [])
-ok('an absent list is empty rather than a crash', [...relationContinuations(undefined)], [])
-ok('a single row is empty rather than a crash', [...relationContinuations([rel('a', 'gmc-1', 'Bai')])], [])
+   heads([rel('a', 'f-1', 'Iron Roots', 'membership'), rel('b', 'f-1', 'Iron Roots', 'relation')]),
+   { a: 'Iron Roots', b: 'Iron Roots' })
+ok('a row with no contact id heads nothing',
+   heads([rel('a', null, ''), rel('b', null, '')]), {})
+ok('a relationship whose contact has no name heads nothing',
+   heads([rel('a', 'gmc-1', ''), rel('b', 'gmc-1', '')]), {})
+ok('an absent list is empty rather than a crash', [...relationGroups(undefined)], [])
+ok('the head carries the type, for a membership to read as one',
+   [...relationGroups([rel('a', 'f-1', 'Iron Roots', 'membership')])].map(([, h]) => h.type),
+   ['membership'])
+ok('and the contact id, so a host can reach the contact',
+   [...relationGroups([rel('a', 'gmc-1', 'Bai')])].map(([, h]) => h.contactId),
+   ['gmc-1'])
 
 // ── a relationship's rows are consecutive ──────────────────────────────
 const keys = (rows) => rows.map(r => r.id)
@@ -369,9 +379,9 @@ ok('a different edge type is a different group',
 ok('an absent list is empty rather than a crash', keys(groupRelationRows(undefined)), [])
 ok('a single row survives', keys(groupRelationRows([A1])), ['a1'])
 
-// The two together: grouped, then labelled once.
-ok('after grouping, only the first row of the run states the contact',
-   [...relationContinuations(groupRelationRows([A1, B1, A2]))], ['a2'])
+// The two together: pulled together by the relationship, headed once.
+ok('after grouping, each run still has exactly one header',
+   heads(groupRelationRows([A1, B1, A2])), { a1: 'Bai', b1: 'Dvalov' })
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)

@@ -140,7 +140,13 @@ export async function openSheet(page, { playerId, entityId, playerName = 'e2e' }
 
 /** Drill into a trait set by name, so its trait rows exist in the DOM. */
 export async function openSet(page, setName) {
-  const header = page.locator('.set-header').filter({ hasText: new RegExp(`^\\s*${setName}\\s*$`, 'i') }).first()
+  // Find the header by its **name element**, but click the header: a header draws
+  // a chevron and, on a set with a limit, a run of dots — so its text is
+  // `▸relations○`, and an exact match against the whole header could never fire.
+  // Both shapes carry `.set-name` (the accordion's toggle and the drill-in's
+  // link), and both put the click handler on the header around it.
+  const name = page.locator('.set-name').filter({ hasText: new RegExp(`^${escapeRe(setName)}$`, 'i') })
+  const header = page.locator('.set-header').filter({ has: name }).first()
   await header.waitFor({ state: 'visible', timeout: 10_000 })
   await header.click()
   await page.locator('.trait-row').first().waitFor({ state: 'visible', timeout: 10_000 })

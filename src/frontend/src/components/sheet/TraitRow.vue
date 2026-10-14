@@ -5,6 +5,23 @@
        did not belong ("the neutron staff is the asset; damaged is a detail that
        lives on the staff"). -->
   <div class="trait-node" :class="{ wrap, 'has-contents': renderChildren, 'is-morph': trait.ego === false, 'is-negative': trait.polarity === 'NEGATIVE' }">
+  <!-- Whom this relationship concerns: a header for the block of traits that
+       belong to it, drawn above the first of them. The sheet decides which row
+       carries it (`relationGroups`), and it sits *outside* `.trait-row` on
+       purpose — the row is a control (it plays the trait, it drags), and a label
+       that plays a trait when you click it would be a small lie.
+       The type is stated only when it is not the common `relation`: "membership"
+       of Iron Roots is a different thing from a personal tie, and saying
+       `relation` on every other group is noise. -->
+  <div
+    v-if="depth === 0 && relationHead && api.isKnown(trait)"
+    class="relation-head"
+    :data-contact-id="relationHead.contactId"
+  >
+    <span class="relation-arrow" aria-hidden="true">→</span>
+    <span class="relation-contact">{{ relationHead.name }}</span>
+    <span v-if="relationHead.type && relationHead.type !== 'relation'" class="relation-type">{{ relationHead.type }}</span>
+  </div>
   <div v-if="depth === 0 && api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, container: api.isContainer(trait), 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false, 'drag-over': api.isDragOver(trait), dragging: api.isDragging(trait) }" :data-ts-id="trait.id" :data-drop-container="api.isContainer(trait) ? trait.id : null" @click="onRowClick" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd" @dragover.prevent="api.onTraitDragOver($event)" @dragleave="api.onTraitDragLeave()" @drop.prevent="api.onTraitDrop($event)" @dragend="api.onTraitDragEnd()">
     <!-- The grip exists only in a set that holds a container — outside one there
          is nowhere to drop, so it would be chrome with no purpose. The GM tree
@@ -36,10 +53,6 @@
       <span class="trait-name" :class="{ disabled: phase !== 'adding' || api.isResourceDepleted(trait) }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
       <span v-if="api.traitTimerLabel(trait)" class="trait-timer" :title="'Re-enables after ' + api.traitTimerLabel(trait)">⏳ {{ api.traitTimerLabel(trait) }}</span>
       <span v-if="trait.enabled === false" class="trait-disabled-badge">disabled</span>
-      <!-- The contact is stated once per run of rows about the same relationship
-           (the sheet decides which rows are continuations), so a group reads as a
-           group instead of repeating the name on every line. -->
-      <span v-if="trait.fromType === 'relationship' && trait.relationshipContactName && !hideContact" class="trait-contact">→ {{ trait.relationshipContactName }}</span>
       <span v-if="trait.statement" class="trait-statement">{{ trait.statement }}</span>
       <div v-if="trait.sfxIds?.length || trait.grantedSfxIds?.length" class="sfx-cards">
         <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId, 'chip')"
@@ -325,8 +338,10 @@ const props = defineProps({
   // True when this row sits directly under a container — the only nested rows
   // that may be picked up.
   insideContainer: { type: Boolean, default: false },
-  // The row above states the same relationship, so this row does not repeat it.
-  hideContact: { type: Boolean, default: false },
+  // The head of a run of rows about one relationship — `{ name, type, contactId }`
+  // from `relationGroups`, or null when this row does not start one. The row that
+  // carries it draws the block's header.
+  relationHead: { type: Object, default: null },
   // This row sits in an **ordered** container, so it carries a leading marker
   // lane with its own `order` (see `ORDERED_TAG` in utils/traitTree.js). The
   // lane renders for every child of such a container — including one with no
@@ -497,10 +512,26 @@ function onRowClick() {
   opacity: 0.45;
 }
 
-.trait-contact {
+/* Whom a relationship concerns, heading the block of its traits. Quiet and
+   full-width, with a rule above it: it is a label for the rows under it, not a
+   row itself, and the rule is what makes a stack of relationships read as a
+   stack rather than as one long list of traits. */
+.relation-head {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 2px 1px;
+  border-top: 1px solid var(--overlay-8);
   font-size: 11px;
+  color: var(--text);
+}
+.relation-head .relation-arrow { color: var(--accent); font-size: 10px; }
+.relation-head .relation-contact { font-weight: 600; }
+.relation-head .relation-type {
+  font-size: 9px;
   color: var(--text-dim);
-  margin-left: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .trait-statement {

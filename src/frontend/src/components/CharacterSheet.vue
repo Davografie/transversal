@@ -446,7 +446,7 @@
                 :api="traitRowApi"
                 :phase="phase"
                 :limit-reached="limitReachedFor(t)"
-                :hide-contact="entry.continuations.has(t.id)"
+                :relation-head="entry.heads.get(t.id) || null"
               />
             </div>
           </div>
@@ -511,7 +511,7 @@
               :phase="phase"
               :limit-reached="limitReachedFor(t)"
               :wrap="activeSheetView === 'profile'"
-              :hide-contact="traitContinuations.has(t.id)"
+              :relation-head="traitHeads.get(t.id) || null"
               :show-notes="activeSheetView === 'profile'"
             />
           <!-- The set order, so a reader can walk a sheet's sets without going back
@@ -696,7 +696,7 @@ import RollTableMenu from './gm/RollTableMenu.vue'
 import GmPlayOverview from './gm/GmPlayOverview.vue'
 import { useEntityCrud } from '../composables/useEntityCrud.js'
 import { useLocationTree } from '../composables/useLocationTree.js'
-import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, groupRelationRows, relationContinuations, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
+import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, groupRelationRows, relationGroups, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
 import { splitRefunds } from '../utils/poolSpends.js'
 import { rollTableIdFromAnswer, rollTableIdOf, rollTableMenuEffect } from '../utils/rollTableMenu.js'
 import { DEFAULT_SHEET_TAB, hasSheetTab, sheetProfileFor } from '../utils/sheetProfile.js'
@@ -1537,10 +1537,11 @@ function goToTraitSets() {
 }
 
 // The accordion's rows: each set's traits, grouped so a relationship's rows sit
-// together, with the ids whose `→ contact` the row above already states.
+// together, and the row in each group that heads it with whom the relationship
+// concerns.
 const accordionSets = computed(() => traitSets.value.map(ts => {
   const traits = groupRelationRows(ts.traits)
-  return { ts, traits, continuations: relationContinuations(traits) }
+  return { ts, traits, heads: relationGroups(traits) }
 }))
 
 // B60 — a sheet with few traits skips the set-list layer: the sets are a
@@ -1607,11 +1608,12 @@ const currentTraits = computed(() => {
   return groupRelationRows(drilledSet.value?.traits || [])
 })
 
-// Rows whose `→ contact` the row above already states. Computed over whatever
-// list is rendering, so the relations set, the flat list and the relation tab all
-// group the same way; the rule itself lives in the model (utils/traitTree.js) so
-// it can be checked without a browser.
-const traitContinuations = computed(() => relationContinuations(currentTraits.value))
+// The row that heads each relationship group in whatever list is rendering, and
+// the name it states. Computed over the list rather than per view, so the
+// relations set, the flat list and the relation tab all group the same way; the
+// rule itself lives in the model (utils/traitTree.js) so it can be checked
+// without a browser.
+const traitHeads = computed(() => relationGroups(currentTraits.value))
 
 // Every root row the traits area is showing, however it is scoped: the flat list
 // (B60), the accordion's open sets, the drilled set, the profile tab or the
