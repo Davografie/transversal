@@ -242,10 +242,17 @@ const isNew = computed(() => !pathId.value)
 // ── Auto-save: no Save button (B211's convention, the human 2026-10-13) ──
 let _saveTimer = null
 let _suppressEdits = false
+// Has the author changed anything since the panel opened? A document fetched while
+// they were typing is older than what they typed, so it must not replace it.
+let _touched = false
+// A stored document that arrived while an editor was open. Applied when the editor
+// closes, if the author still has not edited.
+let _pendingSeed = null
 const savedAt = ref(null)
 
 function scheduleSave() {
   if (_suppressEdits) return
+  _touched = true
   if (isNew.value) return
   savedAt.value = null
   clearTimeout(_saveTimer)
@@ -276,6 +283,16 @@ function seedForm(p) {
   // Copied, not aliased: the editor mutates in place, and the prop is the
   // panel's own `lp` object — a cancelled edit must not leak into it.
   form.conditions = (p.conditions || []).map(c => ({ ...c }))
+}
+
+/** Re-seed from a **stored** copy. Guarded so the load is not read as an edit. */
+function seedFrom(p) {
+  _suppressEdits = true
+  try {
+    seedForm(p)
+  } finally {
+    _suppressEdits = false
+  }
 }
 
 const form = reactive({
@@ -348,20 +365,35 @@ onMounted(async () => {
   // the current path — so the form must be re-seeded from storage. Without this a
   // floating panel shows a stale document (the step effects authored since it was
   // parked are simply not in it) and, being auto-saving, would then write that
-  // staleness back. `_suppressEdits` keeps the re-seed from counting as an edit.
+  // staleness back.
+  //
+  // ⚠ It must not land on top of live work. A step's effect editor is handed the
+  // **step object itself** as its draft (`context.rowDraft`), so replacing
+  // `form.steps` orphans whatever that child is authoring: the effect it adds goes
+  // to an object the list no longer contains and the auto-save never sees, so it
+  // disappears with no error. A document that arrives while an editor is open, or
+  // after the author has changed something, is therefore **parked** and applied when
+  // the editor closes — and dropped if the author has edited by then, because their
+  // version is the newer one and this panel is what saved it.
   if (props.lp?.id) {
     try {
       const fresh = await fetchLifePath(props.lp.id)
       if (fresh) {
-        _suppressEdits = true
-        seedForm(fresh)
-        _suppressEdits = false
+        if (editingStepEffect.value || _touched) _pendingSeed = fresh
+        else seedFrom(fresh)
       }
     } catch { /* keep what we were opened with */ }
   }
   // The row highlight follows the open effect, and shutting the editor is the one
   // path every *close* takes (a detach is deliberately not a close).
-  offStepEffectClose = panel.onChildClose(() => { editingStepEffect.value = null })
+  offStepEffectClose = panel.onChildClose(() => {
+    editingStepEffect.value = null
+    if (_pendingSeed && !_touched) {
+      const parked = _pendingSeed
+      _pendingSeed = null
+      seedFrom(parked)
+    }
+  })
 })
 
 // ── A step's effects: one child panel per effect ────────
