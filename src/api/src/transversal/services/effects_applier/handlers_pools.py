@@ -457,6 +457,7 @@ def _apply_resolve_pool(entity, effect, repo, result):
     from transversal.services.contest_tracker import broadcast_pool_change
     from transversal.api.sse.bus import StreamEvent, event_bus
     from transversal.services.session_manager import session_manager
+    from transversal.services.trait_display import dice_with_trait_display
 
     store = get_scene_store()
     store.save_pool(location_id, owner_id, enriched)
@@ -471,7 +472,13 @@ def _apply_resolve_pool(entity, effect, repo, result):
             # effect-set difficulty is read by the same splash, and it is the
             # only place these dice exist (the pool belongs to *owner_id*, not
             # to the location, so the receiver could not go and fetch them).
-            data={"difficulty": total, "location_id": location_id, "dice": enriched},
+            # …and with each die's trait behind it, so the splash can draw the chip
+            # ([[B289]]). Copied, so the pool just saved above stays the pool.
+            data={
+                "difficulty": total,
+                "location_id": location_id,
+                "dice": dice_with_trait_display(enriched),
+            },
         ))
 
     result.applied.append(AppliedEffect(effect, f"resolved {owner_id} pool → difficulty {total}"))

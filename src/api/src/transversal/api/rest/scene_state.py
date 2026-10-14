@@ -15,6 +15,7 @@ from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.services.scene_state import get_scene_store
 from transversal.services.contest_tracker import broadcast_pool_change
 from transversal.services.session_manager import session_manager
+from transversal.services.trait_display import dice_with_trait_display
 
 logger = logging.getLogger("transversal.scene_state")
 
@@ -194,7 +195,9 @@ async def set_difficulty(location_id: str, req: DifficultyRequest):
     # difficulty has to judge *what* is opposing them, and the number alone does
     # not say — the roller's difficulty pool is keyed by the location id, and only
     # its rolled dice are worth sending (an unrolled pool is not an opposition).
-    dice = [d for d in store.get_pool(location_id, location_id) if d.get("result") is not None]
+    dice = dice_with_trait_display(
+        [d for d in store.get_pool(location_id, location_id) if d.get("result") is not None]
+    )
 
     for s in session_manager.list_active():
         event_bus.publish(StreamEvent(

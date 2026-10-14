@@ -1372,11 +1372,14 @@ trait chips"*). It is the one face allowed to be loud:
   — shape and colour say `d8 d8` at a glance and the numbers are not the point — and not at
   all for a **roll**, where an overlapped die hides its neighbour's face. The step is one
   value used both for the layout and for the reserved lane, so the two cannot disagree.
-- **What it cannot show yet is the statement**, and that is a payload gap rather than a
-  surface one: `PoolDieIn` carries `die` / `label` / `ts_id` and no statement, so the chip
-  degrades to name + dice. The client cannot fill it in honestly — the dice belong to the
-  roller's pool, and only the server has the trait setting in hand where it already resolves
-  the label. **Requested of [[applied-mechanics]].**
+- **The statement and the trait's picture are attached by the server**
+  (`services/trait_display.py`, [[B289]]). A die carries `ts_id` — the **trait setting** —
+  which identifies the data, but **nothing is keyed by a setting id**: the API reaches a
+  navdot image per *registry trait* (`TraitRef.image(role:)`), and a client only holds the
+  settings it happened to load (the current location's scene traits). So the server adds
+  `statement`, `navdot_image` and `navdot_transparent` where it already resolves the label,
+  for both publishers of `difficulty_set`, through the same image ladder the location
+  payload uses. The chip and the map therefore draw the same picture by construction.
 
 ### A sticky message the engine was told to deliver
 
