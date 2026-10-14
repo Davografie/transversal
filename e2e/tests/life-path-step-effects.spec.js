@@ -60,7 +60,13 @@ test('an effect authored on a step is there again after a reload', async ({ page
   await page.locator('.lpd-step').first().locator('.ee-add').click()
   const form = page.locator('.reep-root .ee-form')
   await expect(form).toBeVisible({ timeout: 20000 })
-  await form.locator('select').first().selectOption('gain')
+  // Whichever action the registry lists first — this test is about the *persist*,
+  // not about which verb was chosen, and pinning an action id here couples it to a
+  // vocabulary that is [[Effects System]]'s to change.
+  const action = form.locator('select').first()
+  const firstAction = (await action.locator('option').evaluateAll(
+    (os) => os.map((o) => o.value).filter(Boolean)))[0]
+  await action.selectOption(firstAction)
   // The form's own commit — "Add" — is what puts the effect in the step's list. The
   // *persist* is the panel's auto-save, and it is the half this test is about.
   const saved = page.waitForResponse(
