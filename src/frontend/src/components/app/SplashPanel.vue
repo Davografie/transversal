@@ -15,7 +15,17 @@
            for where they are). It **waits for the tap**, because the tap is the
            point: the splash is the notice and the way through to the sheet, and a
            report that faded before it was read would lose both. It carries
-           `action`, which is also what tells the two apart.
+           `action`, which is also what tells the two apart. An authored client
+           action ([[B132]]) arrives as the same face: a message the engine was
+           told to deliver, which may name an action of its own.
+
+       **Front and centre, for every face** (the author, 2026-10-14: *"I expected
+       the splash panel to open front and center, but it's more like a glorified
+       toast now"*). It used to take the free corner on a desktop and the top
+       banner on a phone; the centre is the same place on every layout, which is
+       what "a player learns where to look" wanted in the first place. It stays
+       **non-modal, with no scrim**: the card is the only thing that takes input,
+       so the table behind it is never blocked.
 
        The shell owns *when*: it decides the dwell (a small change is shorter than
        a course summary), holds a target until it is tapped, and feeds notes in
@@ -37,28 +47,43 @@
       />
     </div>
 
-    <!-- One note at a time, the head of the queue. `role="status"` so a change
-         nobody asked for is announced rather than only seen. A **target** is a
-         button instead: it is meant to be pressed, so it is not a live region. -->
+    <!-- One note at a time, the head of the queue. A plain report is a live region
+         (`role="status"`) so a change nobody asked for is announced rather than
+         only seen; a **target** is a button instead, because it is meant to be
+         pressed. -->
     <TransitionGroup v-if="!hasPrompt && currentNote" name="sp-note" tag="div" class="sp-notes">
-      <component
-        :is="currentNote.action ? 'button' : 'div'"
-        :key="currentNote.id"
-        class="sp-note"
-        :class="{ 'sp-note-action': !!currentNote.action }"
-        :type="currentNote.action ? 'button' : undefined"
-        :role="currentNote.action ? undefined : 'status'"
-        @click="currentNote.action && emit('act', currentNote)"
-      >
-        <div class="sp-note-head">
-          <span class="sp-note-title">{{ currentNote.title }}</span>
-          <span class="sp-note-kind">{{ kindLabel }}</span>
-        </div>
-        <ul v-if="currentNote.lines?.length" class="sp-note-lines">
-          <li v-for="(line, i) in currentNote.lines" :key="i" :class="{ 'is-silent': line.silent }">{{ line.text || line }}</li>
-        </ul>
-        <span v-if="currentNote.action" class="sp-note-cue">{{ currentNote.action }}</span>
-      </component>
+      <!-- A wrapper, so a sticky message with nothing to press can carry its own
+           ✕ *beside* the control rather than inside it (a button inside a button
+           is not a thing). -->
+      <div :key="currentNote.id" class="sp-note-wrap">
+        <component
+          :is="currentNote.action ? 'button' : 'div'"
+          class="sp-note"
+          :class="{ 'sp-note-action': !!currentNote.action }"
+          :type="currentNote.action ? 'button' : undefined"
+          :role="currentNote.action ? undefined : 'status'"
+          @click="currentNote.action && emit('act', currentNote)"
+        >
+          <div class="sp-note-head">
+            <span class="sp-note-title">{{ currentNote.title }}</span>
+            <span class="sp-note-kind">{{ kindLabel }}</span>
+          </div>
+          <ul v-if="currentNote.lines?.length" class="sp-note-lines">
+            <li v-for="(line, i) in currentNote.lines" :key="i" :class="{ 'is-silent': line.silent }">{{ line.text || line }}</li>
+          </ul>
+          <span v-if="currentNote.action" class="sp-note-cue">{{ currentNote.action }}</span>
+        </component>
+        <!-- A target is dismissed *by* its action, so it needs no Cancel. A sticky
+             message with no action has no such way out, and a card that waits for
+             ever with no exit is a trap. -->
+        <button
+          v-if="currentNote.sticky && !currentNote.action"
+          class="sp-note-close"
+          type="button"
+          aria-label="Dismiss"
+          @click="emit('dismiss', currentNote)"
+        >✕</button>
+      </div>
     </TransitionGroup>
   </div>
 </template>
@@ -79,11 +104,11 @@ import EffectTargetWizard from '@/components/gm/EffectTargetWizard.vue'
 //   * **A target waits for its tap** and is the one interactive note. It is still
 //     non-modal and scrim-less — it names one action (`action`), not a decision —
 //     and it is dismissible *by* doing that action, which is why it needs no
-//     Cancel of its own.
+//     Cancel of its own. A sticky message the engine delivered with *no* action is
+//     the one case that does need one ([[B132]]), hence the ✕.
 //
-// The dwell of a note belongs to the shell; the splash only says which face it is.
-// Neither moves: the splash is fixed to the same corner so a player learns where
-// to look, and on touch the bands already own the drag gestures.
+// The dwell of a note belongs to the shell; the splash only says which face it is,
+// and every face opens in the same place — the middle of the viewport.
 // Captured, not just declared — the script reads `props.…` and the template's
 // computeds are built from it, so a bare `defineProps({…})` throws on the first
 // render (`props is not defined`). The sibling of the `emit` trap below.
@@ -94,14 +119,17 @@ const props = defineProps({
   // routed question ([[B229]] item 4) is aimed at a chosen entity.
   entityId: { type: String, default: '' },
   promptTitle: { type: String, default: 'A rule needs a choice' },
-  /** The note at the head of the queue — the note face, or the target face when
-   *  it names an `action`. `{ id, title, kind, lines, action? }`. */
+  /**
+   * The note at the head of the queue — the note face, the **target** face when it
+   * names an `action`, and an authored client message ([[B132]]).
+   * `{ id, title, kind, lines, action?, targetId?, sticky? }`.
+   */
   note: { type: Object, default: null },
 })
 // Captured, not just declared: the template calls `emit(...)`, and a bare
 // `defineEmits([...])` leaves it undefined there — every click then throws
 // instead of reaching the shell, which reads as "the question will not close".
-const emit = defineEmits(['answer', 'leave', 'loop', 'act'])
+const emit = defineEmits(['answer', 'leave', 'loop', 'act', 'dismiss'])
 
 const hasPrompt = computed(() => !!props.choices?.length)
 const promptEntityId = computed(() => props.choices?.[0]?.entity_id || props.entityId)
@@ -113,30 +141,34 @@ const kindLabel = computed(() => KIND_LABELS[currentNote.value?.kind] || KIND_LA
 </script>
 
 <style scoped>
-/* Bottom-right on a desktop: the sheet docks left, the roller sits bottom-centre
-   and the ✨ rail owns the left edge, so this is the one free corner. Above the GM
-   panel viewport (25) so a splash is never buried under a panel, below the
-   login/settings overlay (100). */
+/* Front and centre for every face.
+   Deliberately **transform-free**: a transformed ancestor becomes the containing
+   block for `position: fixed` descendants, and the wizard's own surface must not
+   be re-parented — the trap the landscape dock records. `inset: 0` with
+   `margin: auto` centres without one. Above the GM panel viewport (25) so a
+   splash is never buried under a panel, below the login/settings overlay (100). */
 .sp-root {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  inset: 0;
+  margin: auto;
   z-index: 30;
-  width: min(340px, calc(100vw - 24px));
+  width: min(420px, calc(100vw - 32px));
+  height: fit-content;
   max-height: min(70dvh, 560px);
   overflow-y: auto;
-  padding: 10px;
+  padding: 12px;
   /* The one surface. Opaque enough to be read over a bright location photo, which
      the wizard's own 2%-overlay inset cannot be. */
   background: var(--bg-panel-solid);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px var(--shadow);
+  box-shadow: 0 12px 32px var(--shadow);
 }
 
-/* A note is a banner, not a card: it sits in the same corner but does not need
-   the prompt's room, and it reads as transient. */
+/* A note is a banner, not a card: it sits in the same place but does not need the
+   prompt's room, and it reads as transient. */
 .sp-notes { display: flex; flex-direction: column; }
+.sp-note-wrap { position: relative; display: flex; flex-direction: column; }
 .sp-note { display: flex; flex-direction: column; gap: 4px; }
 .sp-note-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .sp-note-title { font-size: 11px; font-weight: 700; color: var(--accent); }
@@ -174,23 +206,29 @@ const kindLabel = computed(() => KIND_LABELS[currentNote.value?.kind] || KIND_LA
   text-underline-offset: 2px;
 }
 
+/* A sticky message with nothing to press carries its own way out, in the corner
+   of the card. */
+.sp-note-close {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  background: var(--bg-panel-raised);
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sp-note-close:hover { color: var(--text); border-color: var(--border); }
+
 /* Arrival and departure only — the dwell belongs to the shell, which decides how
-   long a note lives. */
+   long a note lives (and gives a target none). */
 .sp-note-enter-active, .sp-note-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
 .sp-note-enter-from, .sp-note-leave-to { opacity: 0; transform: translateY(4px); }
-
-/* The band stack owns the bottom of a phone, so the splash takes the top there
-   and spans the width — the one place a floating panel becomes a banner. */
-@media (max-width: 820px) {
-  .sp-root {
-    top: calc(env(safe-area-inset-top, 0px) + 8px);
-    right: 12px;
-    bottom: auto;
-    left: 12px;
-    width: auto;
-    max-height: 52dvh;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .sp-note-enter-active, .sp-note-leave-active { transition: none; }

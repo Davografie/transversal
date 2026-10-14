@@ -4,7 +4,17 @@
 // B230's host until this migration) waits for an interaction and has no timer. A
 // **note** reports what an activation did — including why an effect did nothing
 // (B236) — and *fades*: a brief banner for a change, longer for a rule that has
-// run its course, one at a time so a burst is not a stack of dialogs.
+// run its course, one at a time so a burst is not a stack of dialogs. A note
+// carrying an **authored action** ([[B132]]) is the exception on both counts — it
+// waits for the player, and tapping it does the authored thing. That is the same
+// face the difficulty target uses ([[B287]]), which has its own spec.
+//
+// **Every face opens front and centre** (the author: *"I expected the splash panel
+// to open front and center, but it's more like a glorified toast now"*). The
+// assertion that used to pin the opposite — `centreIsPanel === false`, "a corner
+// card" — is re-expressed rather than dropped: the card is now *at* the centre,
+// and what must not change is that it is still **not a dialog** (no scrim, nothing
+// blocked, the table outside it reachable, the sheet readable behind it).
 //
 // The routing rule is the author's: a manual press asks on the sheet, a roll asks
 // in the roller, and an automatic rule — a state change or a timer nobody pressed
@@ -14,12 +24,12 @@
 // What only a browser can show is the *host*, and each of its failure modes is
 // quiet: the question falling through to the roller (where a reader who is not
 // rolling will never look), a panel that dims or blocks the table it is asking
-// about, one that dismisses itself before it is read, or an answer that loses its
-// origin so the follow-up lands somewhere else. So this spec raises a real
-// `sfx_choice_required` event with `origin: 'auto'` over the SSE connection and
+// about, one that dismisses itself before it is read, a sticky message that
+// vanishes mid-reach, or an answer that loses its origin so the follow-up lands
+// somewhere else. So this spec raises real events over the SSE connection and
 // measures the result.
 //
-// The event is served as a canned SSE body rather than by firing a rule: the
+// The events are served as canned SSE bodies rather than by firing a rule: the
 // automatic path needs authored content and a real state change, and this spec is
 // about where the question renders. Writing is stubbed and every write is
 // asserted on, so a run answers nothing.
@@ -71,19 +81,32 @@ const AUTO_CHOICE = {
 }
 
 /**
- * Serve one `sfx_choice_required` frame over SSE, then keep the stream quiet on
- * every reconnect (the browser retries when a fulfilled body ends, and re-serving
- * the event would resurrect a question the test has already left behind).
+ * Serve SSE frames, then keep the stream quiet on every reconnect (the browser
+ * retries when a fulfilled body ends, and re-serving the event would resurrect a
+ * question the test has already left behind).
+ *
+ * **The frames are held until `load()` arms them**, and that is not a nicety. The
+ * app opens the stream several times per load — this spec navigates twice to get a
+ * SEC-3 session, and a one-shot body makes the browser retry — so serving on the
+ * *first* connection is a race: measured, the frames could land on a connection the
+ * app then replaced, and the note was never seen (a case that passed on
+ * `release-build` and failed here purely on connection timing). Arming immediately
+ * before the final navigation puts them on the connection being watched.
+ *
+ * `events` is the general form — `[{ type, data }]` — for anything that is not a
+ * choice or an effect note: the authored client action.
  */
-async function stubStream(page, choices = [AUTO_CHOICE], notes = []) {
-  let served = false
+async function stubStream(page, choices = [AUTO_CHOICE], notes = [], events = []) {
+  let armed = false
+  page.__armStream = () => { armed = true }
   await page.route('**/api/v1/stream*', async (route) => {
     const headers = { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' }
-    if (served) return route.fulfill({ status: 200, headers, body: ': idle\n\n' })
-    served = true
+    if (!armed) return route.fulfill({ status: 200, headers, body: ': idle\n\n' })
+    armed = false
     const frames = []
     if (choices) frames.push(`event: sfx_choice_required\ndata: ${JSON.stringify({ entity_id: KAEL, choices })}\n\n`)
     for (const note of notes) frames.push(`event: effects_changed\ndata: ${JSON.stringify(note)}\n\n`)
+    for (const ev of events) frames.push(`event: ${ev.type}\ndata: ${JSON.stringify(ev.data)}\n\n`)
     return route.fulfill({ status: 200, headers, body: frames.join('') })
   })
 }
@@ -125,6 +148,7 @@ async function load(page, size) {
     localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
   await establishSession(page)
+  page.__armStream?.()
   await page.goto('/')
   await page.locator('.name-entry.panel').first().waitFor({ state: 'hidden', timeout: 20000 })
 }
@@ -135,6 +159,16 @@ const boxOf = (page, sel) => page.evaluate((s) => {
   const b = el.getBoundingClientRect()
   return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height), right: Math.round(b.right), bottom: Math.round(b.bottom) }
 }, sel)
+
+/** How far the splash's centre sits from the viewport's, in px. */
+const offCentre = (page) => page.evaluate(() => {
+  const b = document.querySelector('.sp-root')?.getBoundingClientRect()
+  if (!b) return { dx: null, dy: null }
+  return {
+    dx: Math.round(b.x + b.width / 2 - window.innerWidth / 2),
+    dy: Math.round(b.y + b.height / 2 - window.innerHeight / 2),
+  }
+})
 
 test('an automatic rule asks in a floating panel, and the roller does not show it', async ({ page }) => {
   const problems = watch(page)
@@ -152,27 +186,26 @@ test('an automatic rule asks in a floating panel, and the roller does not show i
   // whose reader is looking at a pool, not at a question about the world.
   await expect(page.locator('.sfx-choice-panel')).toHaveCount(0)
 
-  // Not modal: no dimming, nothing blocked. The sheet stays readable behind it,
-  // and the map is still the hit target outside the panel's own box.
+  // Front and centre now — and still **not a dialog**. Both halves matter: the
+  // centre is where the author wanted it, and a scrim or a full-viewport box would
+  // hide the table the question is about.
   const geometry = await page.evaluate(() => {
     const fcp = document.querySelector('.sp-root').getBoundingClientRect()
     const cx = Math.round(window.innerWidth / 2)
     const cy = Math.round(window.innerHeight / 2)
-    const atCentre = document.elementFromPoint(cx, cy)
     return {
+      dx: Math.round(fcp.x + fcp.width / 2 - cx),
+      dy: Math.round(fcp.y + fcp.height / 2 - cy),
       areaShare: (fcp.width * fcp.height) / (window.innerWidth * window.innerHeight),
-      centreIsPanel: !!atCentre?.closest('.sp-root'),
+      outsideIsFree: !document.elementFromPoint(24, cy)?.closest('.sp-root'),
       sheetVisible: !!document.querySelector('.sheet-embedded')?.offsetParent,
     }
   })
-  expect(geometry.centreIsPanel, 'the panel does not cover the middle of the table').toBe(false)
-  expect(geometry.areaShare, 'a corner card, not a full-screen dialog').toBeLessThan(0.35)
+  expect(Math.abs(geometry.dx), 'centred horizontally').toBeLessThanOrEqual(2)
+  expect(Math.abs(geometry.dy), 'centred vertically').toBeLessThanOrEqual(2)
+  expect(geometry.areaShare, 'a card in the middle, not a full-screen dialog').toBeLessThan(0.35)
+  expect(geometry.outsideIsFree, 'no scrim — the table outside it is still reachable').toBe(true)
   expect(geometry.sheetVisible, 'the sheet stays readable behind the question').toBe(true)
-
-  // Desktop corner: bottom-right, clear of the dock (left) and the roller (bottom-centre).
-  const b = await boxOf(page, '.sp-root')
-  expect(Math.abs(b.right - DESKTOP.width)).toBeLessThanOrEqual(20)
-  expect(Math.abs(b.bottom - DESKTOP.height)).toBeLessThanOrEqual(20)
 })
 
 test('it never answers itself, and leaving it writes nothing', async ({ page }) => {
@@ -214,7 +247,7 @@ test('answering carries the origin back, so a follow-up lands here', async ({ pa
   expect(problems, problems.join('\n')).toEqual([])
 })
 
-test('on a phone it takes the top, whole and inside the viewport', async ({ page }) => {
+test('on a phone it is front and centre too, whole and inside the viewport', async ({ page }) => {
   const problems = watch(page)
   const extras = {}
   await stubStream(page)
@@ -225,12 +258,13 @@ test('on a phone it takes the top, whole and inside the viewport', async ({ page
   await expect(panel).toBeVisible({ timeout: 15000 })
   await expect(page.locator('.sfx-choice-panel')).toHaveCount(0)
 
-  // The band stack owns the bottom of a phone, so the question takes the top and
-  // spans the width — a banner rather than a corner card.
+  // Front and centre on a phone too: the same place to look, whatever the layout
+  // (it used to take the top as a banner, because the band stack owns the bottom).
   const b = await boxOf(page, '.sp-root')
-  expect(b.y, 'it starts at the top').toBeLessThan(60)
+  expect(Math.abs(b.x + b.w / 2 - PHONE.width / 2), 'centred horizontally').toBeLessThanOrEqual(2)
+  expect(Math.abs(b.y + b.h / 2 - PHONE.height / 2), 'centred vertically').toBeLessThanOrEqual(2)
   expect(b.bottom, 'and fits on screen').toBeLessThanOrEqual(PHONE.height)
-  expect(b.w, 'spanning the width').toBeGreaterThan(PHONE.width - 40)
+  expect(b.w, 'using most of the width').toBeGreaterThan(PHONE.width - 60)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow, 'no horizontal overflow').toBeLessThanOrEqual(0)
 })
@@ -322,4 +356,116 @@ test('a note waits rather than fading behind a question', async ({ page }) => {
   await page.locator('.sp-prompt .etw-candidate').first().click()
   await expect(page.locator('.sp-note')).toBeVisible({ timeout: 5000 })
   await expect(page.locator('.sp-note-title')).toHaveText('Hinder')
+})
+
+// ── the authored client action ([[B132]]) ───────────────────────────────────
+//
+// `client_action` goes to every session and names its `recipient_id`; a client
+// that is not the recipient ignores it. A **sticky** toast is what the splash is
+// for — a message that waits for the player, and may carry an authored action.
+//
+// The *difficulty target* is the other user of this face and has its own spec
+// (`difficulty-target-splash.spec.js`, B287) — it is not duplicated here.
+
+/** A message with something to press: the press is the dismissal. */
+const ACTIONABLE_TOAST = {
+  action: 'toast', recipient_id: KAEL, target_id: KAEL,
+  message: 'The court convenes', sticky: true, tap: 'open_sheet',
+}
+/** A message with nothing to press, so it needs the ✕. */
+const PLAIN_STICKY_TOAST = {
+  action: 'toast', recipient_id: KAEL, message: 'The court convenes', sticky: true,
+}
+
+test('an authored toast splashes front and centre, and waits for the player', async ({ page }) => {
+  await stubStream(page, null, [], [{ type: 'client_action', data: ACTIONABLE_TOAST }])
+  await stubAnswer(page, {})
+  await load(page, DESKTOP)
+
+  const note = page.locator('.sp-note-action')
+  await expect(note).toBeVisible({ timeout: 15000 })
+  await expect(note).toContainText('The court convenes')
+  await expect(note.locator('.sp-note-cue')).toHaveText('Open character sheet')
+
+  const off = await offCentre(page)
+  expect(Math.abs(off.dx), 'centred horizontally').toBeLessThanOrEqual(2)
+  expect(Math.abs(off.dy), 'centred vertically').toBeLessThanOrEqual(2)
+
+  // Sticky: a plain report would be long gone by now (a change lands for 1–2 s).
+  // Without the stickiness the card would vanish mid-reach — the failure this
+  // asserts against.
+  await page.waitForTimeout(3500)
+  await expect(note).toBeVisible()
+})
+
+test('tapping an actionable message opens the sheet and gets out of its way', async ({ page }) => {
+  await stubStream(page, null, [], [{ type: 'client_action', data: ACTIONABLE_TOAST }])
+  await stubAnswer(page, {})
+  // A phone, because that is where "focus the sheet" is visible as an act: the
+  // band stack has to expand it. In the docked desktop layout the sheet is
+  // permanently up, so there is nothing to watch.
+  await load(page, PHONE)
+  await expect(page.locator('.stage')).toHaveClass(/focus-location/, { timeout: 15000 })
+
+  // The card *is* the control — a tap anywhere on it does the thing.
+  await page.locator('.sp-note-action').click()
+
+  // The band expands…
+  await expect(page.locator('.stage')).toHaveClass(/focus-sheet/)
+  // …and the card is gone: a front-and-centre message left over the sheet it just
+  // opened would hide the point of tapping it.
+  await expect(page.locator('.sp-note')).toHaveCount(0)
+})
+
+test('a sticky message with nothing to press carries its own way out', async ({ page }) => {
+  await stubStream(page, null, [], [{ type: 'client_action', data: PLAIN_STICKY_TOAST }])
+  await stubAnswer(page, {})
+  await load(page, DESKTOP)
+
+  // No action, so it is a notice rather than a target — and a card that waits for
+  // ever with no exit would be a trap.
+  const note = page.locator('.sp-note')
+  await expect(note).toBeVisible({ timeout: 15000 })
+  await expect(page.locator('.sp-note-action')).toHaveCount(0)
+  await page.waitForTimeout(3500)
+  await expect(note, 'sticky, so it outlives a report').toBeVisible()
+
+  await page.locator('.sp-note-close').click()
+  await expect(page.locator('.sp-note')).toHaveCount(0)
+})
+
+test('a bare open_sheet action focuses the sheet with no message at all', async ({ page }) => {
+  await stubStream(page, null, [], [{
+    type: 'client_action',
+    data: { action: 'open_sheet', recipient_id: KAEL, target_id: KAEL },
+  }])
+  await stubAnswer(page, {})
+  await load(page, PHONE)
+
+  await expect(page.locator('.stage')).toHaveClass(/focus-sheet/, { timeout: 15000 })
+  await expect(page.locator('.sp-root')).toHaveCount(0)
+})
+
+test('a non-sticky toast stays the plain toast, not the splash', async ({ page }) => {
+  await stubStream(page, null, [], [{
+    type: 'client_action',
+    data: { action: 'toast', recipient_id: KAEL, message: 'The court convenes' },
+  }])
+  await stubAnswer(page, {})
+  await load(page, DESKTOP)
+
+  await expect(page.locator('.toast-item')).toBeVisible({ timeout: 15000 })
+  await expect(page.locator('.sp-root')).toHaveCount(0)
+})
+
+test('a client action to somebody else is not mine to act on', async ({ page }) => {
+  await stubStream(page, null, [], [{
+    type: 'client_action',
+    data: { ...ACTIONABLE_TOAST, recipient_id: 'character-somebody-else' },
+  }])
+  await stubAnswer(page, {})
+  await load(page, DESKTOP)
+
+  await page.waitForTimeout(3000)
+  await expect(page.locator('.sp-root')).toHaveCount(0)
 })

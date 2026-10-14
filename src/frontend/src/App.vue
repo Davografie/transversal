@@ -242,9 +242,10 @@
   <!-- The activation splash ([[B229]]): the one place a player looks when the
        engine did something they did not ask for. It carries the routed/automatic
        question ([[B230]]'s host, now this surface's prompt face), the brief notes
-       about what an activation changed, and the difficulty target dealt to this
-       player. A question waits for an interaction, a note fades, a target waits
-       for its tap. -->
+       about what an activation changed, the difficulty target dealt to this
+       player, and an authored client action ([[B132]]). A question waits for an
+       interaction, a report fades, a target waits for its tap, and a message the
+       engine was told to deliver does the thing when tapped. -->
   <SplashPanel
     v-if="autoChoices.length || splashNote"
     :choices="autoChoices"
@@ -254,6 +255,7 @@
     @leave="clearSfxChoicesAll"
     @loop="(c) => loopSfxChoice(c, 'auto')"
     @act="onSplashAct"
+    @dismiss="advanceSplash"
   />
   <RelationalCanvas
     v-if="fullCanvas"
@@ -598,12 +600,21 @@ const splashNote = ref(null)
 let splashNoteId = 0
 let splashTimer = null
 
-/** A question is on the surface, so a note cannot be seen (and must not age). */
-const splashBlocked = () => autoChoices.value.length > 0
+/**
+ * The surface is taken — by a question, or by the login/settings overlay, which
+ * sits above the splash (z-index 100 against 30).
+ *
+ * Either way a note **cannot be seen**, and a note's dwell is the time it spends
+ * *on screen*: a report that aged behind the overlay was replaced without ever
+ * being read, exactly the fault the queue exists to prevent.
+ */
+const splashBlocked = () => autoChoices.value.length > 0 || showLoginOverlay.value
 
 function startSplashTimer() {
   if (splashTimer) clearTimeout(splashTimer)
-  // A target is waiting for a tap, not for a clock — see `pushSplashTarget`.
+  // A target is waiting for a tap, not for a clock — see `pushSplashTarget`. A
+  // sticky message the engine delivered ([[B132]]) is the same: it waits for the
+  // player, and vanishes only when acted on or dismissed.
   if (splashNote.value?.sticky) return
   const kind = splashNote.value?.kind || 'change'
   splashTimer = setTimeout(advanceSplash, SPLASH_DWELL[kind] || SPLASH_DWELL.change)
@@ -620,7 +631,8 @@ function advanceSplash() {
   splashNote.value = splashQueue.value.shift() || null
   if (splashNote.value && !splashBlocked()) startSplashTimer()
 }
-/** Queue a report. It waits its turn rather than replacing what is on screen. */
+/** Queue a report — or a sticky, actionable message. It waits its turn rather
+ *  than replacing what is on screen. */
 function pushSplashNote(note) {
   const entry = { id: ++splashNoteId, kind: 'change', lines: [], ...note }
   // A **target** is the current fact, not a queue item: the latest difficulty is
@@ -655,30 +667,88 @@ function pushSplashTarget(difficulty, dice = []) {
   })
 }
 
-/** The tap on a target: it has been read, so it goes — and the sheet comes up. */
-function onSplashAct() {
+/**
+ * The tap on a target: it has been read, so it goes — and the sheet comes up.
+ *
+ * The note may name *whose* sheet: a difficulty target is the player's own, but an
+ * authored `open_sheet` ([[B132]]) can be aimed at anybody, which is the same thing
+ * the peer chips do (view, not assume).
+ */
+function onSplashAct(note) {
   advanceSplash()
-  focusCharacterSheet()
+  focusCharacterSheet(note?.targetId)
 }
 
 /**
  * Bring the player's own sheet forward — the state a click on their own map dot
  * leaves: self rather than an inspected peer, and revealed. On a docked layout
  * the sheet is already on screen beside the map, so there is nothing to reveal.
+ * `targetId` is only read when the action names somebody else.
  */
-function focusCharacterSheet() {
-  viewingEntityId.value = null
+function focusCharacterSheet(targetId) {
+  viewingEntityId.value = targetId && targetId !== entityId.value ? targetId : null
   forceSheet.value = true
   if (mobileStackActive.value) setMobileFocus('sheet')
   else if (!sheetDock.value) openPanel()
 }
-// The question takes the surface and the whole splash with it: hold the queue
-// while it is up, and start the note's clock when it clears.
-watch(() => autoChoices.value.length, (n) => {
-  if (n) { if (splashTimer) { clearTimeout(splashTimer); splashTimer = null } }
-  else if (splashNote.value) startSplashTimer()
-  else advanceSplash()
+/** Hold the queue while the surface is taken; start the clock the moment it is not. */
+function syncSplashClock() {
+  if (splashBlocked()) {
+    if (splashTimer) { clearTimeout(splashTimer); splashTimer = null }
+  } else if (splashNote.value) {
+    startSplashTimer()
+  } else {
+    advanceSplash()
+  }
+}
+// The question — or the overlay — takes the surface and the whole splash with it.
+// Wired in `onMounted` because `showLoginOverlay` is declared *below* this block,
+// and reading a `ref` before its declaration throws (the TDZ trap this file has
+// recorded twice: a green build and a blank page).
+onMounted(() => {
+  watch([() => autoChoices.value.length, () => showLoginOverlay.value], syncSplashClock)
 })
+
+/**
+ * An effect that acts on the **client** rather than on game state ([[B132]]) —
+ * the authored half of "tapping the panel does a thing".
+ *
+ * The payload is Effects' contract (`services/client_actions.py`): it names its
+ * `recipient_id`, and **a client that is not the recipient ignores it** (the same
+ * shape `trait_updated` uses for its entity) — a change to somebody else's screen
+ * is not mine to act on.
+ *
+ *   * `open_sheet` — bring a sheet up: `target_id`, or the recipient's own.
+ *   * `toast` — show `message`; `sticky` means it waits for the player, and
+ *     `tap` (today only `open_sheet`) is what tapping it does.
+ *
+ * A **non-sticky** toast is the plain auto-expiring one the app already had,
+ * because that is exactly what an absent `sticky` means on the wire; the splash is
+ * for the messages that are *meant* to be noticed. A sticky one with an action is
+ * the **target** face (a pressed card, dismissed by pressing); a sticky one
+ * without is a notice, which is the only note that needs the ✕.
+ */
+function handleClientAction(data) {
+  if (!data || !data.action) return
+  if (data.recipient_id !== entityId.value) return
+  if (data.action === 'open_sheet') {
+    focusCharacterSheet(data.target_id)
+    return
+  }
+  if (data.action !== 'toast') return
+  if (!data.sticky) {
+    addToast(data.message || '', 'info')
+    return
+  }
+  pushSplashNote({
+    title: data.title || '',
+    kind: 'target',
+    lines: [{ text: data.message || '' }],
+    action: data.tap === 'open_sheet' ? 'Open character sheet' : null,
+    targetId: data.tap === 'open_sheet' ? data.target_id : null,
+    sticky: true,
+  })
+}
 
 /** Answer a table: resolve, then put any *next* question back where this one was. */
 async function answerSfxChoices(resolutions, origin = 'roll') {
@@ -1566,6 +1636,11 @@ function handleSseEvent(evt) {
           addToast(`Difficulty set: ${evt.data.difficulty}`, 'roll', 'player')
         }
       }
+      break
+    case 'client_action':
+      // An effect that acts on the *client* rather than on game state ([[B132]]),
+      // authored as `client/open_sheet` or `client/toast`.
+      handleClientAction(evt.data)
       break
     case 'contest_challenged':
       if (evt.data?.challenger_id && evt.data?.opponent_id) {

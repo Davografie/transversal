@@ -310,8 +310,10 @@ const find = (name) => VUE.find((p) => rel(p) === name)
     /function pushSplashNote/.test(app) && /SPLASH_DWELL = \{ change: 2000, summary: 5000 \}/.test(app), true)
   ok('…queued one at a time rather than stacked',
     /splashNote\.value = splashQueue\.value\.shift\(\) \|\| null/.test(app), true)
-  ok('…and held while a question is up, so a note cannot fade unseen behind it',
-    /watch\(\(\) => autoChoices\.value\.length/.test(app), true)
+  ok('…and held while a question — or the overlay above it — covers the surface, so a note cannot fade unseen',
+    /splashBlocked = \(\) => autoChoices\.value\.length > 0 \|\| showLoginOverlay\.value/.test(app)
+      && /syncSplashClock/.test(app)
+      && /watch\(\[\(\) => autoChoices\.value\.length/.test(app), true)
   ok('a change is aimed at the entity acting, or the place they are standing',
     /evt\.data\.entity_id === entityId\.value[\s\S]{0,120}evt\.data\.location_id === currentLocationId\.value/.test(app), true)
 
