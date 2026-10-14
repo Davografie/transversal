@@ -122,3 +122,24 @@ class FactionDistance:
     nearest_location_id: Optional[strawberry.ID] = None
     nearest_location_name: Optional[str] = None
     presence: Optional[str] = None
+
+
+@strawberry.type
+class LocationDistance:
+    """How far one location is from an origin, in weighted steps.
+
+    The point-to-point read over the **same** graph and weights
+    :class:`FactionDistance` ranks by (``super`` and ``transversal`` edges, walked
+    undirected; a portal that crosses a universe boundary costs more than a step
+    inside one), so a place-to-place number and a faction's distance cannot come
+    to mean two different things.
+
+    **Only reachable locations are returned.** The graph is fragmentary — from the
+    app's own default origin, 194 of 466 locations have no route at all — so
+    "nowhere near" is an absence rather than a large number, and a caller ordering
+    candidates has to give it a bucket of its own instead of reading it as a digit
+    (see :meth:`~transversal.db.repository_mixins.canvas.CanvasMixin.
+    get_location_distances_from`).
+    """
+    location_id: strawberry.ID
+    distance: int

@@ -117,6 +117,38 @@ def test_unreachable_and_empty_targets():
         _cleanup(repo)
 
 
+def test_the_graphql_resolver_exposes_the_read_nearest_first():
+    """The query a distance-sorted surface reads.
+
+    It returns **every reachable location in the database** — not just the
+    fixture — because the point is one read for a whole map: a caller orders
+    hundreds of candidates by joining entity → place → distance, and asking per
+    candidate would be a query each. So the fixture's chain is checked inside a
+    result that also carries the live graph.
+    """
+    from transversal.api.graphql.resolvers.queries_entities import QueriesEntities
+    from transversal.services.entity_manager import EntityManager
+
+    repo = _repo
+    _seed(repo)
+    info = type("Info", (), {"context": {"entity_manager": EntityManager(repo)}})()
+
+    rows = QueriesEntities().location_distances(info, L1)
+    by_id = {r.location_id: r.distance for r in rows}
+
+    assert by_id[L1] == 0
+    assert by_id[L2] == CROSS_UNIVERSE_WEIGHT
+    assert by_id[L3] == CROSS_UNIVERSE_WEIGHT + 1
+    assert by_id[L4] == CROSS_UNIVERSE_WEIGHT + 2
+    assert L5 not in by_id, "an unreachable place is absent, not scored"
+
+    # Nearest first, ties on id — the order a caller can rely on rather than re-sort.
+    keys = [(r.distance, r.location_id) for r in rows]
+    assert keys == sorted(keys)
+
+    _cleanup(repo)
+
+
 def test_closest_projection_picks_the_nearer_body_through_a_real_repository():
     """The seam between the two halves above: the travel handler asking the *real*
     repository for distances, and the relocated body actually persisting.

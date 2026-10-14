@@ -8,6 +8,7 @@ from transversal.api.graphql.types import EntityType
 from transversal.api.graphql.types import EntityFactionRef
 from transversal.api.graphql.types import FactionDistance
 from transversal.api.graphql.types import FactionMember
+from transversal.api.graphql.types import LocationDistance
 from transversal.api.graphql.types import Projection
 from transversal.api.graphql.types import RelatedEntity
 from transversal.api.graphql.types import Relationship
@@ -196,4 +197,29 @@ class QueriesEntities:
                 presence=r["presence"],
             )
             for r in repo.get_faction_distances_for_location(str(location_id))
+        ]
+
+    @strawberry.field
+    def location_distances(
+        self, info: strawberry.Info, location_id: strawberry.ID
+    ) -> list[LocationDistance]:
+        """Weighted distance from a location to every **reachable** location.
+
+        The bulk read behind a distance-sorted surface: the GM panel's filter
+        offers *nearest* as an ordering, and this is one Dijkstra from the origin
+        for the whole map rather than a query per candidate — the caller joins
+        entity → place → distance itself. The origin is included, scoring 0.
+
+        Unreachable locations are simply **absent**, never a sentinel: the graph is
+        fragmentary (194 of 466 places have no route from the app's own default
+        origin), and a large number dropped in the middle of a list is not an
+        answer. Nearest first, ties on id, so the order is total and stable.
+        See :class:`~transversal.api.graphql.type_defs.relationships.LocationDistance`.
+        """
+        repo = _em(info).repo
+        targets = {e.id for e in repo.list_entities_by_type(DomainEntityType.LOCATION)}
+        found = repo.get_location_distances_from(str(location_id), targets)
+        return [
+            LocationDistance(location_id=key, distance=dist)
+            for key, dist in sorted(found.items(), key=lambda kv: (kv[1], kv[0]))
         ]
