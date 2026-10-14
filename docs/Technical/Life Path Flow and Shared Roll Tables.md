@@ -336,14 +336,34 @@ pure content and can be rolled for anything.
 
   Row labels stay per-table (the human's call): two paths wanting the same mechanics under different
   fiction get different tables.
-- **The offering gate is not the same thing as the enrolling faction** (measured 2026-10-13, on
-  [[B41]]). `LifePath.factionIds` is derived read-only from each faction's `suitable_life_path_ids`,
-  which is **write-only on the wire**; `LifePathWizard` locks a path that no faction offers — **7 of
-  10 live paths** — and that is currently the *only* gate on the player surface, because nothing in
-  the frontend reads `walkable` while [[B196]] is pending. But `startTerm` *requires* a `factionId`,
-  and on an enrolling row `_ensure_enrollment` uses it to create the `entity → faction`
-  `membership` edge that rank and tenure hang off (3 live settings, 15 effects). So the gate is
-  removable and the faction is not: it wants a picker over the character's memberships, or a
-  `startTerm` that takes the membership edge.
+- **The player surface gates on walkability. The offering faction is no longer a gate** ([[B41]],
+  [[B196]], landed 2026-10-13). `LifePathWizard` locked a path no faction offered — **7 of 10 live
+  paths**, both Earth paths, all three Emberline, Grog and Wang Family — with *"no offering
+  faction"*, and that was the **only** gate on the player surface because nothing read `walkable`
+  while [[B196]] was pending. It answered the wrong question: the offering faction says *which sect
+  offers this path*, not *may this character walk it*. Now:
+  - the wizard passes `entityId` and gates on `walkable` / `unwalkableReasons`, so an unwalkable
+    path is **visible and disabled with why**, never hidden and never silently offered;
+  - **`startTerm`'s `factionId` is optional.** The checkpoint is a cursor — `path_id` +
+    `current_step_id` — and a cursor needs no faction. The faction answers a different question,
+    *whose sect this term serves*;
+  - only an **enrolling** row needs the answer, because that is what creates the
+    `entity → faction` `membership` edge rank and tenure hang off (3 live settings, 15 effects). It
+    is resolved **then**: the term's faction if the caller gave one (the caller wins, as everywhere),
+    else the **path's own `{sect}`** — [[B290]]'s declaration layer, which is how a path nobody
+    offers says which faction it joins. With neither, nothing is enrolled and the executor logs it;
+  - **a path that cannot begin a term is unwalkable for everyone** — a structural reason in
+    `unwalkable_reasons`, not a condition. Removing the offering gate left this read as the only
+    thing between the player and the path, and `lp-drifter-earth` (Street Survivor) is an empty
+    shell, so without it the path would be offered and then error on click.
+
+  Still to do (recorded on [[B41]]): the offering mechanism itself is **not** retired —
+  `suitable_life_path_ids`, `LifePath.factionIds` and its readers (the wizard's start input, the
+  canvas label, `useCanvas`) remain, and the two offered paths still rely on it rather than declaring
+  `{sect}`. The audit reports the gap the content has: **three Emberline paths enrol, are offered by
+  nobody, and declare no `{sect}`** — and there are **zero factions in the `emberline` universe** at
+  all, so their enrolling rows admit nobody until the factions exist or the paths declare one.
+- Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
+  ([[B194]]–[[B197]]) are unchanged by this and remain separate gates.
 - Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
   ([[B194]]–[[B197]]) are unchanged by this and remain separate gates.
