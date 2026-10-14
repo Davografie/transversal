@@ -242,7 +242,7 @@ for (const name of ['GmEntityEditPanel', 'GmTraitEditPanel', 'GmTraitsetDetail',
 // Each of these edits a draft handed to it through the spec's `context`, so a
 // restored copy would either do nothing or edit the wrong thing.
 for (const name of ['GmDisplayNameEditPanel', 'GmEffectEditPanel', 'GmProjectionEditPanel',
-  'GmPathEditPanel', 'GmRollTableEntryEffectPanel', 'GmEntityCreatePanel']) {
+  'GmPathEditPanel', 'GmDraftEffectPanel', 'GmEntityCreatePanel']) {
   ok(`${name} is NOT restorable`, new RegExp(`^\\s*${name},$`, 'm').test(REGISTRY), false)
 }
 

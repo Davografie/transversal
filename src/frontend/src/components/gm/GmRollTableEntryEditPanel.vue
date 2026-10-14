@@ -97,7 +97,7 @@ import { usePanelBus } from '@/composables/usePanelBus.js'
 import ConditionEditor from './ConditionEditor.vue'
 import EffectList from './EffectList.vue'
 import BoundVariablesEditor from './BoundVariablesEditor.vue'
-import GmRollTableEntryEffectPanel from './GmRollTableEntryEffectPanel.vue'
+import GmDraftEffectPanel from './GmDraftEffectPanel.vue'
 import { useBoundVariableScope } from '@/composables/useBoundVariableScope.js'
 
 const panel = usePanel()
@@ -259,7 +259,7 @@ onUnmounted(() => {
 function openEffectEditor(index) {
   editingEffectIndex.value = index
   panel.open({
-    component: GmRollTableEntryEffectPanel,
+    component: GmDraftEffectPanel,
     title: index === null ? 'Add effect' : 'Edit effect',
     props: {
       index,

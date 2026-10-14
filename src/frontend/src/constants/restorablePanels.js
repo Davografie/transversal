@@ -23,7 +23,7 @@
 //   GmProjectionEditPanel   — injects `entityEditor`; its fallback is the shared
 //                             instance, so the opening panel's list would not move.
 //   GmPathEditPanel         — injects `pathBinding`, which is the edit itself.
-//   GmRollTableEntryEffectPanel — injects `rowDraft`; without it save is a no-op.
+//   GmDraftEffectPanel — injects `rowDraft`; without it save is a no-op.
 //   GmEntityCreatePanel     — a create form: restoring it would offer to create
 //                             the same entity again after a reload.
 //   GmAdmissionPanel        — its props carry a live admission **token**, and the

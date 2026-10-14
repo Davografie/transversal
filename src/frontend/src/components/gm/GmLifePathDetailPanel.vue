@@ -78,10 +78,17 @@
              nothing on the rest, which is the point ([[B281]]). -->
         <div class="lpd-field">
           <label>Step effects</label>
-          <EffectEditor
-            v-model="step.effects"
-            :universe="form.universe"
-            :life-path="path.id"
+          <!-- The list stays in the step; each effect's form opens in a *child*
+               panel, as the roll-table entry's and the SFX editor's do — an effect
+               is a stacked builder of unbounded height, and the path's steps have to
+               stay in view while one is edited. -->
+          <EffectList
+            :model-value="step.effects"
+            :editing-index="editingStepEffect && editingStepEffect.stepId === step.id
+              ? editingStepEffect.index : null"
+            @update:model-value="step.effects = $event"
+            @add="openStepEffectEditor(step, null)"
+            @edit="(i) => openStepEffectEditor(step, i)"
           />
           <span class="lpd-hint">
             Runs once for <strong>any</strong> row this step resolves — after the row's
@@ -163,6 +170,9 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { resolveLayer } from '@/composables/useBoundVariableScope.js'
+import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
+import { ROLL_TABLE_AMBIENT_VARIABLES } from '@/composables/rollTableScope.js'
 import { useApi } from '@/composables/useApi.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -171,7 +181,8 @@ import Button from '@/components/ui/Button.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import GmScopePicker from './GmScopePicker.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
-import EffectEditor from './EffectEditor.vue'
+import EffectList from './EffectList.vue'
+import GmDraftEffectPanel from './GmDraftEffectPanel.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -239,6 +250,7 @@ function scheduleSave() {
 }
 
 onUnmounted(() => {
+  offStepEffectClose?.()
   // Flush a pending write: an edit made inside the debounce window still lands.
   if (_saveTimer) {
     clearTimeout(_saveTimer)
@@ -282,13 +294,17 @@ const newStepTableId = ref('')
 async function loadOptions() {
   try {
     const [tables, lps, unis] = await Promise.all([
-      graphql(`{ rollTables { id name universe lifePath } }`),
+      graphql(`{ rollTables { id name universe lifePath boundVariables { name spec } } }`),
       graphql(`{ lifePaths { id name } }`),
       graphql(`query($type: EntityType){ entities(type: $type){ id name currentUniverse } }`, { type: 'UNIVERSE' }),
     ])
     universeOptions.value = (unis?.entities || []).map(u => ({ value: u.currentUniverse, label: u.name }))
     const pathNames = Object.fromEntries((lps?.lifePaths || []).map(l => [l.id, l.name]))
     tableNames.value = Object.fromEntries((tables?.rollTables || []).map(t => [t.id, t.name]))
+    // Kept for the step-effect scope: `stepScopeFor` resolves these into the names a
+    // step's effects may start a path from, once per table.
+    tableDeclarations.value = Object.fromEntries(
+      (tables?.rollTables || []).map(t => [t.id, t.boundVariables || []]))
     entryTableOptions.value = (tables?.rollTables || []).map(t => ({
       value: t.id,
       label: t.name + (t.lifePath
@@ -298,7 +314,61 @@ async function loadOptions() {
   } catch { /* leave empty */ }
 }
 
-onMounted(loadOptions)
+onMounted(() => {
+  loadOptions()
+  // The row highlight follows the open effect, and shutting the editor is the one
+  // path every *close* takes (a detach is deliberately not a close).
+  offStepEffectClose = panel.onChildClose(() => { editingStepEffect.value = null })
+})
+
+// ── A step's effects: one child panel per effect ────────
+//
+// The list lives in the step; the editor does not. Same reason as every other
+// effects list here: the form is a stacked builder of unbounded height.
+const editingStepEffect = ref(null)  // { stepId, index } | null
+let offStepEffectClose = null
+
+/** The names a *step's* effects may start a path from.
+ *
+ *  A step effect runs for **any** row of the step, so the only names guaranteed to
+ *  resolve are the ambient facts plus **the wrapped table's own declarations** — a
+ *  row's declarations exist on some rows and not others, which is exactly why the
+ *  effect is allowed to no-op where they are missing. Offering the table's names is
+ *  what makes `select variable …` authorable at all here.
+ *
+ *  Resolved on open and cached per table: it costs a trace per declaration, and the
+ *  answer only changes when the table does.
+ */
+const { traceSpec } = useTargetCatalog()
+const tableDeclarations = ref({})   // tableId -> [{name, spec}]
+const stepScopeCache = ref({})      // tableId -> {name: {element, cardinality}}
+
+async function stepScopeFor(tableId) {
+  if (stepScopeCache.value[tableId]) return stepScopeCache.value[tableId]
+  const { scope } = await resolveLayer(
+    tableDeclarations.value[tableId] || [], ROLL_TABLE_AMBIENT_VARIABLES, traceSpec)
+  stepScopeCache.value = { ...stepScopeCache.value, [tableId]: scope }
+  return scope
+}
+
+async function openStepEffectEditor(step, index) {
+  editingStepEffect.value = { stepId: step.id, index }
+  // Resolved *before* the panel opens: the spec's `context` is a snapshot, and a
+  // promise inside it would reach the child as an unresolved object.
+  const scopeVariables = await stepScopeFor(step.tableId)
+  panel.open({
+    component: GmDraftEffectPanel,
+    title: index === null ? 'Add step effect' : 'Edit step effect',
+    // Identity per step: `Panel.open` reuses a child with no id *in place*, which
+    // would show the previous step's effect under this step's title.
+    id: 'step-effect-' + step.id,
+    props: { index, universe: form.universe, lifePath: pathId.value },
+    // The step itself is the draft the child writes into, and its resolved scope is
+    // what the targeting wizard may start from. A panel cannot `provide` to its own
+    // child panels, so both travel in the spec's context.
+    context: { rowDraft: step, scopeVariables },
+  })
+}
 
 // ── Step identity ────────────────────────────────────
 // New steps get an id here rather than waiting for the server's `""` → `sN`:

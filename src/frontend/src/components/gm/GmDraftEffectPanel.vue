@@ -18,16 +18,21 @@ import EffectForm from './EffectForm.vue'
 import { usePanel } from '@/composables/usePanel.js'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 
-// One effect of a *roll-table entry*, edited in a child panel of the entry panel
-// — the same shape the SFX editor uses for `GmEffectEditPanel`, and the reason
-// this is a panel rather than an inline form: an effect is a stacked builder of
-// unbounded height, and the entry's list has to stay in view while it is edited.
+// **One effect of a list**, edited in a child panel — the same shape the SFX editor
+// uses for `GmEffectEditPanel`, and the reason it is a panel rather than an inline
+// form: an effect is a stacked builder of unbounded height, and the list has to stay
+// in view while one is edited.
 //
-// It is a separate component from `GmEffectEditPanel` because the drafts differ:
-// that one edits the SFX composer's shared `sfxEdit` draft and persists on save,
-// while this edits the entry panel's row and persists *nothing* — the row's own
-// "Save entry" is the commit point, and its `universe` / `lifePath` scope the
-// targeting wizard.
+// It is deliberately **draft-agnostic**: it reads `effects` off whatever object the
+// opener hands it in `rowDraft` and writes back to the same one. Two lists use it
+// today — a roll-table row's effects and a life-path step's — and it persists
+// nothing itself: the panel that owns the draft is the commit point, and its
+// `universe` / `lifePath` scope the targeting wizard. (It was named
+// `GmRollTableEntryEffectPanel` until the second consumer arrived; a shared
+// component named after one of them is a lie the next reader has to unlearn.)
+//
+// It is separate from `GmEffectEditPanel` because the drafts differ: that one edits
+// the SFX composer's shared `sfxEdit` draft and persists on save.
 const props = defineProps({
   // Identity only (Rule 6): which effect of the row to edit, or null to add. The
   // effects themselves live in the row draft, handed across in the spec context.

@@ -32,27 +32,8 @@ export function useBoundVariableScope(declarations, base) {
   }
 
   async function refresh() {
-    const start = { ...read(base) }
-    const out = { ...start }
-    const resolved = []
-    for (const row of (read(declarations) || [])) {
-      const name = (row?.name || '').trim()
-      const steps = row?.spec?.steps || []
-      if (!name || !steps.length) { resolved.push(null); continue }
-      try {
-        const res = await traceSpec(steps, null, null, out)
-        const last = (res?.types || [])[res.types.length - 1]
-        if (last?.element && !(res.errors || []).length) {
-          const t = { element: last.element, cardinality: last.cardinality || 'one' }
-          resolved.push(t)
-          out[name] = t
-        } else {
-          resolved.push(null)
-        }
-      } catch {
-        resolved.push(null)
-      }
-    }
+    const { scope: out, types: resolved } = await resolveLayer(
+      read(declarations), read(base), traceSpec)
     scope.value = out
     types.value = resolved
   }
@@ -60,4 +41,39 @@ export function useBoundVariableScope(declarations, base) {
   watch(() => [read(base), read(declarations)], refresh, { immediate: true, deep: true })
 
   return { scope, types, refresh, read }
+}
+
+/** Resolve one layer of declarations against a base scope, in order.
+ *
+ *  The loop `useBoundVariableScope` runs, exported because a caller may need it for
+ *  **several** layers and cannot call a composable in a loop: the life-path panel
+ *  resolves a scope for each wrapped table, so a step's effects are offered the
+ *  names that table actually declares ([[B281]]). One implementation, so what an
+ *  editor offers and what `table_bindings()` binds cannot drift.
+ *
+ *  @returns `{scope, types}` — the base plus this layer, and each row's resolved
+ *           type in declaration order (`null` when it resolves nothing)
+ */
+export async function resolveLayer(declarations, base, traceSpec) {
+  const out = { ...(base || {}) }
+  const types = []
+  for (const row of (declarations || [])) {
+    const name = (row?.name || '').trim()
+    const steps = row?.spec?.steps || []
+    if (!name || !steps.length) { types.push(null); continue }
+    try {
+      const res = await traceSpec(steps, null, null, out)
+      const last = (res?.types || [])[res.types.length - 1]
+      if (last?.element && !(res.errors || []).length) {
+        const t = { element: last.element, cardinality: last.cardinality || 'one' }
+        types.push(t)
+        out[name] = t
+      } else {
+        types.push(null)
+      }
+    } catch {
+      types.push(null)
+    }
+  }
+  return { scope: out, types }
 }

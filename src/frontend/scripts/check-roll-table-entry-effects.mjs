@@ -17,7 +17,7 @@
  * `GmRollTableEntryEditPanel` rendered `EffectEditor`, which draws the list *and*
  * an inline `EffectForm` (`.ee-inline-form`) inside the row — so an effect's
  * stacked, unbounded builder was edited in the row itself. It now draws
- * `EffectList` and opens `GmRollTableEntryEffectPanel` as a child, which is the
+ * `EffectList` and opens `GmDraftEffectPanel` as a child, which is the
  * shape the SFX editor already uses.
  *
  * The rules below are lifted out of the shipping `.vue` files and run, so this is
@@ -34,7 +34,7 @@ const ok = (name, got, want) => {
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const ENTRY = read('../src/components/gm/GmRollTableEntryEditPanel.vue')
-const EFFECT_PANEL = read('../src/components/gm/GmRollTableEntryEffectPanel.vue')
+const EFFECT_PANEL = read('../src/components/gm/GmDraftEffectPanel.vue')
 
 /** The shipped text between two markers, so it can be run as written. */
 function between(src, from, to) {
@@ -62,7 +62,7 @@ const runPrior = new Function('ctx', `
 const eff = (name) => ({ type: 'trait', action: 'add', name })
 
 // ── 1. the child writes into the row's draft ────────────────────────────
-console.log('\nGmRollTableEntryEffectPanel — saving one effect of the row\n')
+console.log('\nGmDraftEffectPanel — saving one effect of the row\n')
 
 {
   let closes = 0
@@ -102,7 +102,7 @@ console.log('\nGmRollTableEntryEffectPanel — saving one effect of the row\n')
 }
 
 // ── 2. the scope an effect sees: the ones before it ─────────────────────
-console.log('\nGmRollTableEntryEffectPanel — prior effects scope the wizard\n')
+console.log('\nGmDraftEffectPanel — prior effects scope the wizard\n')
 
 ok('adding sees every existing effect as prior',
   runPrior({ draft: { effects: [eff('a'), eff('b')] }, props: { index: null } })().map(e => e.name), ['a', 'b'])
@@ -114,7 +114,7 @@ ok('no draft is an empty scope, not a crash',
   runPrior({ draft: null, props: { index: null } })(), [])
 
 // ── 3. nothing here persists; the row's Save is the commit point ────────
-console.log('\nGmRollTableEntryEffectPanel — the row owns persistence\n')
+console.log('\nGmDraftEffectPanel — the row owns persistence\n')
 
 ok('the effect panel never writes to the API',
   /graphql\(|useApi|saveRollTable|updateSfx/.test(EFFECT_PANEL), false)
@@ -130,9 +130,9 @@ ok('the row draws the effects list', /<EffectList/.test(ENTRY), true)
 ok('a row click opens the effect editor', /@edit="openEffectEditor"/.test(ENTRY), true)
 ok('the add button opens it too', /@add="openEffectEditor\(null\)"/.test(ENTRY), true)
 ok('it opens the effect panel through its own panel context',
-  /panel\.open\(\{[\s\S]*?component:\s*GmRollTableEntryEffectPanel/.test(ENTRY), true)
+  /panel\.open\(\{[\s\S]*?component:\s*GmDraftEffectPanel/.test(ENTRY), true)
 ok('the open passes identity plus the row\'s universe/life-path scope',
-  /component:\s*GmRollTableEntryEffectPanel,[\s\S]*?props:\s*\{[\s\S]*?index,[\s\S]*?universe:[\s\S]*?lifePath:/.test(ENTRY), true)
+  /component:\s*GmDraftEffectPanel,[\s\S]*?props:\s*\{[\s\S]*?index,[\s\S]*?universe:[\s\S]*?lifePath:/.test(ENTRY), true)
 // The row itself, as the live `form` — not a copy, or the child's edits would land
 // on a snapshot and the row's Save would write the stale one. Other keys may ride
 // along in the same context ([[B281]] adds the resolved scope), so this asserts the
