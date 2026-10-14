@@ -106,7 +106,10 @@ A spec that type-checks is guaranteed to have resolvable steps; the resolver pro
 
 ### Filter operators
 
-`==`, `!=`, `>`, `>=`, `<`, `<=`, `in` (field value is a member of a list), `not in` (the negation of `in`: none of the listed values — one value or several), `contains` (list field contains the value — how a list-valued field is matched: `armed_sfx_ids`, and `tags` on a trait or trait instance), `not contains` (its negation: several values mean *none of*, and an absent list contains nothing). **The two containment directions are not interchangeable and the wrong one fails silently:** `in` tests the field's *whole value* against a list, so on a list field it can never be true — and `not in` on a list field is therefore *always* true. A list field is matched with `contains`/`not contains` and declares neither `==` nor `in`. Ordering compares numerically (a `die` field coerces `d8` → 8). **Values are typed at authoring time** (decision 4): an `int`/`number` field stores a number, `die`/`string` fields store strings — so downstream logic always has typed values.
+`==`, `!=`, `>`, `>=`, `<`, `<=`, `in` (field value is a member of a list), `not in` (the negation of `in`: none of the listed values — one value or several), `contains` (list field contains the value — how a list-valued field is matched: `armed_sfx_ids`, and `tags` on a trait or trait instance), `not contains` (its negation: several values mean *none of*, and an absent list contains nothing). **The two containment directions are not interchangeable and the wrong one fails silently:** `in` tests the field's *whole value* against a list, so on a list field it can never be true — and `not in` on a list field is therefore *always* true. A list field is matched with `contains`/`not contains` and declares neither `==` nor `in`. Ordering compares numerically (a `die` field coerces `d8` → 8). **A flat `{name}` holding a set *is* a set for the membership operators** (`in` / `not in`) and only
+there: a `many` binding answers with all of its values, so `filter id in {locations}` means what it says
+([[B292]]). `==` still compares that binding's **first** value — a deliberate asymmetry, because
+widening every comparison would change meanings nobody asked to change. **Values are typed at authoring time** (decision 4): an `int`/`number` field stores a number, `die`/`string` fields store strings — so downstream logic always has typed values.
 
 **An enum filter takes one value or several.** Several is written as a list with `in` and means *any of*, and a list-valued field follows the same rule: `tags contains [fire, wood]` means *tagged either*. (The tags editor in the wizard writes that list.) — `polarity in [positive, negative]` matches either, and the card reads *each positive or negative trait instance you rolled*. The wizard stores a single pick as a string with `==` (so nothing already authored changes shape) and a multi-pick as a list with `in`.
 
@@ -268,6 +271,18 @@ The wizard is catalog-driven: it cannot compose an invalid path, and a field wit
 `Effect` / `EffectInput` expose `targetSpec` and `entitySpec` as JSON (camelCase on the wire; `target_spec`/`entity_spec` in Python).
 
 ## Passive rules (the driver)
+
+**A rule's `source_kind` gates its roll-family trigger.** A `traitsetting`-sourced rule fires only when a
+die from that instance is **in the pool** for that roll — not merely because the entity rolled ([[B286]]).
+An event carrying **no** pool is not refused: a synthetic or non-roller activation has nothing to decide,
+and a real roll always carries it. A **disabled** instance is refused by that same gate (a disabled trait
+contributes no dice, so it can never be pooled) and needs no separate check — written separately it
+silently breaks the rules whose *subject* is a disabled trait, such as the portent escalator.
+
+**The flat `{name}` form and the path form must agree, and twice they did not.** An **unresolvable** name
+was left as literal text, so an effect ran against `"{picked}"` as if it were an id while the path form
+applied zero times ([[B282]]); and a **many-valued** name was truncated to its first id while the path form
+expanded the set ([[B292]]). Both are the same seam: one name, two spellings.
 
 The targeting model exists to power **passive rules** like One Trick:
 
