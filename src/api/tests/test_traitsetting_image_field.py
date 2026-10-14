@@ -183,11 +183,21 @@ async def test_a_pick_is_the_instances_picture_for_every_role():
     assert await setting.image(info, "navdot") == "pick:Large"
 
 
-async def test_the_instances_own_picture_beats_a_pick():
-    """An override the instance uploaded is more specific than a pointer at shared
-    art — picking must never hide something the instance owns."""
+async def test_a_pick_wins_over_the_instances_own_picture():
+    """The pick is the instance's *chosen* picture, so it comes first.
+
+    An instance that still holds one of `B215`'s copies would otherwise ignore
+    every pick — the copy carries the roles, so it would win the rung below — and a
+    pick that appears to do nothing is the bug this ticket is about. The pick is
+    visible in the editor and one click to clear, so clearing it restores the
+    instance's own picture and then the definition.
+    """
     info = _info([_image("def"), _image("pick", roles=()), _image("mine", variant_id=SETTING)])
-    assert await _setting(picked_image_id="pick").image(info, "sheet") == "mine:Small"
+    setting = _setting(picked_image_id="pick")
+    assert await setting.image(info, "sheet") == "pick:Small"
+
+    cleared = _setting()
+    assert await cleared.image(info, "sheet") == "mine:Small", "no pick → the instance's own"
 
 
 async def test_a_pick_that_names_nothing_is_ignored():

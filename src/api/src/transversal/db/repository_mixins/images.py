@@ -27,10 +27,10 @@ def pick_role_image(
 ) -> MediaImage | None:
     """The image carrying ``role``, from an already-loaded list — the ladder.
 
-    1. the **variant's** own image carrying ``role`` (newest first) — a
-       projection's for an entity, a traitsetting's for a trait;
-    2. the **picked** owner-level picture ([[B288]]) — the one this instance chose
+    1. the **picked** owner-level picture ([[B288]]) — the one this instance chose
        among its owner's own, which answers **every** role (see below);
+    2. the **variant's** own image carrying ``role`` (newest first) — a
+       projection's for an entity, a traitsetting's for a trait;
     3. an owner-level image in one of ``universes``;
     4. any owner-level image carrying ``role``.
 
@@ -41,14 +41,19 @@ def pick_role_image(
     :meth:`RepositoryImages.resolve_role_image_entry` — one ladder, two ways to
     supply the list.
 
-    ``universes`` is a **callable** because step 2 needs a projection lookup, and
-    skipping it when step 1 already matched is the whole reason the original code
-    tried the variant first. A trait's variant is a traitsetting rather than a
-    projection, so its lookup answers empty and one picture serves every universe.
+    ``universes`` is a **callable** because step 3 needs a projection lookup, and
+    skipping it when an earlier step already matched is the whole reason the
+    original code tried the variant first. A trait's variant is a traitsetting
+    rather than a projection, so its lookup answers empty and one picture serves
+    every universe.
 
-    ``picked_id`` is a **pointer** at one of the owner's pictures, placed *after*
-    the variant rung on purpose: an instance's own picture is more specific than a
-    pointer at shared art, so picking can never hide something the instance owns.
+    ``picked_id`` is a **pointer** at one of the owner's pictures, and it comes
+    **first**, ahead of the instance's own rung: it is the instance's *chosen*
+    picture, so a pick that an old picture could outrank would look like it did
+    nothing — which is exactly what the copies [[B215]] used to write would do to
+    every instance that still holds one. The pick is visible in the editor and one
+    click to clear, so nothing is hidden: clear it and the instance's own pictures
+    (then the definition) take over again.
 
     **The pick answers every role, not just the ones its picture carries** — and
     that is not a shortcut. Roles are unique per rung: ``set_image_roles`` strips a
@@ -64,16 +69,17 @@ def pick_role_image(
     ignored rather than fatal, which is what keeps a stale pointer from blanking a
     surface.
     """
-    if variant_id:
-        for img in images:
-            if (img.variant_id or None) == variant_id and role in img.roles:
-                return img
     # The instance's picked picture ([[B288]]) — a pointer at one of the owner's
-    # own, preferred over the rest of the owner level. Restricted to owner-level
-    # pictures so a pointer can never drag in another instance's rung.
+    # own, and the instance's **chosen** picture, so it comes before the rung the
+    # instance owns. Restricted to owner-level pictures so a pointer can never drag
+    # in another instance's rung.
     if picked_id:
         for img in images:
             if img.id == picked_id and not img.variant_id:
+                return img
+    if variant_id:
+        for img in images:
+            if (img.variant_id or None) == variant_id and role in img.roles:
                 return img
     for u in (universes() if universes else []):
         for img in images:

@@ -432,16 +432,20 @@ a matte, a loop — belong to the *copy*, so it was visible to that instance alo
 `TraitSetting.picked_image_id` replaces it: the setting **names** one of its
 trait's owner-level pictures, and `pick_role_image` prefers it. The rung order is
 
-1. the instance's **own** picture (the variant rung);
-2. the **picked** owner-level picture — `picked_image_id`, for the roles it carries;
+1. the **picked** owner-level picture — `picked_image_id`;
+2. the instance's **own** picture (the variant rung);
 3. an owner-level picture in the setting's universe;
 4. any owner-level picture.
 
-An instance's own art is therefore never hidden by a pointer at shared art, and a
-variant made on the picked picture is a render **of that picture**, so every
-instance that picks it gets it. A pick that names nothing — a deleted picture, or a
-variant-owned one — is ignored rather than fatal, because a stale pointer must not
-blank a surface.
+The pick comes **first** because it is the instance's *chosen* picture, and an
+instance that still holds one of `B215`'s copies carries the roles on that copy — a
+pick that the copy could outrank would look like it did nothing, which is the exact
+complaint this ticket exists for. Nothing is hidden by the order: the pick is shown
+in the editor with a Clear control, and clearing it hands the instance back to its
+own pictures and then the definition. A variant made on the picked picture is a
+render **of that picture**, so every instance that picks it gets it. A pick that
+names nothing — a deleted picture, or a variant-owned one — is ignored rather than
+fatal, because a stale pointer must not blank a surface.
 
 **The pick answers every role, not only the ones its picture carries**, and that is
 not a shortcut: roles are unique per rung (`set_image_roles` strips a role from its
