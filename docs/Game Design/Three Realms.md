@@ -64,7 +64,7 @@ So the man the human describes as an evil emperor who lures cultivators in and s
 
 ## The demonic cultivators — the cast survived, the conspyramid did not
 
-**The conspyramid did NOT survive the migration.** Zero `commands` edges have ever existed. What migrated is a **roster of individuals**, confirmed by the human from the archetype `Entities/335897730` in the old app:
+**The conspyramid did NOT survive the migration.** Zero `commands` edges have ever existed. What migrated is a **roster of individuals**, confirmed by the human from the archetype `Entities/335897730` in the old app. **This is the old app's list of eight; the Valley roster is seven after Si Youyou's removal.**
 
 | Demonic cultivator | Id | Where |
 |---|---|---|
@@ -77,7 +77,7 @@ So the man the human describes as an evil emperor who lures cultivators in and s
 | **Mist-Weaver Shen** | `gmc-344405382` | Misty Mountain |
 | **Si Youyou** | `gmc-123858524` | **Mud-Silk Weavers (Iron Roots)** |
 
-**There is no Valley demonic faction yet — the eight are unfactioned by design, not by omission.** The three existing dark factions (`demon clan`, `Demon Race`, `Devilish Path`) predate this work, each still has **0 members**, and the human confirmed on 2026-09-29 that **the Valley's demonic cultivator faction has not been created.** So the conspyramid's home is a thing to author, not a thing to find. And more importantly:
+**There is no Valley demonic faction yet — the roster is unfactioned by design, not by omission.** The three existing dark factions (`demon clan`, `Demon Race`, `Devilish Path`) predate this work, each still has **0 members**, and the human confirmed on 2026-09-29 that **the Valley's demonic cultivator faction has not been created.** So the conspyramid's home is a thing to author, not a thing to find. **The table above lists the eight the old app held; the Valley roster is now seven** — Si Youyou was moved out to Daxu (below). And more importantly:
 
 > [!warning] Nothing in the live data marks a demonic cultivator as demonic — but two traits come close
 > There is no `demon` trait, no faction membership, no tag. The affiliation exists only in the *old application's archetype* (`Entities/335897730`), which did not migrate. What the cohort shares instead is a **technique signature**, and I measured it rather than guessing:
@@ -93,14 +93,13 @@ So the man the human describes as an evil emperor who lures cultivators in and s
 
 ### They are already planted, and that is the finding
 
-Placed on the map, the eight span the whole Valley:
+Placed on the map, the seven span the whole Valley:
 
 - **Wangnuo** — Beggar Douchi (*Gate*), Kestrel Xu (*Village*), **Zhang (*Fading Vein*, the mine with the Mountain Root Drake*)**
 - **Wilderness** — Jin Mu, Liao Yulian, Seven Wounds Zhang (where the **Transportation Array** is)
 - **Misty Mountain** — Mist-Weaver Shen
-- **Iron Roots** — Si Youyou (*Mud-Silk Weavers*)
 
-**And Seven Wounds Zhang is inside a sect:** he carries **`subordinate` / "TBD Iron Roots Disciple"** and **`vulnerability` / "Disciple Jiang"** — a planted agent with a named lever held over him, already written.
+**And Seven Wounds Zhang is inside a sect:** he carries **`subordinate` / "TBD Iron Roots Disciple"** and **`vulnerability` / "Disciple Jiang"** — a planted agent with a named lever held over him, already written. **No other member is inside an institution** — so at present the cult has exactly one known infiltration, and it is in the declining sect.
 
 ## The demonic cult — how it is designed to work
 
@@ -111,37 +110,53 @@ Placed on the map, the eight span the whole Valley:
 - **A seat is something you *feed*, not something you *hold*.** The seat outlives its holder, which is what makes the cult genuinely demonic rather than a third sect with a roster: members are replaceable, the seats are not.
 - **Empty seats are the point.** Most are unfilled, so the cult is visibly *recruiting* — and the seats it lacks are a scene and a target list rather than a gap.
 
-> [!question] Two things to settle before this is authored
-> **① "Desire" is in both lists** — it is emotion #7 *and* the category containing all six desires. Either it is the crown the other twelve hang from (**6 + 1 + 6**, which makes the overlap the shape of the cult) or one of the two lists needs a different seventh entry.
->
-> **② The roster needs work, and it is the real bill.** The human's call: *"the current roster (i.e. every demonic GMC) needs work"*, and more GMCs are needed to fill the seats. Every one of the eight has to be re-authored as a *seat-holder* rather than a character who happens to be demonic.
+### The crown — desire is the Valley Lord's seat
+
+**Settled 2026-09-29: "desire" is the crown, not a peer.** The overlap between the two lists was the answer rather than the problem — *desire* is emotion #7 **and** the category the six desires belong to, so it sits above both.
+
+```
+                        desire  ←  the crown
+                       Zhu Yan, gmc-207814498 — "Valley Lord"
+                        /                    \
+        6 PEERS: emotions                6 SUBORDINATES: desires
+   joy · anger · sorrow · fear ·        survival · pleasure · belonging ·
+        love · hate                     recognition · power · meaning
+```
+
+**Thirteen seats: one crown, six peers, six subordinates.** The hierarchy is mechanically real rather than flavour — the six emotions are peers of one another and of the crown's tier, the six desires answer to them.
+
+**And the crown is already seated.** *Zhu Yan* holds `role: **Valley Lord**`, rules Tan Gang from the Nine Heavens Pagoda, and holds the **Aegis of the Unspoken Pact** — the soul-binding contract artifact. **The head of the cult is the ruler of the city and the holder of the contract.** Nothing needs inventing for the top of this hierarchy; it needs a stat block.
+
+> [!note] One thing this settles
+> The earlier worry that "desire" duplicated itself is resolved: the crown is desire-as-principle, and the six subordinates are desire-as-appetite. The cult's own doctrine writes itself — *the Lord is what all wanting is; the six are the shapes it takes.*
+
+> [!question] Still open
+> **The roster needs work, and it is the real bill.** The human's call: *"the current roster (i.e. every demonic GMC) needs work"*, and more GMCs are needed to fill the seats. Every remaining member has to be re-authored as a *seat-holder* rather than a character who happens to be demonic — and **six of the thirteen seats are open** (joy · anger · love · hate among the peers; belonging · meaning among the subordinates).
 
 ### Seat fit, read off the live sheets
 
-Where the eight land against the thirteen. **Several are already written; two do not fit at all.**
+Where the **seven** land against the thirteen — Si Youyou is out, see below. **Some are already written; one does not fit at all.**
 
 | Member | Seat | Evidence |
 |---|---|---|
-| **Liao Yulian** | **sorrow** | *"Sorrow of a Thousand Graves"*, *"Inhale the Final Sorrow"*, *"Weeping Blade's Lament"* — written already |
-| **Beggar Douchi** | **survival** | `essence`: "Beggar", 3rd stage QC — recruited exactly where a cult that targets the weak would |
-| **Zhang** | **power** | at the Fading Vein, *"Spirit Stone Blood Enhancement"* — leeching strength out of the ground |
-| **Si Youyou** | **belonging** | *"spirit stitching"*, *"shadow weave"* — binding and holding. **But see provenance below** |
-| **Seven Wounds Zhang** | **fear** | planted in Iron Roots with a hostage; *"Living Corpse Refinement"* |
-| **Kestrel Xu** | **recognition** | *"Wing-Spanning Shadow Art"* — the one whose tell is display |
-| **Mist-Weaver Shen** | **pleasure** | thinnest read; the sheet has not been examined in depth |
-| **Jin Mu** | **— none** | *"The Silencer"*, *"Throat-Severing Resonance"*: he reads as **what the cult does to people**, not as one of its aspects |
-| **— empty —** | **joy · anger · love · hate · meaning** | five seats with no candidate, which is why the roster is known to be incomplete |
+| **Liao Yulian** | **sorrow** *(peer)* | *"Sorrow of a Thousand Graves"*, *"Inhale the Final Sorrow"*, *"Weeping Blade's Lament"* — written already |
+| **Beggar Douchi** | **survival** *(subordinate)* | `essence`: "Beggar", 3rd stage QC — recruited exactly where a cult that targets the weak would |
+| **Zhang** | **power** *(subordinate)* | at the Fading Vein, *"Spirit Stone Blood Enhancement"* — leeching strength out of the ground |
+| **Seven Wounds Zhang** | **fear** *(peer)* | planted in Iron Roots with a hostage; *"Living Corpse Refinement"* |
+| **Kestrel Xu** | **recognition** *(subordinate)* | *"Wing-Spanning Shadow Art"* — the one whose tell is display |
+| **Mist-Weaver Shen** | **pleasure** *(subordinate)* | thinnest read; the sheet has not been examined in depth |
+| **Jin Mu** | **— none** | *"The Silencer"*, *"Throat-Severing Resonance"*: he reads as **what the cult does to people**, not as one of its aspects. **Still unresolved** |
+| **— empty —** | **joy · anger · love · hate** *(peers)* · **belonging · meaning** *(subordinates)* | **six seats, six bodies needed** — and one unseated member (**Jin Mu**) leaves **thirteen seats, seven filled, six open** |
 
-### Si Youyou's provenance — she may not belong at all
+### Si Youyou — removed from the Valley
 
-**The human's admission, 2026-09-29:** Si Youyou is **a character from the donghua *Tales of Herding Gods***, created absent-mindedly at Iron Roots and given the Demonic Cultivator archetype by mistake. So her placement in the eight is **suspect in a way the others' is not**, and whether she is one of the cult or simply a foreign character sitting in the Iron Roots roster is an open question.
+**Resolved 2026-09-29.** She is a character from the donghua *Tales of Herding Gods*, created at Iron Roots absent-mindedly with the Demonic Cultivator archetype. The human moved her out: she now sits at **`Daxu`** (`loc-346324438`), which is **a top-level sibling of the Valley** — *"Daxu"*'s parent is `universe-three_realms`, with no Valley ancestry. **So she is out of scope, and the Valley roster is seven.**
 
-**She is also the one member whose position contradicts the cult's premise.** The cult targets the *weak but ambitious*; she sits at **Iron Roots, 5th stage foundation building, with an 11-die qi pool** — she is neither weak nor outside the institutions. Either she is a genuine infiltration (the cult *does* want the strong) or she is a leftover.
-
-Her sheet's own detail, for whoever decides: `cultivation stage` **"5th stage foundation building"**, `qi` **`5d4 + 6d6`**, `art` *"spirit stitching"*, `transformation art` *"shadow weave"*, `artifact` *"blood needle"*, and **two** `foundation` settings — *"Essence Leeching"* and a bare one.
+**One wrinkle for whoever queries the cult:** she **kept** `cursed` / *"Qi Blood Addiction"*, so the fingerprint still returns her. `Qi Blood Addiction` is a **Three Realms-wide** query, not a Valley one — a Valley-scoped search must also filter on location.
 
 
-**The party is standing in the middle of it.** Three PCs are at Azure Dawn, Andy is at Iron Roots with Si Youyou, and Filip is at Wangnuo Village with Kestrel Xu.
+
+**The party is standing in the middle of it.** Three PCs are at Azure Dawn, Andy is at Iron Roots alongside the cult's one known infiltrator (Seven Wounds Zhang), and Filip is at Wangnuo Village with Kestrel Xu.
 
 ## The four factions in detail
 
@@ -200,7 +215,7 @@ This is also why [[B147]] exists: `commands` is the relationship type that carri
 
 **The demonic cult is now the top of this list, because it is the main antagonist in actual play.**
 
-1. **The demonic cult needs authoring from nothing: the faction, the seats, and a re-worked roster.** The eight individuals exist and are placed, but **every one needs re-authoring as a seat-holder**, five seats have no candidate, and the faction itself does not exist. `cursed` / **"Qi Blood Addiction"** is the fingerprint that finds anyone missed. **Three decisions gate it:** the "desire" overlap, whether Si Youyou belongs, and what Jin Mu is if he is not a seat.
+1. **The demonic cult needs authoring from nothing: the faction, the seats, and a re-worked roster.** The seven individuals exist and are placed, but **every one needs re-authoring as a seat-holder**, **six of the thirteen seats are open**, and the faction itself does not exist. `cursed` / **"Qi Blood Addiction"** is the fingerprint that finds anyone missed. **The one remaining design question is what Jin Mu is** — he fits no seat and reads as the cult's *function* (the Silencer) rather than one of its aspects. **Settled since:** the crown is desire, seated by Zhu Yan; Si Youyou is out, back to Daxu.
 2. **Zhu Yan needs a stat block worthy of a Valley Lord.** He is the Emperor, he holds the Aegis, and his sheet is **five settings** — `role: Valley Lord`, the artifact, `appearance`, an empty `description`. The main antagonist's head is currently thinner than his own guards.
 3. **Tan Gang has no emperor-shaped *position* in its structure.** It has three houses and a Jade-Seal Guard, but nothing that says who rules it and how — which is why the ruler reads as one more GMC in a city rather than the head of a hierarchy.
 4. **Silent Fang has no content worth the name.** 6 members now, but **2 traits total** and no arc-bearing stat block. Its arc cannot be authored until the faction is, and the three `Silent Fang` names (faction / location / guard) need separating.
