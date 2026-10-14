@@ -1278,36 +1278,104 @@ app's default look.
 ## Activation splash
 
 The surface for everything the **engine** does to a player who asked for nothing
-([[B229]]): `app/SplashPanel.vue`. It sits where the floating choice host sat
-(bottom-right on a desktop — the sheet docks left, the roller bottom-centre, the ✨
-rail left; the top banner on a phone, where the bands own the bottom), above the GM
-panel viewport and below the login overlay. **One surface, two faces** — the author's
-rule is that the splash *is* where engine-initiated prompts appear, so a question and
-a "here is what changed" must not be two different corners of the screen.
+([[B229]]): `app/SplashPanel.vue`. **One surface, three faces** — the author's rule is
+that the splash *is* where engine-initiated prompts appear, so a question, a "here is
+what changed", and a "here is what you are up against" must not be three different
+places on the screen.
 
 | face | what it is | how it ends |
 |---|---|---|
 | **prompt** | a choice the engine raised: an automatic rule, a routed question, a [[B5]] branch | only an interaction — answered, or the wizard's own Cancel (writes nothing) |
 | **note** | what an activation did, including **why an effect did nothing** ([[B236]]) | it **fades**: ~2 s for a change, ~5 s for a rule that has run its course |
+| **target** | a number the player is about to act on — a difficulty set for where they are ([[B287]]) | **the tap**: it waits, and pressing it is both the acknowledgement and the way through to the sheet |
 
-- **A note is a report, not a decision.** It never blocks anything, never has a
-  scrim, is never interactive, and is announced (`role="status"`) rather than only
-  seen. Its lines carry a `silent` flag for an effect that did nothing — the whole
-  point of the surface, because a refusal used to be indistinguishable from a
-  success on the wire.
-- **The queue shows one at a time, in order.** A burst of changes is not a stack
-  of dialogs; each is a brief banner that waits its turn.
-- **A note's dwell is the time it is on screen.** The clock starts only when the
-  note is actually visible, so a report that arrives while a question is up is
-  *held* rather than ageing unseen behind it, and released when the question is
-  answered or left.
-- **The audience is the player it happened to**: the entity they are acting as, or
-  the place they are standing in. A change to someone else's sheet is not theirs to
-  read — deliberately not even a GM's, whose acting entity is the one that counts.
-- **The shell owns the timing, the surface owns the shape.** `App.vue` holds the
-  queue, the dwell and the audience; the component renders the prompt or the head
-  of the queue. That is what keeps "1–2 seconds" a decision in one place instead of
-  a number in a component.
+**It opens front and centre, for every face** (the author, 2026-10-14: *"I expected the
+splash panel to open front and center, but it's more like a glorified toast now"*). It
+used to take the one free corner on a desktop (bottom-right) and the top banner on a
+phone; the centre is the same place on every layout, which is what the
+one-place-to-learn rule wanted in the first place. Two things did **not** change, and
+they are what make it survivable at the centre:
+
+- **No scrim, still non-modal.** The card is the only thing that takes input, so the
+  table behind it stays reachable and the sheet stays readable while a question is
+  answered — the reason the non-modality existed. It is still a *card*, not a
+  full-viewport box: the spec pins the area share **and** that a point outside it is not
+  it. That spec's old assertion — `centreIsPanel === false`, "a corner card" — was
+  re-expressed rather than deleted, because the decision changed and the pin should
+  record the new one.
+- **Nothing else about the layout moved.** The centring is deliberately **transform-free**
+  (`inset: 0; margin: auto`): a transformed ancestor becomes the containing block for
+  `position: fixed` descendants, which is the trap the landscape dock records.
+
+> [!note] The one consequence worth knowing
+> The centre is the **viewport's**, so in the docked landscape layout (~821–1220px wide,
+> where the sheet holds a 400px column) the card can overlap the sheet's right edge. The
+> author accepted that when choosing the whole-splash placement; centring it in the space
+> the dock leaves would move it per layout, which is the opposite of "the same place
+> every time".
+
+- **A note is a report, not a decision.** It never blocks anything, never has a scrim,
+  and is announced (`role="status"`) rather than only seen. Its lines carry a `silent`
+  flag for an effect that did nothing — the whole point of the surface, because a refusal
+  used to be indistinguishable from a success on the wire.
+- **A target is the one interactive face**, and `action` is what tells the two apart: a
+  note that names an action renders as a `<button>` (so the press is announced and
+  keyboard-reachable) with a **cue** line, since a card that is itself the control is not
+  discoverable without one. It needs no Cancel of its own — *doing the action is the
+  dismissal*.
+- **The queue shows one at a time, in order** — with one exception: a **target replaces a
+  target**, because the latest difficulty is the only true one, so it does not wait behind
+  a stale number.
+- **A note's dwell is the time it is on screen.** The clock starts only when the note is
+  actually visible, so a report that arrives while a question is up is *held* rather than
+  ageing unseen behind it, and released when the question is answered or left.
+- **The audience is the player it happened to**: the entity they are acting as, or the
+  place they are standing in. A change to someone else's sheet is not theirs to read —
+  deliberately not even a GM's, whose acting entity is the one that counts.
+- **The shell owns the timing, the surface owns the shape.** `App.vue` holds the queue,
+  the dwell, the audience and the target's dice; the component renders the prompt or the
+  head of the queue. That is what keeps "1–2 seconds" a decision in one place instead of a
+  number in a component.
+- **Focusing a sheet works in every layout** (`focusCharacterSheet`): expand the band on a
+  phone, otherwise reveal the panel. In the docked desktop layout it is already on screen,
+  so there the tap has nothing to reveal — which is why both specs drive it on a phone.
+
+**The difficulty target** ([[B287]]) is the target face's first real user, and the reason
+it exists: `difficulty_set` carries the **rolled dice** as well as the number, so the
+splash shows *what is opposing you*, not just how much; the tap opens the sheet it is to
+be rolled against. The player who has to answer it is the one at that location — the GM
+who set it already watched it happen, and everyone else just reads the toast.
+
+### A sticky message the engine was told to deliver
+
+An authored **client action** ([[B132]]) — *open this sheet*, *show this message* —
+arrives as its own SSE event and lands on the **same** target face rather than a second
+one beside it:
+
+```
+event: client_action
+data: { "action": "open_sheet" | "toast", "recipient_id": "<entity>",
+        "target_id": "<entity>", "message": "…", "sticky": true, "tap": "open_sheet" }
+```
+
+- **The event goes to every active session and names its recipient**, so the client filters
+  on `recipient_id` itself — a client that is not the recipient ignores it. That is also
+  what makes the same event safe to replay to a reconnecting tab.
+- **Absent means false.** The server omits `sticky` unless true and `tap` unless it does
+  something (`none` otherwise), so a payload without them is a *plain toast* with no
+  action — which is exactly what `useToasts` is for. The splash is for the messages that
+  are meant to be noticed.
+- **The vocabulary the client honours is `open_sheet`**, matching the server's
+  `none | open_sheet`; an action it does not know is ignored rather than guessed at.
+- **A sticky message with an action is a target** (pressed, and gone when pressed). A
+  sticky one **without** an action is a notice with no way out of its own — the only case
+  that earns a **✕**, because a card that waits for ever with no exit is a trap. The ✕ sits
+  *beside* the control, never inside it: a button in a button is not a thing.
+- **The client half is pinned statically** by `scripts/check-client-actions.mjs` — the most
+  important assertion being that `client_action` is in `useSSE`'s subscription list at
+  all, because the failure mode of a missing subscription is that nothing arrives, nothing
+  errors, and the rule simply looks like it does nothing.
+
 
 ### Embedding a surface in a panel
 
