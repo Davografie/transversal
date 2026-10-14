@@ -48,6 +48,37 @@ async function seedPath(request) {
   )
 }
 
+test('an effect authored on a step is there again after a reload', async ({ page, request }) => {
+  await bootApp(page)
+  await seedScratch(page.request, { rowVariables: [ROW_DECLARED] })
+  await seedPath(page.request)
+  await openPathPanel(page)
+
+  const summaries = page.locator('.lpd-step').first().locator('.ee-summary')
+  await expect(summaries).toHaveCount(0)
+
+  await page.locator('.lpd-step').first().locator('.ee-add').click()
+  const form = page.locator('.reep-root .ee-form')
+  await expect(form).toBeVisible({ timeout: 20000 })
+  await form.locator('select').first().selectOption('gain')
+  // The form's own commit — "Add" — is what puts the effect in the step's list. The
+  // *persist* is the panel's auto-save, and it is the half this test is about.
+  const saved = page.waitForResponse(
+    (r) => (r.request().postData() || '').includes('saveLifePath'), { timeout: 20000 })
+  await form.locator('.ee-save').click()
+  await expect(summaries).toHaveCount(1, { timeout: 20000 })
+  await saved
+
+  // A cold load. The failure this catches: the editor seeds its form from the shared
+  // read, so a read that does not carry `steps { effects }` shows an empty list —
+  // and the next save writes that emptiness back.
+  await page.reload()
+  await page.waitForTimeout(2500)
+  if (!(await page.locator('.lpd-root').count())) await openPathPanel(page)
+  await expect(page.locator('.lpd-step').first().locator('.ee-summary'))
+    .toHaveCount(1, { timeout: 20000 })
+})
+
 test.afterEach(async ({ page }) => {
   // Cleanup through the same authenticated context the seed used.
   await gql(page.request, `mutation { deleteLifePath(id: "${PATH}") }`)

@@ -745,6 +745,16 @@ const objectAfter = (src, key) => {
     // effects, and a bare match passed on that alone until this was tightened.
     ok('the connector writer carries a step\'s own effects',
       /(?<![\w.])effects\s*:\s*s\.effects/.test(stepFn), true)
+
+    // …and it must **re-read** the path before writing it. `steps` replaces the
+    // stored list and this panel auto-saves, so building from the copy it fetched at
+    // load time erases anything authored elsewhere since — a step's own effects
+    // above all. That is not hypothetical: it is what the author reported.
+    const saveFn = panel.slice(panel.indexOf('async function save()'))
+    const reread = saveFn.indexOf('fetchLifePath(')
+    const write = saveFn.indexOf('saveLifePath({')
+    ok('the connector re-reads the path before replacing its steps',
+      reread >= 0 && write >= 0 && reread < write, true)
   }
 
   // ── An eager reader may not precede the `form` it reads ────────────────

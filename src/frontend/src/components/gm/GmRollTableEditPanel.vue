@@ -733,18 +733,26 @@ async function save() {
     let connectorError = ''
     if (connectorEnabled.value && lp.value) {
       try {
-        const steps = (lp.value.steps || []).map(s =>
+        // **Re-read the path here**, immediately before writing it. `lp.value` is the
+        // copy this panel fetched when it *opened*, and this is an auto-save — so
+        // anything authored elsewhere since, a step's own effects above all, would be
+        // replaced by that stale copy and lost. Replacing the whole `steps` list is
+        // how the wrapper works; reading it fresh first is what makes the replace
+        // safe. Falls back to the loaded copy if the re-read fails.
+        const fresh = await fetchLifePath(lp.value.id).catch(() => null)
+        const source = fresh || lp.value
+        const steps = (source.steps || []).map(s =>
           s.id === step.value.id ? stepToInput(s, stepBindings.value) : stepToInput(s, s.bindings))
         const pathResult = await saveLifePath({
-          id: lp.value.id,
-          name: lp.value.name,
-          universe: lp.value.universe,
-          description: lp.value.description,
-          entryTableId: lp.value.entryTableId,
-          entryStep: lp.value.entryStep,
+          id: source.id,
+          name: source.name,
+          universe: source.universe,
+          description: source.description,
+          entryTableId: source.entryTableId,
+          entryStep: source.entryStep,
           steps,
-          discovery: lp.value.discovery || null,
-          conditions: lp.value.conditions || [],
+          discovery: source.discovery || null,
+          conditions: source.conditions || [],
         })
         if (!pathResult?.ok) connectorError = 'the life path save was rejected.'
       } catch (e) {
