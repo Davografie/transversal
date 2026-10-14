@@ -241,9 +241,10 @@
   </div>
   <!-- The activation splash ([[B229]]): the one place a player looks when the
        engine did something they did not ask for. It carries the routed/automatic
-       question ([[B230]]'s host, now this surface's prompt face) and the brief
-       notes about what an activation changed. A question waits for an
-       interaction; a note fades. -->
+       question ([[B230]]'s host, now this surface's prompt face), the brief notes
+       about what an activation changed, and the difficulty target dealt to this
+       player. A question waits for an interaction, a note fades, a target waits
+       for its tap. -->
   <SplashPanel
     v-if="autoChoices.length || splashNote"
     :choices="autoChoices"
@@ -252,6 +253,7 @@
     @answer="(r) => answerSfxChoices(r, 'auto')"
     @leave="clearSfxChoicesAll"
     @loop="(c) => loopSfxChoice(c, 'auto')"
+    @act="onSplashAct"
   />
   <RelationalCanvas
     v-if="fullCanvas"
@@ -601,6 +603,8 @@ const splashBlocked = () => autoChoices.value.length > 0
 
 function startSplashTimer() {
   if (splashTimer) clearTimeout(splashTimer)
+  // A target is waiting for a tap, not for a clock — see `pushSplashTarget`.
+  if (splashNote.value?.sticky) return
   const kind = splashNote.value?.kind || 'change'
   splashTimer = setTimeout(advanceSplash, SPLASH_DWELL[kind] || SPLASH_DWELL.change)
 }
@@ -618,8 +622,55 @@ function advanceSplash() {
 }
 /** Queue a report. It waits its turn rather than replacing what is on screen. */
 function pushSplashNote(note) {
-  splashQueue.value = [...splashQueue.value, { id: ++splashNoteId, kind: 'change', lines: [], ...note }]
+  const entry = { id: ++splashNoteId, kind: 'change', lines: [], ...note }
+  // A **target** is the current fact, not a queue item: the latest difficulty is
+  // the only true one, so a new target replaces an older target instead of
+  // waiting behind it (and behind anything already queued).
+  if (entry.sticky) {
+    splashQueue.value = splashQueue.value.filter(n => !n.sticky)
+    if (splashNote.value?.sticky) { splashNote.value = entry; return }
+  }
+  splashQueue.value = [...splashQueue.value, entry]
   if (!splashNote.value) advanceSplash()
+}
+
+/**
+ * The difficulty this player has been dealt, as a splash they can act on.
+ *
+ * It shows the number **and the dice it was rolled from** — "what is opposing me"
+ * is the question the number alone does not answer — and holds the surface until
+ * it is tapped, because a target that faded before it was read would lose both
+ * the number and the way through to the sheet.
+ */
+function pushSplashTarget(difficulty, dice = []) {
+  const lines = (dice || [])
+    .filter(d => d.result !== null && d.result !== undefined)
+    .map(d => `${d.die}${d.label ? ` · ${d.label}` : ''} — ${d.result}`)
+  pushSplashNote({
+    kind: 'target',
+    title: `Difficulty ${difficulty}`,
+    lines,
+    action: 'Open character sheet',
+    sticky: true,
+  })
+}
+
+/** The tap on a target: it has been read, so it goes — and the sheet comes up. */
+function onSplashAct() {
+  advanceSplash()
+  focusCharacterSheet()
+}
+
+/**
+ * Bring the player's own sheet forward — the state a click on their own map dot
+ * leaves: self rather than an inspected peer, and revealed. On a docked layout
+ * the sheet is already on screen beside the map, so there is nothing to reveal.
+ */
+function focusCharacterSheet() {
+  viewingEntityId.value = null
+  forceSheet.value = true
+  if (mobileStackActive.value) setMobileFocus('sheet')
+  else if (!sheetDock.value) openPanel()
 }
 // The question takes the surface and the whole splash with it: hold the queue
 // while it is up, and start the note's clock when it clears.
@@ -1506,7 +1557,14 @@ function handleSseEvent(evt) {
     case 'difficulty_set':
       if (evt.data?.difficulty != null) {
         currentDifficulty.value = evt.data.difficulty
-        addToast(`Difficulty set: ${evt.data.difficulty}`, 'roll', 'player')
+        // The player who has to answer it gets the splash, with the dice behind
+        // the number. The GM who set it already watched it happen, and a client
+        // somewhere else is not the one being opposed — both just read the toast.
+        if (!gmMode.value && evt.data?.location_id === currentLocationId.value) {
+          pushSplashTarget(evt.data.difficulty, evt.data.dice)
+        } else {
+          addToast(`Difficulty set: ${evt.data.difficulty}`, 'roll', 'player')
+        }
       }
       break
     case 'contest_challenged':
