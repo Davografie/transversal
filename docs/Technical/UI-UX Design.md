@@ -1320,9 +1320,10 @@ they are what make it survivable at the centre:
   used to be indistinguishable from a success on the wire.
 - **A target is the one interactive face**, and `action` is what tells the two apart: a
   note that names an action renders as a `<button>` (so the press is announced and
-  keyboard-reachable) with a **cue** line, since a card that is itself the control is not
-  discoverable without one. It needs no Cancel of its own — *doing the action is the
-  dismissal*.
+  keyboard-reachable) and needs no Cancel of its own — *doing the action is the
+  dismissal*. It carries **no cue line**: pressing the card *is* the action, and a line
+  explaining it is noise, so the accessory that said so is gone and the accessible name
+  says it instead.
 - **The queue shows one at a time, in order** — with one exception: a **target replaces a
   target**, because the latest difficulty is the only true one, so it does not wait behind
   a stale number.
@@ -1359,13 +1360,18 @@ trait chips"*). It is the one face allowed to be loud:
   `.sp-root`** — a transformed ancestor becomes the containing block for `position: fixed`
   descendants — and every bit of it is off under `prefers-reduced-motion`, with the ring
   removed outright since it is pure decoration.
-- **The dice are the map's own chips**, one per **trait instance** (a trait rolled as two
-  d8s is one thing opposing you, not two lines), each showing the face that die actually
-  rolled. `location/TraitChip.vue` ([[B92]]) already existed, so nothing was extracted: it
-  gained a second accepted input — a rolled die (`{ die, result, hitch }`) beside the plain
-  type string the location viewer passes — and hands `result`/`isHitch` to the `DieIcon`
-  that already knew how to draw a face. One chip, two inputs, so the two surfaces cannot
-  drift.
+- **The dice are the map's own chips**, laid out **centred and wrapped**, one per **trait
+  instance** (a trait rolled as two d8s is one thing opposing you, not two lines), each
+  showing the face that die actually rolled. `location/TraitChip.vue` ([[B92]]) already
+  existed, so nothing was extracted: it gained a second accepted input — a rolled die
+  (`{ die, result, hitch }`) beside the plain type string the location viewer passes — and
+  hands `result`/`isHitch` to the `DieIcon` that already knew how to draw a face. One chip,
+  two inputs, so the two surfaces cannot drift.
+- **The dice are *spread*, not fanned** (`diceLayout: 'fan' | 'spread'`, default `fan`).
+  The map's staircase overlaps each die onto the last, which reads perfectly for a **rating**
+  — shape and colour say `d8 d8` at a glance and the numbers are not the point — and not at
+  all for a **roll**, where an overlapped die hides its neighbour's face. The step is one
+  value used both for the layout and for the reserved lane, so the two cannot disagree.
 - **What it cannot show yet is the statement**, and that is a payload gap rather than a
   surface one: `PoolDieIn` carries `die` / `label` / `ts_id` and no statement, so the chip
   degrades to name + dice. The client cannot fill it in honestly — the dice belong to the

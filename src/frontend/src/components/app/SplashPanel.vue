@@ -62,6 +62,7 @@
           :class="{ 'sp-note-action': !!currentNote.action }"
           :type="currentNote.action ? 'button' : undefined"
           :role="currentNote.action ? undefined : 'status'"
+          :aria-label="currentNote.action || undefined"
           @click="currentNote.action && emit('act', currentNote)"
         >
           <!-- A **target**: the number is the whole point, so it is the biggest thing
@@ -83,7 +84,8 @@
           <!-- What is opposing you, as the location's own trait chips ([[B92]]) —
                name, statement, and the face each die actually rolled. Re-using the
                chip is the point: it is the same object the map draws, so the two
-               cannot drift apart. -->
+               cannot drift. `spread` because a rolled face has to be readable, and
+               the map's fanned staircase overlaps the numbers. -->
           <div v-if="currentNote.chips?.length" class="sp-chips">
             <TraitChip
               v-for="(chip, i) in currentNote.chips"
@@ -91,10 +93,10 @@
               class="sp-chip"
               :style="{ '--sp-chip-delay': `${120 + i * 70}ms` }"
               :trait="chip"
+              dice-layout="spread"
               expanded
             />
           </div>
-          <span v-if="currentNote.action" class="sp-note-cue">{{ currentNote.action }}</span>
         </component>
         <!-- A target is dismissed *by* its action, so it needs no Cancel. A sticky
              message with no action has no such way out, and a card that waits for
@@ -228,18 +230,10 @@ const kindLabel = computed(() => KIND_LABELS[currentNote.value?.kind] || KIND_LA
   padding: 0;
   cursor: pointer;
 }
-.sp-note-action:hover .sp-note-cue,
-.sp-note-action:focus-visible .sp-note-cue { color: var(--accent); }
 .sp-note-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
-/* The way through, since the card itself is the control — without a cue the
-   press is not discoverable. */
-.sp-note-cue {
-  font-size: 10px;
-  color: var(--text-dim);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
+/* The press *is* the way through, so there is no cue line to explain it (the
+   author: "the 'open character sheet' is unnecessary, that just needs to happen when
+   the user clicks/taps the splash dialog"). The accessible name carries it instead. */
 /* A sticky message with nothing to press carries its own way out, in the corner
    of the card. */
 .sp-note-close {
@@ -338,8 +332,9 @@ const kindLabel = computed(() => KIND_LABELS[currentNote.value?.kind] || KIND_LA
    opposing you arrives one trait at a time. */
 .sp-chips {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
   gap: 6px;
   margin-top: 2px;
 }

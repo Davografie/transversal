@@ -37,6 +37,9 @@ test.use({ viewport: { width: 390, height: 844 } })
 
 const dice = [
   { die: 'd8', label: 'Sword', source_id: 'ts-sword', source_kind: 'trait', result: 6 },
+  // A second die from the *same* trait: one chip, two faces — the case whose numbers
+  // the map's fanned staircase hides (the author, 2026-10-14).
+  { die: 'd8', label: 'Sword', source_id: 'ts-sword', source_kind: 'trait', result: 2 },
   { die: 'd6', label: '2d6', source_id: 'difficulty', source_kind: 'difficulty', result: 3 },
 ]
 const streamFor = (difficulty, at) => `event: difficulty_set\ndata: ${JSON.stringify({
@@ -118,22 +121,42 @@ test('a difficulty dealt to the player splashes its dice, and the tap opens the 
   await splash.waitFor({ state: 'visible', timeout: 30_000 })
 
   // The number as the loudest thing on the surface, and behind it the traits and the
-  // dice it was rolled from, as the map's own trait chips.
+  // dice it was rolled from, as the map's own trait chips — centred and wrapped.
   await expect(splash.locator('.sp-target-label')).toHaveText('Difficulty')
   await expect(splash.locator('.sp-target-value')).toHaveText('9')
 
-  // One chip per trait instance, each carrying the face its die actually rolled.
+  // One chip per trait **instance**, not per die: Sword's two d8s are one thing
+  // opposing you, and both of their faces have to be readable.
   const chips = splash.locator('.sp-chip')
-  await expect(chips).toHaveCount(dice.length)
-  for (const [i, d] of dice.entries()) {
-    const chip = chips.nth(i)
-    await expect(chip.locator('.trait-chip-name'), `the ${d.die}'s trait`).toHaveText(d.label)
-    // The rolled face, not the die's type: DieIcon prints the result when it has one.
-    await expect(chip.locator('.die-icon'), `the ${d.die} ${d.result} face`)
-      .toHaveAttribute('class', new RegExp(`die-${d.die}`))
-    await expect(chip.locator('.die-text')).toHaveText(String(d.result))
-  }
-  await expect(splash.locator('.sp-note-cue')).toHaveText('Open character sheet')
+  await expect(chips).toHaveCount(2)
+  const sword = chips.nth(0)
+  await expect(sword.locator('.trait-chip-name')).toHaveText('Sword')
+  await expect(sword.locator('.die-icon')).toHaveCount(2)
+  await expect(sword.locator('.die-text'), 'the faces rolled, not the die type').toHaveText(['6', '2'])
+  await expect(sword.locator('.die-icon').first()).toHaveAttribute('class', /die-d8/)
+
+  // …and they are **spread**, not fanned: overlapping is fine for a rating (the types
+  // are what you read) and useless for a roll, where each number has to be legible.
+  const boxes = await sword.locator('.die-icon').evaluateAll((els) =>
+    els.map((e) => { const b = e.getBoundingClientRect(); return { left: Math.round(b.left), right: Math.round(b.right) } }))
+  expect(boxes[1].left, 'the second die must not sit on top of the first')
+    .toBeGreaterThanOrEqual(boxes[0].right - 1)
+
+  const other = chips.nth(1)
+  await expect(other.locator('.trait-chip-name')).toHaveText('2d6')
+  await expect(other.locator('.die-text')).toHaveText('3')
+
+  // The chips are **centred** under the number, and the row wraps rather than widening
+  // the card (the author). Asserted as geometry: the row's midpoint is the card's.
+  const centred = await splash.evaluate((el) => {
+    const row = el.querySelector('.sp-chips').getBoundingClientRect()
+    const card = el.getBoundingClientRect()
+    return Math.round((row.left + row.right) / 2 - (card.left + card.right) / 2)
+  })
+  expect(Math.abs(centred), 'the chip row is centred in the card').toBeLessThanOrEqual(2)
+  // The card *is* the control, and it says so to assistive tech rather than with a
+  // line of text — pressing it is the whole interaction (the author, 2026-10-14).
+  await expect(splash).toHaveAttribute('aria-label', 'Open character sheet')
 
   // A target waits for its tap: it is still there long past a note's dwell.
   await page.waitForTimeout(2600)

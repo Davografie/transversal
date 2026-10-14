@@ -420,7 +420,9 @@ test('an authored toast splashes front and centre, and waits for the player', as
   const note = page.locator('.sp-note-action')
   await expect(note).toBeVisible({ timeout: 15000 })
   await expect(note).toContainText('The court convenes')
-  await expect(note.locator('.sp-note-cue')).toHaveText('Open character sheet')
+  // No cue line: pressing the card is the action. It keeps an accessible name, so a
+  // screen reader still hears what a press will do.
+  await expect(note).toHaveAttribute('aria-label', 'Open character sheet')
 
   const off = await offCentre(page)
   expect(Math.abs(off.dx), 'centred horizontally').toBeLessThanOrEqual(2)

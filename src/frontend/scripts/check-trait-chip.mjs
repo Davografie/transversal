@@ -64,6 +64,17 @@ const splash = readFileSync(SPLASH, 'utf8')
     /ratingWidth = computed\(\(\) => \{[\s\S]{0,240}groups\.reduce\(/.test(chip))
 }
 
+// ── 3b. spread, for a roll whose faces must be readable ─────────────────────
+{
+  yes('a rolled chip can spread its dice instead of fanning them',
+    /diceLayout: \{ type: String, default: 'fan' \}/.test(chip)
+      && /spread\.value \? 2 : -15/.test(chip) && /spread\.value \? 0 : 3/.test(chip))
+  yes('…and the reserved lane is measured from the same step, so it cannot disagree',
+    /stepX\.value \* \(group\.length - 1\)/.test(chip))
+  yes('…and the splash is the surface that asks for it',
+    /dice-layout="spread"/.test(splash))
+}
+
 // ── 4. the two call sites ───────────────────────────────────────────────────
 {
   yes('the location viewer still draws the chip', /<TraitChip/.test(viewer))

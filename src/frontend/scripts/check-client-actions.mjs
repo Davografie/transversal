@@ -106,8 +106,10 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
     /:is="currentNote\.action \? 'button' : 'div'"/.test(splash))
   yes('…and a plain report stays a live region instead',
     /:role="currentNote\.action \? undefined : 'status'"/.test(splash))
-  yes('the cue says what the press does, or the press is not discoverable',
-    /v-if="currentNote\.action" class="sp-note-cue"/.test(splash))
+  // No visible cue: pressing the card is the action, and a line explaining it is
+  // noise (the author). The accessible name has to carry what the cue said.
+  yes('the press needs no cue line, but it does keep an accessible name',
+    !/sp-note-cue/.test(splash) && /:aria-label="currentNote\.action \|\| undefined"/.test(splash))
   yes('a sticky message with nothing to press carries its own way out',
     /v-if="currentNote\.sticky && !currentNote\.action"/.test(splash)
       && /@click="emit\('dismiss', currentNote\)"/.test(splash))

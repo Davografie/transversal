@@ -41,7 +41,7 @@
             :result="die.result"
             :is-hitch="die.hitch"
             class="trait-die-icon"
-            :style="i ? { marginLeft: FAN_X, marginTop: `${i * FAN_Y}px` } : null"
+            :style="i ? { marginLeft: fanX, marginTop: `${i * fanY}px` } : null"
           />
         </div>
       </div>
@@ -80,6 +80,18 @@ const props = defineProps({
   // Open (words showing) or resting (marker only). The parent decides; the stack
   // leaves it open, placed chips drive it from proximity/pointer/tap.
   expanded: { type: Boolean, default: true },
+  /**
+   * How a rating's dice sit beside each other.
+   *
+   * `fan` (default) is the map's staircase: each die overlaps the one before it, which
+   * reads as a rating because the die *types* are what you see — shape and colour say
+   * `d8 d8` at a glance, and the numbers are not the point there.
+   *
+   * `spread` lays them side by side. A chip showing what a roll **produced** needs every
+   * face legible ([[B289]]), and an overlapped die hides its neighbour's number — the
+   * author's report, and it is exactly the difference between a rating and a roll.
+   */
+  diceLayout: { type: String, default: 'fan' },
 })
 
 const isPlaced = computed(() => props.x !== null && props.y !== null)
@@ -89,11 +101,16 @@ const sceneStyle = computed(() => (isPlaced.value ? { left: props.x + '%', top: 
 // before it by 20px and steps it down 4px, at 32×34 dice; these are the same
 // proportions at this chip's 24×26 (see `.trait-die-icon`), which keeps the dice
 // taller than a one-row chip so they overhang it.
+//
+// Both numbers are per-instance, because `spread` needs the opposite of an overlap —
+// and the lane below is measured from the same step, so the two can never disagree.
 const DIE_W = 24          // .trait-die-icon width
-const FAN_X_PX = -15      // each die overlaps the one before it by this much
-const FAN_X = `${FAN_X_PX}px`
-const FAN_Y = 3
 const GROUP_GAP = 8       // .trait-die-groups gap
+
+const spread = computed(() => props.diceLayout === 'spread')
+const stepX = computed(() => (spread.value ? 2 : -15))   // px each die moves right of the last
+const fanX = computed(() => `${stepX.value}px`)
+const fanY = computed(() => (spread.value ? 0 : 3))
 
 // How much room the rating needs — which the chip then reserves as padding.
 //
@@ -105,7 +122,7 @@ const GROUP_GAP = 8       // .trait-die-groups gap
 const ratingWidth = computed(() => {
   const groups = traitDiceGroups(props.trait)
   return groups.reduce(
-    (sum, group, i) => sum + (DIE_W * group.length + FAN_X_PX * (group.length - 1)) + (i ? GROUP_GAP : 0),
+    (sum, group, i) => sum + (DIE_W * group.length + stepX.value * (group.length - 1)) + (i ? GROUP_GAP : 0),
     0,
   )
 })
