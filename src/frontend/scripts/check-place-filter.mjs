@@ -313,6 +313,95 @@ const MIXED = [
   ok('the next page brings the rest', [f.suggestions.value.length, f.hasMore.value], [25, false])
 }
 
+// ── nearest first: the filter's other ordering ──────────────────────────
+// The human: *"Build it and add the mode toggle in the filter. Use the current
+// mode as default and the distance mode as alternative."* So the standard order
+// stays the default, and `sortMode: 'distance'` + a `locationDistances` map is the
+// alternative. The rules a casual implementation gets wrong are all here: a place
+// is its own distance, ties fall back to the standard order, and **no route is not
+// a number** — 194 of 466 places have no route live, so reading an absence as a
+// digit would drop half the world into the middle of the list.
+console.log('\nnearest first — the alternative order\n')
+
+// Every id carries the query letter, so one search matches the whole fixture and
+// the subject is the order. L0..L2 are reachable, L3 is not — it is simply absent
+// from the map, exactly as the read returns it.
+const NEAR = [
+  E('q-loc-0', 'Here', 'LOCATION', null, 'earth'),
+  E('q-loc-1', 'One Step', 'LOCATION', null, 'earth'),
+  E('q-loc-2', 'Two Steps', 'LOCATION', null, 'earth'),
+  E('q-loc-3', 'No Route', 'LOCATION', null, 'earth'),
+  E('q-gmc-far', 'Zed', 'GMC', 'q-loc-2', 'earth'),      // 2 steps
+  E('q-gmc-here', 'Ivy', 'GMC', 'q-loc-0', 'earth'),     // 0
+  E('q-gmc-near', 'Ada', 'GMC', 'q-loc-1', 'earth'),     // 1
+  E('q-gmc-lost', 'Bob', 'GMC', 'q-loc-3', 'earth'),     // no route → absent from the map
+  E('q-gmc-unplaced', 'Cy', 'GMC', null, 'earth'),       // no place at all
+]
+const DIST = new Map([['q-loc-0', 0], ['q-loc-1', 1], ['q-loc-2', 2]])
+
+{
+  const mode = ref('name')
+  const f = useEntityFilter(ref(NEAR), ref(NO_PLAYER_HOLDINGS), ref(null), {
+    sortMode: mode, distances: ref(DIST),
+  })
+  f.filterInput.value = 'q'
+  const names = () => f.suggestions.value.filter((s) => s.hint === 'name').map((s) => s.name)
+
+  ok('the default mode is the standard order', mode.value, 'name')
+  ok('…so GMCs alphabetical, then the places',
+    names(), ['Ada', 'Bob', 'Cy', 'Ivy', 'Zed', 'Here', 'No Route', 'One Step', 'Two Steps'])
+
+  mode.value = 'distance'
+  ok('distance mode is nearest first — and a place is its own distance',
+    names(), [
+      'Ivy', 'Here',        // 0 steps: the GMC standing here, then the place itself
+      'Ada', 'One Step',    // 1
+      'Zed', 'Two Steps',   // 2
+      'Bob', 'Cy', 'No Route',   // no route, then no place — and still a total order
+    ])
+  ok('a row says which place its distance was measured to',
+    f.suggestions.value.find((s) => s.name === 'Ada')?.placeId, 'q-loc-1')
+}
+
+{
+  // No map: no origin, or the read failed. The alternative must degrade to the
+  // standard order rather than to the order the entities arrived in.
+  const withMap = useEntityFilter(ref(NEAR))
+  withMap.filterInput.value = 'q'
+  const standard = withMap.suggestions.value.filter((s) => s.hint === 'name').map((s) => s.name)
+
+  const noMap = useEntityFilter(ref(NEAR), ref(NO_PLAYER_HOLDINGS), ref(null), {
+    sortMode: ref('distance'), distances: ref(null),
+  })
+  noMap.filterInput.value = 'q'
+  ok('with nothing to measure from, distance mode is the standard order',
+    noMap.suggestions.value.filter((s) => s.hint === 'name').map((s) => s.name), standard)
+}
+
+// ── blur, and coming back ───────────────────────────────────────────────
+// The close is deferred so a *pointer* can reach a suggestion. The ordering
+// toggle is a second focusable control in the bar now, which makes blur → toggle →
+// click back an ordinary move — and a pending close that outlived the return shut
+// the list a moment after it reopened (found in the browser, not here). So the
+// delay is cancelled by a re-open and still fires when nothing comes back.
+console.log('\nleaving the box, and coming back\n')
+
+{
+  const f = useEntityFilter(ref(NEAR))
+  f.filterInput.value = 'q'
+  f.openSuggestions()
+  ok('the box opens the list', f.showSuggestions.value, true)
+
+  f.hideSuggestions()
+  f.openSuggestions()
+  await new Promise((r) => setTimeout(r, 220))
+  ok('a re-open cancels the pending close', f.showSuggestions.value, true)
+
+  f.hideSuggestions()
+  await new Promise((r) => setTimeout(r, 220))
+  ok('and a leave with nothing after it still closes', f.showSuggestions.value, false)
+}
+
 // ── the suggestion that names one entity carries its id ─────────────────
 // Picking a suggestion adds a chip; picking one that names a *single entity* also
 // takes the GM to it (centre the tree, open the panel). That needs the id, and
@@ -343,6 +432,30 @@ const PANEL = readFileSync(new URL('../src/components/GmPanel.vue', import.meta.
   ok('the chip is still added first', /function selectFilterSuggestion\(s\) \{\s*selectSuggestion\(s\)/.test(PANEL), true)
   ok('and only an entity suggestion goes further',
     /if \(s\.entityId\) revealEntity\(s\.entityId\)/.test(PANEL), true)
+}
+
+{
+  // The filter's ordering toggle, and the read behind it. These are the wiring
+  // facts a node check can see; that the list actually reorders is the e2e half.
+  ok('the order is a mode the GM chose, remembered per device',
+    /const filterSort = usePersistedRef\('gmFilterSort', 'name'\)/.test(PANEL), true)
+  ok('and it is handed to the filter with the distance map',
+    /useEntityFilter\(entities, playerHoldings, agencyByEntity, \{\s*sortMode: filterSort,/.test(PANEL), true)
+  ok('the origin is where the GM is — not the universe, not the entity',
+    /async function fetchFilterDistances\(\) \{\s*const origin = props\.currentLocationId/.test(PANEL), true)
+  ok('one bulk read for the whole map, not one per candidate',
+    /locationDistances\(locationId: \$id\) \{ locationId distance \}/.test(PANEL), true)
+  ok('the map is cached against its origin', /filterDistances\.value\?\.origin === origin/.test(PANEL), true)
+  ok('changing the graph voids it', /filterDistances\.value = null/.test(PANEL), true)
+  ok('the mode is only fetched when it is in use',
+    /if \(filterSort\.value === 'distance'\) fetchFilterDistances\(\)/.test(PANEL), true)
+  ok('a failure means no distances, which means the standard order',
+    /catch \{\s*\/\/ No map means no distances[\s\S]{0,120}?filterDistances\.value = null/.test(PANEL), true)
+  ok('the toggle flips the mode', /filterSort = filterSort === 'distance' \? 'name' : 'distance'/.test(PANEL), true)
+  ok('a row shows how far it is — only in distance mode',
+    /function distanceLabel\(s\) \{\s*if \(filterSort\.value !== 'distance'/.test(PANEL), true)
+  ok('the declared order comes before the composable that reads it (the TDZ trap)',
+    PANEL.indexOf('const filterSort = usePersistedRef') < PANEL.indexOf('} = useEntityFilter(entities, playerHoldings, agencyByEntity'), true)
 }
 
 {

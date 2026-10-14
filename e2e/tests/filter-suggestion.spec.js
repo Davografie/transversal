@@ -11,7 +11,7 @@
 // row 600px below the fold).
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
-import { bootGmPanel, enterPrep } from '../helpers/gm.js'
+import { bootGmPanel, enterPrep, openStack } from '../helpers/gm.js'
 
 const TEST_CHARACTER = 'character-kael-drift-e555ccde'
 
@@ -109,4 +109,64 @@ test('the suggestion list is sorted by type and loads more as it is scrolled', a
   expect(ranks.length, 'the rendered rows include entities').toBeGreaterThan(3)
   expect(ranks, `entity rows are grouped by type in the canonical order (${entityRows.join(', ')})`)
     .toEqual([...ranks].sort((a, b) => a - b))
+})
+
+// The ordering toggle: the standard order is the default and *Nearest* is the
+// alternative, measured from where the GM is (the human, 2026-10-13: *"Use the
+// current mode as default and the distance mode as alternative."*).
+//
+// The comparator itself is pinned in `check-place-filter.mjs`. What only a browser
+// can show is that the mode reaches the rendered list: the map is fetched when the
+// mode is first used, the rows come back reordered, each says how far it is, and
+// the choice survives a reload because it is a device preference.
+const stepOf = (label) => (label === 'here' ? 0 : Number(label.replace('+', '')))
+
+test('the sort toggle orders the suggestions by distance from the GM', async ({ page }) => {
+  await bootGmPanel(page, character)
+  await enterPrep(page)
+
+  const toggle = page.locator('.sort-toggle')
+  await expect(toggle, 'the ordering toggle lives in the filter bar').toHaveCount(1)
+  await expect(toggle, 'the default is the standard order').not.toHaveText(/Nearest/)
+
+  await page.locator('.filter-input').fill('wang')
+  await page.waitForTimeout(900)
+  expect(await page.locator('.suggestion-distance').count(),
+    'the default mode shows no distances').toBe(0)
+
+  await toggle.click()
+  await expect(toggle, 'the toggle says which order is on').toHaveText(/Nearest/)
+  // The toggle click moves focus out of the filter box, which closes the list —
+  // so put the caret back and let it open again before reading the rows.
+  await page.locator('.filter-input').click()
+  await page.waitForTimeout(1500)          // the map is one read, when it is wanted
+
+  const labels = await page.evaluate(() =>
+    [...document.querySelectorAll('.filter-suggestions .suggestion-row .suggestion-distance')]
+      .map((s) => s.textContent.trim()))
+  expect(labels.length, `rows say how far they are (${labels.join(', ')})`).toBeGreaterThan(3)
+
+  const steps = labels.map(stepOf)
+  expect(steps, `nearest first (${labels.join(', ')})`).toEqual([...steps].sort((a, b) => a - b))
+
+  // A device preference, like the anchor and the window layout: it comes back.
+  // The chain itself does not (the 🛠 open/closed state is deliberately not
+  // persisted), so it has to be reopened before its filter bar exists.
+  await page.reload()
+  await page.waitForTimeout(2600)
+  await openStack(page)
+  await enterPrep(page)
+  await expect(page.locator('.sort-toggle'), 'the mode survives a reload').toHaveText(/Nearest/)
+  await page.locator('.filter-input').fill('wang')
+  await page.waitForTimeout(1500)
+  expect(await page.locator('.suggestion-distance').count(),
+    'and it is still measuring, not just labelled').toBeGreaterThan(3)
+
+  // …and back: the standard order returns, and the numbers go with the mode.
+  await page.locator('.sort-toggle').click()
+  await expect(page.locator('.sort-toggle'), 'the toggle flips back').not.toHaveText(/Nearest/)
+  await page.locator('.filter-input').click()
+  await page.waitForTimeout(600)
+  expect(await page.locator('.suggestion-distance').count(),
+    'no distances outside distance mode').toBe(0)
 })

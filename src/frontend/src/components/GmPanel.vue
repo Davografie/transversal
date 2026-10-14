@@ -38,6 +38,19 @@
             <span class="chip-label">{{ f.label }}</span>
             <Button class="chip-remove" variant="ghost" @click="activeFilters.splice(i, 1)">×</Button>
           </span>
+          <!-- The suggestion order: the standard one, or nearest first. A chip-like
+               button rather than a SegmentedControl, because it belongs to the filter
+               bar — and because a second full-width segmented control under the mode
+               tabs would read as another mode of the panel. -->
+          <button
+            type="button"
+            class="sort-toggle"
+            :class="{ 'is-distance': filterSort === 'distance' }"
+            :title="filterSort === 'distance'
+              ? `Suggestions: nearest first from ${props.currentLocationName || 'your location'} — click for entity type, then name`
+              : 'Suggestions: entity type, then name — click for nearest first'"
+            @click="filterSort = filterSort === 'distance' ? 'name' : 'distance'"
+          >{{ filterSort === 'distance' ? 'Nearest' : 'A–Z' }}</button>
         </div>
         <div class="filter-input-wrap">
           <input
@@ -50,8 +63,8 @@
             :aria-controls="filterListId"
             :aria-activedescendant="filterActiveDescendant"
             aria-autocomplete="list"
-            @focus="showSuggestions = true"
-            @input="showSuggestions = true"
+            @focus="openSuggestions"
+            @input="openSuggestions"
             @blur="hideSuggestions"
             @keydown="onFilterKeydown"
             @keyup.escape="filterInput = ''"
@@ -71,6 +84,7 @@
             >
               <!-- A status chip has no entity type to badge. -->
               <span v-if="s.entityType || s.type" class="entity-type-badge" :class="'type-' + (s.entityType || s.type)">{{ s.entityType || s.type }}</span><span>{{ s.name }}</span>
+              <span v-if="distanceLabel(s)" class="suggestion-distance">{{ distanceLabel(s) }}</span>
               <span class="suggestion-hint">{{ s.hint }}</span>
             </div>
           </div>
@@ -165,6 +179,7 @@ import { useEntityFilter } from '@/composables/useEntityFilter.js'
 import { buildAgencyIndex, buildPlayerHoldings, NO_PLAYER_HOLDINGS } from '@/constants/entityTypes.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
+import { usePersistedRef } from '@/composables/usePersistedState.js'
 import GmPlayOverview from '@/components/gm/GmPlayOverview.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmList from '@/components/ui/GmList.vue'
@@ -291,17 +306,74 @@ function endSession() { emit('end-session') }
 const agencyByEntity = ref(new Map())
 const playerHoldings = ref(NO_PLAYER_HOLDINGS)
 
+// ── Filter ordering: the standard, or nearest first ──
+// The domain's entity order is the standard (`rank → name → id`) and stays the
+// default; *nearest* is the alternative, and it measures from where the GM is —
+// "what is around me" is the question a distance order answers, and a distance
+// from anywhere else would answer a question nobody asked. Measured live from a
+// real hub (Iron Roots): the twelve Wang GMCs sit 1–6 steps away while the Earth
+// one that shares the letters is 19, so the order also demotes a substring match
+// that is nowhere near.
+//
+// `distances` is the origin's whole reachable map — one read, not one per
+// candidate — and it is fetched when the mode is first used, not on every load.
+//
+// ⚠ These declarations come *before* `useEntityFilter` below, which reads both.
+// A `const` read from a line above it is a temporal-dead-zone error at setup, and
+// the panel would not mount at all.
+const filterSort = usePersistedRef('gmFilterSort', 'name')
+const filterDistances = ref(null)   // { origin, map: Map<locationId, steps> } or null
+
+async function fetchFilterDistances() {
+  const origin = props.currentLocationId
+  if (!origin) { filterDistances.value = null; return }
+  if (filterDistances.value?.origin === origin) return
+  try {
+    const data = await graphql(
+      `query($id: ID!) { locationDistances(locationId: $id) { locationId distance } }`,
+      { id: origin },
+    )
+    const map = new Map((data?.locationDistances || []).map((d) => [d.locationId, d.distance]))
+    filterDistances.value = { origin, map }
+  } catch {
+    // No map means no distances, and no distances means the standard order —
+    // never an arbitrary one.
+    filterDistances.value = null
+  }
+}
+
+// Loaded when the mode is turned on (or restored, since the choice is per device),
+// and re-read when the GM moves.
+watch(
+  [filterSort, () => props.currentLocationId],
+  () => { if (filterSort.value === 'distance') fetchFilterDistances() },
+  { immediate: true },
+)
+
+// A row says how far it is, in distance mode: the mode is otherwise invisible, and
+// the number is the whole reason one row sits above another. A row with no number
+// has no route to the origin (or no place at all) and is in the tail.
+function distanceLabel(s) {
+  if (filterSort.value !== 'distance' || !s.placeId) return ''
+  const d = filterDistances.value?.map?.get(s.placeId)
+  if (d === undefined) return ''
+  return d === 0 ? 'here' : `+${d}`
+}
+
 const {
   activeFilters, filterInput, showSuggestions,
   filteredEntities, filteredFactions,
-  suggestions, selectSuggestion, hideSuggestions,
+  suggestions, selectSuggestion, hideSuggestions, openSuggestions,
   highlighted: filterHighlighted,
   listId: filterListId,
   optionId: filterOptionId,
   activeDescendant: filterActiveDescendant,
   moveHighlight,
   loadMore: loadMoreSuggestions,
-} = useEntityFilter(entities, playerHoldings, agencyByEntity)
+} = useEntityFilter(entities, playerHoldings, agencyByEntity, {
+  sortMode: filterSort,
+  distances: computed(() => filterDistances.value?.map ?? null),
+})
 
 // The filter's suggestion list is keyboard-navigable (it was mouse-only): the
 // list mechanics are the shared combobox, so arrows/Enter work as they do in
@@ -872,7 +944,13 @@ async function fetchAgency() {
 onMounted(() => {
   fetchEntities(); fetchLocationTree(); fetchAgency(); startJobPolling()
   offCanvasInspect = bus.on('canvas:inspect', (id) => toggleEntity({ id }))
-  offLocationsChanged = bus.on('locations-changed', () => { fetchLocationTree(); fetchEntities(); fetchAgency() })
+  offLocationsChanged = bus.on('locations-changed', () => {
+    fetchLocationTree(); fetchEntities(); fetchAgency()
+    // The graph the distances are measured over just changed, so the map is void
+    // — and if the filter is showing *nearest*, the new one is wanted now.
+    filterDistances.value = null
+    if (filterSort.value === 'distance') fetchFilterDistances()
+  })
   offChildClose = panel.onChildClose(onPanelChildClose)
 })
 onUnmounted(() => {
@@ -933,6 +1011,16 @@ onUnmounted(() => {
 .filter-chip { display: flex; align-items: center; gap: 2px; font-size: 11px; padding: 3px 8px; background: var(--accent-16); border: 1px solid var(--accent-dim); border-radius: 10px; color: var(--text); }
 .chip-label { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .filter-chip .chip-remove { font-size: 14px; padding: 0 2px; line-height: 1; }
+/* The ordering toggle sits after the chips, so it reads as filter state rather
+   than as panel chrome. `margin-left: auto` keeps it at the right edge. */
+.sort-toggle {
+  margin-left: auto; font-size: 11px; font-family: inherit; padding: 3px 8px;
+  background: var(--overlay-6); border: 1px solid var(--overlay-12); border-radius: 10px;
+  color: var(--text-dim); cursor: pointer;
+}
+.sort-toggle:hover { color: var(--text); background: var(--overlay-12); }
+.sort-toggle.is-distance { background: var(--accent-16); border-color: var(--accent-dim); color: var(--text); }
+.suggestion-distance { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .suggestion-hint { font-size: 9px; color: var(--text-dim); text-transform: uppercase; margin-left: auto; }
 .filter-input-wrap { position: relative; }
 .filter-input { width: 100%; font-size: 12px; padding: 6px 28px 6px 8px; box-sizing: border-box; }

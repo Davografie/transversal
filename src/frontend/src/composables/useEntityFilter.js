@@ -15,7 +15,18 @@ import { useCombobox } from '@/composables/useCombobox.js'
 // and support, and that lives on the agency edge rather than on the type — without
 // the map every character is a plain `PC`. GmPanel already holds it for the tree's
 // buckets, so it costs nothing to pass.
-export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDINGS), agencyByEntity = ref(null)) {
+//
+// `sortMode`/`distances` are the optional **nearest** ordering. `distances` is a
+// `locationId → weighted steps` map (the `locationDistances` read), or null when
+// there is no origin to measure from; `sortMode` is `'name'` (the standard order,
+// the default) or `'distance'`. With no map, distance mode degrades to the
+// standard order rather than to an arbitrary one.
+export function useEntityFilter(
+  entities,
+  playerHoldings = ref(NO_PLAYER_HOLDINGS),
+  agencyByEntity = ref(null),
+  { sortMode = ref('name'), distances = ref(null) } = {},
+) {
   const activeFilters = ref([])
   const filterInput = ref('')
 
@@ -32,8 +43,42 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
     String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
     || String(a.id).localeCompare(String(b.id))
 
-  /** The entity list in canonical order — a copy; `entities` is the app's own. */
-  const orderedEntities = computed(() => [...entities.value].sort(byEntityOrder))
+  /** The place an entity stands at — a location is its own place. */
+  const placeOf = (e) => (e.type === 'LOCATION' ? e.id : e.currentLocation)
+
+  /**
+   * Weighted steps from the origin to where this entity stands, or null.
+   *
+   * Null covers three different silences — no origin, no place, and **no route**
+   * (194 of 466 places, live) — deliberately as one answer, because the
+   * alternative is reading an absence as a number and dropping "nowhere near" in
+   * the middle of the list. Whatever `distances` does not cover sorts last.
+   */
+  function distanceOf(e) {
+    const map = distances.value
+    if (!map) return null
+    const place = placeOf(e)
+    if (!place) return null
+    const d = map.get(place)
+    return d === undefined ? null : d
+  }
+
+  /** The entity list in the chosen order — a copy; `entities` is the app's own. */
+  const orderedEntities = computed(() => {
+    const list = [...entities.value]
+    if (sortMode.value !== 'distance') return list.sort(byEntityOrder)
+    // Nearest first, with the standard order *inside* a tie — including the tail
+    // that has no distance at all, so the whole list stays a total order.
+    return list.sort((a, b) => {
+      const da = distanceOf(a)
+      const db = distanceOf(b)
+      if (da === null || db === null) {
+        if (da !== db) return da === null ? 1 : -1
+        return byEntityOrder(a, b)
+      }
+      return da - db || byEntityOrder(a, b)
+    })
+  })
 
   // ⚠ Both value AND q must be lowercased. The autocomplete stores the entity's
   // original-cased name as the filter value, but users type lowercase queries.
@@ -216,6 +261,9 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
         // consumer can act on "take me to *this*" without parsing the `ent:`
         // prefix back out of the synthetic id.
         entityId: e.id,
+        // …and the place it stands at, so a row can say how far it is without
+        // looking the entity up again in a list the shell does not hold.
+        placeId: placeOf(e),
         terms: [e.name, e.id].filter(Boolean),
       })
     }
@@ -255,8 +303,22 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
   }
 
   // Delayed so a click on a suggestion is not cut short by the input's blur.
+  //
+  // ⚠ And **cancelled** by a re-open: the filter bar has a second focusable
+  // control now (the ordering toggle), so blur → click the toggle → click back is
+  // an ordinary move, and a pending close that survived the return would shut the
+  // list a moment after it opened. The delay exists for the pointer, not to outlive
+  // the reason for it.
+  let hideTimer = null
+
   function hideSuggestions() {
-    setTimeout(() => combo.closeList(), 150)
+    clearTimeout(hideTimer)
+    hideTimer = setTimeout(() => combo.closeList(), 150)
+  }
+
+  function openSuggestions() {
+    clearTimeout(hideTimer)
+    combo.openList()
   }
 
   return {
@@ -269,6 +331,7 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
     suggestions,
     selectSuggestion,
     hideSuggestions,
+    openSuggestions,
     // The window: `hasMore` says the match set runs past what is on screen, and
     // `loadMore` reveals the next page (the shell calls it at the end of its
     // scroll, and the combobox's own `move` calls it at the end of the keyboard's).
