@@ -296,18 +296,25 @@ _EFFECT_FIELDS = (
 # A path **wraps** tables: `entryStep` is the step a term begins at and `steps` is
 # the wrapper itself. Each step's `bindings` overlay meaning on one row, named by
 # that row's stable `key` — so the selection carries them, or an authored binding
-# is indistinguishable from one the server dropped.
+# is indistinguishable from one the server dropped. `boundVariables` is declared at
+# **both** levels for the same reason ([[B290]]): a path and a step supply the
+# context their wrapped (possibly shared) tables read, and a read that omitted them
+# would erase them on the next save of the steps it hands back. A step's own
+# `effects` belong to that selection too ([[B281]]).
 _QUERY_LIFE_PATHS = """
 query($universe: String) {
   lifePaths(universe: $universe) {
     id name universe entryTableId description entryStep
+    boundVariables { name spec element cardinality override }
     steps {
       id tableId label next
+      boundVariables { name spec element cardinality override }
       bindings { key next exitKind exitPath enroll effects { %s } }
+      effects { %s }
     }
   }
 }
-""" % _EFFECT_FIELDS
+""" % (_EFFECT_FIELDS, _EFFECT_FIELDS)
 
 _QUERY_ROLL_TABLES = """
 query($lifePathId: String) {
@@ -437,7 +444,7 @@ _ROLL_ENTRY_FIELDS = (
     "key label description minValue maxValue weight tier "
     "conditions { type subject target value operator narrative } "
     "costEffects { %s } effects { %s } "
-    "boundVariables { name spec }"
+    "boundVariables { name spec element cardinality }"
 ) % (_EFFECT_FIELDS, _EFFECT_FIELDS)
 
 _MUT_SAVE_ROLL_TABLE = (
@@ -446,7 +453,7 @@ _MUT_SAVE_ROLL_TABLE = (
     "    id name universe lifePath subjectKind scheme rollSource traitDiceCount die\n"
     "    check { traitIds difficulty freeChoice }\n"
     "    entries { " + _ROLL_ENTRY_FIELDS + " }\n"
-    "    boundVariables { name spec } canvasX canvasY\n"
+    "    boundVariables { name spec element cardinality } canvasX canvasY\n"
     "  }\n"
     "}\n"
 )
@@ -455,12 +462,12 @@ _MUT_SAVE_LIFE_PATH = """
 mutation(
   $id: String!, $name: String!, $universe: String!, $description: String!,
   $entryTableId: String, $entryStep: String, $steps: [LifePathStepInput!],
-  $discovery: JSON
+  $boundVariables: [BoundVariableInput!], $discovery: JSON
 ) {
   saveLifePath(
     id: $id, name: $name, universe: $universe, description: $description,
     entryTableId: $entryTableId, entryStep: $entryStep, steps: $steps,
-    discovery: $discovery
+    boundVariables: $boundVariables, discovery: $discovery
   )
 }
 """
@@ -1192,6 +1199,11 @@ def save_life_path(args: dict) -> dict:
     the path's whole graph, so a caller that saved only a name and rebuilt the
     document without them would silently unwrap every table the path declares.
     ``entry_table_id`` is deprecated (the path's entry is ``entry_step`` now).
+
+    ``bound_variables`` is the path's own declaration layer ([[B290]]) — the names it
+    supplies to the tables it wraps — and is leave-alone by the same rule, so a
+    caller editing a name cannot blank what every wrapped table reads. A declaration
+    may carry ``override`` to replace the wrapped table's name of the same name.
     """
     variables = {
         "id": args["id"],
@@ -1208,6 +1220,10 @@ def save_life_path(args: dict) -> dict:
         variables["entryStep"] = args["entry_step"]
     if args.get("steps") is not None:
         variables["steps"] = args["steps"]
+    # Leave-alone, like `steps`: a caller that omits the declarations must not blank
+    # the names every shared table the path wraps is written against ([[B290]]).
+    if args.get("bound_variables") is not None:
+        variables["boundVariables"] = args["bound_variables"]
     result = _call_mutation("saveLifePath", _MUT_SAVE_LIFE_PATH, variables,
                             args.get("dry_run", True), "saveLifePath")
     if args.get("dry_run", True):
@@ -3634,7 +3650,12 @@ TOOL_SCHEMAS = {
                        "goes, and `entry_step` is the step a term begins at. `steps` and `entry_step` "
                        "are omitted-or-null to leave the stored value alone; supplying them REPLACES "
                        "the path's wrapped tables, so a caller that rebuilds the document without them "
-                       "silently unwraps the path. `entry_table_id` is deprecated.",
+                       "silently unwraps the path. `entry_table_id` is deprecated. "
+                       "`boundVariables` declares names the path (and each step) supplies to the "
+                       "tables it wraps — the context a **shared** table reads, so one `rt-advance` "
+                       "serves every sect. Omit or null to leave the stored declarations alone. "
+                       "Mark a declaration `override: true` to replace the wrapped table's own name "
+                       "of the same name rather than merely shadow it.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -3647,6 +3668,14 @@ TOOL_SCHEMAS = {
                 "entry_step": {"type": "string",
                     "description": "Step id a term begins at. Omit or null to leave the stored value "
                                    "alone; \"\" unwraps the entry."},
+                "bound_variables": {
+                    "type": "array",
+                    "description": "The names this PATH supplies to the tables its steps wrap, as "
+                                   "BoundVariableInput documents (name, spec, and optionally "
+                                   "override). Omit or null to leave the stored declarations alone; "
+                                   "supply to REPLACE them (pass [] to clear).",
+                    "items": {"type": "object"},
+                },
                 "steps": {
                     "type": "array",
                     "description": "The tables this path wraps, as LifePathStepInput documents. "
@@ -3661,6 +3690,15 @@ TOOL_SCHEMAS = {
                             "label": {"type": "string"},
                             "next": {"type": "string",
                                      "description": "Step id this step flows to, or \"\" to stop."},
+                            "boundVariables": {
+                                "type": "array",
+                                "description": "The names this STEP supplies to the table it wraps, "
+                                               "resolved before the table's own — how one shared "
+                                               "table reads the context of the path wrapping it. "
+                                               "BoundVariableInput documents (name, spec, and "
+                                               "optionally override).",
+                                "items": {"type": "object"},
+                            },
                             "bindings": {
                                 "type": "array",
                                 "description": "Per-row overlay: LifePathBindingInput keyed by the "

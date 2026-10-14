@@ -352,6 +352,7 @@ def test_an_unreserved_row_name_still_binds_at_run_time():
 
 def test_a_table_source_walks_to_the_path_the_term_is_in():
     """A table is the source of its row's effects, but it no longer owns a path.
+
     Several paths may wrap the same table, or none ([[B266]]), so `navigate
     life_path` cannot read an ownership field — the answer is the path the term is
     actually in, from the acting entity's checkpoint, which is also what makes the
@@ -398,3 +399,118 @@ def test_a_table_no_term_wraps_resolves_a_unique_path_or_nothing():
                               repo=NS(get_lifepath=lambda lid: None,
                                       list_all_lifepaths=lambda: [one, two]))
     assert resolve(spec, ambiguous).values == []
+
+
+# ── The caller's layers: a path and a step ([[B290]]) ────────────────
+# The wrapper nests — a path wraps steps, a step wraps a table, a table wraps rows —
+# so the declaration layers resolve outermost first:
+#
+#     path  →  step  →  table  →  row
+#
+# The caller's layers are what let a **shared** table read the context its caller
+# supplies, so `rt-advance` reads `{sect}` instead of hardcoding a faction. They are
+# optional and absent rather than empty: a step is the only thing that knows which of
+# a path's steps is speaking (a path may wrap one table twice), and a table may also
+# be rolled with no step at all (`roll_table_menu`, outside any term).
+
+def _lit(name, value, *, override=False, element="trait"):
+    return BoundVariable(name=name, override=override, spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "literal", "element": element, "value": value}]}))
+
+
+def _trait_repo(entity=None):
+    return NS(get_entity=lambda eid: entity or NS(id=eid),
+              get_trait=lambda tid: NS(id=tid, traitset_id="ts"))
+
+
+def _caller(path_vars=(), step_vars=()):
+    return (NS(id="lp-a", bound_variables=list(path_vars)),
+            NS(id="s1", table_id="rt-x", bound_variables=list(step_vars)))
+
+
+def test_a_path_supplies_a_name_a_shared_table_reads():
+    """The ticket's motivating case: the shared table declares nothing and hardcodes
+    nothing, and the path is what tells it which sect this term is about."""
+    path, step = _caller([_lit("sect", "fac-verdant")])
+    bindings = table_bindings(_table(), _entity(), _trait_repo(), path=path, step=step)
+    assert bindings["sect"].value == "fac-verdant"
+
+
+def test_a_step_supplies_a_name_and_may_start_from_the_paths():
+    path, step = _caller(
+        [_lit("sect", "fac-verdant")],
+        [BoundVariable(name="sect_name", spec=TargetSpec.model_validate(
+            {"steps": [{"kind": "select", "collection": "variable", "variable": "sect"}]}))],
+    )
+    bindings = table_bindings(_table(), _entity(), _trait_repo(), path=path, step=step)
+    assert bindings["sect"].value == "fac-verdant"
+    assert bindings["sect_name"].value == "fac-verdant", \
+        "the step's layer resolves after the path's, so it may start from it"
+
+
+def test_the_path_beats_the_tables_own_declaration_of_the_same_name():
+    """Outer-first: the caller is specific to this term, the table is the shared
+    content, so the path's value stands and the table's is refused."""
+    path, step = _caller([_lit("sect", "fac-verdant")])
+    table = _table(declared=[_lit("sect", "fac-table")])
+
+    bindings = table_bindings(table, _entity(), _trait_repo(), path=path, step=step)
+    assert bindings["sect"].value == "fac-verdant"
+
+
+def test_an_override_suppresses_the_tables_declaration_entirely():
+    """The explicit override — and why it is not redundant with outer-first.
+
+    The caller's declaration resolves to **nothing** on this activation. Unmarked,
+    the name silently falls back to the table's value, so `{sect}` would mean one
+    thing when the caller's path resolved and another when it did not. Marked as an
+    override, the table's declaration is gone *before any layer resolves*: the name
+    is left unbound, and it means the same thing for the whole activation — which is
+    also what lets the table's row conditions and every effect after them agree.
+    """
+    unresolvable = {"steps": [{"kind": "select", "collection": "variable",
+                               "variable": "missing"}]}
+    table = _table(declared=[_lit("sect", "fac-table")])
+    entity, repo = _entity(), _trait_repo()
+
+    plain = _caller(step_vars=[BoundVariable(
+        name="sect", spec=TargetSpec.model_validate(unresolvable))])
+    assert table_bindings(table, entity, repo, path=plain[0],
+                          step=plain[1])["sect"].value == "fac-table", \
+        "unmarked, a caller declaration that resolves nothing falls back to the table's"
+
+    marked = _caller(step_vars=[BoundVariable(
+        name="sect", spec=TargetSpec.model_validate(unresolvable), override=True)])
+    assert "sect" not in table_bindings(table, entity, repo, path=marked[0], step=marked[1]), \
+        "marked, the table's declaration is suppressed — unbound, never the table's value"
+
+
+def test_a_path_override_suppresses_the_tables_declaration_too():
+    """The path is the outermost caller, and "path and step over table" is offered at
+    both ([[B290]])."""
+    path, step = _caller([_lit("sect", "fac-verdant", override=True)])
+    table = _table(declared=[_lit("sect", "fac-table")])
+
+    bindings = table_bindings(table, _entity(), _trait_repo(), path=path, step=step)
+    assert bindings["sect"].value == "fac-verdant"
+
+
+def test_only_a_caller_can_override_the_table():
+    """A row cannot override the table, structurally: the row does not exist yet when
+    its conditions run, so "the row's value replaces the table's" cannot be decided
+    up front. The flag on a row is ignored rather than half-honoured."""
+    row = RollTableEntry(label="e", bound_variables=[_lit("sect", "fac-row", override=True)])
+    table = _table(declared=[_lit("sect", "fac-table")])
+    table.entries = [row]
+
+    bindings = table_bindings(table, _entity(), _trait_repo(), entry=row)
+    assert bindings["sect"].value == "fac-table", \
+        "only a path or a step may mark an override; a row's flag changes nothing"
+
+
+def test_a_caller_layer_absent_means_the_table_still_resolves_alone():
+    """`table_bindings` called the way `roll_table_menu` calls it — no path, no step —
+    works unchanged, because the caller's layers are optional rather than required."""
+    bindings = table_bindings(_table(declared=[_lit("sect", "fac-table")]),
+                              _entity(), _trait_repo())
+    assert bindings["sect"].value == "fac-table"

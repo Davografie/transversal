@@ -251,8 +251,27 @@ def traced_type(spec, scope: Optional[dict] = None) -> Optional["ValueType"]:
     return types[-1]
 
 
+def override_names(*layers) -> set:
+    """The names these declaration layers mean to **replace**, not merely shadow.
+
+    The one definition of what ``override`` means ([[B290]]), so the resolver and
+    the editor cannot disagree about it. It is meaningful only on a **caller's**
+    declaration — a life path or a life path step, the holder that wraps a shared
+    table — and it suppresses the table's own declaration of the name before any
+    layer resolves, so an activation where the caller's path resolves to nothing
+    leaves the name *unbound* rather than quietly falling back to the table's value.
+    """
+    return {
+        name
+        for declared in layers
+        for d in (declared or [])
+        if getattr(d, "override", False)
+        and (name := (getattr(d, "name", "") or "").strip())
+    }
+
+
 def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
-                   index=None) -> dict:
+                   index=None, path=None, step=None) -> dict:
     """The scope a roll-table entry's conditions and effects resolve against.
 
     Two kinds of name, one scope:
@@ -266,11 +285,23 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
       invoking term's, and ``table_id``/``roll``/``entry_tier`` describe the roll.
     * **declared** — the author's own names, each a targeting path, resolved in
       declaration order into the same scope (a later declaration may start from an
-      earlier one, and from any ambient name). There are **two layers** and they
-      resolve in this order: ``table.bound_variables``, then — when a row has been
-      chosen — ``entry.bound_variables`` on that row ([[B281]]). The table's layer
-      is the one a row's *conditions* can read, because it is resolved without
-      knowing which row will apply; see ``entry_applies``.
+      earlier one, and from any ambient name). There are **four layers**, and they
+      resolve outermost first ([[B281]], [[B290]]):
+
+      ```
+      path → step → table → row
+      ```
+
+      ``path``/``step`` are the **caller's** layer — supplied by whichever path's
+      step invoked this table, and **optional** because a table may also be rolled
+      where there is no step at all (``roll_table_menu``, outside any term). They
+      are what lets a **shared** table read the context its caller gives it:
+      ``rt-advance`` reads ``{sect}`` rather than hardcoding a faction. ``table``
+      resolves before any row is chosen, which is what lets a row's *conditions*
+      read it; ``row`` resolves once that row has applied. A name an earlier layer
+      already bound is **refused** rather than rebound — unless the caller's
+      declaration marks itself an ``override``, which suppresses the table's own
+      declaration of that name up front (see ``override_names``).
 
     A name that resolves to nothing is left *unbound*, never bound empty: for every
     reader, "no value" and "no such name" are the same state, and a downstream path
@@ -342,9 +373,15 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
             # perfect d10, fail none. A die, so an effect's ``result`` can name it.
             bindings["entry_effect_die"] = one(getattr(effect_die, "value", effect_die))
 
-    # Two declaration layers, resolved in order so a later one may start from an
-    # earlier one: the **table's** (resolved before any row is chosen, which is what
-    # lets a row's conditions test them) and then the **chosen row's own** ([[B281]]).
+    # The declaration layers, resolved outermost first so a later one may start from
+    # an earlier one: the **caller's** (a life path, then its step — [[B290]]), the
+    # **table's** (resolved before any row is chosen, which is what lets a row's
+    # conditions test them) and then the **chosen row's own** ([[B281]]).
+    #
+    # The caller's layers are **optional and absent rather than empty**: a step is
+    # the only thing that knows which of a path's steps is speaking (a path may wrap
+    # one table twice), and a table may also be rolled with no step at all
+    # (`roll_table_menu`, outside any term), so neither can be inferred here.
     #
     # A table-level declaration may also be a **reservation**: a type with no value,
     # which binds nothing but fixes the type of the name it reserves. Every row that
@@ -353,8 +390,32 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
     # hand-written path that happened to use it — one row starting from a collection
     # where the rest pinned a value made the same name `many` for that row alone,
     # and nothing objected ([[B285]]).
-    layers = (("table", getattr(table, "bound_variables", None) or []),
-              ("entry", getattr(entry, "bound_variables", None) or []))
+    layers: list[tuple[str, list]] = []
+    if path is not None and (getattr(path, "bound_variables", None) or []):
+        layers.append(("path", list(path.bound_variables)))
+    if step is not None and (getattr(step, "bound_variables", None) or []):
+        layers.append(("step", list(step.bound_variables)))
+    layers.append(("table", getattr(table, "bound_variables", None) or []))
+    layers.append(("entry", getattr(entry, "bound_variables", None) or []))
+
+    # An **override** is decided before any layer resolves: a caller's declaration
+    # marked as such replaces the table's own declaration of that name outright, so
+    # the table's value can never surface on an activation where the caller's path
+    # resolved nothing. The table is the shared content, the path/step the caller,
+    # and only the caller can mark one — a row overriding the table cannot work,
+    # because the row does not exist yet when its conditions run.
+    overridden = override_names(
+        getattr(path, "bound_variables", None) if path is not None else None,
+        getattr(step, "bound_variables", None) if step is not None else None,
+    )
+    if overridden:
+        layers = [
+            (owner, [d for d in declared
+                     if (getattr(d, "name", "") or "").strip() not in overridden])
+            if owner == "table" else (owner, declared)
+            for owner, declared in layers
+        ]
+
     if repo is not None and any(declared for _, declared in layers):
         reservations: dict = {}
         ctx = TargetContext(subject=entity, repo=repo, bindings=dict(bindings))
@@ -376,7 +437,9 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
                     continue
                 # An existing name wins: the declaration is refused rather than
                 # rebinding something a condition or an earlier layer already read.
-                # The editor flags the collision, so this is the backstop.
+                # The editor flags the collision, so this is the backstop — unless
+                # the caller marked it an override, which is the explicit way to say
+                # "I mean to replace the table's" (the table's is already gone).
                 if name in ctx.bindings:
                     log.info("[table_bindings] table=%s %s variable '%s' shadows an "
                              "existing name — refused", table.id, owner, name)
@@ -407,10 +470,11 @@ def entry_applies(entry, entity, repo, bindings: dict | None = None, *,
 
     The conditions read the entry scope ([[B164]]): the ambient facts — the term's
     faction, *this table's* path faction, the table, the roll and tier that reached
-    the entry — plus whatever **the table** declares. Not the entry's own
-    declarations: those cannot be known until this row is the row being considered,
-    which is the question being asked ([[B281]]). An entry with no conditions always
-    applies, which is every entry today (see [[B179]]).
+    the entry — plus whatever the invoking path and step supply ([[B290]]) and
+    **the table** declares. Not the entry's own declarations: those cannot be known
+    until this row is the row being considered, which is the question being asked
+    ([[B281]]). An entry with no conditions always applies, which is every entry
+    today (see [[B179]]).
 
     ``bindings`` defaults to ``None``, and a caller that passes nothing gets ``{}``
     — so pass ``table_bindings(table, entity, repo, roll=…, tier=…, index=…)`` (or
@@ -431,7 +495,8 @@ def entry_applies(entry, entity, repo, bindings: dict | None = None, *,
 
 def resolve_applicable_entry(table, entity, repo, *, roll=None, tier=None, index=None,
                              bindings: dict | None = None, source=None,
-                             source_element: str | None = None):
+                             source_element: str | None = None,
+                             path=None, step=None):
     """The entry to run: the one the roll picked, or the previous one that applies.
 
     **Fall back, don't re-roll** (the author's call, 2026-09-25): when the selected
@@ -445,18 +510,24 @@ def resolve_applicable_entry(table, entity, repo, *, roll=None, tier=None, index
     A **deliberate** pick (``index``, the menu path) is not steered this way: the
     caller refuses it instead, because silently running a different row than the one
     someone chose is a worse surprise than being told it is not available.
+
+    ``path``/``step`` are the caller's declaration layers ([[B290]]), forwarded to
+    the scope the conditions read: a condition that tests a name the *path*
+    supplies is the case this layer exists for, so the row being considered has to
+    see the same scope the effect after it will.
     """
     entry = resolve_table(table, roll=roll, tier=tier, index=index)
     if entry is None:
         return None
     if bindings is None:
         # The scope a row's conditions are checked against: ambient facts plus the
-        # table's own declarations, resolved *without* an entry because which row
-        # applies is exactly what is being decided ([[B281]]). Doing it here rather
-        # than at each call site is what makes the table-level layer usable in a
-        # condition at all — before this, every caller passed nothing and a row's
-        # conditions saw no declared name.
-        bindings = table_bindings(table, entity, repo, roll=roll, tier=tier, index=index)
+        # declared layers — the caller's, then the table's own — resolved *without* an
+        # entry because which row applies is exactly what is being decided ([[B281]],
+        # [[B290]]). Doing it here rather than at each call site is what makes the
+        # table-level layer usable in a condition at all — before this, every caller
+        # passed nothing and a row's conditions saw no declared name.
+        bindings = table_bindings(table, entity, repo, roll=roll, tier=tier, index=index,
+                                  path=path, step=step)
     if entry_applies(entry, entity, repo, bindings, source=source,
                      source_element=source_element):
         return entry

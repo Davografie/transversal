@@ -15,6 +15,10 @@ from transversal.api.graphql.type_defs.effects import (
 from transversal.api.graphql.type_defs.entities import (
     PendingTerm,
 )
+from transversal.api.graphql.type_defs.sfx import (
+    BoundVariable,
+    BoundVariableInput,
+)
 
 
 @strawberry.type
@@ -58,6 +62,10 @@ class LifePathStep:
     #: effects counterpart of `next`, so an identical effect is authored once
     #: rather than on every binding.
     effects: list[Effect] = strawberry.field(default_factory=list)
+    #: The names this step supplies to the tables it wraps ([[B290]]), resolved
+    #: before the table's own so a shared table can read the context its caller
+    #: gives it. Declarations only — a pathless one is half-typed and dropped.
+    bound_variables: list[BoundVariable] = strawberry.field(default_factory=list)
 
 @strawberry.input
 class LifePathBindingInput:
@@ -78,6 +86,7 @@ class LifePathStepInput:
     next: str = ""
     bindings: list[LifePathBindingInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
+    bound_variables: list[BoundVariableInput] = strawberry.field(default_factory=list)
 
 @strawberry.type
 class LifePath:
@@ -89,6 +98,10 @@ class LifePath:
     #: The step a term begins at, and the steps it may walk.
     entry_step: str = ""
     steps: list[LifePathStep] = strawberry.field(default_factory=list)
+    #: The names the **path** supplies to the tables its steps wrap ([[B290]]).
+    #: Outermost layer: resolved before the step's and the table's, so a shared
+    #: table reads whatever context this term gives it.
+    bound_variables: list[BoundVariable] = strawberry.field(default_factory=list)
     discovery: Optional[DiscoveryBlock] = None
     conditions: list[Condition] = strawberry.field(default_factory=list)
     # Entity-scoped walkability ([[B194]]). `walkable` is null when the query was

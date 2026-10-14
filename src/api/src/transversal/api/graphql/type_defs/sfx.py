@@ -41,11 +41,16 @@ class BoundVariable:
     name by declaring them and leaving ``spec`` empty, so every row assigning it is
     checked rather than trusted ([[B285]]). Empty on both = trace the path, which
     is what an SFX does.
+
+    ``override`` replaces the table's own declaration of that name ([[B290]]). Only
+    a life path or life path step can carry it — they are the caller, the table is
+    the shared content — and it is meaningless (and ignored) everywhere else.
     """
     name: str
     spec: Optional[strawberry.scalars.JSON] = None
     element: str = ""
     cardinality: str = ""
+    override: bool = False
 
 @strawberry.input
 class BoundVariableInput:
@@ -53,6 +58,7 @@ class BoundVariableInput:
     spec: Optional[strawberry.scalars.JSON] = None
     element: str = ""
     cardinality: str = ""
+    override: bool = False
 
 @strawberry.type
 class UnavailableSfx:

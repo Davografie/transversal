@@ -696,3 +696,39 @@ def test_find_step_prefers_a_step_id_over_a_table_id():
 
     # "tbl-x" is both a step id and another step's table: the id wins.
     assert find_step(lp, "tbl-x").table_id == "tbl-real"
+
+
+def test_a_shared_tables_row_effect_reads_a_name_the_path_supplies():
+    """The content half of the wrapper ([[B290]]), end to end.
+
+    `rt-verdant-advance` and `rt-ironroots-standing` are mechanically identical row for
+    row once the faction id is masked — the same five bands, the same effects, only the
+    id and the row labels differ. One **shared** table can replace both if it can read
+    the sect from its caller instead of hardcoding it, so here the table declares
+    nothing and its row's effect consumes `{sect}`, supplied by the path.
+
+    The link that breaks *silently* is `resolve_step` handing `path`/`step` to
+    `table_bindings`: without it the flat `{sect}` token is left verbatim and the
+    effect runs against the literal string `"{sect}"` ([[B282]]) — a junk trait,
+    with no error.
+    """
+    from transversal.domain import BoundVariable
+    from transversal.services.target_spec import TargetSpec
+
+    repo = ExecutorRepo()
+    repo.traits["t-sect"] = FakeTrait("t-sect", "ts-1")
+    shared = _wrapped("lp-shared", [LifePathStep(id="s1", table_id="tbl-advance")],
+                      entry_step="s1")
+    shared.bound_variables = [BoundVariable(name="sect", spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "literal", "element": "trait", "value": "t-sect"}]}))]
+    repo.lifepaths["lp-shared"] = shared
+    repo.tables["tbl-advance"] = _table("tbl-advance", [
+        _entry("Promoted", [_gain("{sect}", "d6")]),
+    ])
+
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-shared", repo)
+    resolve_step(entity, repo, index=1)
+
+    gained = {ts.trait_id for ts in repo.created_traitsettings}
+    assert gained == {"t-sect"}, "the row's effect resolved the name its path supplied"

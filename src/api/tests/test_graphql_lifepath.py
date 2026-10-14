@@ -48,6 +48,9 @@ class GqlRepo:
         self.lifepaths[lp.id] = lp
         return lp
 
+    def list_all_lifepaths(self):
+        return list(self.lifepaths.values())
+
     def get_roll_table(self, tid):
         return self.tables.get(tid)
 
@@ -444,3 +447,96 @@ def _existing_steps():
     from transversal.domain import LifePathStep
 
     return [LifePathStep(id="s1", table_id="tbl-a", label="Where")]
+
+
+_TRAIT_LITERAL = {"steps": [{"kind": "literal", "element": "trait", "value": "t-sect"}]}
+
+
+def test_save_life_path_round_trips_its_own_declarations():
+    """[[B290]]: a path and a step both declare names, and both survive a save.
+
+    A field that is written but not read is a delete waiting for a save — the editor
+    writes the whole document, so a declaration the read half forgets is erased the
+    next time the panel saves for any reason ([[B279]], [[B281]], [[B285]]). The
+    `override` flag travels with the declaration it marks, and only here.
+    """
+    repo = _build()
+
+    data = _run(repo, """
+        mutation($b: [BoundVariableInput!], $steps: [LifePathStepInput!]) {
+          saveLifePath(
+            id: "lp-1", name: "Path", universe: "earth", description: "d",
+            entryTableId: "", entryStep: "s1", steps: $steps, boundVariables: $b
+          )
+        }
+    """, {
+        "b": [{"name": "sect", "spec": _TRAIT_LITERAL, "override": True}],
+        "steps": [{
+            "id": "s1", "tableId": "tbl-a", "label": "Where",
+            "boundVariables": [{"name": "advance_tr", "spec": _TRAIT_LITERAL}],
+        }],
+    })
+
+    assert data["saveLifePath"]["ok"] is True
+    saved = repo.lifepaths["lp-1"]
+    assert [(d.name, d.override) for d in saved.bound_variables] == [("sect", True)]
+    assert [(d.name, d.override) for d in saved.steps[0].bound_variables] == [("advance_tr", False)]
+
+    read = _run(repo, """
+        query {
+          lifePaths {
+            id
+            boundVariables { name override }
+            steps { id boundVariables { name override } }
+          }
+        }
+    """)
+    lp = next(p for p in read["lifePaths"] if p["id"] == "lp-1")
+    assert lp["boundVariables"] == [{"name": "sect", "override": True}]
+    assert lp["steps"][0]["boundVariables"] == [{"name": "advance_tr", "override": False}]
+
+
+def test_save_life_path_without_declarations_leaves_them_alone():
+    """The same leave-alone convention `steps` uses, for the same reason: a caller
+    editing only a name must not blank the names every shared table it wraps is
+    written against."""
+    from transversal.domain import BoundVariable
+
+    repo = _build()
+    repo.lifepaths["lp-1"].bound_variables = [BoundVariable(name="sect", element="entity")]
+
+    _run(repo, """
+        mutation {
+          saveLifePath(id: "lp-1", name: "Renamed", universe: "earth",
+                       description: "d", entryTableId: "")
+        }
+    """)
+
+    assert repo.lifepaths["lp-1"].name == "Renamed"
+    assert [d.name for d in repo.lifepaths["lp-1"].bound_variables] == ["sect"]
+
+
+def test_an_override_is_kept_only_where_a_layer_can_honour_it():
+    """`override` says "I mean to replace the table's name" — meaningful on a life
+    path or a step, the caller of a shared table. A table's or a row's declaration
+    cannot replace anything outside itself, so the flag is cleared there rather than
+    stored as a promise no layer can keep."""
+    repo = _build()
+
+    created = _run(repo, """
+        mutation($input: RollTableInput!) {
+            saveRollTable(input: $input) {
+                boundVariables { name override }
+                entries { boundVariables { name override } }
+            }
+        }
+    """, {"input": {
+        "name": "T", "universe": "earth", "scheme": "INDEX", "die": "D6",
+        "boundVariables": [{"name": "sect", "element": "trait", "override": True}],
+        "entries": [{"label": "r", "boundVariables": [
+            {"name": "sect", "spec": _TRAIT_LITERAL, "override": True}]}],
+    }})
+
+    table = created["saveRollTable"]
+    assert table["boundVariables"][0] == {"name": "sect", "override": False}
+    assert table["entries"][0]["boundVariables"][0] == {"name": "sect", "override": False}

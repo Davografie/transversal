@@ -41,6 +41,15 @@ class BoundVariable(BaseModel):
     name can be ``location/one`` on one row and ``location/many`` on another and
     nothing objects ([[B285]]). Empty on both means "trace the path", which is what
     every SFX declaration does — a rule has no layer that could check it.
+
+    ``override`` is the author saying *"I mean to replace the table's name of this
+    same name"* ([[B290]]). It is meaningful only on a **path** or **step**
+    declaration, where the holder is the caller and the table is the shared content
+    it wraps: the marked declaration **suppresses the table's own declaration of
+    that name before any layer resolves**, so the table's value can never surface on
+    an activation where the caller's path happened to resolve nothing. It cannot
+    work the other way (a row overriding the table): the row does not exist yet when
+    its conditions run. False everywhere else, and ignored there.
     """
 
     name: str
@@ -55,6 +64,10 @@ class BoundVariable(BaseModel):
     #: here would be a second opinion.
     element: str = ""
     cardinality: str = ""
+    #: Replace the table's declaration of this name rather than merely shadow it
+    #: ([[B290]]). Only a path or step declaration can carry it; see the class
+    #: docstring. Read through ``services.roll_table.override_names``.
+    override: bool = False
 
 
 class ReachFlavour(str, Enum):

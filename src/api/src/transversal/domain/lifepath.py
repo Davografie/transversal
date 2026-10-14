@@ -7,6 +7,7 @@ from transversal.domain.effects import Condition, Effect
 from transversal.domain.enums import (
     DieType,
 )
+from transversal.domain.sfx import BoundVariable
 
 
 class DiscoveryBlock(BaseModel):
@@ -85,6 +86,15 @@ class LifePathStep(BaseModel):
     #: leaves the rest verbatim, so a flat reference to an unbound name runs the
     #: effect against the literal string ``"{name}"`` — a junk target, silently.
     effects: list[Effect] = Field(default_factory=list)
+    #: Names this **step** supplies to the tables it wraps ([[B290]]), resolved
+    #: before the table's own declarations so a *shared* table can read the context
+    #: its caller gives it. Same shape as a roll table's ``bound_variables``; a step
+    #: is the specific caller, the table is the shared content.
+    #:
+    #: **Declarations only**, deliberately: a step does not reserve a typed slot for
+    #: its rows to fill in v1 (that shape is identical and can follow), so a
+    #: pathless declaration here is half-typed input and is dropped.
+    bound_variables: list[BoundVariable] = Field(default_factory=list)
 
 class LifePath(BaseModel):
     """A life path — **a layer over roll tables**, not an owner of them.
@@ -113,6 +123,15 @@ class LifePath(BaseModel):
     #: Step id the term begins at. Empty on a path that has not been migrated yet.
     entry_step: str = ""
     steps: list[LifePathStep] = Field(default_factory=list)
+    #: Names the **path** supplies to the tables its steps wrap ([[B290]]), resolved
+    #: before the step's and the table's declarations — outermost first, because a
+    #: shared table may be wrapped by several paths and must read whatever context
+    #: *this* term gives it. A path-level value therefore wins over a shared table's
+    #: declaration of the same name; mark a declaration ``override`` to replace the
+    #: table's outright rather than merely shadow it.
+    #:
+    #: Declarations only in v1 — see ``LifePathStep.bound_variables``.
+    bound_variables: list[BoundVariable] = Field(default_factory=list)
     discovery: Optional[DiscoveryBlock] = None  # null → always visible
     conditions: list[Condition] = Field(default_factory=list)  # empty → always walkable
     #: **Deprecated** — the pre-wrapper entry table. Read only as a fallback while

@@ -11,6 +11,9 @@ from transversal.api.graphql.type_defs.conditions import (
 from transversal.api.graphql.type_defs.lifepath import (
     LifePathStepInput as GqlStepInput,
 )
+from transversal.api.graphql.type_defs.sfx import (
+    BoundVariableInput as GqlBoundVariableInput,
+)
 from transversal.api.graphql.resolvers.converters import (
     _em,
     _life_path_step_input_to_domain,
@@ -29,6 +32,7 @@ class MutationsLifepath:
                        entry_table_id: str = "",
                        entry_step: Optional[str] = None,
                        steps: Optional[list[GqlStepInput]] = None,
+                       bound_variables: Optional[list[GqlBoundVariableInput]] = None,
                        discovery: Optional[strawberry.scalars.JSON] = None,
                        conditions: Optional[list[GqlConditionInput]] = None) -> strawberry.scalars.JSON:
         """Create or update a life path definition. For GM content authoring.
@@ -49,8 +53,16 @@ class MutationsLifepath:
         graph of the path, so a caller that saved only a name and rebuilt the
         document would silently unwrap every table the path declares. ``None``
         keeps what is stored; a list replaces it.
+
+        ``bound_variables`` is the path's own declaration layer ([[B290]]) — the
+        context a **shared** table reads — and follows the same convention for the
+        same reason: a caller editing a name must not blank the names every table
+        the path wraps is written against. The declarations are meaningful with
+        ``override``, which is why this is one of the two call sites that keep it.
         """
-        from transversal.api.graphql.resolvers.converters import _condition_input_to_domain
+        from transversal.api.graphql.resolvers.converters import (
+            _bound_variables_from_input, _condition_input_to_domain,
+        )
         from transversal.domain import DiscoveryBlock, LifePath
 
         d = None
@@ -80,9 +92,14 @@ class MutationsLifepath:
             entry = (getattr(existing, "entry_step", "") or "") if existing else ""
         else:
             entry = entry_step
+        if bound_variables is None:
+            decls = list(getattr(existing, "bound_variables", None) or []) if existing else []
+        else:
+            decls = _bound_variables_from_input(bound_variables, allow_override=True)
         lp = LifePath(
             id=id, name=name, universe=universe, description=description,
             entry_table_id=entry_table_id, entry_step=entry, steps=wrapped,
+            bound_variables=decls,
             discovery=d, conditions=gate,
         )
 

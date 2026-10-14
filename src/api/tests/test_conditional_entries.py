@@ -114,3 +114,37 @@ def test_a_row_condition_can_read_a_table_level_variable():
         "the table declared `flagged`, so the row's condition passes"
     assert resolve_applicable_entry(silent, _entity(), repo=repo, roll=3).label == "first", \
         "nothing declares `flagged`, so the condition is unmet and the roll falls back"
+
+
+def test_a_row_condition_can_read_a_name_the_path_supplies():
+    """[[B290]]: the **caller's** layer resolves before a row is chosen, exactly as the
+    table's does, which is what lets a *shared* table's row condition test the context
+    its path gave it — `{sect}` — instead of hardcoding a faction in a condition.
+
+    This is the link that would break silently: `resolve_applicable_entry` builds the
+    scope the condition reads, so the path/step layers have to reach *it* and not only
+    the effects resolved after the row.
+    """
+    from transversal.domain import BoundVariable
+    from transversal.services.target_spec import TargetSpec
+
+    def _reads_the_sect():
+        return Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec.model_validate(
+            {"steps": [{"kind": "select", "collection": "variable", "variable": "sect"}]}))
+
+    sect = BoundVariable(name="sect", spec=TargetSpec.model_validate(
+        {"steps": [{"kind": "literal", "element": "location", "value": "loc-2"}]}))
+
+    entries = [
+        RollTableEntry(label="first", min_value=1, max_value=2),
+        RollTableEntry(label="gated", min_value=3, max_value=4, conditions=[_reads_the_sect()]),
+    ]
+    table = _table(entries)
+    path = NS(id="lp-a", bound_variables=[sect])
+    repo = NS(get_entity=lambda eid: NS(id=eid))
+
+    assert resolve_applicable_entry(table, _entity(), repo=repo, roll=3,
+                                    path=path).label == "gated", \
+        "the path supplied `sect`, so the row's condition passes"
+    assert resolve_applicable_entry(table, _entity(), repo=repo, roll=3).label == "first", \
+        "with no path there is no `sect`, so the condition is unmet and the roll falls back"

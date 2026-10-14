@@ -184,6 +184,10 @@ def resolve_step(
     entry = resolve_applicable_entry(
         table, entity, repo, roll=roll, tier=tier, index=index,
         source=table, source_element="roll_table",
+        # The caller's declaration layers ([[B290]]): the row's *conditions* must see
+        # the same context its effect will, or a condition could test a name the path
+        # supplies and the effect after it read something else.
+        path=lp, step=step,
     )
     if entry is None:
         return {"done": True, "error": "no applicable entry resolved"}
@@ -252,7 +256,12 @@ def resolve_step(
 
     effect_context = {
         BINDINGS_CONTEXT_KEY: table_bindings(table, entity, repo, entry=entry,
-                                             roll=roll, tier=tier, index=index),
+                                             roll=roll, tier=tier, index=index,
+                                             # The caller's names ([[B290]]), so a
+                                             # **shared** table reads the context
+                                             # this path's step gives it rather than
+                                             # hardcoding a faction.
+                                             path=lp, step=step),
         # The entry's effect is applied *from* its table, so the table is the
         # source: `select source` is the table, and `navigate life_path` reaches
         # the paths that wrap it. The table is no longer owned by one path, so

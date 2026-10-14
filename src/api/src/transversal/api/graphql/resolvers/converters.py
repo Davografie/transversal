@@ -255,6 +255,27 @@ def _scheduled_event_to_gql(e: DomainScheduledEvent, repo=None) -> GqlScheduledE
         source_sfx_name=source_name,
     )
 
+def _bound_variables_to_gql(declarations) -> list:
+    """Declared bound variables as the GraphQL type.
+
+    One construction for every holder — a table, a row ([[B281]]), a life path and
+    a step ([[B290]]) — because the *read* half is where this surface keeps losing
+    a field: a holder whose map forgets one silently erases it on the next
+    whole-document save. (An SFX's own declarations keep their separate
+    construction: they serialize without ``exclude_none``, and changing that is a
+    different job.)
+    """
+    return [
+        BoundVariable(
+            name=bv.name,
+            spec=(bv.spec.model_dump(mode="json", exclude_none=True) if bv.spec else None),
+            element=getattr(bv, "element", "") or "",
+            cardinality=getattr(bv, "cardinality", "") or "",
+            override=bool(getattr(bv, "override", False)),
+        )
+        for bv in (declarations or [])
+    ]
+
 def _entry_to_gql(e: DomainRollTableEntry, index: int = 0) -> RollTableEntry:
     # `row_key` falls back to a scheme-derived key for content authored before
     # keys existed, so a reader never sees an empty identity it cannot bind to.
@@ -270,15 +291,7 @@ def _entry_to_gql(e: DomainRollTableEntry, index: int = 0) -> RollTableEntry:
         # The row's own declared names ([[B281]]). Per row, not per table: the
         # declaration resolves once a row is picked, so a row can expose a value
         # no other row in the table has.
-        bound_variables=[
-            BoundVariable(
-                name=bv.name,
-                spec=(bv.spec.model_dump(mode="json", exclude_none=True) if bv.spec else None),
-                element=getattr(bv, "element", "") or "",
-                cardinality=getattr(bv, "cardinality", "") or "",
-            )
-            for bv in (getattr(e, "bound_variables", None) or [])
-        ],
+        bound_variables=_bound_variables_to_gql(getattr(e, "bound_variables", None)),
     )
 
 def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
@@ -297,15 +310,7 @@ def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
             else None
         ),
         entries=[_entry_to_gql(e, i) for i, e in enumerate(t.entries)],
-        bound_variables=[
-            BoundVariable(
-                name=bv.name,
-                spec=(bv.spec.model_dump(mode="json", exclude_none=True) if bv.spec else None),
-                element=getattr(bv, "element", "") or "",
-                cardinality=getattr(bv, "cardinality", "") or "",
-            )
-            for bv in (t.bound_variables or [])
-        ],
+        bound_variables=_bound_variables_to_gql(t.bound_variables),
         canvas_x=t.canvas_x,
         canvas_y=t.canvas_y,
     )
@@ -414,7 +419,8 @@ def _reach_to_json(reach) -> list:
     ]
 
 
-def _bound_variables_from_input(raw, *, allow_reservation: bool = False) -> list:
+def _bound_variables_from_input(raw, *, allow_reservation: bool = False,
+                                allow_override: bool = False) -> list:
     """Validate declared bound variables into domain models.
 
     A nameless entry is dropped rather than persisted: the editor can hold a
@@ -425,6 +431,11 @@ def _bound_variables_from_input(raw, *, allow_reservation: bool = False) -> list
     roll table's reservation ([[B285]]). Only the table level passes it: a row
     *assigns* a reserved name, so a pathless row declaration is still half-typed
     input, and an SFX has no layer that could check one.
+
+    ``allow_override`` keeps the ``override`` flag — meaningful only where the
+    holder is the **caller** of a shared table, i.e. a life path or a life path
+    step ([[B290]]). Everywhere else the flag is cleared rather than stored, so a
+    reader cannot find a promise no layer can honour.
     """
     from transversal.domain import BoundVariable as DomainBoundVariable
 
@@ -446,6 +457,7 @@ def _bound_variables_from_input(raw, *, allow_reservation: bool = False) -> list
             # reservation that names an element and stops is a single value, not a
             # third state.
             cardinality=(getattr(item, "cardinality", "") or "").strip() or ("one" if element else ""),
+            override=allow_override and bool(getattr(item, "override", False)),
         ))
     return out
 
@@ -691,6 +703,7 @@ def _sfx_ref(sfx, resolve=None) -> SfxRef:
                 spec=bv.spec.model_dump() if getattr(bv, "spec", None) else None,
                 element=getattr(bv, "element", "") or "",
                 cardinality=getattr(bv, "cardinality", "") or "",
+                override=bool(getattr(bv, "override", False)),
             )
             for bv in (getattr(sfx, "bound_variables", None) or [])
         ],
@@ -788,6 +801,8 @@ def _life_path_steps_to_gql(lp) -> list:
             ],
             # The step's own effects: once per activation, whatever row resolved.
             effects=[_effect_to_gql(x) for x in (getattr(st, "effects", None) or [])],
+            # The names the step supplies to the table it wraps ([[B290]]).
+            bound_variables=_bound_variables_to_gql(getattr(st, "bound_variables", None)),
         )
         for st in (getattr(lp, "steps", None) or [])
     ]
@@ -814,6 +829,12 @@ def _life_path_step_input_to_domain(st):
             for b in (st.bindings or [])
         ],
         effects=[_effect_input_to_domain(x) for x in (getattr(st, "effects", None) or [])],
+        # The step's supplied names ([[B290]]). Declarations only — a pathless one
+        # is half-typed input, and `override` is meaningful exactly here (the step
+        # is the caller of a shared table), so this is one of the two call sites
+        # that allow it.
+        bound_variables=_bound_variables_from_input(
+            getattr(st, "bound_variables", None), allow_override=True),
     )
 
 
@@ -832,6 +853,7 @@ def _life_path_to_gql(lp, *, walkable=None, reasons=()) -> GqlLifePath:
         entry_table_id=lp.entry_table_id,
         entry_step=getattr(lp, "entry_step", "") or "",
         steps=_life_path_steps_to_gql(lp),
+        bound_variables=_bound_variables_to_gql(getattr(lp, "bound_variables", None)),
         discovery=lp.discovery,
         conditions=[_condition_to_gql(c) for c in (getattr(lp, "conditions", None) or [])],
         walkable=walkable,
