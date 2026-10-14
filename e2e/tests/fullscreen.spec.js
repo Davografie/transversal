@@ -105,14 +105,15 @@ const userExit = (page) => page.evaluate(() => document.exitFullscreen())
 test('the control is the last thing on the settings screen, off by default', async ({ page }) => {
   await boot(page)
 
-  // The author's placement, asserted as order rather than as a screenshot.
+  // The screen's order, asserted as order rather than as a screenshot: Mode is
+  // what the app *is*, then the characters you came for, then how this device
+  // shows the game — set once, so it must not sit in the way.
   const labels = await page.evaluate(() =>
     [...document.querySelectorAll('.name-entry .settings-label')].map((e) => e.textContent.trim()),
   )
-  expect(labels[labels.length - 1]).toBe('Fullscreen')
-  expect(labels.indexOf('Find character')).toBeLessThan(labels.indexOf('Fullscreen'))
-  expect(labels).toContain('Media quality')
-  expect(labels).toContain('Appearance')
+  expect(labels.slice(-3)).toEqual(['Appearance', 'Media quality', 'Fullscreen'])
+  expect(labels.indexOf('Find character')).toBeLessThan(labels.indexOf('Appearance'))
+  expect(labels.indexOf('Mode')).toBeLessThan(labels.indexOf('Your characters'))
 
   await expect(section(page)).toHaveCount(1)
   expect(await section(page).locator('.segmented-btn').allInnerTexts()).toEqual(['Off', 'On', 'Auto'])

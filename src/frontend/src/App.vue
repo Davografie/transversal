@@ -60,13 +60,7 @@
 
       <!-- Mode + Characters (hidden during switch) -->
       <template v-if="!rosterPicking && !charSwitchLoading">
-        <AppearanceBlock :mode="colorMode" @update:mode="colorMode = $event" />
-
-        <ModeAndMediaBlock
-          v-model:gm-mode="gmMode"
-          :media-quality="mediaQuality"
-          @set-media-quality="setMediaQuality"
-        />
+        <ModeBlock v-model:gm-mode="gmMode" />
 
         <p v-if="needsCharacterPick" class="switch-error">Pick one of your characters to play.</p>
 
@@ -107,6 +101,17 @@
           :location-label="locationLabel"
           @enter="onCharSearchEnter"
           @choose="chooseFoundCharacter"
+        />
+
+        <!-- Device preferences — how this device shows the game, as opposed to
+             what it plays or which character it plays as. Last, under Find
+             character, so the things you set once never sit between you and the
+             things you opened this screen for. -->
+        <AppearanceBlock :mode="colorMode" @update:mode="colorMode = $event" />
+
+        <MediaQualityBlock
+          :media-quality="mediaQuality"
+          @set-media-quality="setMediaQuality"
         />
 
         <FullscreenBlock
@@ -288,7 +293,8 @@ import UnauthorizedNotice from '@/components/app/UnauthorizedNotice.vue'
 import SplashPanel from '@/components/app/SplashPanel.vue'
 import { unauthorized } from '@/composables/useAuthGate.js'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
-import ModeAndMediaBlock from '@/components/app/ModeAndMediaBlock.vue'
+import ModeBlock from '@/components/app/ModeBlock.vue'
+import MediaQualityBlock from '@/components/app/MediaQualityBlock.vue'
 import FullscreenBlock from '@/components/app/FullscreenBlock.vue'
 import AppearanceBlock from '@/components/app/AppearanceBlock.vue'
 import CharacterListBlock from '@/components/app/CharacterListBlock.vue'

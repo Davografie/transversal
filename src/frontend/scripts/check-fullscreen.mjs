@@ -19,7 +19,7 @@
  *     -v /path/to/src/frontend/src:/app/src:ro \
  *     -w /app transversal2-frontend:latest node scripts/check-fullscreen.mjs
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 
 let pass = 0, fail = 0
 /** `bad` is the list of problems; empty means pass. */
@@ -154,6 +154,25 @@ yes('the default is off — nobody gets fullscreen before choosing it',
   yes('the shell claims the policy, so Auto works without opening that screen',
     /const \{ mode: fullscreenMode, setMode: setFullscreenMode[\s\S]{0,120}useFullscreenMode\(\)/.test(app))
 
+  // The screen's order is a convention, and it has one silent failure mode: a
+  // block drifts back into the middle of the screen, which reads as clutter
+  // rather than as a bug. Mode is what the app *is*; the three below it are how
+  // this device shows it, and they are set once.
+  const atMode = app.indexOf('<ModeBlock')
+  const atChars = app.indexOf('<CharacterListBlock')
+  const atAppearance = app.indexOf('<AppearanceBlock')
+  const atMedia = app.indexOf('<MediaQualityBlock')
+  yes('Mode stays at the top, above the characters',
+    atMode > -1 && atChars > -1 && atMode < atChars, `mode=${atMode} chars=${atChars}`)
+  yes('Appearance, media quality and fullscreen sit together under Find character',
+    atFind < atAppearance && atAppearance < atMedia && atMedia < atFull,
+    `find=${atFind} appearance=${atAppearance} media=${atMedia} fullscreen=${atFull}`)
+  yes('…and the component they were split out of is gone, not left as a second doorway',
+    !/<ModeAndMediaBlock/.test(app) && !existsSync('src/components/app/ModeAndMediaBlock.vue'))
+  yes('…with Mode and media quality each owning one block',
+    /<label class="settings-label">Mode<\/label>/.test(readFileSync('src/components/app/ModeBlock.vue', 'utf8')) &&
+    /<label class="settings-label">Media quality<\/label>/.test(readFileSync('src/components/app/MediaQualityBlock.vue', 'utf8')))
+
   const css = readFileSync('src/assets/styles.css', 'utf8')
   yes('the hint style is shared with the other settings controls',
     /\.settings-note \{/.test(css) && !/\.quality-hint/.test(css))
@@ -172,7 +191,7 @@ yes('the default is off — nobody gets fullscreen before choosing it',
   yes('…and the fullscreen control is the one that opts in',
     /reselect/.test(readFileSync(BLOCK, 'utf8')))
   yes('…and a plain preference is unchanged by it',
-    !/reselect/.test(readFileSync('src/components/app/ModeAndMediaBlock.vue', 'utf8')) &&
+    !/reselect/.test(readFileSync('src/components/app/MediaQualityBlock.vue', 'utf8')) &&
     !/reselect/.test(readFileSync('src/components/app/AppearanceBlock.vue', 'utf8')))
   yes('the player can see that we are holding off after they left',
     /if \(suppressed\.value && !isFullscreen\.value\)[\s\S]{0,120}Left fullscreen/.test(code))

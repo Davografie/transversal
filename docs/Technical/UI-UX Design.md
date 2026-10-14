@@ -978,10 +978,18 @@ surface**. `100dvh` and `viewport-fit=cover` keep the layout honest about the sp
 that is left; fullscreen is what *reclaims* it, and it is the only mechanism that does
 so without asking the player to install anything.
 
-Settings → **Fullscreen** (`app/FullscreenBlock.vue` — last on that screen, under
-*Find character*): `Off` · `On` · `Auto`, remembered **per device** beside media
-quality. The default is **Off**; fullscreen is a behaviour change nobody should get
+Settings → **Fullscreen** (`app/FullscreenBlock.vue`): `Off` · `On` · `Auto`, remembered
+**per device**. The default is **Off**; fullscreen is a behaviour change nobody should get
 without choosing it.
+
+**The settings screen has an order, and it is now a convention.** `Mode` sits at the top —
+it is what the app *is*, and it re-fetches role-scoped data. Then the characters you came
+for (*Your characters* → *Support* → *Find character*). Then the **device preferences** —
+*Appearance*, *Media quality*, *Fullscreen* — **last**, because they are set once and must
+not sit between you and the things you opened the screen for. The author moved the first
+two down to join fullscreen ("Reorder the media quality and appearance also below"), which
+is what split `ModeAndMediaBlock` into `ModeBlock` and `MediaQualityBlock` — one block per
+setting, so their order is not welded together.
 
 | mode | behaves |
 |---|---|

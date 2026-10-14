@@ -1,16 +1,5 @@
 <template>
   <div class="settings-section">
-    <label class="settings-label">Mode</label>
-    <SegmentedControl
-      class="settings-segmented"
-      aria-label="Mode"
-      :model-value="gmMode"
-      :options="modeOptions"
-      @update:model-value="$emit('update:gmMode', $event)"
-    />
-  </div>
-
-  <div class="settings-section">
     <label class="settings-label">Media quality</label>
     <SegmentedControl
       class="settings-segmented"
@@ -26,22 +15,18 @@
 <script setup>
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 
-const modeOptions = [
-  { value: false, label: '🎭 Player' },
-  { value: true, label: '🏛 Architect' },
-]
+// A device preference: with Appearance and Fullscreen it is grouped at the
+// bottom of the settings screen, under Find character. (Split out of
+// `ModeAndMediaBlock` when those three moved.)
 const qualityOptions = [
   { value: 'auto', label: 'Auto' },
   { value: 'low', label: 'Low' },
   { value: 'high', label: 'High' },
 ]
 
-// The two preference toggles at the top of the settings overlay: Player/Architect
-// (the app persists it and re-fetches role-scoped data) and media quality.
 defineProps({
-  gmMode: { type: Boolean, default: false },
   mediaQuality: { type: String, default: 'auto' },
 })
 
-defineEmits(['update:gmMode', 'set-media-quality'])
+defineEmits(['set-media-quality'])
 </script>
