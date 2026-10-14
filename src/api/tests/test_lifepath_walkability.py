@@ -32,12 +32,18 @@ from transversal.api.graphql.schema import schema
 from transversal.db.repository import EntityRepository
 from transversal.domain import Condition, Entity, EntityType, LifePath
 from transversal.domain.enums import ConditionType
-from transversal.services.conditions import static_conditions
+from transversal.services.conditions import evaluate_condition, static_conditions
 from transversal.services.entity_manager import EntityManager
 from transversal.services.lifepath_walkability import (
     evaluable_conditions,
     unwalkable_reasons,
 )
+from transversal.services.target_spec import TargetSpec
+
+
+def _spec(step: dict) -> TargetSpec:
+    """A one-step targeting path, for the condition shapes below."""
+    return TargetSpec.model_validate({"steps": [step]})
 
 try:
     _repo = EntityRepository()
@@ -192,6 +198,46 @@ def test_a_satisfied_condition_is_walkable():
         walker = repo.get_entity(WALKER)
         assert unwalkable_reasons(repo, walker, [repo.get_lifepath(UNIVERSE_PATH)]) == {}
         assert unwalkable_reasons(repo, walker, [repo.get_lifepath(TYPE_PATH)]) == {}
+    finally:
+        _cleanup(repo)
+
+
+def test_a_condition_may_read_what_an_earlier_one_named():
+    """[[B41]]: the conditions share **one scope**, so a `target_path` condition can
+    publish a named output and the next can read it — `evaluate_conditions` threads
+    exactly that.
+
+    Iron Roots is authored this way: one condition declares the sect's location set
+    (`literal location → navigate subtree`, with an `output`), the next tests whether
+    the character's location is in it (`filter id in {that_name}`). Evaluating them
+    one at a time with a fresh scope made the whole gate **silently always-false** —
+    the second condition read the literal token `{…}` and matched nothing, for every
+    entity, and the player saw "unmet: …" rather than a broken condition.
+    """
+    repo = _repo
+    _seed(repo)
+    try:
+        lp = repo.get_lifepath(OPEN_PATH)
+        # Both conditions must be **static** to reach an availability gate, and a spec
+        # that seeds from `select variable` is not (`_spec_is_static` — it needs the
+        # activation context). So the second one reads the earlier output through a
+        # *filter value* instead, which is exactly how a real authored gate does it.
+        lp.conditions = [
+            Condition(type=ConditionType.TARGET_PATH, spec=_spec(
+                {"kind": "select", "collection": "self", "output": "me"})),
+            Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec.model_validate(
+                {"steps": [
+                    {"kind": "select", "collection": "self"},
+                    {"kind": "filter", "field": "id", "operator": "==", "value": "{me}"},
+                ]})),
+        ]
+        walker = repo.get_entity(WALKER)
+
+        # With a fresh scope the token stays literal, so the second condition matches
+        # nobody — the silent always-false this pins.
+        assert evaluate_condition(walker, lp.conditions[1], repo) is False
+        # Through the gate the two share one scope, so it resolves.
+        assert unwalkable_reasons(repo, walker, [lp]) == {}
     finally:
         _cleanup(repo)
 

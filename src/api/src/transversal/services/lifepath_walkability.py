@@ -75,6 +75,15 @@ def unwalkable_reasons(
     because removing the offering gate ([[B41]]) made this read the *only* thing
     between the player and a path: offering one that can only fail is how a disabled
     row with a reason becomes an error on click.
+
+    **The conditions share one scope.** A ``target_path`` condition publishes the
+    names it gives an ``output``, and a later condition may read them — that is what
+    ``evaluate_condition``'s ``out_bindings`` is for, and what ``evaluate_conditions``
+    (plural) threads. Evaluating them one at a time with a fresh scope instead makes
+    an authored gate **silently always-false**: Iron Roots declares its location set
+    on one condition and tests membership on the next, and the second read the
+    literal token. It is the same class as every other silent failure here — the
+    author sees an unmet condition, not a broken one.
     """
     from transversal.services.conditions import evaluate_condition
     from transversal.services.lifepath_executor import entry_step
@@ -91,9 +100,10 @@ def unwalkable_reasons(
         gate = evaluable_conditions(getattr(path, "conditions", None))
         if not gate:
             continue
+        scope: dict = {}
         failing: list[str] = []
         for condition in gate:
-            if evaluate_condition(entity, condition, repo):
+            if evaluate_condition(entity, condition, repo, out_bindings=scope):
                 continue
             phrase = condition_text(condition, resolve=resolve)
             failing.append(f"unmet: {phrase}" if phrase else "unmet: a condition it declares")
