@@ -19,7 +19,7 @@
       :options="qualityOptions"
       @update:model-value="$emit('set-media-quality', $event)"
     />
-    <p class="quality-hint">Low uses smaller images (less data). Auto follows your connection.</p>
+    <p class="settings-note">Low uses smaller images (less data). Auto follows your connection.</p>
   </div>
 </template>
 

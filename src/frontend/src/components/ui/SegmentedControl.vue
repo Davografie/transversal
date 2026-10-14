@@ -35,12 +35,20 @@ const props = defineProps({
   /** [{ value, label, title?, disabled? }] */
   options: { type: Array, required: true },
   ariaLabel: { type: String, default: '' },
+  /**
+   * Emit even when the clicked segment is already the selection. Off by
+   * default, because for a plain preference a repeat click means nothing — but
+   * a control that *re-asserts* something needs it: fullscreen's `On` has to
+   * work again after the player left fullscreen with the back gesture, and the
+   * selection never changed.
+   */
+  reselect: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 function select(value) {
-  if (value !== props.modelValue) emit('update:modelValue', value)
+  if (value !== props.modelValue || props.reselect) emit('update:modelValue', value)
 }
 
 function step(delta) {

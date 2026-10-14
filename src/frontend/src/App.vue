@@ -108,6 +108,13 @@
           @enter="onCharSearchEnter"
           @choose="chooseFoundCharacter"
         />
+
+        <FullscreenBlock
+          :mode="fullscreenMode"
+          :options="fullscreenOptions"
+          :hint="fullscreenHint"
+          @update:mode="setFullscreenMode"
+        />
       <div v-if="gmMode" class="settings-section settings-lab">
           <button class="settings-lab-toggle" @click="showLab = !showLab">
             <span>🧪 Resonance Lab</span>
@@ -282,6 +289,7 @@ import SplashPanel from '@/components/app/SplashPanel.vue'
 import { unauthorized } from '@/composables/useAuthGate.js'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
 import ModeAndMediaBlock from '@/components/app/ModeAndMediaBlock.vue'
+import FullscreenBlock from '@/components/app/FullscreenBlock.vue'
 import AppearanceBlock from '@/components/app/AppearanceBlock.vue'
 import CharacterListBlock from '@/components/app/CharacterListBlock.vue'
 import SupportBlock from '@/components/app/SupportBlock.vue'
@@ -297,6 +305,7 @@ import { useApi } from './composables/useApi.js'
 import { usePanelBus } from './composables/usePanelBus.js'
 import { useEntityCrud } from './composables/useEntityCrud.js'
 import { useMediaQuality } from './composables/useMediaQuality.js'
+import { useFullscreenMode } from './composables/useFullscreenMode.js'
 import { useEntityCache } from './composables/entityCache.js'
 import { perfMark } from './composables/perfLog.js'
 import { useTroupe } from './composables/useTroupe.js'
@@ -306,6 +315,9 @@ import RollTableMenu from './components/gm/RollTableMenu.vue'
 const { graphql, endSfx: apiEndSfx, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools, getActivity: apiGetActivity } = useApi()
 const { fetchEntities: prefetchEntities, entities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
+// Fullscreen is claimed here rather than in the settings block: the auto policy
+// has to be armed from the first render, whether or not that screen is opened.
+const { mode: fullscreenMode, setMode: setFullscreenMode, options: fullscreenOptions, hint: fullscreenHint } = useFullscreenMode()
 const entityCache = useEntityCache()
 const bus = usePanelBus()
 const { supportCharacters, activeMains, playerBodies, onlinePlayers, fetchSupportCharacters, fetchActiveMains, fetchSupportCastTableId, fetchRecency, fetchPlayerBodies, fetchOnlinePlayers } = useTroupe()

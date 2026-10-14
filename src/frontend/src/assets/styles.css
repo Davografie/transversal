@@ -557,7 +557,8 @@ select option {
   font-size: 12px;
   color: var(--danger);
 }
-.quality-hint {
+/* The one line under a settings control that says what it will do. */
+.settings-note {
   font-size: 11px;
   color: var(--text-dim);
   line-height: 1.4;
