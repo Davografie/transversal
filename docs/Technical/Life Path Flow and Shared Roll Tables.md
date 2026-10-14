@@ -195,16 +195,19 @@ pure content and can be rolled for anything.
 - `services/lifepath_executor.py` — `start_term`, `resolve_step`, `find_step`, `_process_flow`,
   `_advance`, `_exit`. `_next_step` survives **only** for the unwrapped regime.
 - `services/roll_table.py` — `row_key`, `entry_key_for`, `table_bindings` (the scope a row's
-  conditions and effects resolve against; it resolves the table's declared names and then the
-  chosen row's, in that order), `entry_applies` / `resolve_applicable_entry` (which build the
-  table's scope so a row's *conditions* can read it), and — for reservations ([[B285]]) —
-  `declared_type_of`, `is_reservation`, `traced_type` and `roll_table_problems` (the pure
-  write-boundary check, called by `saveRollTable`).
+  conditions and effects resolve against; it walks the declared layers `path → step → table → row`
+  in that order, with `path`/`step` optional, and `override_names` is the one definition of what an
+  override means), `entry_applies` / `resolve_applicable_entry` (which build the table's scope so a
+  row's *conditions* can read it), and — for reservations ([[B285]]) — `declared_type_of`,
+  `is_reservation`, `traced_type` and `roll_table_problems` (the pure write-boundary check, called
+  by `saveRollTable`).
 - `services/lifepath_validation.py` — `validate_life_path`.
 - `migrate_lifepath_wrapper.py` — the one-way migration off the old model.
 - Frontend — `composables/lifePathGraph.js` (draws from steps); `composables/useBoundVariableScope.js`
-  (resolves one declaration layer into a scope — shared by the table's layer and a row's, so the
-  two cannot drift — and `reservationsOf`, the slot list); `GmLifePathDetailPanel.vue` authors the path and its **steps**;
+  (resolves one declaration layer into a scope — shared by every layer, so none can drift from the
+  engine — refusing a shadowed name as the engine does, plus `reservationsOf`, the slot list);
+  `GmLifePathDetailPanel.vue` authors the path, its **declarations** and its **steps**;
+  `GmStepVariablesPanel.vue` authors one step's declarations in a child panel ([[B290]]);
   `GmRollTableEditPanel.vue` authors the table's declarations (values **and reserved slots**), a row and its **binding**
   (next / exit / draft / enrol / binding effects); `GmRollTableEntryEditPanel.vue` authors a row's
   own declarations (the **assignments** of the table's slots). The split is by ownership, not by verb — [[B277]] collapsed the old
@@ -223,15 +226,18 @@ pure content and can be rolled for anything.
   the life-path canvas is inert under the wrapper.
 - **Forbidding a row** — a path declining a row it does not want — is designed for but not
   built (the human: *"paths forbidding rows sounds interesting, maybe later"*).
-- **Bound variables are declared at two levels, and the resolution order is the point**
-  ([[B279]], [[B281]]). A **table's** declarations resolve once per activation, *before any row
-  is chosen* — so every row shares one value, and, precisely because they exist before a row
-  does, a row's **conditions** can read them (one declaration instead of an elaborate targeting
-  path repeated on every row). A **row's** own declarations resolve once that row has applied, so
-  a value only one row has — a location, a rival — can be exposed; a row's conditions cannot read
-  *those*, which would be circular, since which row applies is the question being asked. A row's
-  name may start from a table's, and an existing name wins: a collision is refused and logged
-  rather than silently rebound, and the editors mark it.
+- **Bound variables are declared at four levels, and the resolution order is the point**
+  ([[B279]], [[B281]], [[B290]]). The wrapper nests — `path → step → table → row` — and the
+  layers resolve outermost first, into one scope. A **table's** declarations resolve once per
+  activation, *before any row is chosen* — so every row shares one value, and, precisely because
+  they exist before a row does, a row's **conditions** can read them (one declaration instead of
+  an elaborate targeting path repeated on every row). A **row's** own declarations resolve once
+  that row has applied, so a value only one row has — a location, a rival — can be exposed; a
+  row's conditions cannot read *those*, which would be circular, since which row applies is the
+  question being asked. A later layer's name may start from an earlier one, and an existing name
+  wins: a collision is refused and logged rather than silently rebound, and the editors mark it.
+  The **path's** and the **step's** layers are the caller's, and are what let a *shared* table
+  read the context of whichever path wraps it — see the [[B290]] entry below.
   The *consumption* half is proven end to end: a declared name is typed by its traced path, and a
   life path's **binding effects** read it because `resolve_step` hands one scope to both the row's
   effects and the binding's. The form is a path (`select variable X`), not a `{token}` in a
@@ -263,20 +269,26 @@ pure content and can be rolled for anything.
   `useBoundVariableScope.js` is the one definition of "what is a slot", the frontend twin of
   `is_reservation`; `useCanvas.linkRollTable` and both panels' whole-document maps carry the two
   fields, so a save that never touched a reservation cannot erase it.
-- **A path and a step declare variables too** ([[B290]], designed). The wrapper nests — a path
-  wraps steps, a step wraps a table, a table wraps rows — so the declaration layers resolve
-  outermost first, and a **shared** table can read the context its caller supplies:
+- **A path and a step supply the context a shared table reads** ([[B290]], landed 2026-10-13). The
+  wrapper nests — a path wraps steps, a step wraps a table, a table wraps rows — so the declaration
+  layers resolve outermost first, and a table wrapped by several paths reads whichever one is
+  walking it:
 
   ```
   path  →  step  →  table  →  row
   ```
 
-  `table_bindings` already walks its `layers` tuple in order, so this is the same rule over a
-  larger nesting, not a new one ([[B285]] left one definition of what a declaration is). What it
-  buys: `rt-verdant-advance` and `rt-ironroots-standing` are **mechanically identical row for row**
-  once the faction id is masked — the only differences are that id and the row labels — so one
-  shared `rt-advance` reading `{sect}` replaces both. That is the content half of the wrapper, and
-  what [[P5.5]]'s shared tables have been waiting on.
+  `table_bindings` walks its `layers` tuple in order, so this is the same rule over a larger
+  nesting rather than a new one ([[B285]] left one definition of what a declaration is).
+  `LifePath.bound_variables` and `LifePathStep.bound_variables` are the two new holders, the same
+  shape as a table's and a row's; **declarations only** in v1 — a path or step does not reserve a
+  typed slot for its rows to fill, which is the identical shape and can follow if a path wants it.
+
+  What it buys, measured rather than assumed: `rt-verdant-advance` and `rt-ironroots-standing` are
+  **mechanically identical row for row** once the faction id is masked — same bands, same effects,
+  five rows each — differing only in that id and the row labels. One shared `rt-advance` reading
+  `{sect}` replaces both, and the 15 effects that hardcode `faction-41014575` can stop. That is the
+  content half of the wrapper, and what [[P5.5]]'s shared tables have been waiting on.
 
   **Precedence is *not* "the more specific wins", and the reason is structural.** On a collision the
   earlier layer wins and the later declaration is refused, because for **table → row** the general
@@ -285,25 +297,44 @@ pure content and can be rolled for anything.
   would make the condition and the effect disagree about what `{name}` means inside one activation.
   That is the guarantee the table layer exists for. For **step/path → table**, "which is more
   specific" cuts the other way — the path's value is specific to the term, the table's to the table
-  — and the existing rule already gives the **caller** precedence over the shared content, which is
-  what sharing wants; flipping it would hand precedence to the callee. So:
+  — and the rule already gives the **caller** precedence over the shared content, which is what
+  sharing wants; flipping it would hand precedence to the callee. So:
   1. **values — outer resolves first and wins**, one value per name per activation;
   2. **slots — the inner layer fills the outer's reservation**: a reservation binds no value, so an
      assignment is a *fill*, never a shadow. This is the one place where "the specific overrules the
-     general" is unambiguous, and it already works at table → row;
-  3. **plus an explicit override** for path and step over table: a declaration marked as an override
-     suppresses the outer declaration of that name **before any layer resolves**, so there is one
-     value for the whole activation and the editor can say *"overrides the table's `{sect}`"*
-     instead of *"will not bind"*. It cannot work for row-over-table, for the structural reason
-     above — the row does not exist yet when its conditions run.
+     general" is unambiguous, and it works at table → row;
+  3. **plus an explicit override** for path and step over table — `BoundVariable.override`, a
+     declaration marked as such which **replaces the table's own declaration of that name before any
+     layer resolves**. Outer-first already wins *while the caller's path resolves*; what the override
+     adds is the case where it resolves **nothing**, where the table's value would otherwise surface
+     and the same `{name}` would mean two things across activations. The editor states it as
+     *"replaces the wrapped table's `{name}`"* — informational, not the red *"will not bind"*, because
+     there is nothing wrong. It cannot work for row-over-table, for the structural reason above: the
+     row does not exist yet when its conditions run, so the flag is **cleared** on a table's or a
+     row's declaration where no layer could keep the promise.
 
-  **Two implementation facts.** `table_bindings` must be *handed the step* (a table may be two steps
-  in one path, so it cannot be inferred), and `roll_table_menu` has no step and may run outside any
-  term — so the path/step layers are **optional, absent rather than empty**, like the ambient facts.
-  And the round trip is where this surface keeps losing data: both whole-`steps` writers must carry
-  each step's declarations, `LIFE_PATH_FIELDS` must select them at both levels, and `stepScopeFor()`
-  must fold them into the scope it offers or the names are never authorable ([[B281]]'s bug). Row
-  labels stay per-table (the human's call): two paths wanting the same mechanics under different
+  **Two implementation facts.** `table_bindings` is *handed the step* (a table may be two steps in
+  one path, so it cannot be inferred), and `roll_table_menu` has no step and may run outside any term
+  — so the path/step layers are **optional, absent rather than empty**, like the ambient facts. And
+  `resolve_step` hands them to **both** `resolve_applicable_entry` (which builds the scope a row's
+  *conditions* read) and the effect scope: one of them alone would let a condition test a name the
+  effect after it does not have, inside one activation.
+
+  **Authoring it.** The path panel gains a **Path variables** section; a step's own declarations open
+  in a **child panel** (`GmStepVariablesPanel`), because the step list is already table + label +
+  next + effects — the same reasoning that moved a step's effects out. `BoundVariablesEditor` gained
+  `allowOverride` and `overridable`, both additive and off by default, so the SFX and roll-table
+  callers are unchanged. The round trip is where this surface keeps losing data, and there are now
+  **three** writers to keep in step: `LIFE_PATH_FIELDS` selects the declarations at both levels, the
+  path panel's save sends them (per step, in a map that replaces the whole list), and the roll-table
+  panel's **connector** — which rebuilds every step by hand — carries them too. `stepScopeFor()`
+  folds the path's and the step's layers in ahead of the table's, which is what makes the names
+  authorable in the effects that consume them ([[B281]]'s bug otherwise). `resolveLayer` in
+  `useBoundVariableScope.js` now **refuses a shadowed name** as the engine does; it used to write the
+  later value into the offered scope, so an editor offered a name that resolves to the outer value at
+  run time.
+
+  Row labels stay per-table (the human's call): two paths wanting the same mechanics under different
   fiction get different tables.
 - **The offering gate is not the same thing as the enrolling faction** (measured 2026-10-13, on
   [[B41]]). `LifePath.factionIds` is derived read-only from each faction's `suitable_life_path_ids`,
