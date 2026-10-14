@@ -32,7 +32,7 @@
        order. The splash owns *how*. -->
   <div
     class="sp-root"
-    :class="{ 'sp-has-prompt': hasPrompt }"
+    :class="{ 'sp-has-prompt': hasPrompt, 'sp-target-card': !!currentNote?.value }"
     role="region"
     :aria-label="hasPrompt ? 'A rule is asking for a choice' : 'What changed'"
   >
@@ -189,6 +189,16 @@ const kindLabel = computed(() => KIND_LABELS[currentNote.value?.kind] || KIND_LA
   box-shadow: 0 12px 32px var(--shadow);
 }
 
+/* A target's card is edged in the accent and glows: it is the one face that is
+   asking for attention rather than reporting. */
+.sp-target-card {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow:
+    0 12px 32px var(--shadow),
+    0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 0 34px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 /* A note is a banner, not a card: it sits in the same place but does not need the
    prompt's room, and it reads as transient. */
 .sp-notes { display: flex; flex-direction: column; }
@@ -270,17 +280,36 @@ const kindLabel = computed(() => KIND_LABELS[currentNote.value?.kind] || KIND_LA
   letter-spacing: 0.22em;
   color: var(--text-dim);
 }
+/* A wash behind the number, so the eye lands there before anything else. */
+.sp-target::before {
+  content: '';
+  position: absolute;
+  inset: -10px -28px;
+  background: radial-gradient(ellipse at center,
+    color-mix(in srgb, var(--accent) 24%, transparent) 0%,
+    transparent 72%);
+  pointer-events: none;
+}
 .sp-target-value {
-  font-size: 64px;
+  font-size: 76px;
   font-weight: 800;
   line-height: 1;
+  letter-spacing: -0.02em;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
   text-shadow:
-    0 0 22px color-mix(in srgb, var(--accent) 60%, transparent),
-    0 0 4px color-mix(in srgb, var(--accent) 80%, transparent),
-    0 2px 0 rgba(0, 0, 0, 0.5);
-  animation: sp-target-pop 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+    0 0 2px color-mix(in srgb, var(--accent) 90%, transparent),
+    0 0 26px color-mix(in srgb, var(--accent) 70%, transparent),
+    0 0 64px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 3px 0 rgba(0, 0, 0, 0.4);
+  /* Lands, then breathes: the pop is the arrival, the glow is the menace. */
+  animation:
+    sp-target-pop 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both,
+    sp-target-glow 2.6s ease-in-out 0.5s infinite;
+}
+@keyframes sp-target-glow {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.2); }
 }
 /* The ring is decoration, so it is out of the flow and never eats a press. */
 .sp-target-ring {

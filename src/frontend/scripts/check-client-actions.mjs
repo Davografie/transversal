@@ -150,10 +150,18 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
       && /value: String\(difficulty\)/.test(app))
   yes('…and the head is skipped with it, so the number is not labelled twice',
     /<div v-else class="sp-note-head">/.test(splash))
-  yes('…the number is stated large, with the accent glow',
-    /\.sp-target-value \{[\s\S]{0,400}font-size: 64px/.test(splash) && /text-shadow:/.test(splash))
+  // "Big" is the requirement, so the size is checked as a floor rather than a literal:
+  // a number that shrank back to body size would still pass a presence check.
+  const valueSize = Number(((splash.match(/\.sp-target-value \{[\s\S]{0,600}?font-size: (\d+)px/) || [])[1] || 0))
+  yes('…the number is stated large, with the accent glow and a breathing pulse',
+    valueSize >= 60 && /text-shadow:/.test(splash) && /@keyframes sp-target-glow/.test(splash),
+    `font-size: ${valueSize}px`)
   yes('…and the entrance is a pop plus a ring, not a fade',
     /@keyframes sp-target-pop/.test(splash) && /@keyframes sp-target-ring/.test(splash))
+  yes('…behind a wash that puts the eye on the number first',
+    /\.sp-target::before \{[\s\S]{0,200}radial-gradient/.test(splash))
+  yes('…and the card itself is edged and glowing, so the target reads as the loud face',
+    /'sp-target-card': !!currentNote\?\.value/.test(splash) && /\.sp-target-card \{/.test(splash))
   yes('the flash never lands on the fixed root', rootRule.length > 0 && !/animation:/.test(rootRule))
   yes('…and it is all off under reduced motion',
     /prefers-reduced-motion: reduce\) \{[\s\S]{0,200}\.sp-target-value, \.sp-target-ring, \.sp-chip \{ animation: none/.test(splash))
