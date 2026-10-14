@@ -128,10 +128,10 @@
          it is needed: a chip dragged out of it becomes a scene element and never
          returns. -->
     <div
-      v-if="showElements && editZones && (unplacedTraits.length || unplacedOccupants.length)"
+      v-if="showElements && editZones && railOpen && unplacedCount"
       ref="railEl"
       class="loc-traits fade-in"
-      :class="{ 'has-switcher': gmMode, scrollable: railScrollable }"
+      :class="{ 'has-switcher': gmMode }"
     >
       <TraitChip
         v-for="t in unplacedTraits"
@@ -168,17 +168,20 @@
       </div>
     </div>
 
-    <!-- The unplace target (the human, 2026-09-26): drop a dragged occupant or trait
-         chip here and it is *unplaced* — back to the arrange-mode drawer. GM-only
-         (a player has no drawer to recover from) and `pointer-events: none`, because
-         the drag's own hit test decides; it must never swallow a pointer event. -->
+    <!-- ONE control in two states (the human, 2026-09-26). Idle in arrange mode it is the
+         rail's handle: the count of what is unplaced, tap to open or close the rail.
+         While an occupant or a trait chip is dragged it becomes the unplace target — the
+         same gesture in reverse: drag out of the rail to place, drag onto this to unplace.
+         GM-only, and `pointer-events: none` while a drag runs, because the drag owns the
+         pointer through document listeners and the hit test is done against this rect. -->
     <div
-      v-if="showElements && unplaceArmed && gmMode"
+      v-if="showElements && gmMode && (unplaceArmed || (editZones && unplacedCount))"
       ref="unplaceEl"
-      class="unplace-target"
-      :class="{ armed: unplaceHover }"
-      title="Drop here to unplace"
-    >( x )</div>
+      class="top-control"
+      :class="{ 'unplace-armed': unplaceArmed, armed: unplaceHover, open: railOpen && !unplaceArmed }"
+      :title="unplaceArmed ? 'Drop here to unplace' : `${unplacedCount} unplaced`"
+      @click="!unplaceArmed && (railOpen = !railOpen)"
+    >{{ unplaceArmed ? '( x )' : `unplaced · ${unplacedCount}` }}</div>
 
     <!-- Overlay preset switcher (architect only) -->
     <div class="overlay-switcher fade-in" v-if="showElements && gmMode">
@@ -373,31 +376,18 @@ const placedOccupants = computed(() =>
 // Unplaced occupants join the rail; see `unplacedOccupants` below for why they are
 // listed rather than drawn.
 const railEl = ref(null)
-const railScrollable = ref(false)
-let railObserver = null
 
-// Does the rail actually have more to show than fits? Only then may it take pointer
-// events (`.loc-traits.scrollable`), because taking them steals them from the scene
-// beneath — which broke dragging a placed chip that sat behind the rail.
-function measureRail() {
-  const el = railEl.value
-  railScrollable.value = !!el && el.scrollHeight > el.clientHeight + 1
-}
+// The rail is **behind the top control**, not always on screen (the human, 2026-09-26):
+// closed by default, opened by a tap, never remembered. That matters because an open
+// rail must take pointer events to scroll, and anything taking pointer events over the
+// map blocks what is behind it — acceptable for a panel you asked for, not for one that
+// is always there. Closed, nothing of the rail is over the map at all.
+const railOpen = ref(false)
+const unplacedCount = computed(() => unplacedTraits.value.length + unplacedOccupants.value)
 
-// The rail is `v-if`'d, so it appears and disappears with arrange mode; observe it
-// whenever the element changes, and re-measure then. A ResizeObserver alone is not
-// enough at the moment of appearance (its first callback is async), hence the
-// explicit measure on the next tick.
-watch(railEl, (el) => {
-  railObserver?.disconnect()
-  if (!el) { railScrollable.value = false; return }
-  if (typeof ResizeObserver !== 'undefined') {
-    railObserver = new ResizeObserver(measureRail)
-    railObserver.observe(el)
-  }
-  nextTick(measureRail)
-}, { immediate: true })
-onUnmounted(() => railObserver?.disconnect())
+// Leaving arrange mode forgets it: "closed until asked for" has to survive the mode
+// being toggled, or the next arrange session would start with the rail already open.
+watch(() => props.editZones, (on) => { if (!on) railOpen.value = false })
 
 // ── Size animation for driven dots ─────────────────────────────────────────
 // One-cycle, class-triggered keyframes — deliberately NOT a transition. A
@@ -2094,6 +2084,9 @@ function onExpandedClick(type, item) {
 // Dismiss pop-out when clicking background
 function onBgClick(e) {
   if (e.target === viewerEl.value) {
+    // Tapping the map also closes the rail: it is a panel you opened, so the map is the
+    // natural "never mind". This is the other half of it being over the map on purpose.
+    railOpen.value = false
     // Keep self popped
     const self = occupants.value.find(o => o.id === props.entityId)
     activeElement.value = self ? { type: 'occupant', id: self.id } : null
@@ -2321,17 +2314,10 @@ onMounted(() => {
   overflow-x: hidden;
   overscroll-behavior: contain;   /* don't chain the wheel to the page behind */
   padding: var(--rail-pad-y) var(--rail-pad-x);
-  /* NOT interactive by default — see `.scrollable` below. A rail that accepts pointer
-     events steals them from whatever scene element sits under it, which broke dragging
-     a placed chip that happened to be behind the rail. */
-  pointer-events: none;
-}
-
-/* …but a scroll container that ignores pointer events cannot be scrolled at all. So the
-   rail only becomes interactive when it actually has something to scroll, which is the
-   state where it is covering that strip of map anyway. Short rails — the common case —
-   stay transparent to the map exactly as they were before. */
-.loc-traits.scrollable {
+  /* Interactive, because the rail is now OPENED (the human, 2026-09-26) rather than
+     always on screen: a scroll container that ignores pointer events cannot be scrolled
+     at all — not by wheel, not by touch. Taking events is acceptable here precisely
+     because the rail is transient; closed, it is not over the map at all. */
   pointer-events: auto;
 }
 
@@ -2339,40 +2325,62 @@ onMounted(() => {
   --rail-top: calc(env(safe-area-inset-top, 16px) + 80px);
 }
 
-/* The unplace target: centred at the top of the map, present only while an occupant
-   or a trait chip is being dragged. `pointer-events: none` is load-bearing — the drag
-   already owns the pointer through document listeners, and hit-testing is done
-   against this element's rect, so it must not intercept anything itself. */
-.unplace-target {
+/* The one top control: the rail's handle when idle, the unplace target while a drag is
+   running. Centred at the top of the map, in the same pill language as the other map
+   controls. */
+.top-control {
   position: absolute;
   top: calc(env(safe-area-inset-top, 16px) + 6px);
   left: 50%;
   transform: translateX(-50%);
   padding: 5px 15px;
   border-radius: 999px;
-  border: 1px dashed rgba(255,255,255,0.45);
+  border: 1px solid rgba(255,255,255,0.18);
   background: rgba(10,10,20,0.55);
   backdrop-filter: blur(4px);
   color: var(--map-text);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.85);
+  cursor: pointer;
+  z-index: 40;
+  /* IDLE it is a button — the rail's handle — so it must be tappable. It is a small,
+     visible control, so taking events here costs the map nothing it did not already
+     give up to the other controls. */
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* …but while a drag is running it is a DROP TARGET, not a button: the drag owns the
+   pointer through document listeners and hit-testing is done against this rect, so it
+   must not intercept anything itself. */
+.top-control.unplace-armed {
+  pointer-events: none;
+  cursor: default;
   font-size: 14px;
   letter-spacing: 1px;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.85);
-  pointer-events: none;
-  z-index: 40;
+  border-style: dashed;
+  border-color: rgba(255,255,255,0.45);
 }
 
 /* Over it: the drop will unplace. Same accent language as the armed travel dot, so
    "this drop will do something" reads the same way everywhere on the map. */
-.unplace-target.armed {
+.top-control.armed {
   border-color: var(--accent);
   border-style: solid;
   background: var(--accent-16);
 }
 
+/* The rail is open (and no drag is running): the handle reads as pressed. */
+.top-control.open {
+  border-color: var(--accent);
+  background: var(--accent-16);
+}
+
 /* An unplaced OCCUPANT in the same drawer: a small row — picture or initials, then
    the name — in the chips' own visual language, so the drawer reads as one list of
-   "not placed yet" whatever the kind. `pointer-events: auto` for the same reason the
-   chips need it: the drawer itself is transparent to the map. */
+   "not placed yet" whatever the kind. `pointer-events: auto` so the row can be dragged
+   out of the rail (the rail takes events while it is open; see `.loc-traits`). */
 .occ-drawer-chip {
   display: flex; align-items: center; gap: 7px;
   padding: 3px 9px 3px 5px;

@@ -216,19 +216,16 @@ test('arrange mode opens every chip, and a chip can then be dragged', async ({ p
   await page.mouse.move(5, 5)
   await expect(page.locator('.scene-chip.expanded')).toHaveCount(2)
 
-  // The unplaced traits appear here — the only place they exist now — already open,
-  // because nothing in the stack can be approached.
-  const stack = page.locator('.loc-traits .trait-chip')
-  await expect(stack).toHaveCount(1)
-  await expect(stack.first()).toHaveClass(/expanded/)
+  // The rail is CLOSED by default now (the human, 2026-09-26) — it sits over the map and
+  // must take pointer events while open, so it is a panel you ask for. Closed, nothing
+  // of it is over the map at all, which is what keeps a placed chip behind it draggable.
+  await expect(page.locator('.loc-traits')).toHaveCount(0)
+  const handle = page.locator('.top-control')
+  await expect(handle).toContainText('unplaced')
 
-  // A rail with one chip has nothing to scroll, so it must stay transparent to the map.
-  // This is the guard for a real regression: making the rail take pointer events
-  // unconditionally swallowed the drag below, and the test dragged the DRAWER's chip
-  // instead of the scene one.
-  await expect(page.locator('.loc-traits')).not.toHaveClass(/scrollable/)
-
-  // The gesture itself: grab a chip and move it.
+  // …and the drag below must work with the rail closed. This is the guard for a real
+  // regression: a rail that took pointer events unconditionally swallowed the drag, and
+  // the test dragged the DRAWER's chip instead of the scene one.
   const target = chip(WITH_IMAGE)
   await expect(target).toHaveClass(/draggable/)
   const before = await target.boundingBox()
@@ -279,6 +276,10 @@ test('an unplaced occupant is listed in the drawer and NOT drawn on the map', as
 
   await page.locator('.arrange-btn').click()
 
+  // The rail is behind the handle now: open it first.
+  await expect(page.locator('.occ-drawer-chip')).toHaveCount(0)
+  await page.locator('.top-control').click()
+
   // …and it is in the drawer, where the GM drags it out to place it. The PLACED
   // occupant in the same payload must NOT be listed, so this is the "unplaced" filter
   // being asserted and not "list everyone".
@@ -327,15 +328,16 @@ test('clicking the roaming GM dot drops a foreign view', async ({ page }) => {
 // map; dropping the dragged thing on it *unplaces* it — the inverse of dragging one
 // out of the drawer. GM-only, because a player has no drawer to recover from.
 
-/** Drag `locator` onto the unplace target, which only exists once the drag has moved. */
+/** Drag `locator` onto the unplace target, which the drag itself brings up. */
 async function dragOntoUnplace(page, locator) {
   const before = await locator.boundingBox()
   await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2)
   await page.mouse.down()
-  // A first move arms the target (nothing appears on a plain click)…
+  // A first move arms the target: idle the control is the rail's handle, and it only
+  // becomes the drop target once something is actually being dragged.
   await page.mouse.move(before.x + before.width / 2, before.y - 60, { steps: 8 })
-  const target = page.locator('.unplace-target')
-  await expect(target).toHaveCount(1)
+  const target = page.locator('.top-control.unplace-armed')
+  await expect(target).toContainText('( x )')
   const box = await target.boundingBox()
   // …then onto it. `armed` is the live hover state, so this also proves the hit test.
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 })
@@ -358,7 +360,9 @@ test('dropping a dragged chip on the ( x ) unplaces it', async ({ page }) => {
   await expect.poll(() => writes.length).toBe(1)
   // The absence of the key IS the unplacement — the PUT replaces the whole map.
   expect(Object.keys(writes[0].trait_positions)).not.toContain(WITH_IMAGE)
-  // Back in the drawer, which is the only place an unplaced chip exists.
+  // …and it is off the map. The rail is closed, so open the handle to see it listed.
+  await expect(page.locator(`.scene-chip[data-trait-id="${WITH_IMAGE}"]`)).toHaveCount(0)
+  await page.locator('.top-control').click()
   await expect(
     page.locator(`.loc-traits .trait-chip[data-trait-id="${WITH_IMAGE}"]`)
   ).toHaveCount(1)
@@ -384,6 +388,7 @@ test('dropping a dragged occupant on the ( x ) unplaces it', async ({ page }) =>
   // Off the map…
   await expect(page.locator('.occ-dot', { hasText: 'PP' })).toHaveCount(0)
   // …and into the drawer, where the GM can drag it back out.
+  await page.locator('.top-control').click()
   await expect(page.locator('.occ-drawer-chip')).toHaveCount(1)
   await expect(page.locator('.occ-drawer-chip').first()).toContainText('Placed Probe')
 })
@@ -391,9 +396,10 @@ test('dropping a dragged occupant on the ( x ) unplaces it', async ({ page }) =>
 // ── The rail is capped to the viewer and scrolls vertically (the human, 2026-09-26) ──
 //
 // Past the viewer's height the rail used to run off the bottom of the map (on a phone
-// the stack alone measured 526px of an 844px screen). It is now capped and scrolls.
+// the stack alone measured 526px of an 844px screen). It is now capped and scrolls, and
+// it is opened from the top control rather than always on screen.
 
-test('the unplaced rail is capped to the viewer and scrolls vertically only', async ({ page }) => {
+test('the unplaced rail is opened by the handle, capped to the viewer, and scrolls vertically', async ({ page }) => {
   await asArchitect(page)
   // Enough unplaced traits to overflow any viewport: they all have no position, so
   // every one of them lands in the rail. The standard TRAITS ride along because
@@ -405,11 +411,14 @@ test('the unplaced rail is capped to the viewer and scrolls vertically only', as
   await open(page, FAR, [], { traits: many })
   await page.locator('.arrange-btn').click()
 
+  // Closed until asked for — that is what keeps the map underneath usable.
   const rail = page.locator('.loc-traits')
+  await expect(rail).toHaveCount(0)
+  const handle = page.locator('.top-control')
+  await expect(handle).toContainText(`unplaced · ${many.length - 2}`)  // 2 of them are placed
+  await handle.click()
   await expect(rail).toHaveCount(1)
-  // Overflowing is what lets it take pointer events — a rail that ignores them cannot
-  // be scrolled, but one that takes them steals them from the scene beneath.
-  await expect(rail).toHaveClass(/scrollable/)
+  await expect(handle).toHaveClass(/open/)   // and it reads as pressed
 
   const m = await rail.evaluate((el) => {
     const box = el.getBoundingClientRect()
@@ -417,7 +426,7 @@ test('the unplaced rail is capped to the viewer and scrolls vertically only', as
     const cs = getComputedStyle(el)
     return {
       overflowY: cs.overflowY, overflowX: cs.overflowX,
-      maxHeight: cs.maxHeight, padding: cs.padding, cls: el.className,
+      pointerEvents: cs.pointerEvents,
       scrollH: el.scrollHeight, clientH: el.clientHeight,
       scrollW: el.scrollWidth, clientW: el.clientWidth,
       bottom: Math.round(box.bottom), viewerBottom: Math.round(viewer.bottom),
@@ -426,6 +435,7 @@ test('the unplaced rail is capped to the viewer and scrolls vertically only', as
 
   expect(m.overflowY).toBe('auto')
   expect(m.overflowX).toBe('hidden')                    // vertical ONLY
+  expect(m.pointerEvents).toBe('auto')                  // open ⇒ scrollable
   expect(m.scrollH).toBeGreaterThan(m.clientH)          // it really does overflow
   expect(m.bottom).toBeLessThanOrEqual(m.viewerBottom)  // …and is capped to the viewer
   expect(m.scrollW).toBeLessThanOrEqual(m.clientW + 1)  // no horizontal overflow
@@ -438,4 +448,11 @@ test('the unplaced rail is capped to the viewer and scrolls vertically only', as
   })
   expect(after.top).toBeGreaterThan(0)
   expect(after.left).toBe(0)
+
+  // Tapping the map closes it again — the panel is over the map on purpose, so the map
+  // is the natural "never mind". Dispatched on the viewer itself rather than clicked at
+  // an arbitrary point: a real click could land on a dot or a chip, which would prove
+  // nothing about the handler.
+  await page.locator('.location-viewer').dispatchEvent('click')
+  await expect(rail).toHaveCount(0)
 })
