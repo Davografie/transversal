@@ -129,6 +129,63 @@ def _source_was_added(sfx: SFX, event: GameEvent, source_id: str | None) -> bool
     return _added_die_of(event.context, source_id) is not None
 
 
+#: Triggers whose event carries the assembled pool, so "was the source rolled?" is
+#: answerable. The outcome triggers carry it too — `conditions.py` maps each trigger
+#: to the context keys it may read, and every one of these has ``rolls``.
+_POOL_TRIGGERS = frozenset({
+    "on_roll", "on_result", "on_set",
+    "on_complication", "on_botch", "on_success", "on_failure",
+})
+
+
+def _source_in_pool(event: GameEvent, source_id: str | None) -> bool:
+    """Whether a die from ``source_id`` is in the pool this event carries."""
+    if not source_id:
+        return False
+    return any((die or {}).get("ts_id") == source_id
+               for die in (event.context or {}).get("rolls") or [])
+
+
+def _source_matches(sfx: SFX, event: GameEvent, source_id: str | None,
+                    source_element: str = "") -> bool:
+    """Whether this rule's own source is in play for this event ([[B286]]).
+
+    Two questions, each replacing a case that used to fire on everything:
+
+    * **``on_pool_add``** is about the source *arriving* — the just-added dice must
+      include it (``_source_was_added``).
+    * **a roll-family trigger on a trait *instance*** is about that instance being
+      rolled, so a die carrying its ``ts_id`` must be in the pool. The author's
+      intuition, 2026-10-13: *"if the source is traitsetting … I'd expect the source
+      to gate the trigger."*
+
+    **A disabled source needs no separate check, and must not have one.** A disabled
+    trait instance *contributes no dice* (``TraitSetting.enabled``: "false = disabled;
+    contributes no dice until re-enabled"), so it cannot be in the pool and the roll
+    gate above already refuses it — the author's second expectation, satisfied by the
+    first. A blanket "disabled source never fires" check would instead break the rules
+    whose subject *is* a disabled trait: the portent escalator is sourced on the
+    disabled slot it exists to enable (``on_challenge_completed``), and the full suite
+    caught exactly that when this was first written.
+
+    A source that is not a trait instance (entity, table, location, …) is not gated
+    here: for those, "was it rolled?" has no meaning, and the entity case is already
+    true by construction (the roller *is* the source).
+    """
+    if sfx.trigger == "on_pool_add":
+        return _source_was_added(sfx, event, source_id)
+    if sfx.trigger in _POOL_TRIGGERS and source_element == "traitsetting":
+        # Decide it only where it can be decided: an event carrying **no** pool is a
+        # synthetic or non-roller activation (a direct engine call, an agenda firing),
+        # and refusing there would silence rules over information nobody supplied.
+        # A real roll always carries the pool — every roll-family trigger may read
+        # ``rolls`` (`conditions.py`) — so the gate is exact where it matters.
+        if not (event.context or {}).get("rolls"):
+            return True
+        return _source_in_pool(event, source_id)
+    return True
+
+
 def _activation_bindings(sfx: SFX, event: GameEvent, source_id: str | None,
                          source=None) -> dict:
     """The activation's own names, bound as typed seeds for targeting paths.
@@ -296,9 +353,9 @@ class EffectsEngine:
             # A trigger *about* its source ("this trait was added") can only be
             # decided now that the source is resolved — and it is decided before
             # the conditions, which is the point of having the trigger at all.
-            if not _source_was_added(sfx, event, source_id):
-                log.info("[process_event] sfx=%s trigger=on_pool_add but source %s was not added",
-                         sfx.id, source_id)
+            if not _source_matches(sfx, event, source_id, source_element):
+                log.info("[process_event] sfx=%s trigger=%s source=%s does not take part in this event",
+                         sfx.id, sfx.trigger, source_id)
                 continue
 
             # Per-activation variable scope. Sealed *before* the gate because a
