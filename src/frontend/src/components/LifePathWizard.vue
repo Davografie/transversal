@@ -12,9 +12,11 @@
       </div>
 
       <div class="wiz-body">
-        <!-- Choose a life path. The offering gate ([[B194]]) is the fourth of the
-             four: a path no faction offers is *visible and disabled carrying
-             why*, not hidden. -->
+        <!-- Choose a life path. The gate is the path's own `conditions` ([[B194]]),
+             and an unwalkable path is a **visible, disabled row carrying why** — never
+             a hidden one. The offering faction used to gate here and does not any more
+             ([[B41]]): it could not tell whether the character may walk the path, and
+             it locked 7 of 10. -->
         <template v-if="step === 'choose'">
           <p class="wiz-hint">Choose a life path to take a term in.</p>
           <ChoiceTable
@@ -185,14 +187,22 @@ const tableMax = computed(() => {
 // rolls are handled by the MOD wrap in resolveIndex().
 const rollableTraits = computed(() => traits.value.filter(t => t.universe === props.universe))
 
-/** The path list as rows: the offering gate carries its reason, not a lockout. */
+/** The path list as rows: the **conditions** gate carries its reason, not a lockout.
+ *
+ *  The gate used to be the offering faction — a path no faction offered was disabled
+ *  with *"no offering faction"* — which locked 7 of 10 live paths and gated nothing
+ *  about whether the character *could* walk them ([[B41]]). Walkability is the path's
+ *  own `conditions` ([[B194]]); the offering faction is now only an input to *starting*
+ *  a term, never a gate. An unwalkable path stays **visible and disabled, carrying the
+ *  reason** (the human, 2026-09-25), and `walkable === null` means not evaluated —
+ *  which this query never is, because it always passes the entity. */
 const pathRows = computed(() => paths.value.map(lp => ({
   id: lp.id,
   factionIds: lp.factionIds,
   label: lp.name,
   description: lp.description,
-  locked: !lp.factionIds?.length,
-  why: 'no offering faction',
+  locked: lp.walkable === false,
+  why: (lp.unwalkableReasons || []).join('; '),
 })))
 
 const groupedTraits = computed(() => {
@@ -235,9 +245,13 @@ function resolveIndex(n) {
 async function loadPaths() {
   busy.value = true
   try {
+    // `entityId` is what makes `walkable` an answer at all ([[B194]]): without it the
+    // field is null, because a gate nobody asked about has no answer — and defaulting
+    // it true would offer every path to everyone, which is the bug this replaces.
     const data = await graphql(
-      `query($u:String){ lifePaths(universe:$u){ id name universe description entryTableId factionIds } }`,
-      { u: props.universe },
+      `query($u:String,$eid:ID){ lifePaths(universe:$u, entityId:$eid){
+         id name universe description entryTableId factionIds walkable unwalkableReasons } }`,
+      { u: props.universe, eid: props.entityId },
     )
     paths.value = data?.lifePaths || []
   } finally {
@@ -274,14 +288,17 @@ async function loadPendingTerm() {
 }
 
 async function startPath(lp) {
-  const factionId = lp?.factionIds?.[0]
-  if (!factionId) { error.value = 'This path has no offering faction yet.'; return }
+  // The faction is **not** a gate any more ([[B41]]): the checkpoint is a cursor, so a
+  // path nobody offers can begin. Pass the offering faction when there is one — it is
+  // the caller saying whose sect this term serves, and it wins — and otherwise omit it;
+  // an enrolling row then resolves the faction from the path's own `{sect}` ([[B290]]).
+  const factionId = lp?.factionIds?.[0] || null
   selectedPath.value = lp
   error.value = ''
   resolving.value = true
   try {
     const data = await graphql(
-      `mutation($eid:ID!,$fid:ID!,$pid:ID!){ startTerm(entityId:$eid, factionId:$fid, pathId:$pid){ factionId pathId currentTableId continuation } }`,
+      `mutation($eid:ID!,$fid:ID,$pid:ID!){ startTerm(entityId:$eid, factionId:$fid, pathId:$pid){ factionId pathId currentTableId continuation } }`,
       { eid: props.entityId, fid: factionId, pid: lp.id },
     )
     const pt = data?.startTerm
