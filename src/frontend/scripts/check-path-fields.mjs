@@ -719,6 +719,34 @@ const objectAfter = (src, key) => {
     }
   }
 
+  // ── A step's own effects must be read *and* sent, by every path writer ──
+  //
+  // Same rule as the row's declarations above, one level up ([[B281]]). The read
+  // half is the one that keeps being forgotten: `LIFE_PATH_FIELDS` did not select
+  // `steps { effects }`, so the path panel seeded its form from a copy that had none
+  // — the author's effect vanished from the editor on refresh, and the next save
+  // wrote that emptiness back. A field that is written but not read is a delete
+  // waiting for a save.
+  {
+    const fields = constBody(readFileSync(join(SRC, 'composables', 'useLifePaths.js'), 'utf8'),
+                             'LIFE_PATH_FIELDS') || ''
+    // Inside `steps { … }`, not merely somewhere in the constant: the *binding*
+    // effects are in the same string, so a bare match would pass on those alone.
+    const stepsAt = fields.indexOf('steps {')
+    const stepsBody = stepsAt < 0 ? '' : brace(fields, fields.indexOf('{', stepsAt))
+    ok('the shared life-path read fetches each step\'s own effects',
+      /(?<![\w.])effects\s*\{/.test(stepsBody.replace(/bindings\s*\{[\s\S]*?\n\s*\}/, '')), true)
+
+    // And the connector writer, which builds every step by hand and replaces the list.
+    const panel = readFileSync(join(SRC, 'components/gm/GmRollTableEditPanel.vue'), 'utf8')
+    const stepFn = panel.slice(panel.indexOf('function stepToInput'),
+                              panel.indexOf('async function save()'))
+    // `s.effects`, not `effects:` — the same function also maps each *binding*'s
+    // effects, and a bare match passed on that alone until this was tightened.
+    ok('the connector writer carries a step\'s own effects',
+      /(?<![\w.])effects\s*:\s*s\.effects/.test(stepFn), true)
+  }
+
   // ── An eager reader may not precede the `form` it reads ────────────────
   //
   // `<script setup>` runs top-down, and two things here read `form` *during* setup:

@@ -654,6 +654,11 @@ function stepToInput(s, bindings) {
     tableId: s.tableId,
     label: s.label || '',
     next: s.next || '',
+    // The step's own effects travel untouched: this panel does not edit them, and
+    // `steps` REPLACES the stored list — so omitting the field here erases every
+    // effect the path panel authored (the same rule as a binding's, and the reason
+    // `check-path-fields.mjs` compares this map's fields against what it read).
+    effects: s.effects || [],
     bindings: (bindings || []).map(b => ({
       key: b.key,
       next: b.next || '',

@@ -8,9 +8,10 @@ const pathsByUniverse = ref({})
 const loading = ref(false)
 
 // The full effect shape EffectForm round-trips — the same selection the SFX
-// editor uses (useSfxEdit.js), because a binding's `effects` are ordinary
-// effects and a partial selection would drop what the editor wrote back.
-const BINDING_EFFECT_FIELDS = `
+// editor uses (useSfxEdit.js), because an effect is an ordinary effect and a partial
+// selection would drop what the editor wrote back. It serves **both** effect lists a
+// step carries: the step's own ([[B281]]) and each binding's.
+const STEP_EFFECT_FIELDS = `
   timing type action target entity result dieFilter negative context
   duration { timers { event remaining } combine }
   targetSpec entitySpec resultSpec ownerSpec refs output
@@ -29,8 +30,14 @@ const LIFE_PATH_FIELDS = `
     id tableId label next
     bindings {
       key next exitKind exitPath enroll
-      effects { ${BINDING_EFFECT_FIELDS} }
+      effects { ${STEP_EFFECT_FIELDS} }
     }
+    // The step's own effects ([[B281]]). **Must be read**, not merely written: this
+    // store is what the path panel seeds its form from, so a missing field here shows
+    // the author an empty list after a refresh — and the next save writes that
+    // emptiness back over what they authored. The read half is the one that keeps
+    // being forgotten ([[B279]], [[B281]]).
+    effects { ${STEP_EFFECT_FIELDS} }
   }
   conditions { type subject target targets value operator narrative spec }
   discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship }
