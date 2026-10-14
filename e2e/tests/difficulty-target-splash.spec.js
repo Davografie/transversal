@@ -5,10 +5,12 @@
 // Two things shape how it is driven:
 //
 //   * The splash is the **receiving player's** — the GM who set the target
-//     already watched it happen. The test player is an architect, and an
-//     architect has no sheet of their own to focus, so the role read is mocked to
-//     `player` while `architectMode` is seeded false. That agreement is what
-//     keeps the app's `watch(gmMode)` from PATCHing a role back to the server.
+//     already watched it happen, and an architect has no sheet of their own to
+//     focus. So the role read is *pinned* to `player` with `architectMode` seeded
+//     false; the two agreeing is what keeps the app's `watch(gmMode)` from
+//     PATCHing a role back to the server. Pinned rather than taken as given: the
+//     `DSH MCP` test player has been an architect and has been a player, and which
+//     one it is that week is not this spec's subject.
 //   * The event is delivered by **fulfilling the app's own SSE stream**, not by
 //     setting a difficulty for real. `difficulty_set` only reaches *started*
 //     sessions, so the live route would mean starting and ending a session on the

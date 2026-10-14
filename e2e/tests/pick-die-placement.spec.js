@@ -13,11 +13,13 @@
 // total doubled the die; that is what the assertions below catch.
 //
 // Kael Drift is the testing character (AGENTS.md § Player characters & the testing
-// character), mained by the `DSH MCP` test player. That player is an **architect**,
-// so the app runs in GM free-roam and the roller picks in the *location's* pool
-// rather than an entity's. The pool is discovered from the roller's own request —
-// a free-roam pool is keyed by the location id, so its two path segments are equal —
-// and it is left as it was found.
+// character), mained by the `DSH MCP` test player. The pick being tested is the
+// player's **own** — which is how the bug was reported — so the role read is pinned
+// to `player` with `architectMode` seeded false, rather than left to whatever role
+// the test identity happens to carry that week. (It *was* an architect, and the
+// roller then picks in the location's pool; the identity was demoted, and this spec
+// broke on the integration branch for a reason that had nothing to do with dice.)
+// The pool is discovered from the roller's own request and left as it was found.
 
 import { test, expect } from '@playwright/test'
 import { establishSession } from '../helpers/session.js'
@@ -42,12 +44,17 @@ test.beforeAll(async ({ request }) => {
 test('a die dragged from the pool twice fills one slot, not two', async ({ page, request }) => {
   test.setTimeout(150_000)
 
-  // Every free-roam (location-keyed) pool the roller reads. The app settles on its
-  // current location during load, so the last one is the pool it ends up editing.
-  const freeRoamPools = []
+  // Player mode, pinned — and without writing to the server's view of the player.
+  await page.route('**/api/v1/players/*', async (route) => {
+    const body = await (await route.fetch()).json()
+    return route.fulfill({ json: { ...body, role: 'player' } })
+  })
+
+  // The pools the roller reads: its own entity's, at the location it settles on.
+  const poolReads = []
   page.on('request', (r) => {
     const m = r.url().match(/\/api\/v1\/locations\/([^/]+)\/pools\/([^/?]+)$/)
-    if (r.method() === 'GET' && m && m[1] === m[2]) freeRoamPools.push(new URL(r.url()).pathname)
+    if (r.method() === 'GET' && m) poolReads.push({ loc: m[1], entity: m[2] })
   })
 
   await page.goto('/')
@@ -55,6 +62,7 @@ test('a die dragged from the pool twice fills one slot, not two', async ({ page,
     localStorage.setItem('playerId', ids.playerId)
     localStorage.setItem('playerName', ids.playerName)
     localStorage.setItem('entityId', ids.entityId)
+    localStorage.setItem('architectMode', 'false')   // agrees with the mock above
   }, character)
   await establishSession(page)
 
@@ -69,8 +77,8 @@ test('a die dragged from the pool twice fills one slot, not two', async ({ page,
   await page.goto('/')
   await openRoller()
   await expect(page.locator('.dice-roller')).toBeVisible({ timeout: 30_000 })
-  const poolUrl = freeRoamPools[freeRoamPools.length - 1]
-  expect(poolUrl, 'the roller must read a location-keyed pool').toBeTruthy()
+  await expect.poll(() => poolReads.length, { timeout: 30_000 }).toBeGreaterThan(0)
+  const poolUrl = `/api/v1/locations/${poolReads[poolReads.length - 1].loc}/pools/${KAEL}`
 
   // The scene's pool is not this test's to keep.
   const before = await (await request.get(poolUrl)).json()
@@ -97,15 +105,15 @@ test('a die dragged from the pool twice fills one slot, not two', async ({ page,
       }, { timeout: 15_000 })
       .toBe(true)
 
-    // A fresh load restores the rolled pool straight into picking.
-    freeRoamPools.length = 0
+    // A fresh load restores the rolled pool straight into picking — the three dice
+    // this test seeded. (Asserted on the dice rather than on a pool *read*: the
+    // roller can also be seeded from the roll's own SSE broadcast, so which of the
+    // two brings it back is not this spec's business.)
+    poolReads.length = 0
     await page.goto('/')
     await openRoller()
     await page.locator('.roll-pick').waitFor({ state: 'visible', timeout: 30_000 })
-    expect(
-      freeRoamPools[freeRoamPools.length - 1],
-      'the roller must still be reading the pool this test seeded',
-    ).toBe(poolUrl)
+    await expect(page.locator('.roll-pick .roll-die-wrap'), 'the seeded pool is the one restored').toHaveCount(3)
 
     // Hitches cannot be picked, so drag one that can be.
     const dice = page.locator('.roll-pick .roll-die-wrap[draggable="true"]')
