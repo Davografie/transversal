@@ -314,8 +314,9 @@ async function loadOptions() {
   } catch { /* leave empty */ }
 }
 
+let optionsReady = null
 onMounted(() => {
-  loadOptions()
+  optionsReady = loadOptions()
   // The row highlight follows the open effect, and shutting the editor is the one
   // path every *close* takes (a detach is deliberately not a close).
   offStepEffectClose = panel.onChildClose(() => { editingStepEffect.value = null })
@@ -345,9 +346,15 @@ const stepScopeCache = ref({})      // tableId -> {name: {element, cardinality}}
 
 async function stepScopeFor(tableId) {
   if (stepScopeCache.value[tableId]) return stepScopeCache.value[tableId]
+  // The table list arrives asynchronously, and a panel opened straight after mount
+  // would otherwise resolve the scope before it lands — offering ambient names only
+  // and then **caching** that, so the table's own names never appear for the rest of
+  // the session. Wait for it, and only cache once the declarations are known.
+  await (optionsReady || Promise.resolve())
+  const known = tableId in tableDeclarations.value
   const { scope } = await resolveLayer(
     tableDeclarations.value[tableId] || [], ROLL_TABLE_AMBIENT_VARIABLES, traceSpec)
-  stepScopeCache.value = { ...stepScopeCache.value, [tableId]: scope }
+  if (known) stepScopeCache.value = { ...stepScopeCache.value, [tableId]: scope }
   return scope
 }
 

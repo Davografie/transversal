@@ -118,17 +118,26 @@ test('the step effect is offered the table\'s declarations, not just ambient nam
   // Build a `select variable` from the step's scope: this is the assertion about
   // *usability* — the child panel alone would leave the feature unauthorable, since
   // the variable picker is a dropdown with no free text.
-  await form.locator('select').first().selectOption({ label: 'Create Relationship' })
-  // The target is a path, so it opens in its own child panel of the effect editor.
+  // By value, not label: `actionId` is the stable spelling.
+  await form.locator('select').first().selectOption('create_relationship')
+  // This action's target is **path-only**, so no mode row is rendered at all — the
+  // path builder is the only input, which is exactly the surface in question.
   await form.locator('.pf-open').first().click()
+
   await page.locator('.tsb-plus').first().click()
   await page.locator('.tsb-add-btn', { hasText: 'Select' }).first().click()
-  await page.locator('.tsb-step').first().locator('select').first().selectOption('variable')
+  const step = page.locator('.tsb-step').first()
+  // `variable` is a **collection** of the `select` step, not a step kind — the step's
+  // own kind select is `select.tsb-kind`, and the config's first dropdown picks what
+  // it selects from.
+  const config = step.locator('.tsb-config').first()
+  await config.locator('select').first().selectOption('variable')
 
   // The table's own declaration is on offer — resolved by the same tracer the engine
-  // binds with, so what is offered is what will resolve at run time.
-  const options = page.locator('.tsb-step').first().locator('select').nth(1).locator('option')
-  await expect(options.filter({ hasText: DECLARED })).toHaveCount(1, { timeout: 20000 })
+  // binds with, so what is offered is what will resolve at run time. Without it the
+  // variable dropdown is empty and a step effect cannot consume a row's name at all.
+  await expect(config.locator('select').nth(1).locator('option', { hasText: DECLARED }))
+    .toHaveCount(1, { timeout: 20000 })
 })
 
 test.afterEach(async ({ page }) => {
