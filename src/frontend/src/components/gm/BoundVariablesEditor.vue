@@ -30,6 +30,17 @@
         />
         <span class="bv-token">{{ '{' + (row.name || '…') + '}' }}</span>
         <span v-if="typeAt(i)" class="bv-type">{{ typeAt(i) }}</span>
+        <!-- The caller's escape hatch ([[B290]]): "I mean to replace the wrapped
+             table's name of this name". Only a layer that is the *caller* of a
+             shared table — a life path, a life path step — offers it. -->
+        <label
+          v-if="allowOverride && !isSlot(row) && row.name"
+          class="bv-override"
+          title="Replace the wrapped table's declaration of this name, rather than only shadowing it while this path resolves"
+        >
+          <input type="checkbox" :checked="!!row.override" @change="onOverride(i, $event.target.checked)" />
+          override
+        </label>
         <Button class="bv-remove" variant="danger-ghost" size="sm" title="Remove" @click="remove(i)">✕</Button>
       </div>
       <!-- A **reservation**: a type and no value. It binds nothing; it is what every
@@ -60,6 +71,9 @@
       </p>
       <p v-else-if="mismatchAt(i)" class="bv-reads bv-shadows">
         ⚠ {{ mismatchAt(i) }}
+      </p>
+      <p v-else-if="overrideNote(i)" class="bv-reads bv-override-note">
+        {{ overrideNote(i) }}
       </p>
       <p v-else-if="isSlot(row) && row.element" class="bv-reads">
         each entry that assigns <code>{{ '{' + row.name + '}' }}</code> must resolve
@@ -96,6 +110,12 @@
       each entry assigns it, and an assignment that resolves a different type is
       refused rather than silently making the name mean two things.
     </p>
+    <p v-else-if="allowOverride" class="bv-empty">
+      Resolved <em>before</em> the wrapped table's own names — this is how one
+      <strong>shared</strong> table reads the context of whichever path is walking it.
+      Tick <strong>override</strong> to replace the table's declaration of the same
+      name outright, so it can never surface in its place.
+    </p>
   </div>
 </template>
 
@@ -130,6 +150,16 @@ const props = defineProps({
   // traced type against the slot it chose, because the table refuses a mismatched
   // save and the author should see why before it happens.
   assignments: { type: Array, default: () => [] },
+  // When true a row may be marked an **override** ([[B290]]): *"I mean to replace the
+  // wrapped table's name of this name"*. Only a life path or a life path step offers
+  // it — they are the **caller** of a shared table. A row cannot override the table,
+  // structurally: the row does not exist yet when its conditions run.
+  allowOverride: { type: Boolean, default: false },
+  // The names the **wrapped content** declares. A caller's declaration colliding with
+  // one of these is not a refusal — the caller resolves first and wins — so there is
+  // nothing for the red collision state to say; this is what lets the note below say
+  // what the override would change.
+  overridable: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -209,6 +239,32 @@ function collisionAt(i) {
   return ''
 }
 
+/** Whether the **wrapped content** declares this name — the only case an override
+ *  changes anything ([[B290]]). */
+function isOverridable(name) {
+  const wanted = (name || '').trim()
+  return !!wanted && (props.overridable || []).includes(wanted)
+}
+
+/** What an override means for row `i` — "" when the row is not one of the caller's
+ *  names that the wrapped content also declares.
+ *
+ *  Informational, deliberately, and not a collision: the path and the step resolve
+ *  **before** the table, so this declaration already wins while it resolves. What the
+ *  override changes is the case where it resolves *nothing* — then, unmarked, the
+ *  table's value surfaces and the same `{name}` means two things across activations.
+ */
+function overrideNote(i) {
+  const row = rows.value[i]
+  const name = (row?.name || '').trim()
+  if (!props.allowOverride || !name || isSlot(row) || !isOverridable(name)) return ''
+  if (row.override) {
+    return `↺ replaces the wrapped table's “${name}” — the table's value can never surface here`
+  }
+  return `the wrapped table also declares “${name}” — tick override to replace it; until `
+    + `then the table's value is used whenever this one resolves nothing`
+}
+
 /** The reserved slots row `i` may pick, plus whatever it already names.
  *
  *  The row's own slot is always listed — filtering it out would leave a `<select>`
@@ -265,12 +321,13 @@ function onName(i, name) {
 function onSpec(i, spec) { replace(i, { spec }) }
 function onElement(i, element) { replace(i, { element }) }
 function onCardinality(i, cardinality) { replace(i, { cardinality }) }
+function onOverride(i, override) { replace(i, { override }) }
 
 function add(reserved) {
   emit('update:modelValue', [
     ...rows.value,
     reserved ? { name: '', spec: null, element: '', cardinality: 'one' }
-             : { name: '', spec: { steps: [] }, element: '', cardinality: '' },
+             : { name: '', spec: { steps: [] }, element: '', cardinality: '', override: false },
   ])
 }
 
@@ -294,6 +351,14 @@ function remove(i) {
 .bv-reads { margin: 0; font-size: 10px; color: var(--text-dim); }
 .bv-reads code { font-size: 10px; color: var(--accent-pale); }
 .bv-unresolved { color: var(--warn); }
+/* An override is informational, not a warning: the caller resolves first and
+   already wins, so the note says what changes rather than what is wrong. */
+.bv-override-note { color: var(--accent-pale); }
+.bv-override {
+  display: flex; align-items: center; gap: 3px; flex: none;
+  font-size: 10px; color: var(--text-dim); white-space: nowrap; cursor: pointer;
+}
+.bv-override input { margin: 0; }
 /* A name that will be refused is a hard error, not a warning: it saves and then
    silently does nothing, which is the failure this makes visible. */
 .bv-collide { border-color: var(--danger); }

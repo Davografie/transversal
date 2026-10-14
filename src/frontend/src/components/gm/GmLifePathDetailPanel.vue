@@ -22,6 +22,23 @@
       <textarea v-model="form.description" rows="2" placeholder="What it is…"></textarea>
     </div>
 
+    <!-- ── The path's own context: the names its wrapped tables read ── -->
+    <div class="lpd-section">
+      <span class="lpd-subtitle">Path variables</span>
+      <span class="lpd-hint">
+        Values this path supplies to the tables it wraps. They resolve <em>before</em>
+        the step's and the table's own names, which is how one <strong>shared</strong>
+        table reads <code>{sect}</code> from whichever path is walking it.
+      </span>
+      <BoundVariablesEditor
+        v-model="form.boundVariables"
+        :variables="PATH_AMBIENT_VARIABLES"
+        :types="pathTypes"
+        :overridable="wrappedTableNames"
+        allow-override
+      />
+    </div>
+
     <!-- ── The wrapper: the tables this path walks, in order ── -->
     <div class="lpd-section">
       <span class="lpd-subtitle">Steps</span>
@@ -68,6 +85,21 @@
             placeholder="Next step…"
           />
           <span class="lpd-hint">Where a row with no binding of its own goes.</span>
+        </div>
+
+        <!-- The step's own context: the names its wrapped table reads ([[B290]]).
+             A child panel, because the step list is already table + label + next +
+             effects — the same reason the effects moved out. -->
+        <div class="lpd-field">
+          <label>Step variables</label>
+          <div class="lpd-step-vars">
+            <span class="lpd-detail">{{ variableSummary(step) }}</span>
+            <Button variant="secondary" size="sm" @click="openStepVariables(step)">Edit</Button>
+          </div>
+          <span class="lpd-hint">
+            Names this step supplies to the table it wraps, resolved before the table's
+            own — so a shared table reads the context of this step.
+          </span>
         </div>
 
         <!-- The effects counterpart of `next`: that is this step's default *flow*,
@@ -171,7 +203,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { resolveLayer } from '@/composables/useBoundVariableScope.js'
+import { resolveLayer, useBoundVariableScope } from '@/composables/useBoundVariableScope.js'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import { ROLL_TABLE_AMBIENT_VARIABLES } from '@/composables/rollTableScope.js'
 import { useApi } from '@/composables/useApi.js'
@@ -179,11 +211,19 @@ import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import Button from '@/components/ui/Button.vue'
+import BoundVariablesEditor from './BoundVariablesEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import GmScopePicker from './GmScopePicker.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import EffectList from './EffectList.vue'
 import GmDraftEffectPanel from './GmDraftEffectPanel.vue'
+import GmStepVariablesPanel from './GmStepVariablesPanel.vue'
+
+// The names a **path** or **step** declaration starts from: the ambient roll-table
+// facts, and nothing else ([[B290]]). A path resolves before any table exists, so
+// these — plus the path's own names, for a step — are the whole base, and they are
+// the same mirror `table_bindings()` binds.
+const PATH_AMBIENT_VARIABLES = { ...ROLL_TABLE_AMBIENT_VARIABLES }
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -207,6 +247,22 @@ const path = computed(() => {
   return props.lp
 })
 
+// A path's or a step's declared names ([[B290]]), copied field by field so the whole
+// wire shape survives: `spec` is deep-copied (the builder mutates it in place),
+// `element`/`cardinality` are a reservation's type ([[B285]]), and `override` is the
+// caller's "replace the wrapped table's name of this name". Dropping any of them here
+// erases it on the next auto-save — `steps` replaces the stored list, and so do the
+// path's own declarations.
+function copyDecls(decls) {
+  return (decls || []).map(d => ({
+    name: d.name || '',
+    spec: d.spec ? JSON.parse(JSON.stringify(d.spec)) : null,
+    element: d.element || '',
+    cardinality: d.cardinality || '',
+    override: !!d.override,
+  }))
+}
+
 // Copy the wrapper deeply: the editor mutates steps in place, and the prop is
 // the panel's own `lp` object — a cancelled edit must not leak into it. A step's
 // `bindings` are carried through untouched (this panel no longer edits them) but
@@ -218,6 +274,9 @@ function copySteps(steps) {
     tableId: s.tableId || '',
     label: s.label || '',
     next: s.next || '',
+    // The step's own declarations ([[B290]]). Carried for the same reason the
+    // bindings are: this panel replaces the whole list.
+    boundVariables: copyDecls(s.boundVariables),
     bindings: (s.bindings || []).map(b => ({
       key: b.key || '',
       next: b.next || '',
@@ -280,6 +339,9 @@ function seedForm(p) {
   form.entryTableId = p.entryTableId || ''
   form.entryStep = p.entryStep || ''
   form.steps = copySteps(p.steps)
+  // The path's own declaration layer ([[B290]]) — copied, and carried through every
+  // save for the same reason the steps are: the mutation replaces what it is sent.
+  form.boundVariables = copyDecls(p.boundVariables)
   // Copied, not aliased: the editor mutates in place, and the prop is the
   // panel's own `lp` object — a cancelled edit must not leak into it.
   form.conditions = (p.conditions || []).map(c => ({ ...c }))
@@ -301,9 +363,20 @@ const form = reactive({
   description: path.value.description || '',
   entryTableId: path.value.entryTableId || '',
   entryStep: path.value.entryStep || '',
+  boundVariables: copyDecls(path.value.boundVariables),
   steps: copySteps(path.value.steps),
   conditions: (path.value.conditions || []).map(c => ({ ...c })),
 })
+
+// The path's own declaration layer, resolved for display as the author edits it: the
+// ambient facts are its base, and `pathScope` — ambient **plus** these names — is what
+// a step's declarations start from. Declared after `form`, because the composable's
+// watcher is `immediate` and reads `form.boundVariables` during setup (a TDZ
+// `ReferenceError` otherwise, invisible to the build — pinned by `check-path-fields`).
+const { scope: pathScope, types: pathTypes } = useBoundVariableScope(
+  computed(() => form.boundVariables),
+  computed(() => PATH_AMBIENT_VARIABLES),
+)
 
 // The watch must **follow** the declaration it watches. A getter source is run
 // eagerly, at `watch()` time, to collect its dependencies — so written above
@@ -406,50 +479,89 @@ let offStepEffectClose = null
 /** The names a *step's* effects may start a path from.
  *
  *  A step effect runs for **any** row of the step, so the only names guaranteed to
- *  resolve are the ambient facts plus **the wrapped table's own declarations** — a
- *  row's declarations exist on some rows and not others, which is exactly why the
- *  effect is allowed to no-op where they are missing. Offering the table's names is
- *  what makes `select variable …` authorable at all here.
+ *  resolve are the ambient facts, the **path's** and the **step's** own declarations
+ *  ([[B290]]), and **the wrapped table's own** — a row's declarations exist on some
+ *  rows and not others, which is exactly why the effect is allowed to no-op where
+ *  they are missing. Offering the table's names is what makes `select variable …`
+ *  authorable at all here.
  *
- *  Resolved on open and cached per table: it costs a trace per declaration, and the
- *  answer only changes when the table does.
+ *  Resolved **per open**, in the engine's layer order (`path → step → table → row`)
+ *  and with the engine's refuse-a-shadow rule (`resolveLayer`). The answer now
+ *  changes when the *path* or the *step* is edited and not only when the table is, so
+ *  a cache keyed by table id would offer a scope the engine no longer binds.
  */
 const { traceSpec } = useTargetCatalog()
 const tableDeclarations = ref({})   // tableId -> [{name, spec}]  (the table's own)
 const rowDeclarations = ref({})     // tableId -> [{name, spec}]  (every row's, flattened)
-const stepScopeCache = ref({})      // tableId -> {name: {element, cardinality}}
 
-/** The names a step effect may be written against, resolved as one layer.
- *
- *  Both layers, in the engine's own order: the **table's** declarations, then its
- *  **rows'**. A step effect is written against a name some *row* exposes (that is the
- *  whole design — "the picked entry exposes the variable this depends on"), and
- *  `resolveLayer` refuses a name already bound, so the precedence is the engine's:
- *  the table wins over a row, and the first row wins over a later one.
- *
- *  The consequence to know: a row-only name resolves on the rows that declare it and
- *  nowhere else. That is intended — the effect runs only where its input exists — and
- *  the hint beside the list says so. */
-async function stepScopeFor(tableId) {
-  if (stepScopeCache.value[tableId]) return stepScopeCache.value[tableId]
+async function stepScopeFor(step) {
   // The table list arrives asynchronously, and a panel opened straight after mount
-  // would otherwise resolve the scope before it lands — offering ambient names only
-  // and then **caching** that, so the tables' names never appear for the rest of the
-  // session. Wait for it, and only cache once the declarations are known.
+  // would otherwise resolve the scope before it lands and offer the ambient names
+  // only — the bug that made a step effect's table names unauthorable ([[B281]]).
   await (optionsReady || Promise.resolve())
-  const known = tableId in tableDeclarations.value || tableId in rowDeclarations.value
-  const { scope } = await resolveLayer(
-    [...(tableDeclarations.value[tableId] || []), ...(rowDeclarations.value[tableId] || [])],
-    ROLL_TABLE_AMBIENT_VARIABLES, traceSpec)
-  if (known) stepScopeCache.value = { ...stepScopeCache.value, [tableId]: scope }
-  return scope
+  // One layer at a time, outermost first. The table's and its rows' stay one list
+  // because the table resolves before any row, and `resolveLayer` refuses the later
+  // duplicate — which is exactly the engine's rule.
+  const ambient = { ...ROLL_TABLE_AMBIENT_VARIABLES }
+  const afterPath = (await resolveLayer(form.boundVariables, ambient, traceSpec)).scope
+  const afterStep = (await resolveLayer(step.boundVariables || [], afterPath, traceSpec)).scope
+  return (await resolveLayer(
+    [...(tableDeclarations.value[step.tableId] || []),
+     ...(rowDeclarations.value[step.tableId] || [])],
+    afterStep, traceSpec)).scope
+}
+
+/** A one-line read of a step's declarations, for the step list. */
+function variableSummary(step) {
+  const names = (step.boundVariables || []).map(v => (v.name || '').trim()).filter(Boolean)
+  if (!names.length) return 'None — the table’s own names are all it reads'
+  return names.map(n => `{${n}}`).join(', ')
+}
+
+/** The names a step's wrapped table declares: a collision with one of these is the
+ *  case an override changes, and the list is already loaded for `stepScopeFor`. */
+function stepOverridable(step) {
+  return (tableDeclarations.value[step.tableId] || [])
+    .map(d => (d.name || '').trim()).filter(Boolean)
+}
+
+/** The names any table this path wraps declares — the whole set a path-level
+ *  declaration could override, since a path applies to every step it holds. */
+const wrappedTableNames = computed(() => {
+  const out = new Set()
+  for (const s of form.steps) {
+    for (const n of stepOverridable(s)) out.add(n)
+  }
+  return [...out]
+})
+
+/** A step's declarations are edited in a **child** panel ([[B290]]): the step list is
+ *  already table + label + next + effects, and the same reasoning that moved the
+ *  effects out applies to a fourth stacked builder. The step itself is the draft, and
+ *  the scope it starts from travels in the spec's `context` — a panel cannot
+ *  `provide` to its own child panels. */
+function openStepVariables(step) {
+  panel.open({
+    component: GmStepVariablesPanel,
+    title: 'Step variables — ' + stepText(step),
+    // Identity per step: `Panel.open` reuses a child with no id *in place*, which
+    // would show the previous step's declarations under this step's title.
+    id: 'step-vars-' + (step.id || step.tableId),
+    context: {
+      rowDraft: step,
+      // Ambient + the path's names, snapshotted: the path panel edits those, so they
+      // cannot change underneath this child.
+      boundVariableBase: pathScope.value,
+      boundVariableOverridable: stepOverridable(step),
+    },
+  })
 }
 
 async function openStepEffectEditor(step, index) {
   editingStepEffect.value = { stepId: step.id, index }
   // Resolved *before* the panel opens: the spec's `context` is a snapshot, and a
   // promise inside it would reach the child as an unresolved object.
-  const scopeVariables = await stepScopeFor(step.tableId)
+  const scopeVariables = await stepScopeFor(step)
   panel.open({
     component: GmDraftEffectPanel,
     title: index === null ? 'Add step effect' : 'Edit step effect',
@@ -491,6 +603,10 @@ function onPickNewStep(tableId) {
     tableId,
     label: tableNames.value[tableId] || '',
     next: '',
+    // The step's own declarations ([[B290]]) start empty and are authored in their
+    // child panel; they are the *caller's* context, so re-pointing the step at
+    // another table keeps them (only the row `bindings` name the table's rows).
+    boundVariables: [],
     bindings: [],
     effects: [],
   })
@@ -584,6 +700,9 @@ async function save() {
       tableId: s.tableId,
       label: s.label,
       next: s.next,
+      // The step's own declarations ([[B290]]), sent for **every** step: `steps`
+      // replaces the stored list, so an omitted `boundVariables` is a deleted one.
+      boundVariables: s.boundVariables || [],
       bindings: (s.bindings || []).map(b => ({
         key: b.key,
         next: b.next,
@@ -609,6 +728,8 @@ async function save() {
       entryTableId: form.entryTableId,
       entryStep: form.entryStep,
       steps,
+      // The path's own declarations ([[B290]]) — the context its wrapped tables read.
+      boundVariables: form.boundVariables,
       discovery: path.value.discovery || null,
       conditions: form.conditions,
     })
@@ -662,6 +783,10 @@ async function save() {
 .lpd-step-index { font-size: 10px; font-weight: 700; color: var(--accent); min-width: 14px; }
 .lpd-step-open { font-family: monospace; font-size: 10px; }
 .lpd-step-table { flex: 1; font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The step's declarations: a read of what is there plus the child panel's opener —
+   the builder itself is unbounded height and belongs in a panel of its own. */
+.lpd-step-vars { display: flex; align-items: center; gap: 6px; }
+.lpd-step-vars .lpd-detail { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .lpd-add-table { margin-top: 2px; }
 .lpd-subsection { margin-top: 8px; }

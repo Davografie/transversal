@@ -48,11 +48,23 @@ export function useBoundVariableScope(declarations, base) {
  *  The loop `useBoundVariableScope` runs, exported because a caller may need it for
  *  **several** layers and cannot call a composable in a loop: the life-path panel
  *  resolves a scope for each wrapped table, so a step's effects are offered the
- *  names that table actually declares ([[B281]]). One implementation, so what an
- *  editor offers and what `table_bindings()` binds cannot drift.
+ *  names that table actually declares ([[B281]]), and it resolves the path's and the
+ *  step's own layers ahead of it ([[B290]]). One implementation, so what an editor
+ *  offers and what `table_bindings()` binds cannot drift.
  *
- *  @returns `{scope, types}` — the base plus this layer, and each row's resolved
- *           type in declaration order (`null` when it resolves nothing)
+ *  **A name already in the base wins, and the declaration is refused** — the same
+ *  rule the engine applies (`if name in ctx.bindings: continue`), and it has to be
+ *  here too: the alternative is an editor offering a name that resolves to the outer
+ *  value at run time, which reads as the authored path silently doing nothing. It is
+ *  why a table's name beats a row's of the same name, and the first of two in one
+ *  list beats the second.
+ *
+ *  The row's own traced type is still reported in `types` even when refused, so the
+ *  editor can show what the author wrote *and* the collision ([[B281]]).
+ *
+ *  @returns `{scope, types}` — the base plus the names this layer actually binds, and
+ *           each row's resolved type in declaration order (`null` when it resolves
+ *           nothing)
  */
 export async function resolveLayer(declarations, base, traceSpec) {
   const out = { ...(base || {}) }
@@ -61,19 +73,20 @@ export async function resolveLayer(declarations, base, traceSpec) {
     const name = (row?.name || '').trim()
     const steps = row?.spec?.steps || []
     if (!name || !steps.length) { types.push(null); continue }
+    let t = null
     try {
       const res = await traceSpec(steps, null, null, out)
       const last = (res?.types || [])[res.types.length - 1]
       if (last?.element && !(res.errors || []).length) {
-        const t = { element: last.element, cardinality: last.cardinality || 'one' }
-        types.push(t)
-        out[name] = t
-      } else {
-        types.push(null)
+        t = { element: last.element, cardinality: last.cardinality || 'one' }
       }
     } catch {
-      types.push(null)
+      t = null
     }
+    types.push(t)
+    // An existing name — an ambient fact, an outer layer, or an earlier row — is
+    // **not** rebound. The engine refuses it, so offering it would be a lie.
+    if (t && !(name in out)) out[name] = t
   }
   return { scope: out, types }
 }

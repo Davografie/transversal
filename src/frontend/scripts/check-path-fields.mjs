@@ -810,6 +810,96 @@ const objectAfter = (src, key) => {
     ok('the slot list has one definition', /export function reservationsOf\s*\(/.test(scope), true)
   }
 
+  // ── A path and a step declare the names their shared tables read ([[B290]]) ──
+  //
+  // The wrapper nests — `path → step → table → row` — and the caller's layers are what
+  // let one **shared** table read the context of whichever path wraps it:
+  // `rt-advance` reads `{sect}` instead of hardcoding a faction, which is why
+  // `rt-verdant-advance` and `rt-ironroots-standing` are one table rather than two.
+  //
+  // Two halves, and both are the round trip this file exists for: the **read**
+  // (`LIFE_PATH_FIELDS`, at both levels) and **both** whole-`steps` writers — the path
+  // panel's own save, and the roll-table panel's connector, which rebuilds every step
+  // by hand before replacing the list.
+  {
+    const lpSrc = readFileSync(join(SRC, 'composables', 'useLifePaths.js'), 'utf8')
+    // The query interpolates a constant, so check the constant and then that the
+    // document uses it at both levels — the read half is the one that keeps being
+    // forgotten, and a bare match would pass on the path's own declarations alone.
+    const declFields = constBody(lpSrc, 'BOUND_VARIABLE_FIELDS') || ''
+    for (const f of ['name', 'spec', 'element', 'cardinality', 'override']) {
+      ok(`a caller declaration's read carries \`${f}\``,
+        new RegExp(`(?<![\\w.])${f}(?![\\w.])`).test(declFields), true)
+    }
+    const DECL = /boundVariables\s*\{\s*\$\{BOUND_VARIABLE_FIELDS\}/
+    const fields = constBody(lpSrc, 'LIFE_PATH_FIELDS') || ''
+    ok('the shared life-path read fetches the path\'s own declarations',
+      DECL.test(fields.slice(0, fields.indexOf('steps {'))), true)
+    const stepsAt = fields.indexOf('steps {')
+    const stepsBody = stepsAt < 0 ? '' : brace(fields, fields.indexOf('{', stepsAt))
+    ok('…and each step\'s own, inside `steps`',
+      DECL.test(stepsBody.replace(/bindings\s*\{[\s\S]*?\n\s*\}/, '')), true)
+
+    // The save half. `steps` / `boundVariables` are omit-means-leave-alone, so both
+    // have to be declared *and* passed or the resolver never sees them.
+    ok('the save puts the path\'s declarations on the wire',
+      /\$boundVariables:\[BoundVariableInput!\]/.test(lpSrc)
+        && /boundVariables:\$boundVariables/.test(lpSrc), true)
+
+    const panel = readFileSync(join(SRC, 'components/gm/GmLifePathDetailPanel.vue'), 'utf8')
+    ok('the path panel reads the declarations into its form',
+      /form\.boundVariables = copyDecls\(/.test(panel), true)
+    ok('…carries them through the step copy, so an untouched step is not blanked',
+      /boundVariables:\s*copyDecls\(/.test(panel), true)
+    ok('…writes the path\'s own back on save',
+      /(?<![\w.])boundVariables\s*:\s*form\.boundVariables/.test(panel), true)
+    const saveFn = panel.slice(panel.indexOf('const steps = form.steps.map'),
+                              panel.indexOf('const result = await saveLifePath'))
+    ok('…and every step\'s own with it',
+      saveFn.length > 0 && /(?<![\w.])boundVariables\s*:\s*s\.boundVariables/.test(saveFn), true)
+
+    // The *other* whole-`steps` writer: the connector rebuilds each step by hand, and
+    // an omitted field there is a deleted one — [[B281]]'s erasure, one field over.
+    const connector = readFileSync(join(SRC, 'components/gm/GmRollTableEditPanel.vue'), 'utf8')
+    const stepFn = connector.slice(connector.indexOf('function stepToInput'),
+                                   connector.indexOf('async function save()'))
+    ok('the connector writer carries a step\'s own declarations',
+      stepFn.length > 0 && /(?<![\w.])boundVariables\s*:\s*s\.boundVariables/.test(stepFn), true)
+
+    // What a step's effects and declarations are *offered*: the engine's layers, in
+    // the engine's order. Missing this is [[B281]]'s bug — names that exist and cannot
+    // be authored.
+    ok('the step scope folds the path\'s layer in',
+      /resolveLayer\(form\.boundVariables,/.test(panel), true)
+    ok('…and the step\'s own',
+      /resolveLayer\(step\.boundVariables \|\| \[\],/.test(panel), true)
+
+    // The authoring surface: a section on the path itself, and a step's own in a
+    // **child** panel (the step list is already table + label + next + effects).
+    ok('the path panel offers a declarations editor for the path itself',
+      /<BoundVariablesEditor[\s\S]{0,500}allow-override/.test(panel), true)
+    ok('…and opens a step\'s declarations in a child panel',
+      /component:\s*GmStepVariablesPanel/.test(panel), true)
+    const stepPanel = readFileSync(join(SRC, 'components/gm/GmStepVariablesPanel.vue'), 'utf8')
+    ok('the step panel writes into the path panel\'s live draft',
+      /draft\.boundVariables\s*=/.test(stepPanel), true)
+
+    // The override is a real field rather than decoration: the editor offers it, the
+    // read and the save carry it (above), and the resolver honours it.
+    const bv = readFileSync(join(SRC, 'components/gm/BoundVariablesEditor.vue'), 'utf8')
+    ok('the shared editor offers the override at a caller layer',
+      /\ballowOverride\b/.test(bv) && /onOverride\(i,/.test(bv), true)
+    ok('…and says what it replaces rather than that it will not bind',
+      /replaces the wrapped table's/.test(bv), true)
+
+    // One rule for the scope an editor *offers* and the scope the engine *binds*: a
+    // name already in scope wins and the later declaration is refused. Without this,
+    // a later layer is offered a name that resolves to the outer value at run time.
+    const scope = readFileSync(join(SRC, 'composables', 'useBoundVariableScope.js'), 'utf8')
+    ok('the offered scope refuses a shadowed name, as the engine does',
+      /if \(t && !\(name in out\)\) out\[name\] = t/.test(scope), true)
+  }
+
   // ── An eager reader may not precede the `form` it reads ────────────────
   //
   // `<script setup>` runs top-down, and two things here read `form` *during* setup:

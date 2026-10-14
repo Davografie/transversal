@@ -18,6 +18,12 @@ const STEP_EFFECT_FIELDS = `
   conditions { type subject target targets value operator narrative spec }
 `
 
+// A declared name, in every field the wire has ([[B290]]). `element`/`cardinality`
+// are the declared type a reservation states ([[B285]]); `override` is the caller's
+// "replace the wrapped table's name of this name" — meaningful only at the path and
+// step levels, which is exactly where this selection is used.
+const BOUND_VARIABLE_FIELDS = `name spec element cardinality override`
+
 // ── The wrapper model ────────────────────────────────
 // A path declares the tables it wraps (`steps`) and what each row of those
 // tables means to *it* (`bindings`).
@@ -36,8 +42,10 @@ const LIFE_PATH_FIELDS = `
   id name universe description entryTableId
   entryStep
   factionIds
+  boundVariables { ${BOUND_VARIABLE_FIELDS} }
   steps {
     id tableId label next
+    boundVariables { ${BOUND_VARIABLE_FIELDS} }
     bindings {
       key next exitKind exitPath enroll
       effects { ${STEP_EFFECT_FIELDS} }
@@ -104,12 +112,13 @@ export function useLifePaths() {
     return null
   }
 
-  // `steps` / `entryStep` are **optional and null means "leave the stored value
-  // alone"**: a caller that omits them (an MCP script, a migration, a rename-only
-  // edit) must not unwrap the path. So they are only put on the wire when this
-  // caller actually supplies them — `undefined` omits, a list/string replaces.
-  // The editor panel always supplies both; nothing else has to.
-  async function saveLifePath({ id, name, universe, description, entryTableId = '', discovery = null, conditions = [], entryStep, steps }) {
+  // `steps` / `entryStep` / `boundVariables` are **optional and null means "leave the
+  // stored value alone"**: a caller that omits them (an MCP script, a migration, a
+  // rename-only edit) must not unwrap the path or blank the names its shared tables
+  // read. So they are only put on the wire when this caller actually supplies them —
+  // `undefined` omits, a list/string replaces. The editor panel always supplies all
+  // three; nothing else has to.
+  async function saveLifePath({ id, name, universe, description, entryTableId = '', discovery = null, conditions = [], entryStep, steps, boundVariables }) {
     const isNew = !id
     const decls = ['$id:String!', '$name:String!', '$universe:String!', '$description:String!', '$entryTableId:String!', '$discovery:JSON', '$conditions:[ConditionInput!]']
     const args = ['id:$id', 'name:$name', 'universe:$universe', 'description:$description', 'entryTableId:$entryTableId', 'discovery:$discovery', 'conditions:$conditions']
@@ -123,6 +132,11 @@ export function useLifePaths() {
       decls.push('$entryStep:String')
       args.push('entryStep:$entryStep')
       vars.entryStep = entryStep
+    }
+    if (boundVariables !== undefined) {
+      decls.push('$boundVariables:[BoundVariableInput!]')
+      args.push('boundVariables:$boundVariables')
+      vars.boundVariables = boundVariables
     }
     const data = await graphql(
       `mutation(${decls.join(',')}){ saveLifePath(${args.join(',')}) }`,
@@ -142,6 +156,7 @@ export function useLifePaths() {
       }
       if (steps !== undefined) full.steps = steps
       if (entryStep !== undefined) full.entryStep = entryStep
+      if (boundVariables !== undefined) full.boundVariables = boundVariables
       let placed = false
       _patchBuckets((list) => {
         const idx = list.findIndex(p => p.id === result.id)

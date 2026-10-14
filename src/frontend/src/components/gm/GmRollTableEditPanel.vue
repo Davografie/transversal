@@ -684,6 +684,10 @@ function stepToInput(s, bindings) {
     // effect the path panel authored (the same rule as a binding's, and the reason
     // `check-path-fields.mjs` compares this map's fields against what it read).
     effects: s.effects || [],
+    // The step's own declarations travel for exactly the same reason ([[B290]]):
+    // they are the context this table reads, the path panel is what authors them,
+    // and this map rebuilds every step by hand before replacing the list.
+    boundVariables: s.boundVariables || [],
     bindings: (bindings || []).map(b => ({
       key: b.key,
       next: b.next || '',
