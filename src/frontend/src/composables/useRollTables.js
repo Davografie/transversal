@@ -29,7 +29,10 @@ const ROLL_TABLE_FIELDS = `
 `
 
 export function useRollTables() {
-  const { graphql } = useApi()
+  // `graphql` reports a server error on its own `error` ref and returns null — it
+  // does not throw. A panel that only sees `null` can say no more than "save
+  // failed", which tells the author nothing about which row, or why ([[B285]]).
+  const { graphql, error: apiError } = useApi()
 
   async function fetchTables(lifePathId = null) {
     const key = lifePathId || ''
@@ -117,7 +120,7 @@ export function useRollTables() {
   }
 
   return {
-    tablesByPath, tablesFor, allTables, allTableNames, loading,
+    tablesByPath, tablesFor, allTables, allTableNames, loading, apiError,
     fetchTables, fetchAllTables, fetchAllTableNames, fetchTable, saveRollTable, deleteRollTable,
   }
 }

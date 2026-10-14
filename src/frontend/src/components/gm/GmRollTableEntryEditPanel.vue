@@ -41,15 +41,26 @@
           :variables="tableScope || {}"
           :types="declaredTypes"
           :reserved="reservedNames"
+          :assignments="slots"
         />
-        <p class="eep-hint">
+        <p v-if="slots.length" class="eep-hint">
+          Names <em>this row</em> resolves once it has been picked. The table
+          <strong>reserved</strong> the ones offered here with a type, so assigning one
+          is what keeps <code>{name}</code> meaning the same thing on every row — a
+          path that resolves a different type is shown in red and the save is refused.
+          A name an earlier row already declared (or one the table binds) is refused
+          too: the existing value wins.
+        </p>
+        <p v-else class="eep-hint">
           Names <em>this row</em> resolves once it has been picked — a location, a rival,
           a value no other row has. Refer to one as <code>{name}</code> in this row's
           effects and in the life path binding's effects for this row. A name the table
           already declares (or one an earlier row above already declared) is refused and
           shows in red — the existing value wins. The row's own
           <strong>conditions</strong> cannot read these: they are checked before a row is
-          chosen, so they see the <em>table's</em> names instead.
+          chosen, so they see the <em>table's</em> names instead. A name typed here is
+          free-form until the table <strong>reserves</strong> it, and a table that
+          reserves anything requires every row to assign one.
         </p>
       </div>
 
@@ -98,11 +109,11 @@ import ConditionEditor from './ConditionEditor.vue'
 import EffectList from './EffectList.vue'
 import BoundVariablesEditor from './BoundVariablesEditor.vue'
 import GmDraftEffectPanel from './GmDraftEffectPanel.vue'
-import { useBoundVariableScope } from '@/composables/useBoundVariableScope.js'
+import { reservationsOf, useBoundVariableScope } from '@/composables/useBoundVariableScope.js'
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { fetchTable, saveRollTable } = useRollTables()
+const { fetchTable, saveRollTable, apiError } = useRollTables()
 
 const props = defineProps({
   tableId: { type: String, required: true },
@@ -127,12 +138,21 @@ const draft = inject('rowDraft', null)
 // ([[B281]]). It arrives through the spec's `context` for the same reason the row
 // does — a child panel cannot inject its parent's provide.
 const tableScope = inject('tableScope', null)
+// The **reserved slots** the table states, which this row assigns ([[B285]]). It
+// arrives through the context for the same reason the scope does — a child panel
+// cannot inject its parent's provide.
+const reservedFromTable = inject('reservedVariables', null)
 // Names already bound when this row's declarations resolve — the engine refuses a
 // declaration that shadows one rather than rebinding it, so the editor has to show
 // the collision instead of letting the author save a name that does nothing.
 const reservedNames = computed(() => Object.keys(tableScope || {}))
 
 const table = ref(null)
+// …and when the panel was opened on its own (a restored window, no parent) the slots
+// are read off the table this panel fetches instead, so both routes offer one list.
+const slots = computed(
+  () => reservedFromTable || reservationsOf(table.value?.boundVariables || []),
+)
 const ready = computed(() => !!draft || !!table.value)
 const scheme = computed(() => table.value?.scheme || props.scheme)
 const universe = computed(() => table.value?.universe || props.universe)
@@ -378,7 +398,9 @@ async function save() {
       // No `panel.close()`: this is an auto-save now, not a commit-and-dismiss.
       savedAt.value = new Date()
     } else {
-      error.value = 'Save failed'
+      // The server's own message when it refused the write — `graphql` puts it on
+      // `apiError` and returns null rather than throwing ([[B285]]).
+      error.value = apiError.value || 'Save failed'
     }
   } catch (e) {
     error.value = e?.message || 'Save failed'

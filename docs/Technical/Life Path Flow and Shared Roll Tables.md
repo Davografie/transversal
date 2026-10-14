@@ -204,10 +204,10 @@ pure content and can be rolled for anything.
 - `migrate_lifepath_wrapper.py` — the one-way migration off the old model.
 - Frontend — `composables/lifePathGraph.js` (draws from steps); `composables/useBoundVariableScope.js`
   (resolves one declaration layer into a scope — shared by the table's layer and a row's, so the
-  two cannot drift); `GmLifePathDetailPanel.vue` authors the path and its **steps**;
-  `GmRollTableEditPanel.vue` authors the table's declarations, a row and its **binding**
+  two cannot drift — and `reservationsOf`, the slot list); `GmLifePathDetailPanel.vue` authors the path and its **steps**;
+  `GmRollTableEditPanel.vue` authors the table's declarations (values **and reserved slots**), a row and its **binding**
   (next / exit / draft / enrol / binding effects); `GmRollTableEntryEditPanel.vue` authors a row's
-  own declarations. The split is by ownership, not by verb — [[B277]] collapsed the old
+  own declarations (the **assignments** of the table's slots). The split is by ownership, not by verb — [[B277]] collapsed the old
   `GmLifePathEditPanel` for the opposite reason: it and the table panel both rendered rows, so the
   same bindings had two editors.
 
@@ -256,5 +256,12 @@ pure content and can be rolled for anything.
   A reservation's type is stated **once**, on the table: a row assigns a name and states no type of
   its own (`_entry_input_to_domain` clears the fields), because two places to state one type is two
   places to disagree.
+  **Authoring it:** the table panel's section takes `allow-reservations` — a declaration with no path
+  becomes a slot, edited as an element from the targeting catalog plus `one`/`many` — and the row
+  editor is handed the slots (`context.reservedVariables`) so its name field becomes a **picker** and
+  a mismatched path is shown in the same red a shadowed name uses. `reservationsOf()` in
+  `useBoundVariableScope.js` is the one definition of "what is a slot", the frontend twin of
+  `is_reservation`; `useCanvas.linkRollTable` and both panels' whole-document maps carry the two
+  fields, so a save that never touched a reservation cannot erase it.
 - Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
   ([[B194]]–[[B197]]) are unchanged by this and remain separate gates.

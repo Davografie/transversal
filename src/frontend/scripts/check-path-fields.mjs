@@ -777,6 +777,37 @@ const objectAfter = (src, key) => {
       reread >= 0 && write >= 0 && reread < write, true)
   }
 
+  // ── A reservation is stated once and assigned per row ([[B285]]) ──────
+  //
+  // Two halves, and both fail *silently* when the wiring is missing. Without
+  // `allow-reservations` the table's editor can never author a slot, so the feature
+  // is unreachable from the UI. Without the slots reaching the row editor's
+  // `context`, the assignment picker is empty whenever a row is opened from the table
+  // panel — which is the normal route, and the one where the child cannot fetch the
+  // table for itself. That is the shape of every bug this file exists for.
+  {
+    const table = readFileSync(join(SRC, 'components/gm/GmRollTableEditPanel.vue'), 'utf8')
+    ok('the table editor may author a reserved slot',
+      /<BoundVariablesEditor[\s\S]*?\ballow-reservations\b/.test(table), true)
+    ok('…and hands the reserved slots into a row\'s editor',
+      /(?<![\w.])reservedVariables\s*:/.test(table), true)
+
+    const row = readFileSync(join(SRC, 'components/gm/GmRollTableEntryEditPanel.vue'), 'utf8')
+    ok('the row editor takes the slots from its opener',
+      /inject\(\s*'reservedVariables'/.test(row), true)
+    ok('…and offers them as the names it may assign',
+      /<BoundVariablesEditor[\s\S]*?\bassignments\s*=/.test(row), true)
+
+    const bv = readFileSync(join(SRC, 'components/gm/BoundVariablesEditor.vue'), 'utf8')
+    ok('the shared editor knows both halves',
+      /\ballowReservations\b/.test(bv) && /\bassignments\b/.test(bv), true)
+
+    // One definition of "what a slot is", shared with the panel that offers it —
+    // `services/roll_table.is_reservation` is its backend twin.
+    const scope = readFileSync(join(SRC, 'composables', 'useBoundVariableScope.js'), 'utf8')
+    ok('the slot list has one definition', /export function reservationsOf\s*\(/.test(scope), true)
+  }
+
   // ── An eager reader may not precede the `form` it reads ────────────────
   //
   // `<script setup>` runs top-down, and two things here read `form` *during* setup:

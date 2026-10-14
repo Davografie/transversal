@@ -77,3 +77,29 @@ export async function resolveLayer(declarations, base, traceSpec) {
   }
   return { scope: out, types }
 }
+
+/**
+ * The **reserved slots** in a declaration layer ([[B285]]).
+ *
+ * A reservation is a name with a declared type and **no path**: it binds nothing, and
+ * it is what every row assigning that name is checked against. One definition, so the
+ * slot list an editor offers is the one the engine measures an assignment against —
+ * `services/roll_table.is_reservation` is its backend twin, and the two have to agree
+ * about what "a slot" is.
+ *
+ * A declaration with a type *and* a path is not one: it resolves a value, so a row
+ * assigning that name is refused as a shadow rather than filled by it.
+ *
+ * @returns `[{name, element, cardinality}]`, in declaration order
+ */
+export function reservationsOf(declarations) {
+  const out = []
+  for (const row of (declarations || [])) {
+    const name = (row?.name || '').trim()
+    const element = row?.element || ''
+    if (!name || !element) continue
+    if ((row?.spec?.steps || []).length) continue
+    out.push({ name, element, cardinality: row.cardinality || 'one' })
+  }
+  return out
+}

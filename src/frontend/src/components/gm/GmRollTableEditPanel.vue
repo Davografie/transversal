@@ -83,6 +83,7 @@
         v-model="form.boundVariables"
         :variables="ambientVariables"
         :types="declaredTypes"
+        allow-reservations
       />
       <p class="rte-detail">
         Names this table resolves for itself, once per roll, in order, before a row's
@@ -92,6 +93,14 @@
         <code>{entry_effect_die}</code> and the entry's band are values a filter can
         compare against. Not <em>select source</em> — a table's bindings are resolved
         before any source exists.
+      </p>
+      <p class="rte-detail">
+        A <strong>reserved slot</strong> is the other half: state a name and its type
+        once, and each entry <em>assigns</em> it. Without one a name's type is only as
+        consistent as every hand-written path — a single entry that resolves a
+        collection instead of a value makes <code>{name}</code> mean
+        <em>several</em> for that entry alone, and an effect written against one
+        quietly does nothing.
       </p>
     </div>
 
@@ -250,7 +259,7 @@ import { useRollTables } from '@/composables/useRollTables.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
-import { useBoundVariableScope } from '@/composables/useBoundVariableScope.js'
+import { reservationsOf, useBoundVariableScope } from '@/composables/useBoundVariableScope.js'
 import { ROLL_TABLE_AMBIENT_VARIABLES } from '@/composables/rollTableScope.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
@@ -265,7 +274,7 @@ import GmRollTableEntryEditPanel from './GmRollTableEntryEditPanel.vue'
 const panel = usePanel()
 const bus = usePanelBus()
 const { graphql } = useApi()
-const { fetchTable, saveRollTable, allTableNames, fetchAllTableNames } = useRollTables()
+const { fetchTable, saveRollTable, allTableNames, fetchAllTableNames, apiError } = useRollTables()
 const { fetchLifePath, saveLifePath } = useLifePaths()
 
 const props = defineProps({
@@ -349,6 +358,11 @@ const { scope: tableScope, types: declaredTypes } = useBoundVariableScope(
   computed(() => form.boundVariables),
   computed(() => ROLL_TABLE_AMBIENT_VARIABLES),
 )
+
+// The **reserved slots** this table states ([[B285]]), handed to a row's editor so
+// it can offer a name to assign instead of free text. Read off the same list the
+// editor writes, so naming a slot and assigning it cannot drift.
+const reservedVariables = computed(() => reservationsOf(form.boundVariables))
 
 // ── Life-path connector context ──────────────────────
 // The connector is a property of the *path*, not the table: it lives in the
@@ -638,6 +652,11 @@ function openEntry(i) {
       // start from a table-level one, and a name that collides is refused, so the
       // editor has to show the collision rather than let it fail silently.
       tableScope: tableScope.value,
+      // …and the **reserved slots** this row may assign ([[B285]]). A row assigns a
+      // name the table reserved; it does not invent one, and the save is refused if
+      // it tries. Passed the same way the scope is, because a child panel cannot
+      // inject its parent's provide.
+      reservedVariables: reservedVariables.value,
     },
   })
 }
@@ -731,7 +750,11 @@ async function save() {
     }
     const result = await saveRollTable(input)
     if (!result?.id) {
-      error.value = 'Roll table save failed'
+      // `graphql` reports the server's message on `apiError` and returns null, so the
+      // **reason** a save was refused lives there — an inconsistent reservation names
+      // the row and both types, and "save failed" on its own would hide exactly the
+      // thing the author has to fix ([[B285]]).
+      error.value = apiError.value || 'Roll table save failed'
       return
     }
 
