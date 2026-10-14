@@ -447,11 +447,19 @@ test('a life-path step is taken by the click, and the roll only marks it', async
   const extras = {}
   await stub(page, {
     extras,
-    // A path a faction offers, so a term can start at all (the fourth gate) —
-    // and one nobody offers, so the gate has something to hold back.
+    // The gate is the path's own **walkability** ([[B41]]): a path nobody offers is
+    // offered anyway — the offering faction answers *which sect offers this*, not
+    // *may this character walk it* — while an unmet condition disables, visibly and
+    // with its reason.
     lifePaths: [
-      { id: 'lp-e2e', name: 'Test Path', universe: 'earth', description: 'a path', entryTableId: 'rt-e2e', factionIds: ['fac-e2e'] },
-      { id: 'lp-offered-by-nobody', name: 'Orphan Path', universe: 'earth', description: 'nobody offers this', entryTableId: 'rt-e2e', factionIds: [] },
+      { id: 'lp-e2e', name: 'Test Path', universe: 'earth', description: 'a path',
+        entryTableId: 'rt-e2e', factionIds: ['fac-e2e'], walkable: true, unwalkableReasons: [] },
+      { id: 'lp-offered-by-nobody', name: 'Unoffered Path', universe: 'earth',
+        description: 'nobody offers this', entryTableId: 'rt-e2e', factionIds: [],
+        walkable: true, unwalkableReasons: [] },
+      { id: 'lp-gated', name: 'Gated Path', universe: 'earth', description: 'gated by a condition',
+        entryTableId: 'rt-e2e', factionIds: [], walkable: false,
+        unwalkableReasons: ['unmet: you are in Three Realms'] },
     ],
     table: {
       id: 'rt-e2e', name: 'Term Table', universe: 'earth', lifePath: 'lp-e2e',
@@ -467,19 +475,22 @@ test('a life-path step is taken by the click, and the roll only marks it', async
   await page.locator('.sheet-pills button').filter({ hasText: '🛤' }).click()
   await page.locator('.ct-row').first().waitFor({ state: 'visible', timeout: 15_000 })
 
-  // Step one: the path list. The offering gate is visible and disabled with its
-  // reason, not hidden.
-  const orphan = page.locator('.ct-row.is-locked')
-  await expect(orphan).toContainText('Orphan Path')
-  await expect(orphan).toContainText('no offering faction')
-  await expect(orphan).toBeDisabled()
+  // Step one: the path list. The **condition** gate is visible and disabled with its
+  // reason, not hidden — and it is the only thing disabled, which is the assertion
+  // that the offering lock is really gone rather than merely relabelled.
+  const gated = page.locator('.ct-row.is-locked')
+  await expect(gated).toHaveCount(1)
+  await expect(gated).toContainText('Gated Path')
+  await expect(gated).toContainText('unmet: you are in Three Realms')
+  await expect(gated).toBeDisabled()
+  await expect(page.locator('.ct-row').filter({ hasText: 'Unoffered Path' })).toBeEnabled()
 
   // A path is taken by the click — no confirm, and the indexed scheme shows its
   // keys rather than a range.
   await page.locator('.ct-row').filter({ hasText: 'Test Path' }).click()
   // The *phase label* is what says the step changed: the path list's rows are
   // still on screen for a moment after the click, so waiting for "a row exists"
-  // would race the transition and then click the orphan path by index.
+  // would race the transition and then click a wrong row by index.
   await expect(page.locator('.wiz-phase-label')).toBeVisible({ timeout: 15_000 })
   await expect(page.locator('.ct-pip').first()).toHaveText('1')
   await expect(page.locator('.ct-actions').getByRole('button', { name: /continue|confirm/i })).toHaveCount(0)
