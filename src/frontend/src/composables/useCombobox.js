@@ -42,6 +42,15 @@ export function useCombobox({
   createLabel = (t) => `Create “${t}”`,
   /** 0 = no limit. */
   maxResults = 0,
+  /**
+   * Reveal the list one page at a time instead of all at once (0 = all at once),
+   * grown by {@link loadMore} — the shell calls it when its list is scrolled to
+   * the end. For a match set that can run to hundreds of rows, where `maxResults`
+   * would silently *hide* the rest: the window is a rendering decision, the list
+   * is still the whole match set, and `hasMore` says when there is more of it.
+   * Use one or the other, not both.
+   */
+  pageSize = 0,
   /** Debounce before a query function is called. */
   debounceMs = 200,
   /** Keep the top option armed on every change (TagInput's Enter-to-commit). */
@@ -102,7 +111,8 @@ export function useCombobox({
 
   const normalized = computed(() => source.value.map(normalize))
 
-  const available = computed(() => {
+  // The whole match set, before any window is applied.
+  const matches = computed(() => {
     const q = query.value.trim().toLowerCase()
     if (requireQuery && !q) return []
     const taken = new Set([...(chosen.value ?? []), ...(exclude.value ?? [])])
@@ -112,11 +122,32 @@ export function useCombobox({
     // re-filtering its results here would silently drop rows it deliberately
     // returned (a match on a field this list never sees).
     const serverMatched = typeof options.value === 'function'
-    const list = normalized.value
+    return normalized.value
       .filter((it) => !taken.has(it.value))
       .filter((it) => (serverMatched || !q ? true : hit(it, q)))
+  })
+
+  // How much of the match set is revealed. A new query — or a re-read of the
+  // source — starts at one page again, or a long list would open already scrolled
+  // deep into the previous one's results. Synchronous on purpose: the window has
+  // to belong to the query it was typed for, not to the one before it, and a
+  // deferred reset would render one frame of the old list against the new query.
+  const shown = ref(pageSize)
+  if (pageSize > 0) watch([query, source], () => { shown.value = pageSize }, { flush: 'sync' })
+
+  const available = computed(() => {
+    const list = matches.value
+    if (pageSize > 0) return list.slice(0, shown.value)
     return maxResults > 0 ? list.slice(0, maxResults) : list
   })
+
+  /** Whether the match set holds more than the window is showing. */
+  const hasMore = computed(() => pageSize > 0 && matches.value.length > shown.value)
+
+  /** Reveal one more page. A no-op once the whole match set is on screen. */
+  function loadMore() {
+    if (hasMore.value) shown.value += pageSize
+  }
 
   const exactMatch = computed(() => {
     const q = query.value.trim().toLowerCase()
@@ -145,7 +176,16 @@ export function useCombobox({
     if (!count) return
     open.value = true
     if (!wrapHighlight) {
-      highlighted.value = Math.min(Math.max(highlighted.value + dir, 0), count - 1)
+      const next = Math.min(Math.max(highlighted.value + dir, 0), count - 1)
+      // Stepping onto the last revealed row asks for the next page: the window is
+      // a rendering decision, so a keyboard user has to be able to walk past it
+      // rather than only reach the first page the scrollbar shows.
+      if (dir > 0 && hasMore.value && next === count - 1) {
+        loadMore()
+        highlighted.value = Math.min(highlighted.value + dir, optionCount.value - 1)
+        return
+      }
+      highlighted.value = next
       return
     }
     const max = count - 1
@@ -172,7 +212,11 @@ export function useCombobox({
   function openList() { open.value = true }
   function closeList() { open.value = false; highlighted.value = -1 }
 
-  if (armTopOnChange) watch([query, available], armTop)
+  // Armed on the *match set*, not on the window: revealing another page must not
+  // re-arm the highlight to the top (a keyboard user walking to the end of a page
+  // would be thrown back to the first row of it). For an unpaged list the two are
+  // the same list, so nothing changes for those shells.
+  if (armTopOnChange) watch([query, matches], armTop)
 
   return {
     listId,
@@ -180,6 +224,8 @@ export function useCombobox({
     loading,
     highlighted,
     available,
+    hasMore,
+    loadMore,
     exactMatch,
     createText,
     optionCount,

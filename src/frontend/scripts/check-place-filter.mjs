@@ -43,6 +43,7 @@ export async function resolve(specifier, context, next) {
 `))
 const { useEntityFilter } = await import('../src/composables/useEntityFilter.js')
 const { useLocationTree } = await import('../src/composables/useLocationTree.js')
+const { NO_PLAYER_HOLDINGS } = await import('../src/constants/entityTypes.js')
 
 let pass = 0, fail = 0
 const ok = (name, got, want) => {
@@ -244,6 +245,72 @@ const CHIP_UNPUBLISHED = [{ type: 'unpublished', value: 'true', label: 'Unpublis
   // The seed matters here: nothing unpublished is *inside* the Emberline, so only
   // a universe that matched can put it on the populated path.
   ok('a draft universe with no draft descendants draws itself', got.includes('universe-emberline'), true)
+}
+
+// ── suggestions: the canonical order, revealed a page at a time ─────────
+// The human: *"Replace the hard cap with a lazy-load infinite scroll. It'd also be
+// a good idea to sort the results deterministically, follow the sorting standard
+// (entity type, then alphabetical)."* Measured live before this: "wang" matched 21
+// rows, the box showed the first 10 **in database order**, and the last ten Wang
+// GMCs could not be reached at all — no query surfaced them. Two guards: the order
+// is rank → name → id, and the box reveals the whole match set a page at a time
+// instead of truncating it.
+console.log('\nsuggestions — the canonical order, a page at a time\n')
+
+const AGENCY = new Map([
+  ['q-char-main', { playerId: 'p1', main: true }],
+  ['q-char-supp', { playerId: 'p2', main: false }],
+])
+
+// Every id carries the query letter, so one search matches the whole fixture and
+// the assertion is about the *order*, not about what matches.
+const MIXED = [
+  E('q-loc-alpha', 'Alpha Place', 'LOCATION', null, 'earth'),
+  E('q-gmc-zeta', 'Zeta', 'GMC', null, 'earth'),
+  E('q-uni-earth', 'Earth', 'UNIVERSE', null, 'earth'),
+  E('q-faction-beta', 'Beta Guild', 'FACTION', null, 'earth'),
+  E('q-asset-ark', 'Ark', 'ASSET', null, 'earth'),
+  E('q-gmc-alpha', 'Alpha', 'GMC', null, 'earth'),
+  E('q-char-supp', 'Zed', 'CHARACTER', null, 'earth'),
+  E('q-char-main', 'Beta', 'CHARACTER', null, 'earth'),
+]
+
+{
+  const f = useEntityFilter(ref(MIXED), ref(NO_PLAYER_HOLDINGS), ref(AGENCY))
+  f.filterInput.value = 'q'
+  const got = f.suggestions.value.filter((s) => s.hint === 'name').map((s) => s.entityId)
+  ok('entity rows follow rank → name → id', got, [
+    'q-char-main', 'q-char-supp',                 // PC(MC), then PC(SC) — the agency decides
+    'q-gmc-alpha', 'q-gmc-zeta',                  // then by type, alphabetical inside it
+    'q-asset-ark', 'q-faction-beta', 'q-loc-alpha', 'q-uni-earth',
+  ])
+  ok('which is not the order the list arrived in (guard is real)',
+    JSON.stringify(got) === JSON.stringify(MIXED.map((e) => e.id)), false)
+}
+
+{
+  // The same type and the same name, differing only in case: the id is what makes
+  // the order total rather than merely nearly-total.
+  const twins = [
+    E('q-gmc-b', 'wang', 'GMC', null, 'earth'),
+    E('q-gmc-a', 'Wang', 'GMC', null, 'earth'),
+  ]
+  const f = useEntityFilter(ref(twins))
+  f.filterInput.value = 'q'
+  ok('equal names fall back to the id, so the order is total',
+    f.suggestions.value.filter((s) => s.hint === 'name').map((s) => s.entityId),
+    ['q-gmc-a', 'q-gmc-b'])
+}
+
+{
+  const many = Array.from({ length: 25 }, (_, i) =>
+    E(`q-gmc-${String(i).padStart(2, '0')}`, `Wang ${String(i).padStart(2, '0')}`, 'GMC', null, 'earth'))
+  const f = useEntityFilter(ref(many))
+  f.filterInput.value = 'wang'
+  ok('the match set is not cut off at ten any more', f.suggestions.value.length, 20)
+  ok('…and the box knows there is more of it', f.hasMore.value, true)
+  f.loadMore()
+  ok('the next page brings the rest', [f.suggestions.value.length, f.hasMore.value], [25, false])
 }
 
 // ── the suggestion that names one entity carries its id ─────────────────

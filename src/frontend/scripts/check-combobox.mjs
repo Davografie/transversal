@@ -54,6 +54,31 @@ console.log('\nuseCombobox')
   ok('excludeIds removes values too', values(extra), ['beta', 'alphabet'])
 }
 
+// ── pageSize: the window grows instead of the list being cut ────────────
+// The GM panel's filter used `maxResults: 10`, which truncated the match set in
+// database order: with 21 rows matching "wang", the last ten Wang GMCs could not
+// be reached by typing anything at all. `pageSize` reveals the same list a window
+// at a time, so nothing is unreachable — it is just not all rendered at once.
+console.log('\npageSize — a window that grows\n')
+
+{
+  const options = ref(Array.from({ length: 25 }, (_, i) => `opt${String(i).padStart(2, '0')}`))
+  const query = ref('opt')
+  const c = useCombobox({ options, query, pageSize: 10 })
+  ok('one page is revealed', values(c).length, 10)
+  ok('and it knows the match set runs on', c.hasMore.value, true)
+
+  c.loadMore()
+  ok('loadMore reveals the next page', values(c).length, 20)
+  c.loadMore()
+  ok('the last page ends where the match set does', [values(c).length, c.hasMore.value], [25, false])
+  c.loadMore()
+  ok('loading past the end is a no-op', values(c).length, 25)
+
+  query.value = 'o'
+  ok('a new query starts at one page again', [values(c).length, c.hasMore.value], [10, true])
+}
+
 // ── requireQuery ────────────────────────────────────────────────────────
 {
   const c = useCombobox({ options: ref(['a', 'b']), query: ref(''), requireQuery: true })
@@ -98,6 +123,24 @@ console.log('\nuseCombobox')
 
   for (let i = 0; i < 9; i++) clamped.move(1)
   ok('clamping stops at the last option', clamped.highlighted.value, 2)
+}
+
+// A paged list must not re-arm the highlight when a page is revealed: a keyboard
+// user walking to the end of a page would be thrown back to its first row. The
+// arm-on-change watch is on the match set, not on the rendered window.
+{
+  const options = ref(Array.from({ length: 25 }, (_, i) => `opt${String(i).padStart(2, '0')}`))
+  const c = useCombobox({ options, query: ref('opt'), pageSize: 10, wrapHighlight: false })
+  c.armTop()
+  ok('arming starts on the first row', c.highlighted.value, 0)
+
+  for (let i = 0; i < 9; i++) c.move(1)
+  ok('stepping onto the last revealed row loads the next page and stays there',
+    [c.highlighted.value, values(c).length], [9, 20])
+
+  for (let i = 0; i < 10; i++) c.move(1)
+  ok('…and it walks the whole list, paging again at its next end',
+    [c.highlighted.value, values(c).length, c.hasMore.value], [19, 25, false])
 }
 
 // ── async: authoritative results, and the stale-response guard ──────────

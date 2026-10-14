@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { ENTITY_TYPES, NO_PLAYER_HOLDINGS } from '@/constants/entityTypes.js'
+import { ENTITY_TYPES, NO_PLAYER_HOLDINGS, compareEntityOrder } from '@/constants/entityTypes.js'
 import { useCombobox } from '@/composables/useCombobox.js'
 
 // Entity filtering and autocomplete for the GM panel. Takes the reactive
@@ -9,9 +9,31 @@ import { useCombobox } from '@/composables/useCombobox.js'
 // `playerHoldings` is optional and only enables the player chips (B188): the
 // structure `buildPlayerHoldings` returns, or absent, in which case no player
 // is offered and nothing else changes.
-export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDINGS)) {
+//
+// `agencyByEntity` is optional and only orders the *suggestions*: the map
+// `buildAgencyIndex` returns. The canonical order splits characters into main
+// and support, and that lives on the agency edge rather than on the type — without
+// the map every character is a plain `PC`. GmPanel already holds it for the tree's
+// buckets, so it costs nothing to pass.
+export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDINGS), agencyByEntity = ref(null)) {
   const activeFilters = ref([])
   const filterInput = ref('')
+
+  // ── Ordering the suggestions ─────────────────────────
+  // This box is where a GM picks one entity out of a thousand, and the list it
+  // searches arrives unsorted (the `entities` query has no `SORT`). So the
+  // suggestions are put in the canonical order — rank → name → id, the total order
+  // [[GM Panel Development]] requires ("Ordering must be a total order") and the
+  // tree/sheet/peer strip already use — rather than the order the database happened
+  // to return. It matters more now that the list is revealed a page at a time: an
+  // unordered list would let a row cross a page boundary as the data is re-read.
+  const byEntityOrder = (a, b) => compareEntityOrder(a, b, agencyByEntity.value)
+  const byNameThenId = (a, b) =>
+    String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
+    || String(a.id).localeCompare(String(b.id))
+
+  /** The entity list in canonical order — a copy; `entities` is the app's own. */
+  const orderedEntities = computed(() => [...entities.value].sort(byEntityOrder))
 
   // ⚠ Both value AND q must be lowercased. The autocomplete stores the entity's
   // original-cased name as the filter value, but users type lowercase queries.
@@ -104,7 +126,12 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
   const filteredEntities = computed(() => entities.value.filter(entityMatchesFilters))
   const filteredFactions = computed(() => filteredEntities.value.filter(e => e.type === 'FACTION'))
   const sceneEntities = computed(() => filteredEntities.value.filter(e => e.type === 'CHARACTER' || e.type === 'GMC'))
-  const universes = computed(() => entities.value.filter(e => e.type === 'UNIVERSE').map(u => ({ key: u.currentUniverse, name: u.name })))
+  const universes = computed(() => entities.value
+    .filter(e => e.type === 'UNIVERSE')
+    .map(u => ({ key: u.currentUniverse, name: u.name }))
+    .sort((a, b) =>
+      String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
+      || String(a.key).localeCompare(String(b.key))))
 
   // ── Autocomplete ──────────────────────────────────
   // The list mechanics (filter, highlight, keyboard, aria) come from the shared
@@ -162,8 +189,8 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
     // Players, ahead of the entity names: typing a person's name should reach
     // the chip for that player before it drowns in entities called after them.
     // Only players who hold something are offered — a chip that can match nothing
-    // is a dead end.
-    for (const p of playerHoldings.value?.byPlayer?.values() || []) {
+    // is a dead end. Alphabetical, like everything else here.
+    for (const p of [...(playerHoldings.value?.byPlayer?.values() || [])].sort(byNameThenId)) {
       out.push({
         id: 'player:' + p.id,
         name: p.name,
@@ -174,7 +201,7 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
         terms: [p.name, p.id].filter(Boolean),
       })
     }
-    for (const e of entities.value) {
+    for (const e of orderedEntities.value) {
       if (seen.has('ent:' + e.id)) continue
       seen.add('ent:' + e.id)
       out.push({
@@ -199,7 +226,11 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
     options: candidates,
     query: filterInput,
     allowCustom: false,
-    maxResults: 10,
+    // A page at a time, not a cap: a GM searching a common name ("wang" matches
+    // 21 rows live) has to be able to reach all of them. The old `maxResults: 10`
+    // cut the list off in database order, which hid the last ten Wang GMCs
+    // outright — and no amount of typing could surface them.
+    pageSize: 20,
     armTopOnChange: true,
     wrapHighlight: false,        // a picker list, not a tag field
     requireQuery: true,          // an empty box offers nothing, as it always has
@@ -238,6 +269,11 @@ export function useEntityFilter(entities, playerHoldings = ref(NO_PLAYER_HOLDING
     suggestions,
     selectSuggestion,
     hideSuggestions,
+    // The window: `hasMore` says the match set runs past what is on screen, and
+    // `loadMore` reveals the next page (the shell calls it at the end of its
+    // scroll, and the combobox's own `move` calls it at the end of the keyboard's).
+    hasMore: combo.hasMore,
+    loadMore: combo.loadMore,
     // Keyboard/a11y surface for the filter input.
     highlighted: combo.highlighted,
     moveHighlight: combo.move,

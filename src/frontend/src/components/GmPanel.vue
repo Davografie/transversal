@@ -57,7 +57,7 @@
             @keyup.escape="filterInput = ''"
           />
           <Button v-if="filterInput" class="filter-clear-inline" variant="ghost" @click="filterInput = ''">✕</Button>
-          <div v-if="showSuggestions && suggestions.length" :id="filterListId" class="filter-suggestions" role="listbox">
+          <div v-if="showSuggestions && suggestions.length" :id="filterListId" class="filter-suggestions" role="listbox" @scroll="onFilterScroll">
             <div
               v-for="(s, i) in suggestions"
               :id="filterOptionId(i)"
@@ -300,7 +300,8 @@ const {
   optionId: filterOptionId,
   activeDescendant: filterActiveDescendant,
   moveHighlight,
-} = useEntityFilter(entities, playerHoldings)
+  loadMore: loadMoreSuggestions,
+} = useEntityFilter(entities, playerHoldings, agencyByEntity)
 
 // The filter's suggestion list is keyboard-navigable (it was mouse-only): the
 // list mechanics are the shared combobox, so arrows/Enter work as they do in
@@ -317,6 +318,18 @@ function onFilterKeydown(e) {
     }
     case 'Escape': showSuggestions.value = false; break
   }
+}
+
+// The suggestion list is the *whole* match set, revealed a page at a time — a GM
+// searching a common name has to be able to reach every row, and the old hard cap
+// hid the tail of the list outright. The box is capped at 200px, so it always
+// scrolls; coming within a row of the end asks for the next page. No guard for
+// "already at the end" is needed: `loadMore` is a no-op once nothing is left.
+const LOAD_MORE_SLACK_PX = 24
+
+function onFilterScroll(e) {
+  const el = e.currentTarget
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - LOAD_MORE_SLACK_PX) loadMoreSuggestions()
 }
 
 // Picking a suggestion does the two things it always did — add the chip, clear the

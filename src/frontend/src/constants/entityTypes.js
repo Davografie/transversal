@@ -40,6 +40,27 @@ export function entityTypeRank(type, agency) {
 }
 
 /**
+ * The total order an entity list reads in: **rank → name → id**.
+ *
+ * All three keys are load-bearing. The entity list arrives unsorted (the
+ * `entities` query has no `SORT`), so a stable sort alone would preserve that
+ * arbitrary order *inside* a type; the name is what makes the order visible, and
+ * the id is the last resort so two names that compare equal (they differ only in
+ * case, which `sensitivity: 'base'` ignores) still land somewhere fixed.
+ *
+ * `agency` is the map {@link buildAgencyIndex} returns — without it there is no
+ * main/support signal and every character is a plain `PC`.
+ *
+ * The location tree, the sheet's contacts and the peer strip each open-code these
+ * same three keys; this is that comparison, named, for callers that want it.
+ */
+export function compareEntityOrder(a, b, agency) {
+  return (entityTypeRank(a.type, agency?.get(a.id)) - entityTypeRank(b.type, agency?.get(b.id)))
+    || String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' })
+    || String(a?.id).localeCompare(String(b?.id))
+}
+
+/**
  * The single holder per entity, from a `players { agency }` payload — the map
  * {@link entityTypeRank} wants, in one read.
  *
