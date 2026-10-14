@@ -129,8 +129,9 @@
          returns. -->
     <div
       v-if="showElements && editZones && (unplacedTraits.length || unplacedOccupants.length)"
+      ref="railEl"
       class="loc-traits fade-in"
-      :class="{ 'has-switcher': gmMode }"
+      :class="{ 'has-switcher': gmMode, scrollable: railScrollable }"
     >
       <TraitChip
         v-for="t in unplacedTraits"
@@ -368,6 +369,35 @@ const unplacedOccupants = computed(() =>
 const placedOccupants = computed(() =>
   occupantDots.value.filter(o => o.map_x != null && o.map_y != null)
 )
+
+// Unplaced occupants join the rail; see `unplacedOccupants` below for why they are
+// listed rather than drawn.
+const railEl = ref(null)
+const railScrollable = ref(false)
+let railObserver = null
+
+// Does the rail actually have more to show than fits? Only then may it take pointer
+// events (`.loc-traits.scrollable`), because taking them steals them from the scene
+// beneath — which broke dragging a placed chip that sat behind the rail.
+function measureRail() {
+  const el = railEl.value
+  railScrollable.value = !!el && el.scrollHeight > el.clientHeight + 1
+}
+
+// The rail is `v-if`'d, so it appears and disappears with arrange mode; observe it
+// whenever the element changes, and re-measure then. A ResizeObserver alone is not
+// enough at the moment of appearance (its first callback is async), hence the
+// explicit measure on the next tick.
+watch(railEl, (el) => {
+  railObserver?.disconnect()
+  if (!el) { railScrollable.value = false; return }
+  if (typeof ResizeObserver !== 'undefined') {
+    railObserver = new ResizeObserver(measureRail)
+    railObserver.observe(el)
+  }
+  nextTick(measureRail)
+}, { immediate: true })
+onUnmounted(() => railObserver?.disconnect())
 
 // ── Size animation for driven dots ─────────────────────────────────────────
 // One-cycle, class-triggered keyframes — deliberately NOT a transition. A
@@ -2257,9 +2287,20 @@ onMounted(() => {
    click. This block is the AUTO-STACK for chips with no stored position yet; a
    placed chip is drawn in the scene instead ([[Location Trait Chips]]). */
 .loc-traits {
+  /* Internal breathing room for what the chips paint outside their own box (a cutout
+     stands ~10px proud above and below, the rating dice straddle the right edge), kept
+     in variables because **the box is offset by them**: padding that moved the chips
+     would let the rail cover scene chips it used to sit clear of, and a placed chip
+     under the rail cannot be grabbed — its own click target wins the hit test. */
+  --rail-pad-y: 10px;
+  --rail-pad-x: 8px;
+  /* The rail's top as ONE value: `max-height` below subtracts exactly the offset the
+     box starts at, or the cap drifts from where the rail begins. The switcher variant
+     moves it, so it moves the variable instead of `top`. */
+  --rail-top: calc(env(safe-area-inset-top, 16px) + 44px);
   position: absolute;
-  top: calc(env(safe-area-inset-top, 16px) + 44px);
-  left: 16px;
+  top: calc(var(--rail-top) - var(--rail-pad-y));   /* net: the chips sit at --rail-top */
+  left: calc(16px - var(--rail-pad-x));             /* …and at 16px, as they always have */
   display: flex; flex-direction: column; gap: 10px;
   /* Each chip sizes to ITS own content, the width it would have if it were placed in
      the scene. A column flex container stretches its items across the cross axis by
@@ -2269,11 +2310,33 @@ onMounted(() => {
   align-items: flex-start;
   max-width: 40vw;
   z-index: 2;
+  /* Never taller than the map it floats over: past that the rail SCROLLS instead of
+     running off the bottom of the viewer (the human, 2026-09-26). Written from the same
+     `--rail-top` the box starts at, so the cap cannot drift from the box. */
+  max-height: calc(100% - (var(--rail-top) - var(--rail-pad-y)) - 16px);
+  /* Vertical ONLY — the rail is a column and a horizontal scrollbar would be noise.
+     Note `overflow-y: auto` clips BOTH axes (the spec promotes the other axis to
+     `auto`), which is what the padding above is for. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;   /* don't chain the wheel to the page behind */
+  padding: var(--rail-pad-y) var(--rail-pad-x);
+  /* NOT interactive by default — see `.scrollable` below. A rail that accepts pointer
+     events steals them from whatever scene element sits under it, which broke dragging
+     a placed chip that happened to be behind the rail. */
   pointer-events: none;
 }
 
+/* …but a scroll container that ignores pointer events cannot be scrolled at all. So the
+   rail only becomes interactive when it actually has something to scroll, which is the
+   state where it is covering that strip of map anyway. Short rails — the common case —
+   stay transparent to the map exactly as they were before. */
+.loc-traits.scrollable {
+  pointer-events: auto;
+}
+
 .loc-traits.has-switcher {
-  top: calc(env(safe-area-inset-top, 16px) + 80px);
+  --rail-top: calc(env(safe-area-inset-top, 16px) + 80px);
 }
 
 /* The unplace target: centred at the top of the map, present only while an occupant

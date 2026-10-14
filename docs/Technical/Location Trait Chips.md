@@ -94,6 +94,31 @@ must not be thirty labels. The words arrive when it opens.
   so "hidden by default" costs nothing once a location has been arranged; placed chips are
   still always on the map, resting as their markers. The stack's own chips are open and
   cannot be approached, so they do not collapse.
+- **The rail is capped to the viewer and scrolls vertically** (the human, 2026-09-26).
+  Past the map's own height it used to run off the bottom of the viewer — on a phone the
+  stack alone measured 526px of an 844px screen — so it now has `max-height: calc(100% −
+  rail-top − 16px)` and **`overflow-y: auto` with `overflow-x: hidden`**: vertical only,
+  as asked. Three details are load-bearing:
+  - **The padding does not move the chips.** A scroll container clips on *both* axes (the
+    spec promotes the other to `auto`), so the rail needs ~10px of room for what a chip
+    paints outside its own box — a cutout standing proud above and below, the dice
+    straddling the right edge. But padding that *shifted* the content moved the rail a few
+    pixels onto a placed chip behind it, and a chip under the rail cannot be grabbed (its
+    own click target wins the hit test). So `top`/`left` are offset by the padding and
+    `max-height` is written from the same `--rail-top`, which keeps the chips exactly
+    where they were.
+  - **It is interactive only when it actually scrolls** (`.loc-traits.scrollable`, set from
+    a `ResizeObserver` measuring `scrollHeight > clientHeight`). A scroll container that
+    ignores pointer events cannot be scrolled at all — not by wheel, not by touch — but one
+    that takes them steals them from the scene beneath. A short rail, the common case,
+    therefore stays transparent to the map exactly as it was; a long one becomes a real
+    scroll region, and only then does it cover the strip it occupies.
+  - `overscroll-behavior: contain`, so reaching the end of the rail does not scroll the page
+    behind it.
+  Pinned by `e2e/tests/chip-proximity.spec.js`: the rail overflows, its bottom stays inside
+  the viewer, `scrollWidth == clientWidth`, `scrollLeft` stays 0 while `scrollTop` moves —
+  **and** a short rail is asserted *not* to be `scrollable`, which is the guard for the
+  regression the first attempt caused.
 - **Unplaced OCCUPANTS share the drawer** (the human, 2026-09-26), and they obey the
   same rule as the chips: **an occupant with no stored position is not drawn on the map
   at all.** 332 of 467 standing occupants had none, so they used to be scattered onto a

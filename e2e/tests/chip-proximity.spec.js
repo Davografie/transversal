@@ -94,7 +94,7 @@ async function open(page, self, extraOccupants = [], opts = {}) {
   await page.route('**/api/v1/locations/*/navigate*', (route) =>
     route.fulfill({ json: navigatePayload(self, extraOccupants) }))
   await page.route('**/api/v1/locations/*/traits*', (route) =>
-    route.fulfill({ json: { location_id: LOC, viewer: null, traits: TRAITS } }))
+    route.fulfill({ json: { location_id: LOC, viewer: null, traits: opts.traits || TRAITS } }))
   // No pool anywhere: the roller must be in its `adding` phase for a play to land.
   // `pools**` and not `pools*` — a single star does not cross a `/`, so `pools*` misses
   // the `PUT .../pools/{entity}` save and the run quietly writes to the real pool.
@@ -221,6 +221,12 @@ test('arrange mode opens every chip, and a chip can then be dragged', async ({ p
   const stack = page.locator('.loc-traits .trait-chip')
   await expect(stack).toHaveCount(1)
   await expect(stack.first()).toHaveClass(/expanded/)
+
+  // A rail with one chip has nothing to scroll, so it must stay transparent to the map.
+  // This is the guard for a real regression: making the rail take pointer events
+  // unconditionally swallowed the drag below, and the test dragged the DRAWER's chip
+  // instead of the scene one.
+  await expect(page.locator('.loc-traits')).not.toHaveClass(/scrollable/)
 
   // The gesture itself: grab a chip and move it.
   const target = chip(WITH_IMAGE)
@@ -380,4 +386,56 @@ test('dropping a dragged occupant on the ( x ) unplaces it', async ({ page }) =>
   // …and into the drawer, where the GM can drag it back out.
   await expect(page.locator('.occ-drawer-chip')).toHaveCount(1)
   await expect(page.locator('.occ-drawer-chip').first()).toContainText('Placed Probe')
+})
+
+// ── The rail is capped to the viewer and scrolls vertically (the human, 2026-09-26) ──
+//
+// Past the viewer's height the rail used to run off the bottom of the map (on a phone
+// the stack alone measured 526px of an 844px screen). It is now capped and scrolls.
+
+test('the unplaced rail is capped to the viewer and scrolls vertically only', async ({ page }) => {
+  await asArchitect(page)
+  // Enough unplaced traits to overflow any viewport: they all have no position, so
+  // every one of them lands in the rail. The standard TRAITS ride along because
+  // `open()` waits on a *placed* chip as its load-readiness check.
+  const many = [
+    ...TRAITS,
+    ...Array.from({ length: 40 }, (_, i) => trait(`ts-many-${i}`, { name: `filler trait ${i}` })),
+  ]
+  await open(page, FAR, [], { traits: many })
+  await page.locator('.arrange-btn').click()
+
+  const rail = page.locator('.loc-traits')
+  await expect(rail).toHaveCount(1)
+  // Overflowing is what lets it take pointer events — a rail that ignores them cannot
+  // be scrolled, but one that takes them steals them from the scene beneath.
+  await expect(rail).toHaveClass(/scrollable/)
+
+  const m = await rail.evaluate((el) => {
+    const box = el.getBoundingClientRect()
+    const viewer = el.closest('.location-viewer').getBoundingClientRect()
+    const cs = getComputedStyle(el)
+    return {
+      overflowY: cs.overflowY, overflowX: cs.overflowX,
+      maxHeight: cs.maxHeight, padding: cs.padding, cls: el.className,
+      scrollH: el.scrollHeight, clientH: el.clientHeight,
+      scrollW: el.scrollWidth, clientW: el.clientWidth,
+      bottom: Math.round(box.bottom), viewerBottom: Math.round(viewer.bottom),
+    }
+  })
+
+  expect(m.overflowY).toBe('auto')
+  expect(m.overflowX).toBe('hidden')                    // vertical ONLY
+  expect(m.scrollH).toBeGreaterThan(m.clientH)          // it really does overflow
+  expect(m.bottom).toBeLessThanOrEqual(m.viewerBottom)  // …and is capped to the viewer
+  expect(m.scrollW).toBeLessThanOrEqual(m.clientW + 1)  // no horizontal overflow
+
+  // …and it actually scrolls, vertically only.
+  const after = await rail.evaluate((el) => {
+    el.scrollTop = 200
+    el.scrollLeft = 200
+    return { top: el.scrollTop, left: el.scrollLeft }
+  })
+  expect(after.top).toBeGreaterThan(0)
+  expect(after.left).toBe(0)
 })
