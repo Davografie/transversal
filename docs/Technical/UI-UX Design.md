@@ -532,6 +532,9 @@ read as one object, so the primitive owns its chrome
 
 - `role="radiogroup"` + `role="radio"`/`aria-checked`; arrows (←/→/↑/↓) move the
   selection and wrap, disabled options are skipped.
+- **`reselect`** (off by default) emits even when the clicked segment is already the
+  selection — for a control that *re-asserts* rather than chooses. Fullscreen's `On`
+  needs it ([[#Fullscreen]]); a plain preference keeps ignoring a repeat click.
 - The control fills its container; the host sets `max-width`/alignment (the
   settings overlay uses `.settings-segmented`).
 - **Remaining migration:** `EffectForm.vue`'s `.ee-result-mode` (Die/Variable)
@@ -965,6 +968,75 @@ its location, and the stub has the side benefit of proving the field reaches the
 component. A separate case pins the `?dockw` knob's contract (sets, persists, resets, and never
 touches the desktop dock). The existing sheet-definition suite passes unchanged *inside*
 the dock.
+
+## Fullscreen
+
+The app shell does not scroll — `html, body, #app { overflow: hidden }`, with every
+scroll inside a band or a panel — and a browser only retracts its address bar on a
+*document* scroll. On a phone the bar is therefore **permanent chrome over the play
+surface**. `100dvh` and `viewport-fit=cover` keep the layout honest about the space
+that is left; fullscreen is what *reclaims* it, and it is the only mechanism that does
+so without asking the player to install anything.
+
+Settings → **Fullscreen** (`app/FullscreenBlock.vue` — last on that screen, under
+*Find character*): `Off` · `On` · `Auto`, remembered **per device** beside media
+quality. The default is **Off**; fullscreen is a behaviour change nobody should get
+without choosing it.
+
+| mode | behaves |
+|---|---|
+| `off` | never enters, and is the **only** thing that leaves. |
+| `on` | enters on the next interaction, on any input device — that is what On means. |
+| `auto` | enters only on a **touch** device. |
+
+**The device kind is remembered, from the last input actually used**
+(`localStorage.inputKind`): `(hover: none) and (pointer: coarse)` is the guess on
+load, and the first real `pointerdown` / `keydown` overwrites it — a pen counts as
+touch, because there is no keyboard in hand. A media query alone cannot answer this
+on a convertible, which is why a touchscreen laptop that gets tapped once enters
+fullscreen until a click or a keypress puts it back on the mouse.
+
+**Entering rides a completed interaction, not the touch itself.** A request needs
+transient activation, so it can only fire from a real gesture — but `pointerdown` is
+the wrong one: fullscreen changes the viewport height, which re-derives every band's
+percentage, the roller's measured height and the location camera's zoom, so entering
+between a finger landing and lifting can retarget the tap the player meant. It rides
+`click` (and `keydown`), after the interaction has resolved.
+
+**A player's exit is respected.** The back gesture is how they reach another tab or
+app, so re-entering straight away would trap them. An exit sets a suppression, cleared
+when the page is next **hidden and shown again** — by which time the exit has done its
+job — and an explicit mode change always wins over it. While it holds, the note under
+the control says so (*Left fullscreen — tap here again, or switch away and back, to
+resume*), because a state the player cannot see is one they cannot act on.
+
+**The setting is also the way back in**, and that needed one addition to a shared
+primitive: a segment that is already selected emits nothing, so tapping `On` after an
+exit did nothing at all. `SegmentedControl` gained an opt-in **`reselect`** prop (off
+by default, so a plain preference is unchanged), and fullscreen is its only user.
+
+**Nothing else may exit.** Switching input device stops *entering*; it never yanks
+fullscreen away from someone who is using it. `composables/useFullscreenMode.js` calls
+the API (VueUse's `useFullscreen`, for prefixed handling and the reactive
+`fullscreenchange`) and owns every decision. A refused request is swallowed — a
+browser declining is a normal outcome, not a fault — which is exactly why the *inert*
+failure would be invisible, and why the rules are pinned instead:
+
+- `scripts/check-fullscreen.mjs` — the policy as a pure function across all 96
+  combinations of mode / device / support / visibility / suppression, plus the timing,
+  the manners and the `reselect` contract.
+- `e2e/tests/fullscreen.spec.js` — real fullscreen from a real trusted click in **both
+  engines**: it enters, a user exit is not re-taken, the setting resumes it, and
+  leaving and returning re-arms it; the choice survives a reload; and a real touch (but
+  not a synthetic mouse click) is what makes `Auto` fire.
+
+> [!note] Where it cannot work
+> iPhone Safari has no element fullscreen — its prefixed request method is video-only —
+> so there the control renders **disabled with the reason** (*add it to your Home
+> Screen instead*), which is the route that does work. Support is decided by
+> `document.fullscreenEnabled === true` rather than VueUse's `isSupported`, which
+> accepts the legacy prefixed aliases and so reports support where a page cannot
+> actually go fullscreen.
 
 ## Theming
 
