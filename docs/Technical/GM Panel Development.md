@@ -171,7 +171,15 @@ Four properties carry this, and each is load-bearing:
   `data-panel-window="root"` and nothing able to say which unit to raise. A click
   raises too, but a click is not an open: keyboard activation dispatches `click`
   with no pointerdown, and a panel opened by another panel's reaction has no
-  pointer near it at all.
+  pointer near it at all. The **🛠's own open** raises the chain explicitly
+  (`raise('root')` in `onToggleClick`), because neither rule reaches it: the toggle
+  sits *outside* the layer, so the capture-phase listener finds no
+  `[data-panel-unit]` ancestor, and the chain never goes through `openChild`.
+  Measured before that line: with a float on top, a reload restores the float and
+  the chain starts closed — and opening the chain with the 🛠 drew it *under* the
+  float, so the panel just opened was hidden by one opened earlier. (Closing the
+  chain with a click hides this: the pointerdown on its rail raises the chain on
+  the way out, so it happens to reopen in front.)
 - **Capture-phase `pointerdown` on `window`.** Not a handler per unit: a panel is
   full of controls that stop propagation (`@pointerdown.stop` on the badge and on
   the collapsed chip's buttons), and any of them would be a dead spot. Capture
