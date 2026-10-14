@@ -441,8 +441,24 @@ An instance's own art is therefore never hidden by a pointer at shared art, and 
 variant made on the picked picture is a render **of that picture**, so every
 instance that picks it gets it. A pick that names nothing — a deleted picture, or a
 variant-owned one — is ignored rather than fatal, because a stale pointer must not
-blank a surface; and a pick answers only the roles its picture carries, so it can
-never make a picture render where nobody tagged it.
+blank a surface.
+
+**The pick answers every role, not only the ones its picture carries**, and that is
+not a shortcut: roles are unique per rung (`set_image_roles` strips a role from its
+siblings), so at the owner level exactly one picture holds `sheet`. A pick that
+answered only the roles its picture carries could therefore only ever name the
+picture the ladder already returns — a **provable no-op**, which is what the first
+cut of this was until it was measured. Answering every role is also what the copy it
+replaces did: on an empty instance rung the sole-image rule gave the copy all three.
+Which *render* and tier a role serves stays `ROLE_RENDER`'s decision, so a picked
+picture with a matte floats and one without does not.
+
+Verified on the live library 2026-09-26 (a GMC's `qi` setting, then cleared): with
+no pick all three roles served the roled definition picture (`ffe974d0`, opaque);
+picking `4b409f07` — a matted, **unroled** registry picture — served
+`upload_4b409f07_Cutout_Small.webp` for `sheet`,
+`upload_4b409f07_XLarge.webp` for `background` and
+`upload_4b409f07_Cutout_Large.webp` for `navdot`, each present on disk.
 
 `POST /media/copy`, the editor's `copyImage` and their tests were retired with it.
 

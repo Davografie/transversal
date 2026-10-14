@@ -29,8 +29,8 @@ def pick_role_image(
 
     1. the **variant's** own image carrying ``role`` (newest first) — a
        projection's for an entity, a traitsetting's for a trait;
-    2. the **picked** owner-level image carrying ``role`` ([[B288]]) — the picture
-       this instance chose among its owner's own;
+    2. the **picked** owner-level picture ([[B288]]) — the one this instance chose
+       among its owner's own, which answers **every** role (see below);
     3. an owner-level image in one of ``universes``;
     4. any owner-level image carrying ``role``.
 
@@ -46,13 +46,23 @@ def pick_role_image(
     tried the variant first. A trait's variant is a traitsetting rather than a
     projection, so its lookup answers empty and one picture serves every universe.
 
-    ``picked_id`` is a **pointer** at one of the owner's pictures, and it is placed
-    *after* the variant rung on purpose: an instance's own picture is more specific
-    than a pointer at shared art, so picking can never hide something the instance
-    owns. It answers only the roles the picked picture carries — a pick cannot make
-    a picture render where nobody tagged it — and an id that names nothing (a
-    picture since deleted, or a variant-owned one) is ignored rather than fatal,
-    which is what keeps a stale pointer from blanking a surface.
+    ``picked_id`` is a **pointer** at one of the owner's pictures, placed *after*
+    the variant rung on purpose: an instance's own picture is more specific than a
+    pointer at shared art, so picking can never hide something the instance owns.
+
+    **The pick answers every role, not just the ones its picture carries** — and
+    that is not a shortcut. Roles are unique per rung: ``set_image_roles`` strips a
+    role from its siblings, so at the owner level exactly *one* picture holds
+    `sheet`, and a pick that only answered the roles it carries could only ever
+    name that same picture — it would be a provable no-op. Answering every role is
+    also exactly what the copy it replaces did: on an empty instance rung the
+    sole-image rule gave the copy all three. Which *render* and tier each role
+    serves still comes from ``ROLE_RENDER``, so a picked picture with a matte
+    floats and one without does not.
+
+    An id that names nothing — a picture since deleted, or a variant-owned one — is
+    ignored rather than fatal, which is what keeps a stale pointer from blanking a
+    surface.
     """
     if variant_id:
         for img in images:
@@ -63,7 +73,7 @@ def pick_role_image(
     # pictures so a pointer can never drag in another instance's rung.
     if picked_id:
         for img in images:
-            if img.id == picked_id and not img.variant_id and role in img.roles:
+            if img.id == picked_id and not img.variant_id:
                 return img
     for u in (universes() if universes else []):
         for img in images:

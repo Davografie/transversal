@@ -160,24 +160,34 @@ async def test_the_registry_trait_reads_through_the_same_loader():
 # picture belongs to the picture and every instance using it gets the variant.
 
 async def test_a_picked_picture_wins_the_owner_level():
-    info = _info([_image("def"), _image("pick")])
+    """The pick carries **no** roles, and that is the only observable case.
+
+    Roles are unique per rung — `set_image_roles` strips a role from its siblings —
+    so at the owner level exactly one picture holds `sheet`, and a pick that only
+    answered the roles its picture carries could only ever name the picture the
+    ladder already returns. That is why the pick answers every role.
+    """
+    info = _info([_image("def"), _image("pick", roles=())])
     assert await _setting(picked_image_id="pick").image(info, "sheet") == "pick:Small"
+
+
+async def test_a_pick_is_the_instances_picture_for_every_role():
+    """Every role this instance asks for is served by the picked picture — the same
+    thing the sole-image rule gave a copy on an empty rung, with no files. Which
+    *render* and tier a role serves is still the role map's decision."""
+    info = _info([_image("def", roles=("background", "sheet", "navdot")),
+                  _image("pick", roles=())])
+    setting = _setting(picked_image_id="pick")
+    assert await setting.image(info, "sheet") == "pick:Small"
+    assert await setting.image(info, "background") == "pick:XLarge"
+    assert await setting.image(info, "navdot") == "pick:Large"
 
 
 async def test_the_instances_own_picture_beats_a_pick():
     """An override the instance uploaded is more specific than a pointer at shared
     art — picking must never hide something the instance owns."""
-    info = _info([_image("def"), _image("pick"), _image("mine", variant_id=SETTING)])
+    info = _info([_image("def"), _image("pick", roles=()), _image("mine", variant_id=SETTING)])
     assert await _setting(picked_image_id="pick").image(info, "sheet") == "mine:Small"
-
-
-async def test_a_pick_answers_only_the_roles_it_carries():
-    """A pick cannot make a picture render where nobody tagged it: a role it does
-    not carry falls through to the rest of the ladder."""
-    info = _info([_image("def", roles=("sheet",)), _image("pick", roles=("navdot",))])
-    setting = _setting(picked_image_id="pick")
-    assert await setting.image(info, "navdot") == "pick:Large"
-    assert await setting.image(info, "sheet") == "def:Small"
 
 
 async def test_a_pick_that_names_nothing_is_ignored():
