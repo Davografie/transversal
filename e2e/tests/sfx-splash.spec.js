@@ -81,33 +81,49 @@ const AUTO_CHOICE = {
 }
 
 /**
- * Serve SSE frames, then keep the stream quiet on every reconnect (the browser
- * retries when a fulfilled body ends, and re-serving the event would resurrect a
- * question the test has already left behind).
+ * Serve SSE frames **on demand**, over the connection the app is already listening on.
  *
- * **The frames are held until `load()` arms them**, and that is not a nicety. The
- * app opens the stream several times per load — this spec navigates twice to get a
- * SEC-3 session, and a one-shot body makes the browser retry — so serving on the
- * *first* connection is a race: measured, the frames could land on a connection the
- * app then replaced, and the note was never seen (a case that passed on
- * `release-build` and failed here purely on connection timing). Arming immediately
- * before the final navigation puts them on the connection being watched.
+ * The frames cannot simply be served on whichever stream request arrives first: the
+ * app opens the stream several times per load (this spec navigates twice to get a
+ * SEC-3 session, and a one-shot body makes the browser retry), and a note only lives
+ * 1–2 s — so serving early meant the notes could arrive, and expire, before the test
+ * had finished booting. Measured, not assumed: the same cases passed alone and failed
+ * intermittently in a full-file run, in a different case each time.
+ *
+ * So every request is held open, and `load()` fulfils the **latest** one once the app
+ * is up and looking. The connection is the app's own, so nothing depends on retry
+ * timing. Any later connection is held open for good, which is also what stops a
+ * repeat of the event resurrecting a question the test has already left behind.
  *
  * `events` is the general form — `[{ type, data }]` — for anything that is not a
  * choice or an effect note: the authored client action.
  */
 async function stubStream(page, choices = [AUTO_CHOICE], notes = [], events = []) {
-  let armed = false
-  page.__armStream = () => { armed = true }
+  const frames = []
+  if (choices) frames.push(`event: sfx_choice_required\ndata: ${JSON.stringify({ entity_id: KAEL, choices })}\n\n`)
+  for (const note of notes) frames.push(`event: effects_changed\ndata: ${JSON.stringify(note)}\n\n`)
+  for (const ev of events) frames.push(`event: ${ev.type}\ndata: ${JSON.stringify(ev.data)}\n\n`)
+  const body = frames.join('')
+
+  let served = 0
+  let release
+  const ready = new Promise((r) => { release = r })
+  page.__armStream = () => release()
+  // The handler holds the app's own connection open until the test is ready, then
+  // answers it — so nothing depends on retry timing. Any later connection is held
+  // open for good, which is also what stops a repeat of the event resurrecting a
+  // question the test has already left behind. (The same shape as
+  // `difficulty-target-splash.spec.js`; the fulfil has to happen *inside* the
+  // handler, which is why this is a promise rather than a route kept on `page`.)
   await page.route('**/api/v1/stream*', async (route) => {
-    const headers = { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' }
-    if (!armed) return route.fulfill({ status: 200, headers, body: ': idle\n\n' })
-    armed = false
-    const frames = []
-    if (choices) frames.push(`event: sfx_choice_required\ndata: ${JSON.stringify({ entity_id: KAEL, choices })}\n\n`)
-    for (const note of notes) frames.push(`event: effects_changed\ndata: ${JSON.stringify(note)}\n\n`)
-    for (const ev of events) frames.push(`event: ${ev.type}\ndata: ${JSON.stringify(ev.data)}\n\n`)
-    return route.fulfill({ status: 200, headers, body: frames.join('') })
+    if (served++) { await new Promise(() => {}); return }
+    await ready
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      headers: { 'cache-control': 'no-cache' },
+      body,
+    })
   })
 }
 
@@ -148,9 +164,15 @@ async function load(page, size) {
     localStorage.setItem('entityId', eid)
   }, [character.playerId, character.playerName, character.entityId])
   await establishSession(page)
-  page.__armStream?.()
   await page.goto('/')
   await page.locator('.name-entry.panel').first().waitFor({ state: 'hidden', timeout: 20000 })
+  // Now the app is up and looking: hand it the frames over the connection it already
+  // holds, so a 1–2 s note cannot expire before the surface can draw it. `.stage` is
+  // box-less, so it is waited for as *attached*, not visible (a lesson this spec
+  // records) — and a beat after it because the first render is not the settled one.
+  await page.locator('.stage').waitFor({ state: 'attached', timeout: 20000 })
+  await page.waitForTimeout(1200)
+  await page.__armStream?.()
 }
 
 const boxOf = (page, sel) => page.evaluate((s) => {
@@ -321,11 +343,24 @@ test('a burst of changes queues rather than stacking', async ({ page }) => {
   await stubAnswer(page, {})
   await load(page, DESKTOP)
 
-  // One at a time, in order: the second arrives after the first has gone.
-  await expect(page.locator('.sp-note')).toHaveCount(1)
-  await expect(page.locator('.sp-note-title')).toHaveText('Hinder')
-  await expect(page.locator('.sp-note-title')).toHaveText('Spray n Pray', { timeout: 6000 })
-  await expect(page.locator('.sp-note')).toHaveCount(1)
+  // One at a time, **in order**.
+  //
+  // Watched rather than sampled: a note lives 1–2 s and the frames arrive as soon as
+  // the app's stream connects, so an exact count at one arbitrary instant is a race
+  // (it flaked only when the whole file ran, never on its own). Counting *nodes* is
+  // also wrong even in principle — a `TransitionGroup` leave keeps the outgoing note
+  // in the DOM for the ~0.2 s crossfade, so two coexist without ever stacking on
+  // screen. This records the sequence instead, which is the actual contract; that it
+  // is never a stack is pinned statically in `check-path-fields.mjs`.
+  const seen = []
+  await expect.poll(async () => {
+    for (const t of await page.locator('.sp-note-title').allInnerTexts()) {
+      if (seen[seen.length - 1] !== t) seen.push(t)
+    }
+    return new Set(seen).size
+  }, { timeout: 20_000, intervals: [100] }).toBe(2)
+
+  expect(seen, 'in order').toEqual(['Hinder', 'Spray n Pray'])
 })
 
 test('a change to someone else is not mine to read', async ({ page }) => {
