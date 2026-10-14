@@ -45,6 +45,11 @@ LifePath {
       table_id    # the roll table this step wraps
       label
       next        # default step id for rows with no binding; "" ends the term
+      effects     # applied ONCE for any row this step resolves — the effects
+                  # counterpart of `next`. Runs after the row's effects and the
+                  # binding's, in the same scope, so it can read a name the picked
+                  # row exposed; a name only some rows expose resolves on those and
+                  # is a clean no-op on the rest.
       bindings: [
         { key       # names one row of that table (RollTableEntry.key)
           next      # step id in THIS path; "" leaves the path
@@ -71,6 +76,28 @@ Three consequences worth stating plainly:
 - **A row has one identity and many meanings.** `RollTableEntry.key` is stable and stored,
   deliberately **not** derived from the row's band: a binding naming a row must survive that
   row's band being re-cut from `1–12` to `1–10`.
+
+## A step's own effects
+
+`LifePathStep.effects` is where a path says *what this step does whatever row resolved*,
+as against `next`, which says *where it goes*. It exists so an effect that every row
+would otherwise repeat is written once.
+
+Two properties carry it:
+
+- **It reads the whole scope,** including whatever the resolved row exposed, because
+  `resolve_step` applies the row's effects, the binding's delta and the step's in one
+  `effect_context`. A name only some rows expose therefore resolves on those rows and
+  does nothing on the others — which is the point, not a defect.
+- **It is applied by path, never by a flat `{token}`.** `select variable <name>` in a
+  `target_spec`/`owner_spec` resolves to *zero targets* when the name is unbound and
+  the effect is applied zero times. Writing `{name}` into a flat field such as
+  `target` does **not** behave that way: `_substitute_effect_context` rewrites only the
+  tokens it can resolve and leaves the rest verbatim, so the effect runs against the
+  literal string `"{name}"` ([[B282]]).
+
+Flow is deliberately *not* read from a step's `effects`: a step's destinations are
+`next` and its bindings, which keeps "flow is structure, not effects" true.
 
 ## Flow is structure, not effects
 
