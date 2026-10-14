@@ -280,9 +280,13 @@ contributes no dice, so it can never be pooled) and needs no separate check — 
 silently breaks the rules whose *subject* is a disabled trait, such as the portent escalator.
 
 **The flat `{name}` form and the path form must agree, and twice they did not.** An **unresolvable** name
-was left as literal text, so an effect ran against `"{picked}"` as if it were an id while the path form
-applied zero times ([[B282]]); and a **many-valued** name was truncated to its first id while the path form
-expanded the set ([[B292]]). Both are the same seam: one name, two spellings.
+used to be left as literal text, so an effect ran against `"{picked}"` as if it were an id while the path
+form applied zero times — the dispatch now **refuses** it instead: the effect is skipped, logged, and
+noted on the outcome so the author sees which name nothing bound ([[B282]]). A **many-valued** name was
+truncated to its first id while the path form expanded the set, and now compares as a set for the
+membership operators ([[B292]]). Both are the same seam: one name, two spellings. The refusal sits in the
+engine's immediate dispatch; an effect **deferred** to a roll is substituted when it fires, on a path that
+does not yet consult the accumulator — the same defect, still open there.
 
 The targeting model exists to power **passive rules** like One Trick:
 

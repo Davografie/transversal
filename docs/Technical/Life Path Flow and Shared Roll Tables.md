@@ -92,9 +92,9 @@ Two properties carry it:
 - **It is applied by path, never by a flat `{token}`.** `select variable <name>` in a
   `target_spec`/`owner_spec` resolves to *zero targets* when the name is unbound and
   the effect is applied zero times. Writing `{name}` into a flat field such as
-  `target` does **not** behave that way: `_substitute_effect_context` rewrites only the
-  tokens it can resolve and leaves the rest verbatim, so the effect runs against the
-  literal string `"{name}"` ([[B282]]).
+  `target` is now *refused* rather than wrong — the dispatch skips the effect, logs
+  the name, and notes it on the outcome ([[B282]]) — but a skip is a visible failure,
+  so the path stays the form to author.
 
 Flow is deliberately *not* read from a step's `effects`: a step's destinations are
 `next` and its bindings, which keeps "flow is structure, not effects" true.
