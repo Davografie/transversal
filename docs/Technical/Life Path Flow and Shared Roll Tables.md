@@ -197,7 +197,9 @@ pure content and can be rolled for anything.
 - `services/roll_table.py` — `row_key`, `entry_key_for`, `table_bindings` (the scope a row's
   conditions and effects resolve against; it resolves the table's declared names and then the
   chosen row's, in that order), `entry_applies` / `resolve_applicable_entry` (which build the
-  table's scope so a row's *conditions* can read it).
+  table's scope so a row's *conditions* can read it), and — for reservations ([[B285]]) —
+  `declared_type_of`, `is_reservation`, `traced_type` and `roll_table_problems` (the pure
+  write-boundary check, called by `saveRollTable`).
 - `services/lifepath_validation.py` — `validate_life_path`.
 - `migrate_lifepath_wrapper.py` — the one-way migration off the old model.
 - Frontend — `composables/lifePathGraph.js` (draws from steps); `composables/useBoundVariableScope.js`
@@ -234,5 +236,25 @@ pure content and can be rolled for anything.
   life path's **binding effects** read it because `resolve_step` hands one scope to both the row's
   effects and the binding's. The form is a path (`select variable X`), not a `{token}` in a
   positional field.
+- **A name's type can be *declared* instead of only traced** ([[B285]]). `BoundVariable` gained
+  `element`/`cardinality`, optional and empty by default, and a table declaration that states them
+  **with no path** is a **reservation**: a typed slot, binding no value, that every row's
+  assignment is checked against. Without one a name's type is only as consistent as every
+  hand-written path that happens to use it — one row starting from a collection where the rest
+  pinned a value makes the same name `many` for that row alone, and nothing objects. The rules:
+  - a reservation **binds nothing**; the name stays unbound until a row assigns it;
+  - an assignment that reaches a different type is **refused** — left unbound, not coerced and not
+    rebound, because the reservation is what a downstream effect was written against;
+  - a **table that reserves anything** must have every row assignment name a reserved name, and
+    `saveRollTable` refuses one that does not. Scoped that way deliberately: refusing every
+    free-form row would refuse the next save of any table that has one, and the panel writes the
+    whole table, so it would take the author's unrelated edits with it. A table that reserves
+    nothing is the free-form table that existed before, and it cannot break a promise it never made;
+  - the check is `services/roll_table.roll_table_problems`, pure and catalog-driven, run at the
+    **write** boundary. The **read** tolerates a stored unreserved name — the same "enforce on
+    write, keep reading old data" split the unwrapped-path and legacy-term shims use.
+  A reservation's type is stated **once**, on the table: a row assigns a name and states no type of
+  its own (`_entry_input_to_domain` clears the fields), because two places to state one type is two
+  places to disagree.
 - Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
   ([[B194]]–[[B197]]) are unchanged by this and remain separate gates.
