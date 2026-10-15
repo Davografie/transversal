@@ -131,6 +131,9 @@ Placed on the map, the seven span the whole Valley:
 
 **Zhu Yan's material position, for whoever authors him:** `role: **Valley Lord**`, rules Tan Gang from the **Nine Heavens Pagoda**, holds the **Aegis of the Unspoken Pact** — the soul-binding contract artifact. **He is the ruler of the city and the holder of the contract, and he believes he is the head of the cult. He is not.**
 
+> [!warning] And he is structurally alone
+> **`gmc-207814498` has zero relationship edges of any kind** — no `membership`, no `relation`, no `commands`, nothing. The Valley Lord, who holds the title, the city and the soul-binding contract, **is not connected to a single entity in the graph.** Whatever power he has is positional rather than social, which fits a man who believes he leads something he is not part of.
+
 **The flat reading improves the design rather than breaking it.** The thirteen are not a hierarchy. They are **the Intelligence's taxonomy of what motivates people — thirteen protocols.** A seat is not an office a person holds; **it is a protocol operating through whoever it caught.** That single reframe explains every decision already made:
 
 - **"A seat is something you feed"** → a protocol is something you *run*; the seat outliving the holder is a program outliving its host.
@@ -207,7 +210,7 @@ In that doc's own vocabulary:
 - **And it makes the cult the local enemy while the Intelligence stays the horizon.** The Valley's antagonist is its own ambition; the Intelligence is what that ambition rhymes with.
 - **Which means the horror is recognition, not revelation.** The players are not going to find the villain at the bottom of it. They are going to find that the Valley's own sects — pride, isolation, tyranny, influence-gathering — are the same behaviour at a lower intensity.
 
-### The Wang Pagoda — the only place that knows about Transversal
+### The Wang Pagoda — one of two places that know about Transversal
 
 **The human, 2026-09-29:** *"The only person that knows about Transversal is the Wang family Valley administrator who has a communication device in the top floor of the Wang Pagoda."*
 
@@ -229,6 +232,42 @@ In that doc's own vocabulary:
 **And the room holds a transversal artifact:** the **`Dragon's Dream Pearl`** (`artifact`, **d10**) — *"A large, flawless pearl held within a delicate, clockwork frame of Orichalcum and Gold. At its heart is a pea-sized core of solid Dimension…"* — a **Dimensionite** core, on the Top Floor, next to the man who knows about other worlds. **The communication device has an obvious socket.**
 
 **Two further facts worth having:** the Top Floor carries the same **`curse`** as forty other sites (*"forming a golden core will summon a heavenly tribulation"*), so no one breaks through in that room; and a **`hidden treasure room`** (`loc-135687483`) is reachable from the Top Floor by a `transversal` edge — though its parent is the **`ancestral hall`** (`loc-109272714`), and its own `event` slot is **unwritten**.
+
+### Zhu Xing — the other man who knows, and his sheet holds the ladder
+
+**The human, 2026-09-29:** *"I think `gmc-207982847` Zhu Xing also knows about it, I just don't know how he fits into the whole."*
+
+**He fits, and his sheet answers a design question while raising a family one.** `Zhu Xing` sits at **`loc-207908121` — Star-Gazer's Spire**, in the **Astral Peaks** — which is the site holding the **`Compass of Celestial Law`** (d10), *"a complex orrery that maps the local multiverse and the fundamental laws that govern it. It can predict the 'weather' in the space between worlds."* **He is standing on the Compass.** He also shares **Zhu** with **Zhu Yan**, the Valley Lord.
+
+**Who he is, from his own traits:**
+
+| | |
+|---|---|
+| `astrology` **d10** · `beast`: **Celestial Dragon Spirit** d10 · `spirit manifestation`: **Celestial Dragon** d6 | a heavenly-dragon astrologer |
+| **`space` `[d8,d8,d6,d6,d6,d6]`** · `earth` `[d10,d8,d8]` | **a space-and-earth cultivator.** Space is his law |
+| `Divine Consciousness` d10 · `Spiritual Power` d8 · `qihai` d8 | a high-realm mind |
+| **`container` / "Spirit-Gourd"** — *"contains an entire mountain valley"* | **he carries a pocket universe** |
+| `artifact refinement`: **Soul Bonding** d8 · `elixir`, `alchemy`, `medicine`, `spirit stones` ×4 | a maker, not only a scholar |
+| `appearance`: *"daoist"* · `manual`: *"The Unbreaking Path — Elder Xing's foundational treatise"* | **"Elder Xing"** — he is somebody's elder |
+
+> [!important] His sheet carries the cultivation ladder's real numbers
+> Under `manual` / *"basic knowledge of cultivation"* the notes read:
+>
+> ```
+> - mortal
+> - qi refining      13 stages    can advance from stage 10 onwards
+> - foundation building   9 stages
+> - ???
+> ```
+>
+> **That is the authoritative stage count, written by the human:** **qi refining = 13 stages**, and advancement possible from **stage 10 onwards** — which is where the "half-step" idea comes from. **foundation building = 9 stages.** And the third realm is still `???`. This settles the count question that has been open since the cultivation discussion began, and it is buried in a GMC's manual notes rather than in a doc.
+
+> [!warning] Why "Elder Xing" already knowing about Transversal needs no new explanation
+> Look at what he *is*: a **spatial-law astrologer** with **`d10` astrology**, a **Celestial Dragon Spirit**, **Divine Consciousness d10**, and a **gourd containing a whole mountain valley**. A man whose cultivation is the law of space, who studies the weather between worlds, and who already carries a pocket universe **does not need to be told that other universes exist.** He has the equipment to have found out.
+>
+> **So the answer to "how does he know" is: by doing what he does.** He is the Valley's *other* route to the truth, and unlike Wang Yanjin he arrived at it through cultivation rather than through an inherited device.
+
+**And the same defect appears on him:** his `qi` is `[]` — **empty** — while his realm is high enough that it should be the largest pool in the Valley. `cultivation stage` is `['d8']` with **no statement**, so his sub-level is unrecorded. **A `???` realm, an empty qi pool, and a bare stage** — the ladder's most advanced practitioner is the least legible sheet in the Valley.
 
 ### Seat fit, read off the live sheets
 
