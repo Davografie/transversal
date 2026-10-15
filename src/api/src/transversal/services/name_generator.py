@@ -363,13 +363,19 @@ def theme_for_universe(repo, universe: str) -> str:
 # real source and everything else is unchanged if it is absent or the API is down.
 
 BTN_USAGE: dict[str, str] = {
-    "chinese": "chinese",
-    "japanese": "japanese",
-    "norse": "ancient scandinavian",
-    "slavic": "russian",
-    "arabic": "arabic",
-    "modern": "english",
+    "chinese": "chi",
+    "japanese": "jap",
+    "norse": "sca-anci",
+    "slavic": "sla",
+    "arabic": "ara",
+    "modern": "eng",
 }
+
+#: Behind the Name's documented limits (`/api/help.php`): `number` is capped at 6,
+#: and the key allows 2 requests/second, 400/hour, 4000/day. This seam makes one
+#: call per name request, so a burst of GM clicking is inside the budget — but it
+#: is the reason the seam must never be the only way to get a name.
+BTN_MAX_NUMBER = 6
 
 #: randomuser.me ``nat`` codes — the keyless path, for the themes it can serve.
 RANDOMUSER_NAT: dict[str, str] = {
@@ -398,7 +404,7 @@ def _behind_the_name(theme_key: str, count: int, gender: str) -> Optional[list[s
     usage = BTN_USAGE.get(theme_key)
     if not key or not usage:
         return None
-    params = {"number": max(1, min(count, 20)), "usage": usage, "key": key}
+    params = {"number": max(1, min(count, BTN_MAX_NUMBER)), "usage": usage, "key": key}
     if gender in ("male", "female"):
         params["gender"] = "m" if gender == "male" else "f"
     data = _get_json("https://www.behindthename.com/api/random.json?"

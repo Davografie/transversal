@@ -169,3 +169,26 @@ def test_behind_the_name_needs_a_key(monkeypatch):
 def test_randomuser_is_only_offered_the_locales_it_has():
     assert "modern" in ng.RANDOMUSER_NAT
     assert "chinese" not in ng.RANDOMUSER_NAT
+
+
+def test_the_usage_codes_are_behind_the_names_documented_codes():
+    """`usage` takes a code from `/api/appendix2.php`, **not** a display name.
+
+    Passing "chinese" or "English" answers
+    `{"error_code":60,"error":"name could not be generated"}` — which is what
+    shipped first, and which the local fallback hid so completely that the result
+    still looked like a working call. Probed live against the real key.
+    """
+    assert ng.BTN_USAGE["chinese"] == "chi"
+    assert ng.BTN_USAGE["japanese"] == "jap"
+    assert ng.BTN_USAGE["norse"] == "sca-anci"   # Old Norse, not "norse"
+    assert ng.BTN_USAGE["slavic"] == "sla"
+    for theme, code in ng.BTN_USAGE.items():
+        assert code == code.lower() and code.isascii(), (theme, code)
+        assert " " not in code, (theme, code)
+
+
+def test_the_number_cap_matches_the_api_limit():
+    """Behind the Name caps `number` at 6, and asking for more is not an error the
+    caller can see — the fallback answers instead."""
+    assert ng.BTN_MAX_NUMBER == 6

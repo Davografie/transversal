@@ -78,10 +78,59 @@ Two consequences, and they are the design:
 2. **Every failure falls back to the local generator**, and a **seeded request is never
    remote**: a seed means *"give me that name again"*, which an API cannot honour.
 
-A key for Behind the Name is read from `BEHINDTHENAME_KEY`. With it set, the thematic
-themes gain a real source; without it, nothing changes. That key is the one open
-decision — it is the only way to get public *Chinese* names, and it is the human's to
-obtain.
+A key for Behind the Name is read from `BEHINDTHENAME_KEY`, and — measured 2026-09-28 —
+**the key alone is not enough**: it must also be *named in `docker-compose.yaml`*
+(compose passes only what a service lists) **and** the seam needs `NAME_REMOTE`, since
+remote use is opt-in. Both are now in the api service's environment. The key was in
+`.env`, absent from the container, and the seam therefore off.
+
+### The `usage` codes are codes, not names (found by probing, 2026-09-28)
+
+The first mapping passed display names — `usage=chinese`, `usage=English` — and
+**every one of them answered** `{"error_code":60,"error":"name could not be generated"}`.
+Behind the Name takes a **three-letter code** from
+[`/api/appendix2.php`](https://www.behindthename.com/api/appendix2.php): `chi`, `jap`,
+`sca-anci` (Old Norse), `sla`, `ara`, `eng`. `number` is capped at **6**, and the key
+allows 2 requests/second, 400/hour, 4000/day.
+
+**The fallback hid it completely.** With a bad code every call failed and every call was
+silently answered by the local generator, so the result *looked* like a working API
+call — the only tell was that the names were the curated ones. Verified against the real
+key after the fix:
+
+```
+chinese  → Ruoxi, Lijuan, Xiaoming, Han        japanese → Airi, Emi, Hideaki, Sousuke
+norse    → Alfarr, Gunnhildr, Gunnarr          arabic   → Khayriyya, Manzur, Shawqi, Zeina
+```
+
+### What the key also unlocks — the fantasy categories
+
+Behind the Name is not only real-world. It carries **invented fantasy cultures** and
+**mythologies**, which is arguably a better answer to *"fantasy names, alien names"* than
+a syllable generator, and they were probed too:
+
+| code | what it is | sample |
+| --- | --- | --- |
+| `fntsr` | Romanto (fantasy) | Goxious, Copistrus, Arer |
+| `fntsg` | Gluttakh (fantasy) | Zhid, Hazin, Ghauztsawodh |
+| `fntsx` | Xalaxxi (fantasy) | Suouc, Noai, Aqchux |
+| `lite-k` | Arthurian Cycle | Mordred, Gaheriet, Pelles |
+| `sca-myth` | Norse Mythology | Heiðrún, Oddrún, Gunnarr |
+| `fairy` / `witch` / `goth` | whimsical categories | Glittershine, Sprinkleleaf |
+
+**Not wired yet, deliberately**: the constructed themes (`fantasy`, `alien`, `elvish`,
+`guttural`) stay local so they behave identically online and off, and mapping them onto
+Behind the Name's invented cultures is an authoring choice — *"Gluttakh"* is not a word a
+GM can guess at. Two options, both open: give these categories **their own themes**, or
+point the constructed themes at them and accept an online/offline difference.
+
+### The route that removes the runtime dependency entirely
+
+Behind the Name also publishes **downloadable name lists** (given names + genders,
+surnames) under **CC BY-SA 4.0** — attribution required. Importing those once would give
+the real-world and fantasy themes full offline coverage, no key, no rate limit, no
+certificate to expire, and would let the API become a bonus rather than a dependency.
+Worth doing before the curated lists are grown by hand.
 
 ## The API
 
