@@ -144,20 +144,47 @@ entity stores in `current_universe`. `theme` wins when both are given. `gender` 
 honoured where a theme carries gendered names and ignored elsewhere. `count` is clamped
 to 50.
 
+## The frontend (built 2026-09-28)
+
+`src/frontend/src/composables/useNaming.js` is the one place that knows how to read the
+themes and generate a name, so the surfaces cannot drift. The theme list is fetched
+**once** and shared through a module-level ref — a component mounting after the first
+fetch sees the loaded list rather than an empty dropdown — and `generateName` takes a
+*universe* when no theme is given, because the world decides how its people are named
+and a button should not have to know that.
+
+| surface | what it offers |
+| --- | --- |
+| `GmEntityForm.vue` | 🎲 beside the Name field; a **Naming theme** dropdown for UNIVERSE entities |
+| `GmEntityCreatePanel.vue` | 🎲 on the name field, universe resolved from the chosen location |
+| `CharacterSheet.vue` | 🎲 on the projection-name input, using the entity's universe |
+
+Three things worth keeping:
+
+- **The dropdown is read, not hard-coded** (`namingThemes` + `namingDefaultTheme`), which
+  is what makes `theme_keys()` a completeness guarantee: a theme declared on the server
+  appears in the picker with no frontend change, and an unknown theme cannot be typed.
+- **The sheet's name input commits on blur**, so its 🎲 carries `@mousedown.prevent`.
+  Without it the click blurs the field, the edit ends and the button unmounts before it
+  can fire — the kind of thing that only shows up in a browser.
+- **The button only fills the field.** Committing stays the existing Enter/blur, so it can
+  be pressed repeatedly to cycle without writing anything until you accept.
+
 ## What is still needed
 
-- **The UI buttons** ([[gm-panels]], [[character-sheet]]) — the human asked for them on
-  the entity creation panel and the character sheet:
-  - `GmEntityCreatePanel.vue` — beside `<input v-model="form.name">`; the universe comes
-    from `resolveUniverse(form.location)`.
-  - `GmEntityForm.vue` — beside `<input v-model="local.name">`; uses
-    `local.current_universe`.
-  - `CharacterSheet.vue` — the `projection-name-input` (the sheet's editable name is the
-    *projection's*), using the entity's current universe.
-- **The universe authoring field** — nothing sets `naming_theme` yet, so every world is
-  on the default. The GM universe panel and the MCP `update_entity` passthrough both want
-  it ([[gm-panels]], [[mcp-architect]]).
-- **Behind the Name's key**, if public Chinese names are wanted.
+- **The MCP property** ([[mcp-architect]]) — `naming_theme` is on `UpdateEntityInput` but
+  not on the `update_entity` tool schema, so a client cannot set a world's theme over MCP.
+- **The fantasy categories** — Behind the Name's invented cultures and mythologies are
+  probed and documented above but deliberately unwired; whether they become their own
+  themes or the constructed themes point at them is an authoring call.
+- **The downloadable lists** (CC BY-SA 4.0) — the route that would end the runtime
+  dependency, and the one that removes the silent-fallback hazard described above.
+- **Optional: an enum at the API boundary.** The dropdown closes the UI path, but a
+  non-UI writer can still store an unknown theme, and the read path answers with the
+  default while the field reports what was stored. An enum would reject it at the schema
+  — while the *domain* field should stay a string, because pydantic validates every
+  entity read and one stale value would break that entity's read (the [[B208]] failure
+  mode).
 
 ## Related
 
