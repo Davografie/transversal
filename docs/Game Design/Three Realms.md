@@ -121,7 +121,7 @@ Placed on the map, the seven span the whole Valley:
               power · meaning                                 the seven
 ```
 
-**So the thirteen are flat, and the "subordinate" reading was a mistake** — see *There is no crown* below for what replaced it. **Desire is Zhu Yan's aspect, not his rank.**
+**So the thirteen are flat, and the "subordinate" reading was a mistake** — see *Nobody designed the cult* below for what the thirteen actually are. **Desire is Zhu Yan's aspect, not his rank.**
 
 **His character still explains the faction, though — read as a symptom rather than a throne.** The human's read: *Zhu Yan is bored and spoiled — nothing satisfies him for long.* That is a man who has **lost the emotions and kept only the desires.** He cannot feel joy, anger, love or hate any more; what is left is appetite, and appetite does not last.
 
@@ -193,6 +193,42 @@ In that doc's own vocabulary:
 **And it has instruments, not just a presence:** three entities carry `Facilitate competitive evolution` — **the Intelligence**, **`flyer`** (a ship) and **`Cybernetic Detachment`** (a military unit). **So the Intelligence need never appear in the Valley.** It has a fleet and a doctrine, and it works through resonance rather than arrival.
 
 **And Zhu Yan's boredom is the same disease at a smaller scale:** an elite with everything, on an airless moon, who built an AI because it was bored. The Valley Lord is a one-man version of the immortals.
+
+### Nobody designed the cult — and Zhu Yan is as clueless as the rest
+
+**Corrected 2026-09-29, and it is the most important correction in this note.**
+
+- **The Intelligence's influence is subtle, and the cult is not its design.** The cult is **the local equivalent — the Valley's own answer to the entertainment-evolution philosophy.** It grew here, out of the same pressure, the way the same weed grows in two gardens.
+- **Zhu Yan is as clueless as the others.** He is not a dupe who was deceived, and he is not the author. He holds an aspect and believes he holds a crown, and **that belief is a product of the philosophy rather than a plan of the Intelligence's.**
+
+**This resolves the agency question, and the answer is stronger than either option I had offered.** There is no hand on the tiller:
+
+- **No one is running it, so there is no one to kill.** The cult is a *consequence* — of a philosophy that travels well, and of a Valley full of ambitious people with something to prove. That is far more frightening than a conspiracy, and it is unfalsifiable: smash every node and the pressure remains.
+- **And it makes the cult the local enemy while the Intelligence stays the horizon.** The Valley's antagonist is its own ambition; the Intelligence is what that ambition rhymes with.
+- **Which means the horror is recognition, not revelation.** The players are not going to find the villain at the bottom of it. They are going to find that the Valley's own sects — pride, isolation, tyranny, influence-gathering — are the same behaviour at a lower intensity.
+
+### The Wang Pagoda — the only place that knows about Transversal
+
+**The human, 2026-09-29:** *"The only person that knows about Transversal is the Wang family Valley administrator who has a communication device in the top floor of the Wang Pagoda."*
+
+**Every part of that is already structured, and one part is a surprise.**
+
+| | |
+|---|---|
+| **Wang Yanjin** (`gmc-147185031`) | `essence`: **"regional administrator"** · `cultivation stage` **"9th stage foundation building"** · carries **`Wang Clan's Celestial Bridge Talisman`**, `dao conception` **"Obligation"**, `art`: calligraphy, Wang Calligraphy Technique |
+| **where he actually is** | **Middle Floor** (`loc-151997369`) — *not* the Top Floor |
+| **the Wang Pagoda** | `loc-151990517`, under the **Verdant Dominion**, with three floors: Ground, Middle, **Top** (`loc-151997454`) |
+
+**The Top Floor's own `description` already says it:** *"At the pinnacle of the pagoda lies the most sacred and protected space. This upper level is where **Wang Yanjin** conducts his most important and secretive affairs."* So the room is authored for him — he just does not sleep in it.
+
+> [!warning] The Top Floor is already a multiversal node, and it was there before any of this
+> **`Top Floor → The Floating Vagabond` is a `relation` edge — not a `transversal` one.** The Floating Vagabond is the trans-dimensional bar that exists in every universe, and the Wang Pagoda's top floor is **already linked to it**, by the one edge type that carries narrative posture rather than structural wiring.
+>
+> **So the Wang family does not merely own a communication device. It owns the Valley's existing door out of the universe** — and the only person in the Valley who knows Transversal is real is the man whose private room is wired to the bar that sits outside all universes. That is not a coincidence to be designed; it is already load-bearing.
+
+**And the room holds a transversal artifact:** the **`Dragon's Dream Pearl`** (`artifact`, **d10**) — *"A large, flawless pearl held within a delicate, clockwork frame of Orichalcum and Gold. At its heart is a pea-sized core of solid Dimension…"* — a **Dimensionite** core, on the Top Floor, next to the man who knows about other worlds. **The communication device has an obvious socket.**
+
+**Two further facts worth having:** the Top Floor carries the same **`curse`** as forty other sites (*"forming a golden core will summon a heavenly tribulation"*), so no one breaks through in that room; and a **`hidden treasure room`** (`loc-135687483`) is reachable from the Top Floor by a `transversal` edge — though its parent is the **`ancestral hall`** (`loc-109272714`), and its own `event` slot is **unwritten**.
 
 ### Seat fit, read off the live sheets
 
@@ -282,12 +318,15 @@ This is also why [[B147]] exists: `commands` is the relationship type that carri
 **The demonic cult is now the top of this list, because it is the main antagonist in actual play.**
 
 1. **The demonic cult needs authoring from nothing: the faction, the seats, and a re-worked roster.** The seven individuals exist and are placed, but **every one needs re-authoring as a seat-holder**, **six of the thirteen seats are open**, and the faction itself does not exist. `cursed` / **"Qi Blood Addiction"** is the fingerprint that finds anyone missed. **The one remaining design question is what Jin Mu is** — he fits no aspect and reads as the cult's *function* (the Silencer) rather than one of its thirteen. **Settled since:** there is no crown — desire is a peer, and Zhu Yan only believes otherwise; Si Youyou is out, back to Daxu.
-2. **Zhu Yan needs a stat block worthy of a Valley Lord.** He is the Emperor, he holds the Aegis, and his sheet is **five settings** — `role: Valley Lord`, the artifact, `appearance`, an empty `description`. The main antagonist's head is currently thinner than his own guards.
-3. **Tan Gang has no emperor-shaped *position* in its structure.** It has three houses and a Jade-Seal Guard, but nothing that says who rules it and how — which is why the ruler reads as one more GMC in a city rather than the head of a hierarchy.
-4. **Silent Fang has no content worth the name.** 6 members now, but **2 traits total** and no arc-bearing stat block. Its arc cannot be authored until the faction is, and the three `Silent Fang` names (faction / location / guard) need separating.
-5. **Azure Dawn has no agenda and no portents**, while the smaller Iron Roots has both. The dominant sect states no intention, and **revelry is unwritten** — the authored sect is arrogant and paranoid only.
-6. **`Banished Wang Branch` is an empty faction** with one tie. Either it gets content or it should not be a faction.
-7. **The Wang family's influence is unmeasured.** 26 ties and 8 members is the right *shape*, but nobody has checked whether those ties actually reach the positions that matter — sect benches, gates, the Bazaar, the three houses of Tan Gang.
+2. **The Wang Pagoda's communication device does not exist.** Wang Yanjin, the Top Floor, the room's description, and the `relation` edge to the Floating Vagabond are all authored — **the device itself is not.** *"Communication device"* returns **zero entities and zero trait settings** anywhere in the Three Realms. **The `Dragon's Dream Pearl` (d10, Dimensionite core) on that same Top Floor is the obvious socket** — whether the device *is* the Pearl, is built around it, or sits beside it is the decision. **This is now the most important object in the Valley:** it is how the only man who knows about Transversal talks to anyone.
+3. **Zhu Yan needs a stat block worthy of a Valley Lord.** He holds the Aegis, rules Tan Gang, and believes he leads the cult — and his sheet is **five settings** (`role: Valley Lord`, the artifact, `appearance`, an empty `description`). Thin for a faction head, **and he is no longer the antagonist** — so write the block for a deluded man, not a mastermind.
+4. **Tan Gang has no emperor-shaped *position* in its structure.** It has three houses and a Jade-Seal Guard, but nothing that says who rules it and how — which is why the ruler reads as one more GMC in a city rather than the head of a hierarchy.
+5. **Silent Fang has no content worth the name.** 6 members now, but **2 traits total** and no arc-bearing stat block. Its arc cannot be authored until the faction is, and the three `Silent Fang` names (faction / location / guard) need separating.
+6. **Azure Dawn has no agenda and no portents**, while the smaller Iron Roots has both. The dominant sect states no intention, and **revelry is unwritten** — the authored sect is arrogant and paranoid only.
+7. **`Banished Wang Branch` is an empty faction** with one tie. Either it gets content or it should not be a faction.
+8. **The Wang family's reach is unmeasured — and it now matters far more than "influence".** It holds the only person in the Valley who knows Transversal is real, a room wired to the Floating Vagabond, and the Pearl. Nobody has checked what else those 26 ties touch.
+
+**Cross-cutting:** the cult's authority structure touches [[B147]]'s `commands` decision. **`Staliairtm Tra`** (Silent Fang) reads like a migration mangle rather than a name. And **`hidden treasure room`** (`loc-135687483`) is reachable from the Top Floor by a `transversal` edge but **parented to the `ancestral hall`** (`loc-109272714`), with its `event` slot unwritten.
 
 **Cross-cutting:** the cult's authority structure touches [[B147]]'s `commands` decision. And **`Staliairtm Tra`** (Silent Fang) reads like a migration mangle rather than a name.
 
