@@ -21,16 +21,27 @@
             <div v-if="projectionSubtitle" class="name-overline">{{ entity.name }}</div>
 
             <template v-if="projectionSubtitle">
-              <input
-                v-if="editingProjectionName"
-                ref="projectionNameInput"
-                v-model="projectionNameValue"
-                class="projection-name-input is-primary"
-                placeholder="Name this projection…"
-                @keyup.enter="commitProjectionName"
-                @keyup.escape="editingProjectionName = false"
-                @blur="commitProjectionName"
-              />
+              <div v-if="editingProjectionName" class="name-row">
+                <input
+                  ref="projectionNameInput"
+                  v-model="projectionNameValue"
+                  class="projection-name-input is-primary"
+                  placeholder="Name this projection…"
+                  @keyup.enter="commitProjectionName"
+                  @keyup.escape="editingProjectionName = false"
+                  @blur="commitProjectionName"
+                />
+                <!-- `mousedown.prevent` is load-bearing: this input commits on blur,
+                     so without it the click would blur the field, end the edit and
+                     unmount the button before it could fire. -->
+                <Button
+                  variant="neutral"
+                  :loading="namingBusy"
+                  title="Generate a name in this world's theme"
+                  @mousedown.prevent
+                  @click.stop="onGenerateProjectionName"
+                >🎲</Button>
+              </div>
               <h2 v-else class="name-primary">
                 <Button
                   v-if="canEditProjectionName"
@@ -46,16 +57,25 @@
             <template v-else>
               <h2 class="name-primary">{{ entity.name }}</h2>
               <div v-if="canEditProjectionName" class="name-secondary">
-                <input
-                  v-if="editingProjectionName"
-                  ref="projectionNameInput"
-                  v-model="projectionNameValue"
-                  class="projection-name-input"
-                  placeholder="Name this projection…"
-                  @keyup.enter="commitProjectionName"
-                  @keyup.escape="editingProjectionName = false"
-                  @blur="commitProjectionName"
-                />
+                <div v-if="editingProjectionName" class="name-row">
+                  <input
+                    ref="projectionNameInput"
+                    v-model="projectionNameValue"
+                    class="projection-name-input"
+                    placeholder="Name this projection…"
+                    @keyup.enter="commitProjectionName"
+                    @keyup.escape="editingProjectionName = false"
+                    @blur="commitProjectionName"
+                  />
+                  <!-- `mousedown.prevent`: the input commits on blur (see above). -->
+                  <Button
+                    variant="neutral"
+                    :loading="namingBusy"
+                    title="Generate a name in this world's theme"
+                    @mousedown.prevent
+                    @click.stop="onGenerateProjectionName"
+                  >🎲</Button>
+                </div>
                 <Button
                   v-else
                   variant="link"
@@ -692,6 +712,7 @@ import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
 import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
+import { useNaming } from '@/composables/useNaming.js'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
 import GmPlayOverview from './gm/GmPlayOverview.vue'
@@ -1208,6 +1229,24 @@ const projectionNameInput = ref(null)
 const savingProjectionName = ref(false)
 const projectionSubtitle = computed(() => (activeProjection.value?.name || '').trim())
 const canEditProjectionName = computed(() => !isForeignSheet.value && !!activeProjection.value)
+
+// ── Naming (B82) ─────────────────────────────────────
+// The sheet's editable name is the **projection's** — the entity's own name is the
+// GM's to set (and a PC's is the player's), so this is the field a 🎲 belongs on.
+// It only fills the input: the name is committed by the existing blur/Enter, so the
+// button can be pressed again to cycle without writing anything until you accept.
+const { generateName } = useNaming()
+const namingBusy = ref(false)
+
+async function onGenerateProjectionName() {
+  namingBusy.value = true
+  try {
+    const name = await generateName({ universe: entity.value?.currentUniverse || '' })
+    if (name) projectionNameValue.value = name
+  } finally {
+    namingBusy.value = false
+  }
+}
 
 function startProjectionNameEdit() {
   projectionNameValue.value = projectionSubtitle.value
@@ -3834,6 +3873,10 @@ watch(() => props.externalPoolSources, (sources) => {
   max-width: 220px;
 }
 .projection-name-input.is-primary { font-size: 20px; font-weight: 700; padding: 2px 8px; }
+/* The name field and its 🎲 share a row, so the header does not reflow when the
+   button appears (B82). */
+.name-row { display: flex; gap: 6px; align-items: center; }
+.name-row .projection-name-input { flex: 1; min-width: 0; }
 .meta {
   display: flex;
   gap: 8px;

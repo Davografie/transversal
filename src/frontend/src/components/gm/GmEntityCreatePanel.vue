@@ -1,7 +1,15 @@
 <template>
   <div>
     <label>Name</label>
-    <input v-model="form.name" autofocus />
+    <div class="name-row">
+      <input v-model="form.name" autofocus />
+      <Button
+        variant="neutral"
+        :loading="naming"
+        title="Generate a name for this entity's universe"
+        @click="onGenerateName"
+      >🎲</Button>
+    </div>
 
     <label>Type</label>
     <select v-model="form.type">
@@ -44,10 +52,11 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch } from 'vue'
+import { reactive, computed, watch, ref } from 'vue'
 import { ENTITY_TYPES, hasRazmerit } from '@/constants/entityTypes.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import Button from '@/components/ui/Button.vue'
+import { useNaming } from '@/composables/useNaming.js'
 
 // The create flow runs through the shared entity-CRUD singleton, so read its
 // live `saving` ref — a `saving` prop would be a stale snapshot passed at
@@ -117,6 +126,26 @@ function setRazmerit(n) {
   form.razmerit = form.razmerit === n ? 0 : n
 }
 
+// ── Naming (B82) ─────────────────────────────────────
+const { generateName } = useNaming()
+const naming = ref(false)
+
+async function onGenerateName() {
+  naming.value = true
+  try {
+    // The universe is resolved from the chosen location exactly as `onSubmit`
+    // resolves it, so the name is generated in the world the entity will land in.
+    const name = await generateName({
+      universe: resolveUniverse(form.location) || props.defaultUniverse || '',
+    })
+    // An empty result means the call failed; leaving the field alone beats clearing
+    // a name the GM already typed.
+    if (name) form.name = name
+  } finally {
+    naming.value = false
+  }
+}
+
 function onSubmit() {
   emit('create', {
     ...form,
@@ -129,6 +158,10 @@ function onSubmit() {
 <style scoped>
 label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-top: 8px; }
 input, select { font-size: 13px; padding: 6px 10px; width: 100%; box-sizing: border-box; }
+/* The generate button sits beside the field it fills, so the panel does not reflow
+   when it appears (B82). */
+.name-row { display: flex; gap: 6px; align-items: center; }
+.name-row input { flex: 1; min-width: 0; }
 select:disabled { opacity: 0.45; cursor: not-allowed; }
 .raz-dots { display: flex; gap: 10px; margin-top: 6px; }
 .raz-dot {

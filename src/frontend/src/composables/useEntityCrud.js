@@ -29,7 +29,7 @@ export function createEntityCrud() {
   const ENTITY_QUERY = `query($id: ID!) {
     entity(id: $id) {
       id type name razmerit currentUniverse currentLocation currentProjection
-      hidden unpublished supportEligible starterLocation loraConfig promptSteering
+      hidden unpublished supportEligible starterLocation loraConfig promptSteering namingTheme
       agency { playerId playerName main }
       projections {
         id entityId originUniverse universe name backgroundImage currentLocation transversalType
@@ -77,6 +77,9 @@ export function createEntityCrud() {
         starter_location: data.entity.starterLocation ?? false,
         lora_config: data.entity.loraConfig || '{}',
         prompt_steering: data.entity.promptSteering || '',
+        // B82: universe-only, and `''` genuinely means "the world default", so it
+        // round-trips as an empty string rather than being dropped.
+        naming_theme: data.entity.namingTheme || '',
       }
       return alreadyEditing
     }
@@ -90,7 +93,7 @@ export function createEntityCrud() {
     const result = await graphql(
       `mutation($input: UpdateEntityInput!) {
         updateEntity(input: $input) {
-          id name razmerit currentUniverse currentLocation hidden unpublished supportEligible starterLocation loraConfig promptSteering
+          id name razmerit currentUniverse currentLocation hidden unpublished supportEligible starterLocation loraConfig promptSteering namingTheme
         }
       }`,
       {
@@ -107,6 +110,7 @@ export function createEntityCrud() {
           starterLocation: form.value.starter_location,
           loraConfig: form.value.lora_config,
           promptSteering: form.value.prompt_steering,
+          namingTheme: form.value.naming_theme || '',
         },
       }
     )
@@ -121,6 +125,7 @@ export function createEntityCrud() {
         selected.value.unpublished = ue.unpublished
         selected.value.supportEligible = ue.supportEligible
         selected.value.starterLocation = ue.starterLocation
+        selected.value.namingTheme = ue.namingTheme || ''
       }
     }
     saving.value = false
