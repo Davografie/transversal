@@ -157,6 +157,7 @@ class Entity:
     attunements: list[Attunement] = strawberry.field(default_factory=list)
     lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
     prompt_steering: Optional[str] = None  # universe-only: one steering sentence for prompts
+    naming_theme: str = ""  # universe-only: the naming theme new names here should sound like
     prompt_include_ancestors: bool = False  # location-only: add the ancestor chain to its image prompt
     palette: Optional[str] = None  # universe-only: JSON palette — {"font": {...}, "radius": "0px", "dark": {...}, "light": {...}}
 
@@ -373,8 +374,15 @@ class UpdateEntityInput:
     suitable_life_path_ids: Optional[list[str]] = None
     lora_config: Optional[str] = None
     prompt_steering: Optional[str] = None
+    naming_theme: Optional[str] = None
     prompt_include_ancestors: Optional[bool] = None
     palette: Optional[str] = None
+
+@strawberry.type
+class NameThemeRef:
+    """A naming theme the generator carries, as a picker row ([[B82]])."""
+    key: str
+    label: str
 
 @strawberry.type
 class RazmeritResult:

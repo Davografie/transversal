@@ -62,6 +62,7 @@ from transversal.api.graphql.type_defs.entities import (  # noqa: F401
     Entity,
     CreateEntityInput,
     UpdateEntityInput,
+    NameThemeRef,
     RazmeritResult,
     CharacterView,
 )

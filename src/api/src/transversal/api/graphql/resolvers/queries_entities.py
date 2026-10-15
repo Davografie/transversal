@@ -9,6 +9,7 @@ from transversal.api.graphql.types import EntityFactionRef
 from transversal.api.graphql.types import FactionDistance
 from transversal.api.graphql.types import FactionMember
 from transversal.api.graphql.types import LocationDistance
+from transversal.api.graphql.types import NameThemeRef
 from transversal.api.graphql.types import Projection
 from transversal.api.graphql.types import RelatedEntity
 from transversal.api.graphql.types import Relationship
@@ -223,3 +224,46 @@ class QueriesEntities:
             LocationDistance(location_id=key, distance=dist)
             for key, dist in sorted(found.items(), key=lambda kv: (kv[1], kv[0]))
         ]
+
+    @strawberry.field
+    def naming_themes(self, info: strawberry.Info) -> list[NameThemeRef]:
+        """The naming themes this build carries, for a picker ([[B82]]).
+
+        Read rather than hard-coded in the client: the theme list is the
+        generator's, and a world's ``namingTheme`` has to name something a picker
+        can offer.
+        """
+        from transversal.services import name_generator as ng
+
+        return [NameThemeRef(key=k, label=ng.theme_label(k)) for k in ng.theme_keys()]
+
+    @strawberry.field
+    def random_names(
+        self,
+        info: strawberry.Info,
+        theme: str = "",
+        universe: str = "",
+        count: int = 1,
+        gender: str = "",
+        seed: Optional[int] = None,
+    ) -> list[str]:
+        """Names for a theme — the world's when ``universe`` is given and ``theme``
+        is not, else the default ([[B82]]).
+
+        ``gender`` is honoured by the themes that carry gendered names and ignored
+        by the rest. A ``seed`` makes the result repeatable and is **local-only**:
+        a public API cannot honour "give me that name again", so a seeded request
+        never leaves the process. Everything else prefers a configured public API
+        and falls back to the local generator on any failure — naming a character
+        is not worth an error, and the probed API landscape rots (see
+        ``services/name_generator``).
+        """
+        from transversal.services import name_generator as ng
+
+        repo = _em(info).repo
+        key = theme.strip() or ng.theme_for_universe(repo, universe)
+        return ng.generate_names(
+            key, count=max(1, min(int(count), 50)), gender=gender, seed=seed,
+            remote=ng.is_remote_enabled(),
+        )
+

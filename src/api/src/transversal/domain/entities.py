@@ -154,6 +154,11 @@ class Entity(BaseModel):
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
     # Universe — free-text style steering appended to every prompt generated here
     prompt_steering: str = ""
+    # Universe — which naming theme new names here should sound like. A key from
+    # `services/name_generator.THEMES` ("chinese", "fantasy", "alien", …); "" and
+    # an unknown key both mean the plain default, so a world can name a theme this
+    # build does not carry yet without breaking naming.
+    naming_theme: str = ""
     # Location image prompts — also describe the ancestor chain ("located in …").
     # Useful for exteriors and landscapes, usually noise for interiors, so it is
     # per-location and off by default. Sub-locations ("zones") are always

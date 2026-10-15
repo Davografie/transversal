@@ -74,6 +74,8 @@ class MutationsEntities:
             e.lora_config = json.loads(input.lora_config) if input.lora_config else None
         if input.prompt_steering is not None:
             e.prompt_steering = input.prompt_steering.strip()
+        if input.naming_theme is not None:
+            e.naming_theme = input.naming_theme.strip()
         if input.prompt_include_ancestors is not None:
             e.prompt_include_ancestors = input.prompt_include_ancestors
         if input.palette is not None:

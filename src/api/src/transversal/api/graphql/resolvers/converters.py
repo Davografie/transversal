@@ -114,6 +114,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         ],
         lora_config=json.dumps(e.lora_config) if e.lora_config else None,
         prompt_steering=e.prompt_steering or None,
+        naming_theme=e.naming_theme or "",
         prompt_include_ancestors=e.prompt_include_ancestors,
         palette=json.dumps(e.palette) if e.palette else None,
     )
