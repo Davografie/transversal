@@ -34,6 +34,7 @@ import {
   rootAnchor,
   showsChildren,
   sortSetTraits,
+  sortTraitDefinitions,
   subtreeContains,
   traitTags,
   usesFlatTraitList,
@@ -314,6 +315,26 @@ ok('a sub-trait does not count — it rides its parent',
    ] }]), true)
 ok('an absent list is flat rather than a crash', usesFlatTraitList(undefined), true)
 ok('the limit is overridable', usesFlatTraitList([setOf('a', 5)], 4), false)
+
+// ── the add picker's list reads alphabetically ──────────────────────────
+// The registry's own order is arbitrary, so the picker would otherwise be the one
+// list on the sheet that cannot be scanned for a name.
+const def = (id, name) => ({ id, name })
+ok('trait definitions sort by name',
+   sortTraitDefinitions([def('c', 'size'), def('a', 'regime alert'), def('b', 'technology')])
+     .map(d => d.name),
+   ['regime alert', 'size', 'technology'])
+ok('and case-insensitively, so one name is not split into two runs',
+   sortTraitDefinitions([def('a', 'Fire Blade'), def('b', 'fire blade'), def('c', 'Aegis')])
+     .map(d => d.id),
+   ['c', 'a', 'b'])
+ok('equal names settle on the id rather than on the input order',
+   sortTraitDefinitions([def('b', 'same'), def('a', 'same')]).map(d => d.id),
+   ['a', 'b'])
+ok('an absent list is empty rather than a crash', sortTraitDefinitions(undefined), [])
+ok('the caller\'s array is not reordered in place',
+   (() => { const src = [def('b', 'b'), def('a', 'a')]; sortTraitDefinitions(src); return src.map(d => d.id) })(),
+   ['b', 'a'])
 
 // ── a relationship states whom it concerns, once, as its group's header ──
 // The head is the first row of a run; its traits follow. A header cannot move

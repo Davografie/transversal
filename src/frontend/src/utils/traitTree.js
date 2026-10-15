@@ -345,6 +345,28 @@ export function usesFlatTraitList(traitSets, limit = FLAT_TRAIT_LIMIT) {
 }
 
 /**
+ * Trait definitions in the order a picker should read: alphabetical by the name
+ * the reader is scanning for.
+ *
+ * The registry's own order is arbitrary — `traitsByUniverse(earth)` comes back
+ * `regime alert`, `technology`, `size`, `hydrography`, … — so a picker showing it
+ * raw is the one list on the sheet that cannot be scanned for a name you already
+ * have in mind (the author, 2026-09-29: *"I want the trait list sorted when I want
+ * to add a trait"*). The trait **sets** above it are already ordered by their own
+ * `order`, and the definition picker in the editor already reads alphabetically,
+ * so this is the add picker falling in with both.
+ *
+ * Case-insensitive (`sensitivity: 'base'`), so `fire blade` and `Fire Blade` do
+ * not sort into two runs, and settled on the id so two names that compare equal
+ * still land in a fixed order — the same discipline the entity lists use.
+ */
+export function sortTraitDefinitions(definitions) {
+  return [...(definitions || [])].sort((a, b) =>
+    String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' })
+    || String(a?.id || '').localeCompare(String(b?.id || '')))
+}
+
+/**
  * The row that **heads** each run of rows about one relationship, and the label it
  * carries.
  *

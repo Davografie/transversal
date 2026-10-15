@@ -301,3 +301,42 @@ test('the contacts are grouped by entity type, then alphabetical', async ({ page
     }
   }
 })
+
+// The add flow's own list, which is a different list from the editor's: the traits
+// a set can still offer you. The registry's order is arbitrary (`traitsByUniverse`
+// returns `regime alert`, `technology`, `size`, …), so this is the one list in the
+// picker that could not be scanned for a name you already had in mind — the sets
+// above it are ordered by their own `order` and the contacts step is alphabetical.
+// The author asked for it: *"I want the trait list sorted when I want to add a
+// trait"* (2026-09-29).
+test('the traits a set offers are listed alphabetically', async ({ page, request }) => {
+  const character = await findPlayableCharacter(request)
+  await openSheet(page, character)
+  await ensureTraitRowsVisible(page)
+
+  await page.getByRole('button', { name: /Add Trait/i }).click()
+  const picker = page.locator('.trait-picker')
+  // The picker only exists *after* two `…ByUniverse` queries return, so reading it
+  // immediately after the click sees nothing at all.
+  await picker.waitFor({ state: 'visible', timeout: 20_000 })
+
+  // `assets` on purpose: it is the set with the most definitions in `earth`, and
+  // it is not `relations` — that one interposes the contact step, whose list has
+  // its own (already alphabetical) rule and is asserted above.
+  await picker.locator('.picker-item').filter({ hasText: /^assets$/i }).first().click()
+
+  const names = async () => picker.locator('.picker-item').evaluateAll((els) => els.map((e) => {
+    // The row is the name plus a die badge, so take the name and leave the badge:
+    // `textContent` alone would read `sized8`.
+    const clone = e.cloneNode(true)
+    clone.querySelectorAll('.picker-die').forEach((n) => n.remove())
+    return (clone.textContent || '').trim()
+  }))
+
+  await expect.poll(names, { timeout: 15_000 }).not.toEqual([])
+  const listed = await names()
+  expect(listed.length, 'the fixture must offer several traits to order').toBeGreaterThan(1)
+  expect(listed, 'the offered traits read alphabetically').toEqual(
+    [...listed].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
+  )
+})

@@ -718,7 +718,7 @@ import RollTableMenu from './gm/RollTableMenu.vue'
 import GmPlayOverview from './gm/GmPlayOverview.vue'
 import { useEntityCrud } from '../composables/useEntityCrud.js'
 import { useLocationTree } from '../composables/useLocationTree.js'
-import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, groupRelationRows, relationGroups, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
+import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, groupRelationRows, relationGroups, rootAnchor, sortTraitDefinitions, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
 import { splitRefunds } from '../utils/poolSpends.js'
 import { rollTableIdFromAnswer, rollTableIdOf, rollTableMenuEffect } from '../utils/rollTableMenu.js'
 import { DEFAULT_SHEET_TAB, hasSheetTab, sheetProfileFor } from '../utils/sheetProfile.js'
@@ -1799,7 +1799,12 @@ const filteredRelationships = computed(() => {
 
 const filteredTraits = computed(() => {
   if (!selectedTraitSet.value) return []
-  const inSet = availableTraits.value.filter(t => t.traitsetId === selectedTraitSet.value.id)
+  // Sorted once here, so every branch below keeps the order: this is a list you
+  // scan for a name you already have in mind, and the registry's own order is
+  // arbitrary. (`filter` returns a new array, so sorting it leaves
+  // `availableTraits` — which the other picker steps read — untouched.)
+  const inSet = sortTraitDefinitions(
+    availableTraits.value.filter(t => t.traitsetId === selectedTraitSet.value.id))
 
   // A relationship trait's identity is `{edge}:{trait}`, so the same definition
   // may sit on two different relationships — "already assigned" is per *edge*
