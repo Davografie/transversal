@@ -20,8 +20,8 @@
          dropdown so an unknown theme cannot be typed. -->
     <template v-if="isUniverse">
       <label>Naming theme</label>
-      <select :value="local.naming_theme || ''" @change="onThemeChange">
-        <option value="">Default ({{ defaultThemeLabel }})</option>
+      <select class="naming-theme" :value="local.naming_theme || ''" @change="onThemeChange">
+        <option value="">{{ defaultOptionLabel }}</option>
         <option v-for="t in themes" :key="t.key" :value="t.key">{{ t.label }}</option>
       </select>
       <p class="hint">Names generated in this universe sound like this.</p>
@@ -56,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { hasRazmerit } from '@/constants/entityTypes.js'
 import { useNaming } from '@/composables/useNaming.js'
 import Button from '@/components/ui/Button.vue'
@@ -105,8 +105,19 @@ const themeName = computed(
 const defaultThemeLabel = computed(
   () => themes.value.find((t) => t.key === defaultTheme.value)?.label || defaultTheme.value,
 )
+// Reads "Default (Modern / Earth)" once loaded and plain "Default" before that —
+// the first cut rendered the empty parentheses "Default ()" while the list was in
+// flight, which is also what a failed fetch would have left on screen.
+const defaultOptionLabel = computed(
+  () => (defaultThemeLabel.value ? `Default (${defaultThemeLabel.value})` : 'Default'),
+)
 
-onMounted(() => { if (isUniverse.value) loadThemes() })
+// A **watch, not `onMounted`**: the panel mounts this form before the entity it
+// edits has loaded, so at mount `local.type` is still undefined, the check was
+// false, and the themes were never fetched — the dropdown rendered with no options
+// ("Default ()"). Watching the condition itself covers both orders, and `immediate`
+// covers a form that is already a universe when it mounts.
+watch(isUniverse, (v) => { if (v) loadThemes() }, { immediate: true })
 
 async function onGenerateName() {
   naming.value = true
