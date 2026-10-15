@@ -26,6 +26,15 @@ services:
       # or it sits in .env unseen — compose only passes what the service names.
       ARCHITECT_TOKEN: "${ARCHITECT_TOKEN}"
       ARCHITECT_NAME: "${ARCHITECT_NAME:-Architect}"
+      # B82: the naming seam. A key in `.env` alone sits unseen for the same
+      # reason as the token above — compose passes only what the service names.
+      # Behind the Name is the only public source with a `usage=chinese`, so the
+      # key is what makes the thematic themes real rather than curated.
+      BEHINDTHENAME_KEY: "${BEHINDTHENAME_KEY:-}"
+      # Remote naming is ON here because a key is configured. Naming always falls
+      # back to the local generator, so this is a preference, never a dependency;
+      # set NAME_REMOTE=0 to keep it strictly offline (see [[Name Generation]]).
+      NAME_REMOTE: "${NAME_REMOTE:-1}"
       REDIS_URL: "redis://redis:6379"
     depends_on:
       arango:
