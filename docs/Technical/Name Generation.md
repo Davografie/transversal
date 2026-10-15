@@ -169,6 +169,21 @@ Three things worth keeping:
   can fire — the kind of thing that only shows up in a browser.
 - **The button only fills the field.** Committing stays the existing Enter/blur, so it can
   be pressed repeatedly to cycle without writing anything until you accept.
+- **The dropdown's list is fetched on demand, and the fetch must not be gated on
+  `onMounted`.** It shipped as `onMounted(() => isUniverse && loadThemes())`, and the
+  dropdown had **one option, "Default ()"** — because the GM panel mounts the form
+  *before* the entity it edits has loaded, so at mount `local.type` was still undefined
+  and `namingThemes` was never requested. A `watch(isUniverse, …, { immediate: true })`
+  covers both orders. Every node-level check passed while it was broken — the query, the
+  composable and the template were all fine, and only a browser showed that the options
+  never arrived.
+
+`e2e/tests/naming-theme.spec.js` pins the dropdown: it opens a universe's editor and
+requires more than one option, the real labels and a `Default (…)` label, plus the round
+trip — with the write stubbed, because a universe's theme is live content. It locates the
+select **by its label** so the same spec runs against the tree before and after a fix, and
+it polls the save **value** rather than the write count, because the panel autosaves on a
+600 ms debounce and an earlier write lands first.
 
 ## What is still needed
 
