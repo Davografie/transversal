@@ -283,6 +283,28 @@ class InMemoryRepository(EntityRepository):
         d = self._sfx_owners.get(owner_id)
         return SfxOwner.model_validate(d) if d else None
 
+    # sfxs
+    # The double carried no SFX **read** at all, so `get_available_sfx_ids` (→
+    # `reach_index`) fell through to the Arango implementation and raised
+    # `'NoneType' object has no attribute 'aql'` on the double's missing `db`.
+    # It went unnoticed because a full-suite run warms `sfx_owner`'s reach cache and
+    # skips the call, so **`test_graphql.py` alone had 20 failures** that the suite
+    # never showed — a trap for anyone running a single file, which is what a
+    # session does while working on one thing.
+    def get_all_sfxs(self) -> list:
+        from transversal.domain import SFX
+
+        return [
+            SFX.model_validate({**d, "id": d.get("id") or d.get("_key") or key})
+            for key, d in self._sfxs.items()
+        ]
+
+    def get_sfx(self, sfx_id: str):
+        from transversal.domain import SFX
+
+        d = self._sfxs.get(sfx_id)
+        return SFX.model_validate({**d, "id": d.get("id") or sfx_id}) if d else None
+
     # effective traits
     def get_effective_traitsettings(self, eid: str, universes: list[str]) -> list[TraitSetting]:
         universe_trait_ids = {tid for tid, d in self._traits.items() if any(u in d["universes"] for u in universes)}
