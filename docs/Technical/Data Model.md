@@ -209,6 +209,7 @@ Core entity metadata. Every significant thing in Transversal is an entity. Trait
 | `scheduled_events` | ScheduledEvent[] | | Pending timed reverts |
 | `lora_config` | dict? | | Per-entity-type LoRA config (e.g. `{"CHARACTER": ["lora1"]}`) |
 | `prompt_steering` | string | | Universe-only: free-text style steering appended to every prompt generated there |
+| `naming_theme` | string | | Universe-only: which naming theme names here should sound like — a key from `services/name_generator` (`chinese`, `fantasy`, `alien`, …). `""` and an unknown key both mean the default, so a world may name a theme this build does not carry yet ([[Name Generation]], [[B82]]) |
 | `palette` | dict? | | Universe-only: the universe's look — `dark`/`light` colour groups plus `font` and `radius`, applied by the frontend as `:root` overrides ([[UI-UX Design#The universe palette]]) |
 | `life_paths` | Enrollment[] | | Life-path memberships (faction + path) |
 | `active_universes` | string[] | | Faction-only: where active |
