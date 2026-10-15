@@ -242,12 +242,29 @@
     <!-- No Save button: every edit persists on its own (B211's convention, the
          human 2026-10-13). What replaces it is the *feedback* — the SFX panel's
          button doubled as this readout, and with the button gone the author needs
-         somewhere to see that the write landed, and that it failed if it did. -->
+         somewhere to see that the write landed, and that it failed if it did.
+
+         **Create is the exception** ([[B225]]): a table that does not exist has
+         nothing to write onto, so one deliberate act makes it and the auto-save
+         arms from then on. Its absence is why a new table could not be saved at
+         all — the auto-save returns early without an id, and nothing minted one. -->
     <div class="rte-save-state" :class="{ 'rte-save-error': !!error }">
       <span v-if="error" class="rte-save-msg">{{ error }}</span>
-      <span v-else-if="saving" class="rte-save-msg">Saving…</span>
+      <span v-else-if="saving" class="rte-save-msg">{{ isNew ? 'Creating…' : 'Saving…' }}</span>
       <span v-else-if="savedAt" class="rte-save-msg rte-saved">Saved</span>
+      <span v-else-if="isNew" class="rte-save-msg">
+        Not created yet — name it, then create it.
+      </span>
       <span v-else class="rte-save-msg">Edits save as you make them.</span>
+      <Button
+        v-if="isNew"
+        class="rte-create"
+        variant="success"
+        solid
+        :loading="saving"
+        :disabled="saving || !form.name.trim()"
+        @click="save"
+      >{{ saving ? 'Creating…' : 'Create roll table' }}</Button>
     </div>
   </div>
 </template>
@@ -318,6 +335,11 @@ const form = reactive({
 
 const saving = ref(false)
 const error = ref('')
+// A table that does not exist yet. The auto-save has nothing to write onto, so one
+// deliberate act creates it ([[B225]]) — and `save` then **adopts the id** the
+// server minted, which is what arms the auto-save and keeps every later edit an
+// update rather than a second table.
+const isNew = computed(() => !form.id)
 const universeOptions = ref([])
 const lifePathOptions = ref([])
 
@@ -762,6 +784,17 @@ async function save() {
       return
     }
 
+    // A **create** mints the id (the server does, for an empty one) and this panel
+    // adopts it: everything downstream is keyed on it — the auto-save, the
+    // connector column, a row editor's identity — and without the adoption the
+    // panel would keep looking new and the next edit would create a second table.
+    // Set under the load guard so it is not read as an edit and re-queued.
+    const wasNew = !form.id
+    if (wasNew) {
+      _suppressEdits = true
+      try { form.id = result.id } finally { _suppressEdits = false }
+    }
+
     // The connector belongs to the *path*, so write the wrapper too. `steps`
     // REPLACES the stored list, so every step travels — only the edited step's
     // bindings differ — and the path's other fields travel with it: saveLifePath
@@ -804,7 +837,14 @@ async function save() {
       return
     }
 
-    bus.emit('lifepath-saved', { id: lp.value?.id || form.lifePath, universe: lp.value?.universe })
+    bus.emit('lifepath-saved', {
+      id: lp.value?.id || form.lifePath,
+      // The list panels refetch on this event whatever it carries; the table id and
+      // `isNew` are here so a create is distinguishable from an edit.
+      tableId: form.id,
+      universe: lp.value?.universe ?? form.universe,
+      isNew: wasNew,
+    })
     // No `panel.close()`: this runs on every edit now, and the panel is the
     // author's surface until they close it themselves.
     savedAt.value = new Date()
@@ -885,6 +925,9 @@ async function save() {
    because the failure has nowhere else to appear now. */
 .rte-save-state { display: flex; align-items: center; min-height: 18px; }
 .rte-save-msg { font-size: 10px; color: var(--text-dim); }
+/* Create mode's one deliberate act ([[B225]]), pushed to the end of the readout row
+   so the message stays where the eye already goes for save state. */
+.rte-create { margin-left: auto; flex: none; }
 .rte-saved { color: var(--success); }
 .rte-save-error .rte-save-msg {
   font-size: 11px; color: var(--danger); background: var(--danger-8);
