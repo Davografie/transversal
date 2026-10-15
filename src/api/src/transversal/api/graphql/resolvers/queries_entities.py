@@ -238,6 +238,18 @@ class QueriesEntities:
         return [NameThemeRef(key=k, label=ng.theme_label(k)) for k in ng.theme_keys()]
 
     @strawberry.field
+    def naming_default_theme(self, info: strawberry.Info) -> str:
+        """The theme a universe gets when it names none.
+
+        Read rather than repeated in the client, so a picker can label its *Default*
+        option with the real theme instead of a second copy of the constant — the
+        two would otherwise be free to disagree after a change on either side.
+        """
+        from transversal.services import name_generator as ng
+
+        return ng.DEFAULT_THEME
+
+    @strawberry.field
     def random_names(
         self,
         info: strawberry.Info,

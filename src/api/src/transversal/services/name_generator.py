@@ -218,15 +218,30 @@ THEME_LABELS: tuple[tuple[str, str], ...] = (
 
 
 def theme_keys() -> list[str]:
-    """Every declared theme key, in picker order."""
-    return [k for k, _ in THEME_LABELS if k in THEMES]
+    """Every theme the registry declares, in picker order — **never** a subset.
+
+    Derived from :data:`THEMES`, which is the source of truth;
+    :data:`THEME_LABELS` supplies order and display names only. Any key it does not
+    label is appended, because a picker is the one surface where a missing entry is
+    invisible: the old order came from the label table and **dropped** a theme that
+    had been declared but not labelled, so the frontend could not offer it and
+    nothing said so. `tests/test_name_generator.py` pins that an unlabelled theme is
+    still offered — the frontend's dropdown is built from this read.
+    """
+    labelled = [k for k, _ in THEME_LABELS if k in THEMES]
+    return labelled + sorted(k for k in THEMES if k not in labelled)
 
 
 def theme_label(key: str) -> str:
+    """The display name for a theme — the key itself if nobody labelled it.
+
+    An unlabelled theme shows its key rather than vanishing: the omission is an
+    authoring oversight, and a picker that hides the theme makes it unfindable.
+    """
     for k, label in THEME_LABELS:
         if k == key:
             return label
-    return key
+    return key.replace("-", " ").replace("_", " ").title() if key in THEMES else key
 
 
 def _pick_given(rng: random.Random, theme: ListTheme, gender: str) -> str:

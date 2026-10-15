@@ -192,3 +192,15 @@ def test_the_number_cap_matches_the_api_limit():
     """Behind the Name caps `number` at 6, and asking for more is not an error the
     caller can see — the fallback answers instead."""
     assert ng.BTN_MAX_NUMBER == 6
+
+
+def test_every_declared_theme_is_offered_even_without_a_label(monkeypatch):
+    """The frontend's dropdown is built from this read, so a theme that is declared
+    but not offered is **invisible** — and that is what the old label-derived order
+    did: it listed keys from `THEME_LABELS`, so declaring a theme without labelling
+    it silently withheld it from every picker."""
+    assert set(ng.THEMES) <= set(ng.theme_keys())
+    monkeypatch.setitem(ng.THEMES, "playtest-theme", ng.THEMES["modern"])
+    assert "playtest-theme" in ng.theme_keys()
+    # Unlabelled, so it shows its own key rather than vanishing.
+    assert ng.theme_label("playtest-theme") == "Playtest Theme"
