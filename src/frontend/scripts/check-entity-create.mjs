@@ -130,5 +130,35 @@ ok('an occupant add row is given its location as the parent',
   readFileSync(new URL('../src/components/GmPanel.vue', import.meta.url), 'utf8')
     .includes("ctx?.addType === 'occupant' || ctx?.addType === 'zone'"), true)
 
+// ── 6. the auto-save race behind "the checkbox doesn't persist" ──────────
+// Reported 2026-10-16 as the Starter Location checkbox not sticking. The write
+// was fine: the *panel* re-reads its entity whenever it becomes the active tab
+// again, and that rebuilds the whole form from the database — while the edit was
+// still sitting in the 600ms auto-save debounce. So the tick was read back as it
+// was stored and then written that way. The read now flushes the pending save
+// first. (Reproduced in `e2e/tests/starter-location.spec.js`, which fails without
+// this; the structural half is here because a check can pin the ordering.)
+console.log('\nre-reading the entity being edited flushes the pending auto-save\n')
+
+const CRUD = readFileSync(new URL('../src/composables/useEntityCrud.js', import.meta.url), 'utf8')
+
+ok('a pending save can be flushed on demand',
+  /async function flushPendingSave\(\)/.test(CRUD), true)
+ok('which clears the debounce rather than racing it',
+  /clearTimeout\(entitySaveTimer\)/.test(CRUD) && /entitySaveTimer = null/.test(CRUD), true)
+ok('and waits for a save already on the wire',
+  /if \(saveInFlight\) await saveInFlight/.test(CRUD), true)
+ok('re-selecting the entity already being edited flushes first',
+  /if \(editing\.value && selectedId\.value === e\.id\) await flushPendingSave\(\)/.test(CRUD), true)
+ok('and only then reads — the flush is awaited before the query',
+  (() => {
+    const body = CRUD.slice(CRUD.indexOf('async function selectEntity'))
+    const flush = body.indexOf('await flushPendingSave()')
+    const query = body.indexOf('await graphql(ENTITY_QUERY')
+    return flush >= 0 && query > flush
+  })(), true)
+ok('the debounce is still the 600ms auto-save it was',
+  /setTimeout\(\(\) => saveEntity\(\), 600\)/.test(CRUD), true)
+
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)

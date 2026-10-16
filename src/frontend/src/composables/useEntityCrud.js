@@ -56,6 +56,10 @@ export function createEntityCrud() {
   // selectEntity() sets form.value (new object), which triggers the watcher,
   // which calls saveEntity() again → infinite re-open loop.
   async function selectEntity(e) {
+    // Re-reading the entity we are already editing: flush the pending auto-save
+    // first, or the read returns the pre-edit value and the form is rebuilt from
+    // it — which is how a tick taken just before a tab switch got reverted.
+    if (editing.value && selectedId.value === e.id) await flushPendingSave()
     const alreadyEditing = editing.value && selectedId.value === e.id
     const data = await graphql(ENTITY_QUERY, { id: e.id })
     if (data?.entity) {
@@ -88,7 +92,22 @@ export function createEntityCrud() {
 
   // ── Mutations ──────────────────────────────────────
   // ⚠ Must update selected.value directly — must NOT call selectEntity().
+  // The in-flight save is tracked so a re-read can wait for the newest intent to
+  // land: a panel that re-reads *while* a save is on the wire would otherwise read
+  // the pre-edit value back and save it (see `flushPendingSave`). The body lives
+  // in `doSaveEntity` so `saveEntity` keeps its name and behaviour for callers.
+  let saveInFlight = null
   async function saveEntity() {
+    const run = doSaveEntity()
+    saveInFlight = run
+    try {
+      return await run
+    } finally {
+      if (saveInFlight === run) saveInFlight = null
+    }
+  }
+
+  async function doSaveEntity() {
     saving.value = true
     const result = await graphql(
       `mutation($input: UpdateEntityInput!) {
@@ -337,6 +356,26 @@ export function createEntityCrud() {
 
   // ── Auto-save watcher — one per instance, following this instance's form ──
   let entitySaveTimer = null
+
+  /**
+   * Let a debounced auto-save land *now*.
+   *
+   * The save is 600ms behind the form, and `selectEntity` rebuilds the whole form
+   * from the database. A panel re-reads itself whenever it becomes the active tab
+   * again (see `GmEntityEditPanel`), so an edit made just before a tab switch used
+   * to be read back as it was **stored** and then written that way — silently
+   * reverting it. Nothing was lost at the wire: the newer intent simply never
+   * reached the database. Flushing here makes the read below include the edit.
+   */
+  async function flushPendingSave() {
+    // A save already on the wire carries newer intent than the database shows.
+    if (saveInFlight) await saveInFlight
+    if (!entitySaveTimer) return
+    clearTimeout(entitySaveTimer)
+    entitySaveTimer = null
+    if (editing.value && selected.value) await saveEntity()
+  }
+
   watch(
     () => form.value,
     () => {

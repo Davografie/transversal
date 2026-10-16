@@ -279,6 +279,15 @@ export function useEntityCrud() {
 Singleton composables (the reference implementations):
 
 - `useEntityCrud` — entities, selection, CRUD, auto-save watcher, imagen job polling.
+  **Its auto-save is debounced (600ms), so anything that re-reads an entity that is
+  being edited must flush the pending save first.** `GmEntityEditPanel` re-reads
+  whenever it becomes the active tab again, and without the flush it rebuilt the
+  whole form from the database *inside* the debounce window — reading the edit
+  back as it was stored and then saving it that way. Nothing was lost at the wire;
+  the newer intent simply never got there, which is what made the 2026-10-16
+  "the Starter Location checkbox doesn't persist" report look like a lost write.
+  `selectEntity` now flushes (and waits for any in-flight save) before it reads;
+  `e2e/tests/starter-location.spec.js` fails without it.
 - `useTraitsConfig` — traitsets, allSfxs, `traitNameMap`, fetch, optimistic `patchData`.
 - `useLocationTree` — location tree + expansion state (module-level), derivation computeds.
 - `useTroupe` — troupe-play state (spotlight recency, support characters, active mains, current bodies, online players); read by `GmTroupeOverview` and the player settings overlay.
