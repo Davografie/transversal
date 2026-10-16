@@ -7,6 +7,14 @@ import { fileURLToPath, URL } from 'node:url'
 // worktree serve its own API container; unset, this is the compose service name.
 const API_TARGET = process.env.VITE_API_TARGET || 'http://api:8080'
 
+// Which campaign the dev server opens ([[B305]]). A campaign is chosen by the **Host**
+// the API sees (`<slug>.<base-domain>`), so the proxy is the only place a dev server can
+// set it — and that is deliberate rather than incidental: a client able to *name* its own
+// campaign would be a cross-tenant hole, which is exactly what B305 closed. Unset means no
+// campaign label, and the default database (the playroom) is served, as before.
+const CAMPAIGN_HOST = process.env.VITE_CAMPAIGN_HOST || ''
+const campaignHeaders = CAMPAIGN_HOST ? { Host: CAMPAIGN_HOST } : {}
+
 export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
@@ -110,8 +118,8 @@ export default defineConfig({
       // server at its own API container instead (a worktree's API changes are
       // not in `tv2_api`), which is the only way to exercise a backend change
       // against a browser without touching the :3000 tree.
-      '/api': API_TARGET,
-      '/media': API_TARGET,
+      '/api': { target: API_TARGET, headers: campaignHeaders },
+      '/media': { target: API_TARGET, headers: campaignHeaders },
       // SEC-3: in production the nginx edge serves `/enter` and *rewrites* it to
       // the API route. The dev server has no nginx, so without this a passage link
       // falls through to the SPA, returns index.html and sets no session — which is
@@ -119,6 +127,7 @@ export default defineConfig({
       // lands where the app reads it.
       '/enter': {
         target: API_TARGET,
+        headers: campaignHeaders,
         rewrite: (path) => path.replace(/^\/enter/, '/api/v1/auth/enter'),
       }
     }

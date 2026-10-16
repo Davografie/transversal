@@ -132,6 +132,11 @@ services:
       - ./media:/app/media
     environment:
       - NODE_ENV=development
+      # Which campaign the dev server opens ([[B305]]). Compose passes only what a
+      # service names, so without this the variable sits in `.env` unseen. Empty means
+      # no campaign label — the default database, the playroom — while the authoring
+      # loop sets it to the global's hostname.
+      - VITE_CAMPAIGN_HOST=${VITE_CAMPAIGN_HOST:-}
 
   frontend-prod:
     build:
