@@ -116,7 +116,7 @@ Requires one new primitive: a **pending-confirmation** state that splits *resolv
 
 ## Done
 
-- **Effect-driven portals** — LocationViewer portals fire a `travel` effect via `/portal/{to}/fire`; with no effects, the edge's `transversal_type` fallback routes through the same path.
+- **Effect-driven portals** — LocationViewer portals fire a `travel` effect via `/portal/{to}/fire`. **Firing a portal always delivers the traveller to the edge's own `_to`**, and its effects happen as well; the `transversal_type` fallback routes the move through the same path, and an effect that moved the traveller itself wins so a portal whose effect travels *elsewhere* is not double-moved ([[B312]], 2026-10-17). Before that, travel happened only when the edge carried **no** effects, so any effect-carrying portal moved nobody unless one of its effects was a successful travel — which left Eindhoven Airport unusable as a hub (`status: pending`, `applied: []`, location unchanged, measured live).
 - **Consolidation** — `EntityManager.inapposite_travel` / `consciousness_travel` merged into a single `EntityManager.travel()` that synthesizes a travel effect and runs `commit_effects`.
 
 ## Implementation steps

@@ -1,6 +1,7 @@
 """Tests for portal edge effects + the fire-portal endpoint."""
 
 import pytest
+from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -137,6 +138,15 @@ def test_fire_portal_applies_edge_effects(monkeypatch):
 
     monkeypatch.setattr("transversal.services.effects_commit.commit_effects", fake_commit_effects)
 
+    class _FakeEm:
+        """The travel the endpoint must still perform, recorded not executed."""
+
+        def travel(self, entity_id, to_id, transversal_type=None, projection_policy=None):
+            captured["travel"] = (entity_id, to_id, transversal_type)
+            return entity.model_copy(update={"current_location": to_id})
+
+    monkeypatch.setattr(locations_module, "_em", lambda: _FakeEm())
+
     app = FastAPI()
     app.include_router(locations_router)
     client = TestClient(app)
@@ -149,6 +159,8 @@ def test_fire_portal_applies_edge_effects(monkeypatch):
     assert captured["effects"][0].type == "travel"
     assert captured["effects"][0].target == "loc-b"
     assert captured["effects"][0].context == {"transversal_type": "inapposite"}
+    # …and the traveller is still delivered: a portal with effects is a link too.
+    assert captured["travel"] == ("char-1", "loc-b", "inapposite")
 
 
 def test_fire_portal_finds_an_edge_stored_under_a_legacy_key(monkeypatch):
@@ -184,6 +196,15 @@ def test_fire_portal_finds_an_edge_stored_under_a_legacy_key(monkeypatch):
 
     monkeypatch.setattr("transversal.services.effects_commit.commit_effects", fake_commit_effects)
 
+    class _FakeEm:
+        """The travel the endpoint must still perform, recorded not executed."""
+
+        def travel(self, entity_id, to_id, transversal_type=None, projection_policy=None):
+            captured["travel"] = (entity_id, to_id, transversal_type)
+            return entity.model_copy(update={"current_location": to_id})
+
+    monkeypatch.setattr(locations_module, "_em", lambda: _FakeEm())
+
     app = FastAPI()
     app.include_router(locations_router)
     client = TestClient(app)
@@ -191,6 +212,7 @@ def test_fire_portal_finds_an_edge_stored_under_a_legacy_key(monkeypatch):
     r = client.post("/api/v1/locations/loc-a/portal/loc-b/fire", json={"entity_id": "char-1"})
     assert r.status_code == 200, r.text
     assert len(captured["effects"]) == 1, "the legacy-keyed portal must still fire"
+    assert captured["travel"] == ("char-1", "loc-b", "inapposite")
 
 
 def test_fire_portal_still_404s_when_there_is_no_portal(monkeypatch):
@@ -207,3 +229,90 @@ def test_fire_portal_still_404s_when_there_is_no_portal(monkeypatch):
     assert r.status_code == 404
     assert "not found" in r.json()["detail"]
 
+
+
+def test_fire_portal_delivers_even_when_its_effects_ask_a_question(monkeypatch):
+    """A portal is a link: question or not, firing it takes you where it points.
+
+    The live case (Eindhoven Airport, 2026-10-17): the one effect-carrying portal
+    stopped at a `choose` and left the traveller standing at the gate, so an
+    airport could not be used as a hub.
+    """
+    from transversal.services.effects_applier.datatypes import PendingChoice
+
+    entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael",
+                    current_universe="earth", current_location="loc-a")
+    edge = {
+        "_key": "edge:loc-a:loc-b:transversal",
+        "_from": "entities/loc-a", "_to": "entities/loc-b", "type": "transversal",
+        "effects": [{"timing": "IMMEDIATE", "type": "travel", "action": "move"}],
+    }
+    repo = _FakeRepo(entity, edge)
+    monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+
+    captured = {}
+
+    def fake_commit_effects(e, effects, r, **kwargs):
+        class _R:
+            applied = []
+            pending_choices = [PendingChoice(effect=effects[0], kind="location", field="target")]
+        return _R()
+
+    monkeypatch.setattr("transversal.services.effects_commit.commit_effects", fake_commit_effects)
+
+    class _FakeEm:
+        def travel(self, entity_id, to_id, transversal_type=None, projection_policy=None):
+            captured["travel"] = (entity_id, to_id)
+            return entity.model_copy(update={"current_location": to_id})
+
+    monkeypatch.setattr(locations_module, "_em", lambda: _FakeEm())
+
+    app = FastAPI()
+    app.include_router(locations_router)
+    client = TestClient(app)
+
+    r = client.post("/api/v1/locations/loc-a/portal/loc-b/fire", json={"entity_id": "char-1"})
+    body = r.json()
+    assert r.status_code == 200, r.text
+    assert captured["travel"] == ("char-1", "loc-b"), "the traveller must be delivered"
+    assert body["status"] == "pending", "the question is still outstanding"
+    assert body["location_id"] == "loc-b"
+
+
+def test_an_effect_that_moves_the_traveller_wins_over_the_portals_own_destination(monkeypatch):
+    """A portal whose effect travels somewhere *else* must not be double-moved."""
+    entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael",
+                    current_universe="earth", current_location="loc-a")
+    edge = {
+        "_key": "edge:loc-a:loc-b:transversal",
+        "_from": "entities/loc-a", "_to": "entities/loc-b", "type": "transversal",
+        "effects": [{"timing": "IMMEDIATE", "type": "travel", "action": "move"}],
+    }
+    repo = _FakeRepo(entity, edge)
+    monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+    travelled = []
+
+    def fake_commit_effects(e, effects, r, **kwargs):
+        e.current_location = "loc-c"           # the effect moved them itself
+        class _R:
+            applied = [SimpleNamespace(summary="travelled to loc-c")]
+            pending_choices = []
+        return _R()
+
+    monkeypatch.setattr("transversal.services.effects_commit.commit_effects", fake_commit_effects)
+
+    class _FakeEm:
+        def travel(self, *a, **kw):
+            travelled.append(a)
+            return entity
+
+    monkeypatch.setattr(locations_module, "_em", lambda: _FakeEm())
+
+    app = FastAPI()
+    app.include_router(locations_router)
+    client = TestClient(app)
+
+    r = client.post("/api/v1/locations/loc-a/portal/loc-b/fire", json={"entity_id": "char-1"})
+    assert r.status_code == 200, r.text
+    assert travelled == [], "the portal must not travel the traveller again"
+    assert r.json()["location_id"] == "loc-c"

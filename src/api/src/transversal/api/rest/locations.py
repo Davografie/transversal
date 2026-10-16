@@ -623,28 +623,51 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
         raise HTTPException(status_code=404, detail=f"Entity '{body.entity_id}' not found")
 
     effects = [_effect_from_wire(e) for e in (edge.get("effects") or [])]
+    before_location = entity.current_location
 
-    if not effects:
+    result = None
+    if effects:
+        result = commit_effects(entity, effects, repo, arrival_kind=ArrivalKind.TRANSVERSAL)
+
+    # **A portal is a link, so firing it delivers the traveller to where it
+    # points — always, effects or none.** Its effects happen as well, and an
+    # effect that moved the traveller itself wins, which is what keeps a portal
+    # whose effect travels somewhere *else* meaningful.
+    #
+    # Before this, travel happened only when the edge carried *no* effects: a
+    # portal with any effect moved nobody at all unless one of those effects
+    # happened to be a successful travel. So an airport could not be used as a
+    # hub — its one effect-carrying edge stopped at a `choose` and left the
+    # traveller standing at the gate (measured live on Eindhoven Airport,
+    # 2026-10-17: `status: pending`, `applied: []`, location unchanged).
+    updated = None
+    if entity.current_location == before_location:
         travel_type = edge.get("transversal_type") or "inapposite"
         projection_policy = "{last_projection}" if travel_type == "consciousness" else None
-        updated = _em().travel(body.entity_id, to_id, transversal_type=travel_type, projection_policy=projection_policy)
-        return {
-            "status": "moved", "applied": [], "pendingChoices": [],
-            "entity_id": updated.id, "name": updated.name,
-            "location_id": updated.current_location, "universe": updated.current_universe,
-        }
+        updated = _em().travel(
+            body.entity_id, to_id,
+            transversal_type=travel_type, projection_policy=projection_policy,
+        )
 
-    result = commit_effects(entity, effects, repo, arrival_kind=ArrivalKind.TRANSVERSAL)
+    applied = [a.summary for a in result.applied] if result else []
+    pending = list(result.pending_choices) if result else []
+    if pending:
+        status = "pending"
+    elif applied:
+        status = "applied"
+    else:
+        status = "moved"
+    arrived = updated or (repo.get_entity(body.entity_id) or entity)
     return {
-        "status": "applied" if result.applied else "pending",
-        "applied": [a.summary for a in result.applied],
+        "status": status,
+        "applied": applied,
         "pendingChoices": [
             {"index": i, "kind": c.kind, "scope": c.scope, "field": c.field,
              "effect": c.effect.model_dump()}
-            for i, c in enumerate(result.pending_choices)
+            for i, c in enumerate(pending)
         ],
-        "entity_id": entity.id, "name": entity.name,
-        "location_id": entity.current_location, "universe": entity.current_universe,
+        "entity_id": arrived.id, "name": arrived.name,
+        "location_id": arrived.current_location, "universe": arrived.current_universe,
     }
 
 
