@@ -170,6 +170,133 @@ def test_create_provisions_and_prints_the_fork(repo, monkeypatch, capsys):
     assert "tv2_fork_probe" in capsys.readouterr().out
 
 
+def test_create_carries_the_kind_of_row(repo, monkeypatch):
+    _verified(repo)
+    seen = {}
+
+    def _stub(registry_repo, **kwargs):
+        seen.update(kwargs)
+        return registry_repo.create_fork("P", "tv2_fork_p", kwargs["owner_account"])
+
+    monkeypatch.setattr("transversal.tenancy_cli.provision_fork", _stub)
+
+    main(["create-fork", "Global", "--owner", "dave@example.com", "--kind", "global"])
+
+    assert seen["kind"] == "global"
+
+
+def test_create_kind_defaults_to_fork(repo, monkeypatch):
+    _verified(repo)
+    seen = {}
+
+    def _stub(registry_repo, **kwargs):
+        seen.update(kwargs)
+        return registry_repo.create_fork("P", "tv2_fork_p", kwargs["owner_account"])
+
+    monkeypatch.setattr("transversal.tenancy_cli.provision_fork", _stub)
+
+    main(["create-fork", "Probe", "--owner", "dave@example.com"])
+
+    assert seen["kind"] == "fork"
+
+
+# ── adopt-database ────────────────────────────────────────────────────
+
+
+def test_adopt_routes_an_existing_database(repo, monkeypatch, capsys):
+    owner = _verified(repo)
+    monkeypatch.setattr(
+        "transversal.tenancy_cli.database_exists", lambda name: True
+    )
+
+    assert (
+        main(
+            [
+                "adopt-database",
+                "Playroom",
+                "transversal",
+                "--owner",
+                "dave@example.com",
+                "--kind",
+                "playroom",
+            ]
+        )
+        == 0
+    )
+
+    fork = repo.find_fork_by_database("transversal")
+    assert fork is not None
+    assert fork.owner_account == owner.id
+    assert fork.kind == "playroom"
+    assert fork.slug == "playroom"
+    assert "transversal" in capsys.readouterr().out
+
+
+def test_adopt_refuses_a_database_that_is_not_there(repo, monkeypatch, capsys):
+    _verified(repo)
+    monkeypatch.setattr(
+        "transversal.tenancy_cli.database_exists", lambda name: False
+    )
+
+    assert (
+        main(
+            [
+                "adopt-database",
+                "Typo",
+                "transveral",
+                "--owner",
+                "dave@example.com",
+            ]
+        )
+        == 1
+    )
+    assert "no database" in capsys.readouterr().err
+    assert repo.find_fork_by_database("transveral") is None
+
+
+def test_adopt_refuses_a_database_already_routed(repo, monkeypatch, capsys):
+    owner = _verified(repo)
+    repo.create_fork("Already", "transversal", owner.id, slug="already")
+    monkeypatch.setattr(
+        "transversal.tenancy_cli.database_exists", lambda name: True
+    )
+
+    assert (
+        main(
+            [
+                "adopt-database",
+                "Playroom",
+                "transversal",
+                "--owner",
+                "dave@example.com",
+            ]
+        )
+        == 1
+    )
+    assert "already routed" in capsys.readouterr().err
+
+
+def test_adopt_refuses_an_unverified_owner(repo, monkeypatch, capsys):
+    repo.create_account("dave@example.com")
+    monkeypatch.setattr(
+        "transversal.tenancy_cli.database_exists", lambda name: True
+    )
+
+    assert (
+        main(
+            [
+                "adopt-database",
+                "Playroom",
+                "transversal",
+                "--owner",
+                "dave@example.com",
+            ]
+        )
+        == 1
+    )
+    assert "not verified" in capsys.readouterr().err
+
+
 def test_create_takes_the_source_from_the_environment(repo, monkeypatch):
     _verified(repo)
     seen = {}

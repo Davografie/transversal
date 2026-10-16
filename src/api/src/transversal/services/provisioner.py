@@ -218,6 +218,7 @@ def provision_fork(
     database: str | None = None,
     slug: str = "",
     include_play: bool = False,
+    kind: str = "fork",
     config: ArangoConfig | None = None,
 ):
     """Clone ``source_database`` into a new fork and route it. Returns the ``Fork``.
@@ -226,7 +227,10 @@ def provision_fork(
     ``include_play`` is for the one-off first migration, which is a full duplicate
     by the owner's 2026-10-16 decision; an ordinary fork leaves play state behind.
     ``slug`` is the DNS label the fork answers on; the caller is responsible for
-    having checked it is free (a 409, not a silent suffix).
+    having checked it is free (a 409, not a silent suffix). ``kind`` labels the row
+    for the reader rather than the router — an ordinary copy is a ``fork``, while the
+    two instances the first migration leaves behind are the ``global`` multiverse and
+    the ``playroom`` it was cloned from (``Fork.kind``).
     """
     target_name = database or fork_database_name(name)
 
@@ -280,7 +284,7 @@ def provision_fork(
     # here mirrors the source, whose own index also could not be built.
     _ensure_indexes(target_db)
 
-    return registry.create_fork(name, target_name, owner_account, slug=slug)
+    return registry.create_fork(name, target_name, owner_account, slug=slug, kind=kind)
 
 
 def _system_db(config: ArangoConfig):
@@ -291,6 +295,20 @@ def _system_db(config: ArangoConfig):
     client = ArangoClient(hosts=config.url)
     sys_db = client.db("_system", username=config.username, password=config.password)
     return client, sys_db
+
+
+def database_exists(name: str, *, config: ArangoConfig | None = None) -> bool:
+    """Is ``name`` a database on this server?
+
+    For the operator commands that route a database they did not clone: adopting an
+    existing one has to fail on a typo rather than write a routing row to nowhere.
+    """
+    resolved = config or ArangoConfig.from_env()
+    client, sys_db = _system_db(resolved)
+    try:
+        return bool(sys_db.has_database(name))
+    finally:
+        client.close()
 
 
 def drop_fork(registry, fork_id: str, *, config: ArangoConfig | None = None) -> bool:

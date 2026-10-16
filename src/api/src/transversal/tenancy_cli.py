@@ -37,6 +37,7 @@ from transversal.services import account_links
 from transversal.services.campaign_provisioning import provision_campaign
 from transversal.services.provisioner import (
     campaign_databases,
+    database_exists,
     drop_fork,
     fork_slug,
     provision_fork,
@@ -106,6 +107,7 @@ def _create_fork(args) -> int:
         database=args.database,
         slug=slug,
         include_play=args.include_play,
+        kind=args.kind,
     )
     print(_fork_line(fork))
     if args.include_play:
@@ -115,6 +117,39 @@ def _create_fork(args) -> int:
             "needs cleaning if it is to become the global multiverse.",
             file=sys.stderr,
         )
+    return 0
+
+
+def _adopt_database(args) -> int:
+    """Route a database that is **already there**, without cloning it.
+
+    The first migration leaves one database in place that nobody provisioned — the
+    playroom a troupe is playing in — and it still needs a row: routing, the portal's
+    list and ``campaign_databases()`` (every database a schema change must reach) all
+    enumerate rows, so an unrouted database is one a migration silently forgets. The
+    clone path cannot do this (it refuses an existing database, deliberately), so this
+    writes the row alone — and checks the name is real first, because a typo here would
+    route a campaign to nothing.
+    """
+    registry = _registry()
+    owner = registry.find_account_by_email(args.owner)
+    if owner is None:
+        return _fail(f"no account for {args.owner!r} — bootstrap it first")
+    if not owner.verified_at:
+        return _fail(f"{owner.email!r} is not verified")
+    if not database_exists(args.database):
+        return _fail(f"no database {args.database!r} on this server")
+    if registry.find_fork_by_database(args.database):
+        return _fail(f"the database {args.database!r} is already routed")
+
+    slug = fork_slug(args.slug or args.name)
+    if registry.find_fork_by_slug(slug):
+        return _fail(f"the address {slug!r} is already taken")
+
+    fork = registry.create_fork(
+        args.name, args.database, owner.id, kind=args.kind, slug=slug
+    )
+    print(_fork_line(fork))
     return 0
 
 
@@ -267,11 +302,31 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--database", help="the database name (default: derived)")
     create.add_argument("--source", help="what to clone from (default: GLOBAL_DATABASE)")
     create.add_argument(
+        "--kind",
+        default="fork",
+        help="what the row is for: fork, global or playroom",
+    )
+    create.add_argument(
         "--include-play",
         action="store_true",
         help="copy the play state too — the owner's first migration",
     )
     create.set_defaults(handler=_create_fork)
+
+    adopt = sub.add_parser(
+        "adopt-database",
+        help="route an existing database as a campaign, without cloning it",
+    )
+    adopt.add_argument("name")
+    adopt.add_argument("database")
+    adopt.add_argument("--owner", required=True, help="the owner's account email")
+    adopt.add_argument("--slug", help="the DNS label (default: derived from the name)")
+    adopt.add_argument(
+        "--kind",
+        default="playroom",
+        help="what the row is for: playroom, global or fork",
+    )
+    adopt.set_defaults(handler=_adopt_database)
 
     listing = sub.add_parser("list-forks", help="every fork, newest first")
     listing.set_defaults(handler=_list_forks)
