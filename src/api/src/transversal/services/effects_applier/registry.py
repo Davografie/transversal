@@ -210,6 +210,9 @@ def _register_core_handlers(em, raz):
     effect_registry.register("life_path", "enter", _commit)
     effect_registry.register("relationship", "create", _commit)
     effect_registry.register("projection", "create", _commit)
+    # A spawn is a real entity write, so it commits through the shared applier
+    # like the rest ([[B311]]).
+    effect_registry.register("entity", "duplicate", _commit)
     effect_registry.register("projection", "restore", _commit)
     effect_registry.register("modify_traitset", "set_limit", _commit)
     effect_registry.register("set_destination", "set", _commit)

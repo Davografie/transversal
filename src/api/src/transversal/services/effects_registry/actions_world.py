@@ -29,6 +29,32 @@ ACTIONS: list[EffectActionMeta] = [
         inverse=("entity", "delete_entity"),
     ),
     EffectActionMeta(
+        action_id="duplicate_entity",
+        label="Spawn Entity",
+        description="Spawn a copy of an entity — a mob from a template. The copy owns its own traits, edges and set settings; the template is left untouched",
+        category="benefit",
+        effect_type="entity",
+        effect_action="duplicate",
+        valid_timings=["IMMEDIATE"],
+        path_element=("entity",),
+        output_element="entity",
+        # The anchor is the *place the copy lands*, and it is optional: with no
+        # path the copy stands where the acting subject is — and a GM press runs
+        # against the scene, so that is the place the GM is looking at.
+        owner_elements=("location",),
+        fields=[
+            EffectFieldDef(name="target", label="Template", field_type="text",
+                          required=True, default="", hidden_when_ref="template"),
+        ],
+        context_fields=[
+            EffectFieldDef(name="name", label="Name", field_type="text", required=False,
+                          description="Leave empty to keep the template's name"),
+            EffectFieldDef(name="owner_player_id", label="Owner (player id)",
+                          field_type="text", required=False,
+                          description="Optional: give the copy to a player. Empty = nobody owns it"),
+        ],
+    ),
+    EffectActionMeta(
         action_id="end_active_effect",
         label="End Active Effect",
         description="End a running temporary effect now: its change is reverted (a deferred part is dropped) instead of waiting for the timer",

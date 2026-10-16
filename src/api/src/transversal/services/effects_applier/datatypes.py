@@ -92,6 +92,12 @@ class EffectsResult:
     new_traitsetsettings: list = field(default_factory=list)
     updated_traitsetsettings: list = field(default_factory=list)
     entities_to_update: list[Entity] = field(default_factory=list)
+    #: Entities an effect **made** ([[B311]]). A report, not a write path: the
+    #: handler creates the document itself, because the new id has to exist while
+    #: the rest of the batch is still resolving (the same reason
+    #: ``_apply_relationship_create`` mints its edge). This list is what lets a
+    #: caller say what was spawned.
+    new_entities: list[Entity] = field(default_factory=list)
     pending_choices: list[PendingChoice] = field(default_factory=list)
     pending_branches: list[PendingBranch] = field(default_factory=list)
     passthrough: list[Effect] = field(default_factory=list)

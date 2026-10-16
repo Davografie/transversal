@@ -51,6 +51,10 @@ _DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool
     "copy_trait": [("recipient", "Give To", ('entity',), 'entity', False)],
     "cortex_gain_trait": [("trait", "Trait", ('trait',), 'target', False), ("recipient", "Entity", ('entity',), 'entity', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
     "create_projection": [("recipient", "Entity", ('entity',), 'entity', False)],
+    # A spawn: the template is the operand, and the place it lands is an *anchor*
+    # (settled once) named `owner` — the name `resolve_effect_owner` reads.
+    "duplicate_entity": [("template", "Template", ('entity',), 'target', False),
+                         ("owner", "Spawn At", ('location',), 'owner', True)],
     "create_relationship": [("contact", "Target Entity", ('entity',), 'target', False)],
     "delete_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
     "disable_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
@@ -180,6 +184,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "earn_razmerit": "Razmerit", "spend_razmerit": "Razmerit",
     "transfer_razmerit": "Razmerit",
     "create_asset": "Entity", "end_active_effect": "Entity", "create_projection": "Entity",
+    "duplicate_entity": "Entity",
     "learn_entities": "Entity",
     # `suppress` is the removal half of `attune` (see actions_world), and
     # `set_destination` is how a rule grants travel directions.

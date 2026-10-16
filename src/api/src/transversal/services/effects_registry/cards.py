@@ -116,6 +116,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     # `_effect_core` names them ("choose: let it stand, or change the statement").
     ("branch", "choose"): "choose",
     ("create_entity", "create_asset"): "create the asset {target}",
+    ("entity", "duplicate"): "spawn a copy of {target}",
     ("entity", "cancel_scheduled_event"): "end the active effect {target}",
     ("projection", "create"): "create the temporary projection {target}",
     ("modify_traitset", "set_limit"): "set the limit of {target} to {result}",

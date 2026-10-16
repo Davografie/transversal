@@ -216,6 +216,8 @@ To put it in the world: open **Manage SFX**, filter by *Trait instance*, pick th
 
 **A rule that lives on a place.** Attach it to the location in **Manage SFX** and set **Source** to `Location`. It applies to the entities inside, and inside its sub-locations, however deep — nothing is written onto them, so walking out ends it by itself. A path can walk straight to the people there with `select source → occupants`.
 
+**Spawning a mob from a template.** Use **Spawn Entity**: it makes a *copy* of an entity — its traits, its edges and its set settings — and leaves the original alone, so you can throw eight bandits at the table without touching the bandit you authored. Give the effect a **Template** (a path, or a **Choose** step so the table picks), and optionally a **Spawn At** place; with neither, the copy stands wherever the rule is activated — which for a rule on the GM bucket is the place you are looking at. Name it if you want to; otherwise it keeps the template's name. The copy is nobody's unless you fill in **Owner**, so a spawned mob is neutral by default.
+
 **Teaching — handing a rule to someone.** Use the **Grant SFX** action: the rule to grant is itself a targeting path seeded from the registry (`select sfxs`), and the recipient is whatever the grant should land on. This is how a place hands a technique to the person training for it.
 
 **Offering a rule to many owners at once.** Author a row under **Who it reaches** with the *Offered* relationship and a path naming the owners — for instance every trait in a set, reached by going from the definition to its instances. The owners get the chip; taking it attaches the rule to them.

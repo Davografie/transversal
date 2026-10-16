@@ -87,6 +87,7 @@ from transversal.services.effects_applier.handlers_world import (
     _apply_learn,
     _apply_cancel_scheduled_event,
     _apply_create_projection,
+    _apply_duplicate_entity,
     _apply_relationship_create,
     _apply_restore_projection,
     _apply_set_destination,
@@ -119,6 +120,8 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "enable"): _apply_enable,
     ("modify_trait", "toggle"): _apply_toggle,
     ("entity", "cancel_scheduled_event"): _apply_cancel_scheduled_event,
+    # Spawning a mob from a template: a deep copy of the entity ([[B311]]).
+    ("entity", "duplicate"): _apply_duplicate_entity,
     # Granting a rule to an owner (the teacher case) — see handlers_sfx.
     ("sfx", "grant"): _apply_grant_sfx,
     ("projection", "create"): _apply_create_projection,

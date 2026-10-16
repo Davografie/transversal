@@ -177,6 +177,224 @@ def _next_projection_id(entity_id: str, universe: str, repo) -> str:
         n += 1
     return f"{base}:{n}"
 
+def _apply_duplicate_entity(entity, effect, repo, result):
+    """Spawn a copy of an entity — the mob from a template ([[B311]]).
+
+    A **plain deep copy**, which is the human's decision: the copy owns its traits
+    rather than inheriting the template's, so no rendering rule is needed and no
+    provenance edge is required. Everything is remapped — the entity and its
+    projection, each copied trait instance (nested ones **parent-first**, so a
+    child points at its *new* parent), the set settings, and the `relation` and
+    `membership` edges with the instances anchored to those edges.
+
+    The copy is made **here**, not at commit, for the same reason
+    `_apply_relationship_create` mints its edge here: the new id has to exist while
+    the rest of the batch is still resolving, so `Effect.output` can name "the
+    thing I just spawned" for a later effect.
+
+    The acting subject of a GM-bucket press is the **place** the GM is looking at
+    (the sheet's scene overview passes it as the subject), so the landing place is
+    resolved defensively rather than assumed to be a character's location.
+    """
+    from transversal.domain import Projection, TransversalType
+    from transversal.services.entity_manager import _generate_id, touch_projection
+
+    template_id = (target_value(effect) or "").strip()
+    template = repo.get_entity(template_id) if template_id else None
+    if template is None:
+        result.applied.append(AppliedEffect(
+            effect, f"no entity to copy: '{template_id}' does not exist"))
+        return
+
+    ctx = effect.context or {}
+    name = (ctx.get("name") or "").strip() or template.name
+    location = _spawn_location(entity, effect, repo, template)
+    new_id = _generate_id(name, template.type)
+    new_universe = template.current_universe
+    new = template.model_copy(update={
+        "id": new_id,
+        "name": name,
+        "current_universe": new_universe,
+        "current_location": location,
+        "current_projection": f"{new_id}:{new_universe}",
+        # A copy is a new arrival, not a landmark: it inherits none of the
+        # template's *place* — so it is not itself a spawn destination, it has no
+        # directions, and the map stacks it as an unplaced occupant rather than
+        # hiding it under the template's own dot.
+        "destination_location": None,
+        "map_x": None,
+        "map_y": None,
+        "starter_location": False,
+    })
+    repo.create_entity(new)
+    proj = Projection(
+        id=f"{new_id}:{new_universe}", entity_id=new_id, universe=new_universe,
+        origin_universe=new_universe, current_location=location,
+        transversal_type=TransversalType.NATIVE,
+    )
+    touch_projection(proj)
+    repo.create_projection(proj)
+
+    traits = _copy_trait_settings(repo, template.id, new)
+    sets = _copy_entity_set_settings(repo, template.id, new_id)
+    edges = _copy_entity_edges(repo, template.id, new_id)
+
+    # The ownership edge is **optional**, on the human's instruction: absent
+    # unless asked for, and never guessed from the template.
+    owner_player = (ctx.get("owner_player_id") or "").strip()
+    if owner_player and hasattr(repo, "claim_entity"):
+        repo.claim_entity(owner_player, new_id, main=False)
+
+    result.new_entities.append(new)
+    result.applied.append(AppliedEffect(
+        effect,
+        f"spawned {new.name} ({new_id}) from {template.name} — "
+        f"{traits} trait(s), {sets} set setting(s), {edges} edge(s)",
+        new_id,
+    ))
+
+
+def _spawn_location(subject, effect, repo, template) -> Optional[str]:
+    """Where the copy lands: an authored place, else the subject's, else the template's.
+
+    A GM-owned rule runs against the scene and its subject is a **location**, in
+    which case the place *is* the subject — that is the "mob where the GM is
+    looking" case, and treating it as an entity's ``current_location`` would put
+    the mob in the place's *parent* instead.
+    """
+    ref = (getattr(effect, "refs", None) or {}).get("owner")
+    authored = (getattr(ref, "value", "") or "").strip()
+    if authored and authored != "self":
+        return authored
+    if subject is not None:
+        if _entity_type_of(subject) == "location":
+            return subject.id
+        if subject.current_location:
+            return subject.current_location
+    return template.current_location
+
+
+def _entity_type_of(entity) -> str:
+    """An entity's type as a plain string, enum or not."""
+    value = getattr(entity, "type", "")
+    return str(getattr(value, "value", value) or "")
+
+
+def _copy_trait_settings(repo, source_entity_id: str, new) -> int:
+    """Copy the entity's own instances, nested children included, remapped.
+
+    Parent-first: a nested instance's key is scoped to its parent
+    (`repo.resolve_subtrait_id`), so the parent must exist under its **new** id
+    before the child can be keyed. Every new key comes from the repository's own
+    resolver with the **source instance's statement** — the rule the gain and copy
+    paths already share — because inventing one here would let two readers
+    disagree about which instance is which.
+    """
+    reader = getattr(repo, "get_traitsettings_for_entity", None)
+    if reader is None:
+        return 0
+    copied = 0
+    for source in reader(source_entity_id) or []:
+        copied += _copy_one_trait(repo, source, new, parent_copy=None)
+    return copied
+
+
+def _copy_one_trait(repo, source, new, parent_copy) -> int:
+    from transversal.services.effects_applier.trait_helpers import _allow_duplicates
+
+    entity_id, projection_id, parent_id = new.id, None, None
+    from_type = source.from_type
+    if parent_copy is not None:
+        entity_id = getattr(parent_copy, "entity_id", "") or new.id
+        parent_id = getattr(parent_copy, "id", None)
+        from_type = "traitsetting"
+        resolve_sub = getattr(repo, "resolve_subtrait_id", None)
+        new_id = (resolve_sub(parent_id, source.trait_id, source.statement)
+                  if resolve_sub is not None else f"{parent_id}:{source.trait_id}")
+    else:
+        if from_type == "projection":
+            projection_id = new.current_projection
+        resolve = getattr(repo, "resolve_traitsetting_id", None)
+        new_id = (resolve(entity_id, source.trait_id, source.statement,
+                          _allow_duplicates(source.trait_id, repo))
+                  if resolve is not None else f"{entity_id}:{source.trait_id}")
+    created = source.model_copy(update={
+        "id": new_id,
+        "entity_id": entity_id,
+        "from_type": from_type,
+        "projection_id": projection_id,
+        "parent_traitsetting_id": parent_id,
+    })
+    repo.create_traitsetting(created)
+    count = 1
+    get_children = getattr(repo, "get_sub_traitsettings", None)
+    for child in (get_children(source.id) if get_children else []) or []:
+        count += _copy_one_trait(repo, child, new, parent_copy=created)
+    return count
+
+
+def _copy_entity_set_settings(repo, source_entity_id: str, new_entity_id: str) -> int:
+    """Copy the entity's trait-set settings (its `entity → set` overrides)."""
+    reader = getattr(repo, "get_traitsetsettings_for_entity", None)
+    if reader is None:
+        return 0
+    copied = 0
+    for source in reader(source_entity_id) or []:
+        repo.create_traitsetsetting(source.model_copy(update={
+            "id": f"{new_entity_id}:{source.traitset_id}",
+            "entity_id": new_entity_id,
+            "projection_id": None,
+        }))
+        copied += 1
+    return copied
+
+
+def _copy_entity_edges(repo, source_entity_id: str, new_entity_id: str) -> int:
+    """Copy the entity's `relation` and `membership` edges, and their instances.
+
+    Membership is copied on the human's instruction — the old mutation copied only
+    `relation` edges. `_to` is deliberately left alone: the far end is a *shared*
+    thing (a faction, a contact), so a spawned mob's tie points at the same
+    faction the template's did, which is the point of copying it. The instances
+    anchored to a copied edge follow it, keyed to the **new** edge.
+    """
+    reader = getattr(repo, "list_relationships_for_entity", None)
+    if reader is None:
+        return 0
+    copied = 0
+    for edge in reader(source_entity_id) or []:
+        rel_type = edge.get("type") or ""
+        if rel_type not in ("relation", "membership"):
+            continue
+        # The reader hands back the edge's own key and its *resolved* contact, not
+        # the raw `_to` — `id` is the anchor a relationship-anchored instance
+        # points at, and the far end must be a real id to write a new edge with.
+        to_id = edge.get("contact_id") or ""
+        source_key = edge.get("id") or ""
+        if not to_id:
+            continue
+        created = repo.create_relationship(new_entity_id, to_id, rel_type,
+                                           edge.get("description") or "")
+        copied += 1
+        new_key = created.get("_key", "") if isinstance(created, dict) else ""
+        if not new_key or not source_key:
+            continue
+        get_edge_traits = getattr(repo, "get_relationship_traitsettings", None)
+        for source in (get_edge_traits(source_key) if get_edge_traits else []) or []:
+            from transversal.services.effects_applier.trait_helpers import _allow_duplicates
+            resolve = getattr(repo, "resolve_traitsetting_id", None)
+            new_id = (resolve(new_key, source.trait_id, source.statement,
+                              _allow_duplicates(source.trait_id, repo))
+                      if resolve is not None else f"{new_key}:{source.trait_id}")
+            repo.create_traitsetting(source.model_copy(update={
+                "id": new_id,
+                "entity_id": new_key,
+                "projection_id": None,
+                "parent_traitsetting_id": None,
+            }))
+    return copied
+
+
 def _apply_set_location(entity, effect, repo, result):
     """Place an entity at a location without crossing a universal boundary.
 

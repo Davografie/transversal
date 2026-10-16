@@ -363,7 +363,7 @@ _Count: 10._
 
 **Reading the sign column.** *cost* / *benefit* / *either* is the editor's hint — it groups the picker and colours the row, and stores nothing. A rule is free to use a cost verb for a benefit. *Refs* names the inputs the action declares; the editor labels each one, and a target is normally written as a targeting path.
 
-_Count: 82._
+_Count: 83._
 
 
 **Change a Die**
@@ -453,6 +453,7 @@ _Count: 82._
 | Action | What it does | Sign | Retired |
 |---|---|---|---|
 | **Create Asset** <br>`create_asset` | Create a temporary asset entity at a location (duration-scoped; deleted on revert) | benefit | — |
+| **Spawn Entity** <br>`duplicate_entity` | Spawn a copy of an entity — a mob from a template. The copy owns its own traits, edges and set settings; the template is left untouched <br>Refs: `template`, `owner` | benefit | — |
 | **End Active Effect** <br>`end_active_effect` | End a running temporary effect now: its change is reverted (a deferred part is dropped) instead of waiting for the timer <br>Refs: `recipient`, `effect` | either | — |
 | **Temporary Projection (Disguise)** <br>`create_projection` | Create and activate a temporary alternate body in the current universe/location; reverts to the prior body on expiry <br>Refs: `recipient` | benefit | — |
 | **Delete Entity** <br>`delete_entity` | Remove an entity from the world. The engine writes this when a created entity's rule reverts <br>Refs: `entity` | cost | — |
