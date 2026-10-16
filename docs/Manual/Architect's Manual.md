@@ -21,7 +21,7 @@ An **Architect** is the role that builds the world. Players play in it; architec
 
 Everything you write goes into **one shared world**: one database, one map, one trait vocabulary, used by every table. There is no private copy and no undo. Two habits follow, and they are most of the advice on this page: **look before you write**, and **write for the person who finds it next**.
 
-This is the front door to authoring. It gives you the words, the tools and the order to work in, then hands you to the manual for the thing you actually want to make. It is written for two readers at once, because both do the same work: **you, in the GM panel**, and **an agent driving the same writes over MCP**. Each authoring manual says, layer by layer, which surface writes it — because the surfaces are not uniform.
+This is the front door to authoring. It gives you the words, the tools and the order to work in, then hands you to the manual for the thing you actually want to make. It is written for two readers at once, because both do the same work: **you, in the GM panel**, and **an agent** writing the same layers through the tools. Each authoring manual says, layer by layer, which surface writes it.
 
 ## The words you need
 
@@ -48,7 +48,51 @@ This is the front door to authoring. It gives you the words, the tools and the o
 
 **Panels behave like windows.** A panel can open a child panel, and any child can be detached (⤢) into a floating window, docked back (⤓), collapsed (▾) or closed (×). Floating windows and their order are remembered **on this device**.
 
-**MCP**, for agents: the same writes, as tools. Every mutating tool **plans by default** (`dry_run: true`) — read the plan, then pass `dry_run: false` to commit.
+**Agents** write the same layers through the tools. Every mutating tool **plans by default** — read the plan, then confirm it to commit.
+
+## Making and editing a thing
+
+Everything in the world is made the same way.
+
+1. **Create it from the tree.** Open **Prep → Places**, find the level it belongs under, and press that level's **＋** row.
+2. **Fill in the create form.** **Name** (the 🎲 generates one for the universe), **Type** — CHARACTER, GMC, ASSET, FACTION, UNIVERSE or LOCATION — **Location** (the place it stands in; a universe has none), and **Razmerit** if the type carries a rating. Press **Create**.
+3. **It opens in its own editor, and from then on every change saves itself.** Close the panel whenever you like; the thing is already saved.
+
+The editor's sections are a small common set, and a section only appears when it applies to that kind of thing:
+
+| Section | What it is for |
+|---|---|
+| **Name and type** | Rename it, move it to another place, set its razmerit. |
+| **Traits** | Attach qualities from the registry — see the next section. |
+| **Images** | Upload or generate a picture, and say where it shows: **Sheet**, **BG** (a detail backdrop) or **Nav** (the dot on a scene). |
+| **Projections** | A character's or GMC's bodies, one per universe. Also where a body's own pictures live. |
+| **Transversal Links** | The portals out of a place, and what passing through one does. |
+| **Zones** | The doors on a place's picture — each one links to a child place. |
+| **Fires on arrival** | The rule that runs when someone walks in. |
+| **Members / Factions** | Who belongs to a faction, in what role. |
+| **Danger Zone** | **Publish** or **Unpublish** — unpublished is GM-only and badged *draft* in the tree — and **Delete**, which is a two-click confirm and cannot be undone. |
+
+Two buttons in the header are for running the game rather than authoring: **🎭 Assume** (act as this character) and **📥 Import to Location** (bring them to where you are).
+
+**To fix something, find it first.** The filter above the tree searches names and ids, and the tree's **⊙** jumps to your current location — so nothing has to be hunted for by scrolling.
+
+## The trait registry
+
+Most things in the world are described by **traits**, and a trait has two halves:
+
+- The **registry** — the shared vocabulary, edited under **Manage Traits**. A registry trait is a definition: its name, the universes it belongs to, a default die and rating type (static, resource or challenge), whether it is **ego** (travels with the character) or **morph** (belongs to a body), a polarity, tags, and an **Explanation** — the sentence that tells the next person what it means in play. **Sets** group traits — a location set, a faction set, a character set.
+- The **setting** — that definition attached to one thing, with its own die and its own **statement**. This is what you write day to day.
+
+**Reach for a setting first.** A new registry trait is right only when what you are describing is genuinely new vocabulary that other content should share; most authoring is a new setting on an existing trait.
+
+Two tools in the trait editor matter when the job is *fixing* existing content:
+
+- **Instances** — every place one definition is used, each row naming what it hangs off. Open it before you change a trait, so you can see everything you are about to affect.
+- **Batch Edit** — change many traits at once, from the trait-set panel.
+
+## Universes
+
+A universe is created like anything else — a **＋** row at the top level, Type **UNIVERSE**. Its **name becomes its id**, so settle the name early. Its editor adds three things no other kind of thing has: **LoRA Configuration** and **Universe Style** (the palette), and **🎲 Roll Tables**, because tables belong to a universe.
 
 ## Find your job
 
@@ -59,11 +103,11 @@ This is the front door to authoring. It gives you the words, the tools and the o
 | Build an organisation and its agenda | [[Faction Authoring]] | Create form → FACTION (or `create_faction`) |
 | Write a rule, technique or curse | [[SFX Authoring]], and [[SFX Reference]] as the lookup | **Manage SFX** |
 | Write a list of outcomes, or a growth path | [[Roll Table and Life Path Authoring]] | Universe editor → **🎲 Roll Tables** |
-| Add a trait to the shared vocabulary | [[Entities and Traits]] § *Trait Registry vs. Trait Settings* | **Manage Traits** |
+| Add a trait to the shared vocabulary | *The trait registry*, above; [[Entities and Traits]] for the model | **Manage Traits** |
 | See the shape of a whole world | [[Relational Canvas]] | **🗺 Canvas** |
 | Not authoring — playing or running the game | [[User Manual]] | GM panel **Play** mode |
 
-The four manuals to know are [[Location Authoring]], [[Faction Authoring]], [[SFX Authoring]] and [[Roll Table and Life Path Authoring]]. Each is a recipe with a checklist at the end, and each says which surface writes each layer — some layers are GraphQL, some are REST-only, and two cannot be written through MCP at all.
+The four manuals to know are [[Location Authoring]], [[Faction Authoring]], [[SFX Authoring]] and [[Roll Table and Life Path Authoring]]. Each is a recipe with a checklist at the end, and each says which surface writes each layer — because not everything has a button yet, and a few things need an agent.
 
 ## The order that works
 
@@ -79,7 +123,7 @@ A place is not finished when the entity exists. [[Location Authoring]] § 1 name
 
 ## Before you write, ask what reads it
 
-Every authored thing is read by exactly **one** surface, and a few fields are read by nothing at all — writing into those produces content that exists, validates, and changes nothing. [[Location Authoring]] § 7 keeps the live list. When the answer is "nothing reads it", that is a bug for the surface's owner rather than an authoring job.
+Every authored thing is read by exactly **one** surface, and a few fields are read by nothing at all — writing into those produces content that exists, validates, and changes nothing. [[Location Authoring]] § 7 lists them. When the answer is "nothing reads it", that is a gap for whoever owns that surface rather than an authoring job.
 
 ## Rules of the road
 
