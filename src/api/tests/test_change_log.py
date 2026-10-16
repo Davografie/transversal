@@ -5,6 +5,19 @@ import pytest
 from transversal.services.change_log import ChangeLog, Mutation
 
 
+@pytest.fixture(autouse=True)
+def _in_a_campaign():
+    """The log is campaign-scoped ([[B305]]); these cover one campaign's entries.
+
+    Recording with *no* campaign is the fail-closed case — it stores nothing and says so
+    — and that is asserted in ``test_campaign_state_isolation``.
+    """
+    from transversal.services.campaign_scope import use_campaign
+
+    with use_campaign("tv2-probe-change-log"):
+        yield
+
+
 class TestChangeLog:
     def test_record_and_count(self):
         log = ChangeLog()

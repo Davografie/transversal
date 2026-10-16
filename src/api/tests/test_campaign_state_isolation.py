@@ -1,14 +1,15 @@
 """B305 — the in-memory live state is campaign-scoped, and empty without a campaign.
 
 The session store and the SSE bus are covered by ``test_campaign_isolation``. This
-covers the three process-global registries that stayed behind: presence, the
-active-main/current-body maps, and the armed-SFX store. Each one used to be keyed
-by player or entity alone, so one campaign's state was readable from another — and
-because ``_global_armed`` deliberately means *every entity*, "no campaign" read as
-"everyone" was the exact bug being fixed.
+covers the process-global registries that stayed behind: presence, the
+active-main/current-body maps, the armed-SFX store, and the change log. Each was keyed by
+player or entity alone, so one campaign's state was readable from another — and because
+``_global_armed`` deliberately means *every entity*, "no campaign" reading as "everyone"
+was the exact bug being fixed. The change log was the wrong-*write* case: entity keys are
+shared with the ancestor, so an unscoped undo could reverse another world's change.
 
-All three are plain in-memory dicts, so these tests touch no Redis and no ArangoDB
-and need no cleanup beyond clearing the memory they wrote.
+They are all plain in-memory state, so these tests touch no Redis and no ArangoDB and
+need no cleanup beyond clearing the memory they wrote.
 """
 
 import pytest
@@ -17,6 +18,7 @@ from transversal.domain import Effect, EffectDuration, EffectTiming, Timer, Time
 from transversal.services import player_manager as pm
 from transversal.services import presence, roll_deferral
 from transversal.services.campaign_scope import use_campaign
+from transversal.services.change_log import ChangeLog, change_log
 
 A = "tv2-probe-a"
 B = "tv2-probe-b"
@@ -36,6 +38,7 @@ def _clear():
     presence._last_seen.clear()
     pm._active_main.clear()
     pm._current_body.clear()
+    change_log.clear()
 
 
 def _effect():
@@ -210,3 +213,42 @@ def test_a_global_boundary_only_touches_its_own_campaign():
 
     with use_campaign(A):
         assert roll_deferral.list_global_armed_sfx_ids() == ["sfx-a"]
+
+
+# ── change log ───────────────────────────────────────
+
+
+def test_an_undo_stays_inside_its_campaign():
+    """The wrong-write case: a shared entity key plus the "any session" wildcard would
+    let ``undo_entity`` reverse a mutation made in the *other* world."""
+    log = ChangeLog()
+    with use_campaign(A):
+        log.record("e1", "razmerit", 5, 3, "s1")
+    with use_campaign(B):
+        log.record("e1", "razmerit", 9, 7, "s1")
+
+    with use_campaign(B):
+        assert [m.new_value for m in log.mutations_for("e1")] == [7]
+        undone = log.undo_last("e1", "s1")  # no session filter: any session, this campaign
+        assert undone.new_value == 7
+        assert log.count() == 1, "A's entry must survive B's undo"
+
+    with use_campaign(A):
+        assert [m.new_value for m in log.mutations_for("e1")] == [3]
+        assert log.undo_entity("e1", "s1")[0].new_value == 3
+
+
+def test_no_campaign_records_nothing_to_undo():
+    log = ChangeLog()
+    assert log.record("e1", "razmerit", 5, 3) is None
+    assert log.count() == 0
+    assert log.undo_last("e1") is None
+    assert log.undo_entity("e1") == []
+    assert log.mutations_for("e1") == []
+
+
+def test_an_entry_names_the_campaign_it_was_recorded_in():
+    log = ChangeLog()
+    with use_campaign(A):
+        m = log.record("e1", "razmerit", 5, 3)
+    assert m.campaign == A
