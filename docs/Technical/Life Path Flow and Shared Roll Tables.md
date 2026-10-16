@@ -363,6 +363,18 @@ pure content and can be rolled for anything.
   `{sect}`. The audit reports the gap the content has: **three Emberline paths enrol, are offered by
   nobody, and declare no `{sect}`** — and there are **zero factions in the `emberline` universe** at
   all, so their enrolling rows admit nobody until the factions exist or the paths declare one.
+- **A step's references resolve, and its effect report names things** ([[B303]], landed by
+  [[Effects]]). A step's effects can name what they make, and the report reads names rather than raw
+  ids (`named_summary` in `lifepath_executor.py`); `tests/test_lifepath_step_refs.py` and
+  `test_lifepath_enter.py` pin it. Separately, a **shown** life path — the reveal an effect pushes to
+  a player — is its own surface (`composables/useLifePathIntro.js`, `components/app/LifePathBlock.vue`),
+  routed by *how* the character came to exist (created in the settings overlay → shown there; arrived
+  another way → shown in that character's sheet), and it deliberately does **not** read `walkable`:
+  it is a reveal, closer to `discovery` than to the walk gate. Whether a reveal should honour
+  `discovery` is an open question, not an oversight.
+- **A many-valued `{token}` now compares as a set** ([[B292]], fixed by [[Effects]]). A filter written
+  `id in {a_many_name}` used to keep only the first id, so a regional gate silently matched one place
+  rather than a subtree. That is what made the Iron Roots gate narrower than its author intended.
 - Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
   ([[B194]]–[[B197]]) are unchanged by this and remain separate gates.
 - Row gating (`RollTableEntry.conditions`, [[B179]]) and path walkability
