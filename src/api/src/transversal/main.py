@@ -34,6 +34,7 @@ from transversal.api.rest.sessions import router as sessions_router
 from transversal.api.rest.imagen import router as imagen_router
 from transversal.api.sse.stream import router as sse_router
 from transversal.api.auth import router as auth_router
+from transversal.api.account_auth import router as account_auth_router
 from transversal.db.repository import EntityRepository
 from transversal.services.effects_engine import EffectsEngine
 from transversal.services.entity_manager import EntityManager
@@ -294,6 +295,7 @@ app.include_router(imagen_router)
 app.include_router(sse_router)
 app.include_router(auth_router)
 app.include_router(access_router)
+app.include_router(account_auth_router)
 
 # Serve uploaded media files
 

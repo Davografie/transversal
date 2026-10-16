@@ -141,3 +141,8 @@ from transversal.domain.messaging import (  # noqa: F401
 from transversal.domain.players import (  # noqa: F401
     Player,
 )
+
+from transversal.domain.accounts import (  # noqa: F401
+    Account,
+    Fork,
+)

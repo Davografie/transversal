@@ -1,18 +1,26 @@
 """Signed, expiring tokens, and the signing key behind them (SEC-3, SEC-5).
 
-One signed-token format, two audiences:
+One signed-token format, four audiences:
 
 - ``AUD_JOIN``  — an admission token. Grants access to a campaign and proves
   nothing about who holds it. Reusable within a short life, and closable early:
   that liveness comes from the campaign database, not from the signature.
 - ``AUD_SESSION`` — the browser session. Carries which player the holder has
   taken, plus the epoch it was issued under.
+- ``AUD_ACCOUNT`` — an **account** session (B255): who owns forks. It exists
+  before any campaign is chosen and is not a player session — see below.
+- ``AUD_ACCOUNT_LINK`` — a single-use email link (verify / sign in / recover).
 
-**The audience is not decoration.** Both are signed with the same key, so without
-an audience claim a join token would verify as a session cookie — handing a
+**The audience is not decoration.** They are all signed with the same key, so
+without an audience claim a join token would verify as a session cookie — handing a
 player's identity to anyone holding an invite — and a session cookie would verify
 as a join token, letting any admitted device mint admissions off its own session.
 ``verify`` refuses a token whose ``aud`` is not the one asked for.
+
+The account tier is the one that must not blur: an account session that can act as
+a player **undoes SEC-3**, because the whole point of SEC-3 is that identity is
+server-issued per campaign. Distinct audience *and* a distinct cookie name; the
+separation needs a test rather than a convention ([[B255]]).
 
 A token is a base64url JSON payload plus an HMAC over it, carrying its own ``exp``
 so verification needs no storage.
@@ -39,6 +47,11 @@ import time
 AUD_JOIN = "join"
 #: The browser session, carrying the player taken and the epoch issued under.
 AUD_SESSION = "session"
+#: An account (fork-owner) session. A different tier from a player session: it
+#: exists before any campaign is chosen and must never resolve as one.
+AUD_ACCOUNT = "account"
+#: A single-use email link — verify an address, sign in, or recover.
+AUD_ACCOUNT_LINK = "account-link"
 
 #: A signing key shorter than this counts as "not configured". An empty or stub
 #: secret must never be able to validate a token (SEC-5).
