@@ -18,7 +18,13 @@
              ([[B41]]): it could not tell whether the character may walk the path, and
              it locked 7 of 10. -->
         <template v-if="step === 'choose'">
-          <p class="wiz-hint">Choose a life path to take a term in.</p>
+          <!-- Opened for one path ([[B303]]): the rule named it, so say so rather
+               than dropping the player into a one-row list with no explanation. -->
+          <p v-if="showingPathId" class="wiz-hint">
+            A path has been offered to you. Taking a term is your choice — nothing
+            starts until you pick it.
+          </p>
+          <p v-else class="wiz-hint">Choose a life path to take a term in.</p>
           <ChoiceTable
             :rows="pathRows"
             :loading="busy"
@@ -27,6 +33,9 @@
             empty-text="No life paths available."
             @pick="startPath"
           />
+          <button v-if="showingPathId" type="button" class="wiz-show-all" @click="showAllPaths">
+            Show all paths
+          </button>
           <p v-if="error" class="wiz-error">{{ error }}</p>
         </template>
 
@@ -146,6 +155,16 @@ const props = defineProps({
   embedded: { type: Boolean, default: false },
   entityId: { type: String, required: true },
   universe: { type: String, default: 'earth' },
+  /**
+   * Open the wizard **on one path** rather than on the whole catalogue
+   * ([[B303]]). A rule that shows a life path names it, and the chooser then
+   * carries that path alone with a way back to the rest.
+   *
+   * It narrows the *view* only: nothing is started until the player picks the
+   * row, exactly as when the full list is shown. `show_life_path` is a display
+   * effect — granting the path is `life_path/discover`, a different action.
+   */
+  initialPathId: { type: String, default: '' },
 })
 const emit = defineEmits(['close', 'updated'])
 const { graphql } = useApi()
@@ -153,6 +172,9 @@ const { load: loadEffectActions } = useEffectActions()
 const bus = usePanelBus()
 
 const step = ref('choose') // 'choose' | 'term' | 'done'
+// The one path the chooser is narrowed to, when the wizard was opened for a
+// named path ([[B303]]). Empty = the whole catalogue.
+const showingPathId = ref('')
 const busy = ref(false)
 const resolving = ref(false)
 const error = ref('')
@@ -196,14 +218,19 @@ const rollableTraits = computed(() => traits.value.filter(t => t.universe === pr
  *  a term, never a gate. An unwalkable path stays **visible and disabled, carrying the
  *  reason** (the human, 2026-09-25), and `walkable === null` means not evaluated —
  *  which this query never is, because it always passes the entity. */
-const pathRows = computed(() => paths.value.map(lp => ({
-  id: lp.id,
-  factionIds: lp.factionIds,
-  label: lp.name,
-  description: lp.description,
-  locked: lp.walkable === false,
-  why: (lp.unwalkableReasons || []).join('; '),
-})))
+const pathRows = computed(() => paths.value
+  .filter(lp => !showingPathId.value || lp.id === showingPathId.value)
+  .map(lp => ({
+    id: lp.id,
+    factionIds: lp.factionIds,
+    label: lp.name,
+    description: lp.description,
+    locked: lp.walkable === false,
+    why: (lp.unwalkableReasons || []).join('; '),
+  })))
+
+/** Back to the whole catalogue, from a wizard that was opened on one path. */
+function showAllPaths() { showingPathId.value = '' }
 
 const groupedTraits = computed(() => {
   const groups = {}
@@ -443,6 +470,7 @@ function close() { emit('close') }
 async function init() {
   if (!props.visible) return
   error.value = ''
+  showingPathId.value = ''
   await Promise.all([loadPaths(), loadEffectActions(), loadTraits()])
   const pt = await loadPendingTerm()
   if (pt?.currentTableId) {
@@ -453,6 +481,12 @@ async function init() {
     await nextTick()
     setupRoller()
   } else {
+    // Opened for one path ([[B303]]): carry that path rather than the whole
+    // catalogue, so a rule can put a specific path in front of the player. An
+    // id nobody has falls back to the full list rather than to an empty screen.
+    showingPathId.value = (props.initialPathId && paths.value.some(p => p.id === props.initialPathId))
+      ? props.initialPathId
+      : ''
     step.value = 'choose'
   }
 }
@@ -476,6 +510,9 @@ watch(() => props.visible, (v) => { if (v) init() })
 .wiz-header h2{font-size:15px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wiz-body{padding:16px;flex:1;min-height:0;overflow-y:auto}
 .wiz-hint{color:var(--text-dim);margin:0 0 12px;font-size:13px}
+/* Shown only when the wizard was opened for one path ([[B303]]) — the way back to
+   the rest of the catalogue. Quiet on purpose: the offered path is the point. */
+.wiz-show-all{margin-top:10px;background:none;border:0;padding:0;cursor:pointer;font:inherit;font-size:12px;color:var(--text-dim);text-decoration:underline}
 .wiz-empty{color:var(--text-dim);font-size:13px;padding:20px 0;text-align:center}
 .wiz-phase-label{font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:12px;color:var(--accent);margin:0 0 8px;display:flex;align-items:center;gap:6px}
 .wiz-chip{font-size:9px;color:var(--text-dim);background:var(--overlay-6);padding:1px 5px;border-radius:3px;text-transform:uppercase;font-weight:400}

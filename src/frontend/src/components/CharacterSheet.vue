@@ -261,6 +261,7 @@
         :visible="activeSheetView === 'lifepath'"
         :entity-id="overrideEntityId || entityId"
         :universe="entity?.currentUniverse || 'earth'"
+        :initial-path-id="focusedLifePathId"
         embedded
         @close="activeSheetView = 'traits'"
         @updated="fetchEntity"
@@ -734,6 +735,16 @@ const props = defineProps({
   // trait you pressed stays visible behind it, so the question has its context. A
   // roll-time question goes to the roller; an automatic one to a floating panel.
   sfxChoiceRequest: { type: Array, default: () => [] },
+  /**
+   * A life path a rule has shown to this character ([[B303]]).
+   *
+   * `{ entityId, lifePathId, nonce }`, or null. The app shell decides the
+   * surface: a path for a character this client did **not** create lands here,
+   * because the sheet is that character's own place — so this opens the life
+   * path view on the named path when the sheet is showing that entity. The
+   * `nonce` is what lets the same path be asked for twice.
+   */
+  lifePathRequest: { type: Object, default: null },
   // Whether the traits tab draws the sets as an accordion (B178) or as a drill-in
   // (the shape B178 replaced). The host owns the layout, so it owns this; the
   // rule is the human's — accordion only for landscape views with a large height,
@@ -1018,6 +1029,26 @@ const blueBookRef = ref(null)
 
 const activeSheetView = usePersistedRef('sheet.activeView', 'traits')  // 'traits' | 'profile' | 'lifepath' | 'bluebook' | 'relation'
 watch(activeSheetView, (v) => emit('sheetViewChange', v))
+
+// A life path a rule has shown to this character ([[B303]]). The wizard is
+// entity-addressed and needs only the path to open on, so this is where the
+// "shown in that character's sheet" half of the routing lands: open the life
+// path view on the named path whenever this sheet is showing that character.
+const focusedLifePathId = ref('')
+watch(
+  () => [props.lifePathRequest, props.overrideEntityId || props.entityId],
+  ([req]) => {
+    if (!req?.lifePathId || !req.entityId) return
+    if (req.entityId !== (props.overrideEntityId || props.entityId)) return
+    focusedLifePathId.value = req.lifePathId
+    activeSheetView.value = 'lifepath'
+  },
+  { immediate: true },
+)
+// Leaving the view forgets the path, so opening the tab again is the ordinary
+// chooser rather than a stale one-path offer. Set *before* the switch above, so
+// this never races the open.
+watch(activeSheetView, (v) => { if (v !== 'lifepath') focusedLifePathId.value = '' })
 
 const isForeignSheet = computed(() =>
   props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId

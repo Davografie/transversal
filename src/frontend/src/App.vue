@@ -83,6 +83,18 @@
           @touch-end="onReleaseTouchEnd"
           @create="createCharacter"
         />
+
+        <!-- A life path a rule has shown to this player ([[B303]]). It sits with
+             "Your characters" because it belongs to the character just made, and
+             this overlay is the surface the router picked for it. -->
+        <LifePathBlock
+          v-if="overlayLifePathIntro"
+          :character-id="overlayLifePathIntro.characterId"
+          :life-path-id="overlayLifePathIntro.lifePathId"
+          :name="entName(overlayLifePathIntro.characterId)"
+          :universe="overlayLifePathUniverse"
+          @dismiss="dismissLifePathIntro(overlayLifePathIntro.characterId)"
+        />
         <SupportBlock
           :support-characters="mySupportCharacters"
           :other-mains="otherPlayersMains"
@@ -195,6 +207,7 @@
           :class="{ 'sheet-hidden': !sheetVisible && !mobileStackActive && !sheetDock }"
           :entity-id="entityId"
           :override-entity-id="viewingEntityId"
+          :life-path-request="sheetLifePathRequest"
           :place-id="currentLocationId"
           :place-name="locationName"
           :in-session="inSession"
@@ -302,6 +315,8 @@ import MediaQualityBlock from '@/components/app/MediaQualityBlock.vue'
 import FullscreenBlock from '@/components/app/FullscreenBlock.vue'
 import AppearanceBlock from '@/components/app/AppearanceBlock.vue'
 import CharacterListBlock from '@/components/app/CharacterListBlock.vue'
+import LifePathBlock from '@/components/app/LifePathBlock.vue'
+import { useLifePathIntro } from '@/composables/useLifePathIntro.js'
 import SupportBlock from '@/components/app/SupportBlock.vue'
 import PeersBar from '@/components/app/PeersBar.vue'
 import MediaImage from './components/MediaImage.vue'
@@ -758,6 +773,14 @@ onMounted(() => {
  */
 function handleClientAction(data) {
   if (!data || !data.action) return
+  // `life_path` is the one client action that may name a character this client is
+  // **not playing yet** ([[B303]]): it fires on character creation, from the same
+  // request that made the character, so the guard below would drop the very case
+  // it exists for. Handled before it, and routed rather than shown directly.
+  if (data.action === 'life_path') {
+    handleLifePathIntro(data)
+    return
+  }
   if (data.recipient_id !== entityId.value) return
   if (data.action === 'open_sheet') {
     focusCharacterSheet(data.target_id)
@@ -888,12 +911,59 @@ const {
 // Find/create a character in the settings overlay (see useCharacterFinder.js).
 const {
   charSearch, charSearchResults, charSearching, charSearchSearched, charSearchError,
-  newCharName, creatingChar, createCharError, showNewChar,
+  newCharName, creatingChar, createCharError, showNewChar, lastCreatedId,
   onCharSearchEnter, chooseFoundCharacter, createCharacter, resetFinder,
 } = useCharacterFinder({
   playerId, playerEntities, fetchPlayerEntities, fetchLocationNames,
   onChoose: (e) => beginCharacterSwitch(e),
 })
+
+// Life paths a rule has shown to a player ([[B303]]) — `client/life_path`. The
+// pending set is keyed by character and persisted, so an onboarding moment
+// survives a reload; `firstFor` is what this overlay renders and `introFor` is
+// what the sheet asks about for the character it is showing.
+const {
+  introduce: introduceLifePath,
+  firstFor: firstLifePathIntro,
+  introFor: lifePathIntroFor,
+  dismiss: dismissLifePathIntro,
+} = useLifePathIntro()
+
+const overlayLifePathIntro = computed(() => firstLifePathIntro('overlay'))
+
+// The path's universe is the character's, not this device's: the wizard lists the
+// paths of the universe it is given, and a new character's universe is its own
+// fact. Falls back to earth, which is where the overlay's create flow puts one.
+const overlayLifePathUniverse = computed(() => {
+  const id = overlayLifePathIntro.value?.characterId
+  const e = (playerEntities.value || []).find((x) => x.id === id)
+  return e?.currentUniverse || 'earth'
+})
+
+// A path the sheet should open itself on, when the intro belongs there.
+// `{ entityId, lifePathId, nonce }` — the nonce so the same path can be asked for
+// twice (a re-show after a dismiss) without the sheet ignoring the second ask.
+const sheetLifePathRequest = ref(null)
+
+/**
+ * Route a shown life path to the surface that owns it ([[B303]]).
+ *
+ * The server sends only *which path* and *whose screen*; which surface is ours to
+ * decide, because only this side knows how the character came to exist. A
+ * character created in this client's overlay is shown the path **here**, where
+ * the player already is; anything else — a rule made the character — is shown it
+ * in that character's own sheet.
+ */
+function handleLifePathIntro(data) {
+  const characterId = String(data.recipient_id || '')
+  const lifePathId = String(data.life_path_id || '')
+  if (!characterId || !lifePathId) return
+  const surface = characterId === lastCreatedId.value ? 'overlay' : 'sheet'
+  introduceLifePath(characterId, lifePathId, surface)
+  if (surface === 'sheet') {
+    sheetLifePathRequest.value = { entityId: characterId, lifePathId, nonce: Date.now() }
+  }
+}
 
 // B66 — create-support targets another player's active main (not your own).
 // `activeMains` is one entry per active main: { playerId, playerName, main }.

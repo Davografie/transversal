@@ -63,9 +63,16 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
 // ── 2. who reacts ───────────────────────────────────────────────────────────
 // Published to every session, so this gate is the only thing between "the table
 // gets a message" and "every device acts on everybody's actions".
+//
+// [[B303]] added **one documented exception** ahead of it: `life_path` fires on
+// character creation, from the same request that made the character, so the guard
+// would drop the very case it exists for. The exception is narrow — that action
+// and no other — and the guard must still be there behind it.
 {
   yes('a client that is not the recipient ignores it',
-    /function handleClientAction\(data\) \{\s*if \(!data \|\| !data\.action\) return\s*if \(data\.recipient_id !== entityId\.value\) return/.test(app))
+    /function handleClientAction\(data\) \{\s*if \(!data \|\| !data\.action\) return[\s\S]{0,700}?if \(data\.recipient_id !== entityId\.value\) return/.test(app))
+  yes('…and exactly one action is let through ahead of it, because it fires before the character is active',
+    /if \(data\.action === 'life_path'\) \{\s*handleLifePathIntro\(data\)\s*return\s*\}[\s\S]{0,200}?if \(data\.recipient_id !== entityId\.value\) return/.test(app))
 }
 
 // ── 3. what the two actions do ──────────────────────────────────────────────
@@ -169,6 +176,67 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
     /prefers-reduced-motion: reduce\) \{[\s\S]{0,200}\.sp-target-value, \.sp-target-ring, \.sp-chip \{ animation: none/.test(splash))
   yes('the ring is decoration: out of the flow and never eating the press',
     /\.sp-target-ring \{[\s\S]{0,300}pointer-events: none/.test(splash))
+}
+
+// ── 9. showing a life path ([[B303]]) ───────────────────────────────────────
+// `client/life_path` puts a life path in front of a player. Two things here that
+// nothing else can see:
+//
+//   * **the surface is decided on the client**, and by a *fact only the client
+//     has* — whether this client created the character. A `surface` read off the
+//     wire would mean the server guessed, so the check is that the decision is
+//     made from `lastCreatedId`, not from the payload.
+//   * **the wizard is narrowed, not the term started.** `show_life_path` is
+//     display-only: opening the wizard on a path must not run `startTerm`, or
+//     being *shown* something would take a term on the player's behalf.
+{
+  const intro = fn('handleLifePathIntro')
+  yes('the router exists and reads the two fields the contract carries',
+    intro.length > 0 && /data\.recipient_id/.test(intro) && /data\.life_path_id/.test(intro))
+  yes('the surface comes from what *this client* created, never from the payload',
+    /characterId === lastCreatedId\.value \? 'overlay' : 'sheet'/.test(intro)
+      && !/data\.surface/.test(app))
+  yes('an intro with no character or no path is dropped rather than half-shown',
+    /if \(!characterId \|\| !lifePathId\) return/.test(intro))
+  yes('the overlay route records it for the overlay; the sheet route also asks the sheet',
+    /introduceLifePath\(characterId, lifePathId, surface\)/.test(intro)
+      && /surface === 'sheet'[\s\S]{0,140}?sheetLifePathRequest\.value = \{ entityId: characterId, lifePathId, nonce: Date\.now\(\) \}/.test(intro))
+  yes('the finder is what remembers the character this client made',
+    /lastCreatedId\.value = eid/.test(readFileSync('src/composables/useCharacterFinder.js', 'utf8'))
+      && /lastCreatedId,/.test(app))
+
+  // The overlay host.
+  const block = readFileSync('src/components/app/LifePathBlock.vue', 'utf8')
+  yes('the overlay renders the block only when there is an intro for it',
+    /<LifePathBlock\s+v-if="overlayLifePathIntro"/.test(app))
+  yes('…and dismissing clears it for that character',
+    /@dismiss="dismissLifePathIntro\(overlayLifePathIntro\.characterId\)"/.test(app))
+  yes('the block embeds the real wizard, entity-addressed and narrowed to the path',
+    /<LifePathWizard[\s\S]{0,300}?embedded[\s\S]{0,200}?:entity-id="characterId"[\s\S]{0,200}?:initial-path-id="lifePathId"/.test(block))
+  yes('…and the wizard\'s ✕ is the block\'s dismiss, not a dead close',
+    /@close="\$emit\('dismiss'\)"/.test(block))
+
+  // The sheet host, and the display-only guarantee.
+  const sheet = readFileSync('src/components/CharacterSheet.vue', 'utf8')
+  yes('the sheet is asked for the path by the shell',
+    /:life-path-request="sheetLifePathRequest"/.test(app))
+  yes('…and opens its life path view on it, for the character it is showing',
+    /const focusedLifePathId = ref\(''\)/.test(sheet)
+      && /req\.entityId !== \(props\.overrideEntityId \|\| props\.entityId\)/.test(sheet)
+      && /activeSheetView\.value = 'lifepath'/.test(sheet))
+  yes('…and leaves the path behind when the view is left, so the tab is not stuck on one offer',
+    /if \(v !== 'lifepath'\) focusedLifePathId\.value = ''/.test(sheet))
+
+  const wizard = readFileSync('src/components/LifePathWizard.vue', 'utf8')
+  yes('the wizard takes an initial path and narrows the chooser to it',
+    /initialPathId: \{ type: String, default: '' \}/.test(wizard)
+      && /\.filter\(lp => !showingPathId\.value \|\| lp\.id === showingPathId\.value\)/.test(wizard))
+  yes('…falling back to the whole catalogue when the id names nothing',
+    /showingPathId\.value = \(props\.initialPathId && paths\.value\.some\(p => p\.id === props\.initialPathId\)\)/.test(wizard))
+  yes('…and still only *offers* it: picking the row is what starts the term',
+    /@pick="startPath"/.test(wizard) && !/init\(\)[\s\S]{0,900}?startPath\(/.test(wizard))
+  yes('…with a way back to the rest of the catalogue',
+    /function showAllPaths\(\) \{ showingPathId\.value = '' \}/.test(wizard) && /Show all paths/.test(wizard))
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

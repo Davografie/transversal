@@ -29,6 +29,15 @@ export function useCharacterFinder({
   const creatingChar = ref(false)
   const createCharError = ref('')
   const showNewChar = ref(false)
+  /**
+   * The character this client just created, if any ([[B303]]).
+   *
+   * It is the one fact that tells a `client/life_path` action which surface to
+   * use: a character created *here* is shown its path in the overlay the player
+   * is already in, and a character that arrived some other way is shown it in its
+   * own sheet. The server cannot tell the difference, so the client keeps it.
+   */
+  const lastCreatedId = ref('')
 
   async function fetchAllCharacters() {
     if (allCharactersCache) return allCharactersCache
@@ -110,6 +119,7 @@ export function useCharacterFinder({
       const eid = json.data?.createEntity?.id
       if (eid) {
         await fetch(`/api/v1/players/${playerId.value}/claim/${eid}`, { method: 'POST' })
+        lastCreatedId.value = eid
         newCharName.value = ''
         showNewChar.value = false
         allCharactersCache = null
@@ -138,7 +148,7 @@ export function useCharacterFinder({
 
   return {
     charSearch, charSearchResults, charSearching, charSearchSearched, charSearchError,
-    newCharName, creatingChar, createCharError, showNewChar,
+    newCharName, creatingChar, createCharError, showNewChar, lastCreatedId,
     fetchAllCharacters, onCharSearchEnter, doCharSearch, chooseFoundCharacter,
     createCharacter, resetFinder,
   }
