@@ -395,14 +395,27 @@ class RepositoryRelationships:
         deliberately unchecked; the REST endpoint inserts the edge document
         directly, so this is the only place the shapes are policed.
 
+        **The child must be a location; the parent need not be.** That asymmetry is
+        the point: one `super` edge says *a sub-place of* when both ends are places
+        and *carried by* when the parent is not one — a cultivator's inner world.
+        A non-location **child** is refused, because it is the same corruption from
+        the other side (a character rendered as a leaf inside the location tree),
+        and no live edge has ever been one.
+
         Returns a human-readable refusal; the caller raises it.
         """
         if rel_type == "super":
+            child = self.get_entity(from_id)
+            parent = self.get_entity(to_id)
+            if child is not None and child.type != EntityType.LOCATION:
+                return (
+                    f"'{child.name}' is a {child.type.value}, not a location — only "
+                    "a location can be a child in the location tree (a location may "
+                    "still be *carried* by a non-location)"
+                )
             if from_id == to_id:
                 return "a location cannot be its own parent"
             if from_id in self.get_location_ancestors(to_id):
-                child = self.get_entity(from_id)
-                parent = self.get_entity(to_id)
                 return (
                     f"'{parent.name if parent else to_id}' is inside "
                     f"'{child.name if child else from_id}'s own subtree — a "

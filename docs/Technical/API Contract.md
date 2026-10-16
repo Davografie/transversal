@@ -56,6 +56,12 @@ type Entity {
   projections: [Projection!]!
   traitSettings: [TraitSetting!]!
   attunements: [Attunement!]!
+  # Carried locations — a `super` edge whose parent is not a location (B308).
+  # `carriedLocations` reads from the carrier's end (an inner world); `carrier`
+  # from the location's (who holds this place). Empty/null for a placed location,
+  # and a location inside another location answers null — that parent is containment.
+  carriedLocations: [Entity!]!
+  carrier: Entity
 }
 
 enum EntityType {

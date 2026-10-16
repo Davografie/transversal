@@ -23,6 +23,11 @@ def _ordered(keys: list[str], grouped: dict[str, list]) -> list[list]:
     return [grouped.get(k, []) for k in keys]
 
 
+def _ordered_single(keys: list[str], grouped: dict[str, object]) -> list:
+    """The same, for a loader answering at most one value per key."""
+    return [grouped.get(k) for k in keys]
+
+
 @dataclass
 class Loaders:
     projections: DataLoader
@@ -31,6 +36,8 @@ class Loaders:
     sub_traitsettings: DataLoader
     relationship_traitsettings: DataLoader
     images: DataLoader
+    carried_locations: DataLoader
+    carriers: DataLoader
 
 
 def build_loaders(em: EntityManager) -> Loaders:
@@ -58,6 +65,15 @@ def build_loaders(em: EntityManager) -> Loaders:
     async def load_images(keys: list[str]) -> list[list]:
         return _ordered(keys, repo.get_images_for_owners(keys))
 
+    # A location whose `super` parent is not a location is **carried** by it, so
+    # these two are the same edge read from its two ends. Batched like the rest:
+    # an entity list asking either question costs one query, not one per row.
+    async def load_carried_locations(keys: list[str]) -> list[list]:
+        return _ordered(keys, repo.get_locations_carried_by(keys))
+
+    async def load_carriers(keys: list[str]) -> list:
+        return _ordered_single(keys, repo.get_location_carriers(keys))
+
     return Loaders(
         projections=DataLoader(load_fn=load_projections),
         traitsettings=DataLoader(load_fn=load_traitsettings),
@@ -65,4 +81,6 @@ def build_loaders(em: EntityManager) -> Loaders:
         sub_traitsettings=DataLoader(load_fn=load_sub_traitsettings),
         relationship_traitsettings=DataLoader(load_fn=load_relationship_traitsettings),
         images=DataLoader(load_fn=load_images),
+        carried_locations=DataLoader(load_fn=load_carried_locations),
+        carriers=DataLoader(load_fn=load_carriers),
     )

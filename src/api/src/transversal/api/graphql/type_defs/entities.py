@@ -186,6 +186,32 @@ class Entity:
         ]
 
     @strawberry.field
+    async def carried_locations(self, info: strawberry.Info) -> list["Entity"]:
+        """The locations this entity **carries** — an inner world, not a sub-place.
+
+        A ``super`` edge whose parent is not a location means *carried by*, and this
+        is that edge read from the carrier's end. Empty for almost everything; a
+        cultivator's inner world is the case it exists for. Note the two universes
+        need not agree — the carrier is where it is, the carried place is its own.
+        """
+        from transversal.api.graphql.resolvers.converters import _entity_to_gql
+
+        carried = await info.context["loaders"].carried_locations.load(str(self.id))
+        return [_entity_to_gql(e) for e in carried]
+
+    @strawberry.field
+    async def carrier(self, info: strawberry.Info) -> Optional["Entity"]:
+        """The entity carrying this location, or null when it is placed rather than carried.
+
+        The inverse read, for a location's own panel: *who holds this place?* A
+        location inside another location answers null — that parent is containment.
+        """
+        from transversal.api.graphql.resolvers.converters import _entity_to_gql
+
+        carrier = await info.context["loaders"].carriers.load(str(self.id))
+        return _entity_to_gql(carrier) if carrier is not None else None
+
+    @strawberry.field
     def background_image(self, info: strawberry.Info) -> Optional[str]:
         em = info.context["entity_manager"]
         url = em.repo.resolve_role_image(str(self.id), "background", None)

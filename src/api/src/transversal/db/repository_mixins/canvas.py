@@ -47,6 +47,12 @@ class RepositoryCanvas:
         Universes are the top-level nodes.  Locations are nested under their
         universe (keyed on ``current_universe``), with their own ``super``
         edges forming sub-hierarchies within each universe.
+
+        A **carrier** may also be top-level: a ``super`` edge whose parent is not a
+        location says *carried by* rather than *a sub-place of* (a cultivator's
+        inner world), and its node is reported as ``node_type: "carrier"`` with the
+        node below it marked ``carried: true``. Read [[Data Model]] § carried
+        locations before changing that.
         """
         # ── Get all UNIVERSE entities ─────────────────
         universe_query = f"""
@@ -63,7 +69,8 @@ class RepositoryCanvas:
         location_query = f"""
             FOR e IN {ENTITIES}
             FILTER e.type == 'location'
-            RETURN {{ id: e._key, name: e.name, current_universe: e.current_universe }}
+            RETURN {{ id: e._key, name: e.name, current_universe: e.current_universe,
+                      type: e.type }}
         """
         locations = {doc["id"]: doc for doc in self.db.aql.execute(location_query)}
 
@@ -79,13 +86,38 @@ class RepositoryCanvas:
             parent_of[rel["child"]] = rel["parent"]
             children_of.setdefault(rel["parent"], []).append(rel["child"])
 
-        # Fill gaps for edge-referenced entities not in the locations dict
-        for child_id in parent_of:
-            if child_id not in locations:
-                locations[child_id] = {"id": child_id, "name": child_id, "current_universe": ""}
-        for parent_id in children_of:
-            if parent_id not in locations:
-                locations[parent_id] = {"id": parent_id, "name": parent_id, "current_universe": ""}
+        # Endpoints the location scan did not return are **carriers**: a location may
+        # hang off a non-location entity (a character's inner world), which is how one
+        # `super` edge says both "carried by" and "a sub-place of". They are looked up
+        # for real rather than gap-filled with their id, because a carrier rendered as
+        # `{name: <id>, universe: ""}` reads as a *universe of its own* — measured
+        # 2026-09-29, `character-20809` was listed beside "Earth" and "Three Realms",
+        # named by its key. Anything still missing is a dangling edge endpoint, and
+        # says so rather than being passed off as a carrier.
+        unknown = {i for i in list(parent_of) + list(children_of) if i not in locations}
+        if unknown:
+            for doc in self.db.aql.execute(
+                f"""
+                FOR e IN {ENTITIES}
+                FILTER e._key IN @ids
+                RETURN {{ id: e._key, name: e.name,
+                          current_universe: e.current_universe, type: e.type }}
+                """,
+                bind_vars={"ids": sorted(unknown)},
+            ):
+                locations[doc["id"]] = doc
+            for missing_id in sorted(unknown):
+                locations.setdefault(
+                    missing_id,
+                    {"id": missing_id, "name": missing_id, "current_universe": "", "type": ""},
+                )
+
+        # A node whose own type is not `location` carries what hangs below it.
+        carriers = {
+            node_id
+            for node_id, doc in locations.items()
+            if doc.get("type") not in ("location", "")
+        }
 
         def by_name(ids: list[str]) -> list[str]:
             """Those ids in alphabetical order by display name.
@@ -101,28 +133,46 @@ class RepositoryCanvas:
             )
 
         def build_node(loc_id: str) -> dict:
-            loc = locations.get(loc_id, {"id": loc_id, "name": loc_id, "current_universe": ""})
+            loc = locations.get(
+                loc_id,
+                {"id": loc_id, "name": loc_id, "current_universe": "", "type": ""},
+            )
             children = children_of.get(loc_id, [])
+            kind = loc.get("type", "")
+            if kind == "location":
+                node_type = "location"
+            elif kind:
+                node_type = "carrier"
+            else:
+                node_type = "unknown"  # a dangling edge endpoint, not a carrier
             return {
                 "id": loc["id"],
                 "name": loc["name"],
-                "node_type": "location",
+                "node_type": node_type,
                 "universe": loc.get("current_universe", ""),
+                # True when the node hangs off a carrier rather than another location.
+                "carried": parent_of.get(loc_id) in carriers,
                 "children": [build_node(c) for c in by_name(children)],
             }
 
-        # Root locations: locations with no parent super edge
+        # Root nodes: anything with no parent super edge.
         roots = [lid for lid in locations if lid not in parent_of]
 
-        # Group root locations by their current_universe
+        # Group root locations by their current_universe.
         uni_roots: dict[str, list[str]] = {}
-        orphans: list[str] = []  # locations with no matching universe
+        # Top-level nodes that are **not** a universe's places: a carrier (which is
+        # not a place at all), and a location whose universe has no entity. A carrier
+        # is filed here deliberately rather than into its own universe, because the
+        # locations it holds need not share it — measured 2026-09-29, a character in
+        # `three_realms` carries an `earth` location, so filing by the carrier's
+        # universe would silently re-home the world it carries.
+        orphans: list[str] = []
         for lid in roots:
             ukey = locations[lid].get("current_universe", "")
-            if ukey in universes:
-                uni_roots.setdefault(ukey, []).append(lid)
-            else:
+            if lid in carriers or ukey not in universes:
                 orphans.append(lid)
+            else:
+                uni_roots.setdefault(ukey, []).append(lid)
 
         # Build universe nodes
         result: list[dict] = []
@@ -139,12 +189,70 @@ class RepositoryCanvas:
                 "children": [build_node(r) for r in by_name(loc_roots)],
             })
 
-        # Orphan locations (no matching universe entity) still appear as
-        # top-level nodes so nothing is silently dropped.
+        # Carriers and orphan locations still appear as top-level nodes so nothing
+        # is silently dropped.
         for lid in by_name(orphans):
             result.append(build_node(lid))
 
         return result
+
+    def get_locations_carried_by(self, entity_ids: list[str]) -> dict[str, list[Entity]]:
+        """``{carrier_id: [location, …]}`` — the locations an entity carries.
+
+        A **carried location** is one whose ``super`` parent is not itself a
+        location. That is the whole of the relation: one edge type says both *a
+        sub-place of* and *carried by*, and the endpoint's kind is what tells them
+        apart (a character carries its inner world; a location contains a zone).
+        The distinction matters because the carrier's universe and the carried
+        location's need not agree — measured 2026-09-29, a `three_realms` character
+        carries an `earth` location — so a carried location cannot be re-homed by
+        walking the tree.
+
+        Nothing here is a new field: this reads the edges that already exist, which
+        is why a world built before this method did still answers. Sorted by name so
+        a panel does not have to.
+        """
+        if not entity_ids:
+            return {}
+        handles = [f"{ENTITIES}/{eid}" for eid in entity_ids]
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'super' AND r._to IN @handles
+            LET child = DOCUMENT(r._from)
+            LET parent = DOCUMENT(r._to)
+            FILTER child != null AND parent != null
+            FILTER child.type == 'location' AND parent.type != 'location'
+            SORT parent._key ASC, child.name ASC
+            RETURN {{ carrier: parent._key, child: child }}
+        """
+        grouped: dict[str, list[Entity]] = {}
+        for row in self.db.aql.execute(query, bind_vars={"handles": handles}):
+            grouped.setdefault(row["carrier"], []).append(self._doc_to_entity(row["child"]))
+        return grouped
+
+    def get_location_carriers(self, location_ids: list[str]) -> dict[str, Entity]:
+        """``{location_id: carrier}`` — the entity carrying each location.
+
+        The inverse of :meth:`get_locations_carried_by`, and the read a location's
+        own panel needs: *who holds this place?* A location whose parent is another
+        location is absent, because that parent is containment, not carrying.
+        """
+        if not location_ids:
+            return {}
+        handles = [f"{ENTITIES}/{lid}" for lid in location_ids]
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'super' AND r._from IN @handles
+            LET child = DOCUMENT(r._from)
+            LET parent = DOCUMENT(r._to)
+            FILTER child != null AND parent != null
+            FILTER child.type == 'location' AND parent.type != 'location'
+            RETURN {{ child: r._from, carrier: parent }}
+        """
+        out: dict[str, Entity] = {}
+        for row in self.db.aql.execute(query, bind_vars={"handles": handles}):
+            out[row["child"].split("/", 1)[1]] = self._doc_to_entity(row["carrier"])
+        return out
 
     def location_graph(self) -> dict:
         """Full location hierarchy plus all transversal edges, for the overview canvas."""

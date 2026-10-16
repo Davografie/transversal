@@ -149,7 +149,7 @@ ownership, membership, travel, authority, cast) and one **personal** type
 
 | Type | Direction | Meaning |
 |------|-----------|---------|
-| `super` | child → parent | Location hierarchy (sub-location of) |
+| `super` | child → parent | Location hierarchy — *a sub-place of* when both ends are locations, ***carried by*** when the parent is not (see below) |
 | `transversal` | bidirectional | Portal / traversal connection between locations |
 | `membership` | member → faction | Entity is on a faction's **roster** (rank/role hang here) |
 | `agency` | player → entity | Player ownership / control (carries the `main` flag) |
@@ -160,6 +160,35 @@ ownership, membership, travel, authority, cast) and one **personal** type
 Retired: `associate`, `gifted`, `suspects`, `hostile_to` collapse onto `relation`
 (their meaning lives in the trait / `description` / trait-setting `source_type`).
 See `STRUCTURAL_RELATIONSHIP_TYPES` in `domain/__init__.py` for the source of truth.
+
+> [!important] Carried locations — one edge, two meanings, told apart by the parent's kind ([[B308]])
+> A `super` edge whose **parent is not a location** means the child location is **carried
+> by** that entity, not contained in it. A cultivator's inner world; a pocket realm; a
+> formation anchored to its caster. Nothing distinguishes them in storage — the endpoint's
+> *type* is the whole of it — so the reads must filter on it, and there are two:
+>
+> - `EntityRepository.get_locations_carried_by(entity_ids)` → `{carrier_id: [location, …]}`
+> - `get_location_carriers(location_ids)` → `{location_id: carrier}`
+>
+> surfaced as **`Entity.carriedLocations`** and **`Entity.carrier`** (batched through
+> request-scoped DataLoaders). Live example: `loc-345978606` *Phaos Tyish Qihai* (universe
+> `earth`) is carried by `character-20809` *Phaos Tyish* (universe `three_realms`) — note
+> the two universes **disagree**, which is why a carried location is never re-homed by
+> walking the tree and why a carrier is not filed among a universe's places.
+>
+> **The asymmetry is enforced, and only one way:**
+> `validate_relationship` refuses a `super` edge whose **child** is not a location, and
+> permits one whose parent is not. A non-location child is the same corruption from the far
+> side — a character rendered as a leaf inside the location tree — and 0 live edges have
+> ever been one.
+>
+> `location_tree()` reports a carrier as `node_type: "carrier"` with its own name and
+> universe (it used to be gap-filled as `{name: <the id>, universe: ""}`, which made it a
+> top-level node *beside the universes* named by its key), marks the node below it
+> `carried: true`, and reports an edge endpoint that no longer exists as
+> `node_type: "unknown"`. Read [[B308]] for the reasoning; a travel/entry mechanic and a
+> `create_location` action are [[B309]] and do **not** exist yet.
+
 
 > [!important] Roster vs association — the direction rule
 > Two reads ask different questions of the same edges, and the difference is
