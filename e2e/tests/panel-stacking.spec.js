@@ -19,10 +19,9 @@
 // the order of the gestures below matters.
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
-import { bootGmPanel, enterPrep, openStack } from '../helpers/gm.js'
+import { bootGmPanel, enterPrep, openStack, detachByDrag } from '../helpers/gm.js'
 
 const TEST_CHARACTER = 'character-kael-drift-e555ccde'
-const DETACH = '[title="Detach into a floating window"]'
 const ROOT = '[data-panel-unit="root"]'
 const FLOATS = '[data-panel-unit]:not([data-panel-unit="root"])'
 // A panel opened as a child of the chain: a `.panel-node` inside a `.panel-node`
@@ -71,7 +70,7 @@ const stored = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k)
 async function detachChild(page, row) {
   await page.locator('.tree-row').nth(row).click()
   await page.waitForTimeout(1400)
-  await page.locator(DETACH).last().click()
+  await detachByDrag(page)
   await page.waitForTimeout(900)
 }
 
@@ -184,7 +183,7 @@ test('opening a panel brings its unit to the front', async ({ page }) => {
   await page.waitForTimeout(900)
   await page.locator('.suggestion-row:visible').first().click()
   await page.waitForTimeout(1600)
-  await page.locator(DETACH).last().click()
+  await detachByDrag(page)
   await page.waitForTimeout(900)
 
   const start = await stack(page)

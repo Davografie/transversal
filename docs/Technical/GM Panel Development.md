@@ -30,11 +30,17 @@ renderers that wire composable state to the DOM.**
   `panelKey` navigation context to its slot content, renders nested child
   `Panel`s (tab-group: one active + a chip strip), and carries the per-panel
   geometry: anchor-derived placement, viewport clamp, action rail, drag handle.
+  The handle does double duty — it slides the panel along its parent's edge, or,
+  pulled away, detaches it — and registers the panel as a drop target; see
+  *Drag to detach, drop to re-dock*.
 - `src/components/gm/PanelWindow.vue` — one detached/floating window: its own
   anchor, its own chain direction, and the dock plumbing. Renders a root `Panel`.
 - `src/composables/usePanelAnchor.js` — the anchor model: position (persisted
   per device as `gmPanelAnchor`), edge snap, direction derivation, viewport
   clamps.
+- `src/composables/usePanelDrop.js` — drag-to-anchor: a `WeakMap` from a panel's
+  own DOM node to its `openChild`, plus `dropTargetEl` (the hovered node) and
+  `targetAt` (who is under the pointer) — see *Drag to detach, drop to re-dock*.
 - `src/composables/usePanelWindows.js` — the window registry (`spawn/close/
   replace/toggleCollapse/setDock/move/setDirection/raise`), each window carrying
   `{ id, spec, dock, collapsed, x, y, direction, sourceParentKey, z }`. `z` is the
@@ -68,11 +74,46 @@ Positioning in one paragraph: the chain derives from a draggable **anchor**
 the 🛠 itself; the anchor snaps to the nearest viewport edge on drop and is
 remembered per device). Panels open away from the anchor's edge (left/right/up/
 down), are clamped inside the viewport, slide along their parents' edges, and
-each rail hugs **its own** panel's edge. Any child panel can detach (`⤢`) into a
-floating window, which keeps its own anchor and direction and docks back (`⤓`)
-into the panel it came from, matched by `component + spec.id`. See
-[[GM Panel Positioning Plan]]. Overlap between a window and the chain it came from
-is resolved by *Panel stacking* below — clicking either brings it to the front.
+each rail hugs **its own** panel's edge. Any child panel can be **detached into a
+floating window** by dragging its handle away from the parent — see *Drag to
+detach, drop to re-dock* below — and a window docks back (`⤓`) into the panel it
+came from, matched by `component + spec.id`. See [[GM Panel Positioning Plan]].
+Overlap between a window and the chain it came from is resolved by *Panel
+stacking* below — clicking either brings it to the front.
+
+## Drag to detach, drop to re-dock
+
+Two gestures, both on the **rail's `⠿` handle**, settled with the human
+2026-10-16. The handle is the only affordance for detaching — there is no `⤢`
+button any more — and it is also the keyboard path, because a `Button` takes
+focus: **Enter or Space** on a focused handle detaches that panel.
+
+- **Detach: pull the handle away from the parent.** What decides it is movement
+  *perpendicular* to the edge the slide runs along — X for the default leftward
+  chain, Y for an up/down one — past `DETACH_THRESHOLD` (52px). Along the edge the
+  handle still **slides** the panel, so the two meanings do not compete; past the
+  threshold the slide stops, the panel is lifted to follow the pointer, and it is
+  anchored **where the pointer let go**. Once armed it stays armed for that
+  gesture, so pulling back does not flicker between lifting and sliding.
+  `canDetach` is the condition the `⤢` button used (the panel has an `onDetach`),
+  which is why a **root** keeps the handle's older meaning: it moves the anchor.
+- **Re-dock: drop a window onto another panel.** While a window is dragged it
+  hit-tests the panels under the pointer, outlines the one that would take it,
+  and letting go makes the window **that panel's child** — it joins the chain and
+  stops being a window. A pointer **cancel** is not a drop, so an interrupted
+  gesture leaves the window where it was.
+
+The registry behind the drop is `composables/usePanelDrop.js`, and its keying is
+the load-bearing part: a **`WeakMap` from the panel's own DOM node** to its
+`openChild`. That makes *every* panel a legal target — including the chain root,
+which has no `spec.id` and so is invisible to the identity registry `⤓` uses —
+and it needs no unregister, since the node going away is the cleanup. `targetAt`
+prefers **the unit on top** (units really do overlap: a detached window parks
+exactly on the box its panel occupied) and, within a unit, the **smallest** panel,
+so a child is preferred to the chain root containing it. The dragged window's own
+unit is excluded, or letting go over itself would swallow it. `check-panel-drag`
+drives this registry with a stub `document`; `e2e/tests/panel-drag.spec.js` proves
+the gestures themselves, because a pointer drag is a browser fact.
 
 ## Panel persistence (per device)
 
@@ -489,10 +530,10 @@ An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
 
 There is no frontend test runner: checks are plain `node` scripts in
 `src/frontend/scripts/check-*.mjs`, run against the `transversal2-frontend:latest`
-image (build the same way, in Docker). **33 suites exist** (the count was 14 when
+image (build the same way, in Docker). **38 suites exist** (the count was 14 when
 the shared table component was handed over) and a shared primitive can move
 several — `check-theme-tokens`, `check-combobox`, `check-trait-tree`,
-`check-panel-close`, `check-panel-placement`, `check-panel-persistence`,
+`check-panel-close`, `check-panel-placement`, `check-panel-persistence`, `check-panel-drag`,
 `check-panel-stacking`, `check-admission-panel`, `check-trait-instances`, `check-panel-live-state`, `check-player-filter`, `check-tree-expand/order/locate`,
 `check-place-filter`, `check-trait-explanations`, `check-sheet-profile`,
 `check-sheet-api`, `check-landing`, `check-auth-gate`, `check-entity-create`. **Ping [[gm-panels]]

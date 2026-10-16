@@ -24,7 +24,7 @@ import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
 import { asArchitect } from '../helpers/arrange.js'
 import { establishSession } from '../helpers/session.js'
-import { openStack, enterPrep } from '../helpers/gm.js'
+import { openStack, enterPrep, detachByDrag } from '../helpers/gm.js'
 
 const KAEL = 'character-kael-drift-e555ccde'
 const STORE = 'gmPanelWindows'
@@ -77,7 +77,7 @@ test('a floating entity panel assumes by the live perspective, not its own snaps
   await openPanel()
 
   // Detach it, so the snapshot is written where persistence will keep it.
-  await page.locator('[data-panel-depth="1"]:visible [title="Detach into a floating window"]').last().click()
+  await detachByDrag(page)
   await page.waitForTimeout(1200)
   const record = (await stored())[0]
   expect(record, 'the panel is a window now').toBeTruthy()

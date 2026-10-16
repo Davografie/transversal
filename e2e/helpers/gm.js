@@ -44,3 +44,31 @@ export async function enterPrep(page) {
     await page.waitForTimeout(1000)
   }
 }
+
+/**
+ * Detach a chain panel by dragging its ⠿ handle *away from its parent*.
+ *
+ * This replaced clicking ⤢ (2026-10-16), so every spec that used to click that
+ * button drags instead. The pull is fed in steps because the gesture only arms
+ * on a move, and it is **diagonal** on purpose: the threshold is measured on the
+ * axis *perpendicular* to the slide, which is X for the default leftward chain
+ * and Y for an up/down one — 70px on both covers either.
+ *
+ * The handle defaults to the **last visible** one, which is the deepest panel:
+ * a child's node is rendered after its parent's, so this is the same panel the
+ * old `[title="Detach…"]).last()` picked, at whatever depth.
+ */
+export async function detachByDrag(page, handleSelector = '.panel-drag-handle:visible') {
+  const handle = page.locator(handleSelector).last()
+  const box = await handle.boundingBox()
+  if (!box) throw new Error(`detachByDrag: no drag handle found by ${handleSelector}`)
+  const x = box.x + box.width / 2
+  const y = box.y + box.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + 25, y + 25)
+  await page.mouse.move(x + 50, y + 50)
+  await page.mouse.move(x + 70, y + 70)
+  await page.mouse.up()
+  await page.waitForTimeout(900)
+}

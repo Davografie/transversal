@@ -46,6 +46,7 @@ import Panel from './Panel.vue'
 import PanelScope from './PanelScope.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
 import { clampAnchor, deriveDirection, VIEWPORT_MARGIN } from '@/composables/usePanelAnchor.js'
+import { targetAt, openChildAt, dropTargetEl } from '@/composables/usePanelDrop.js'
 import { dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
 
 const props = defineProps({
@@ -53,7 +54,7 @@ const props = defineProps({
   dockable: { type: Boolean, default: false },
 })
 
-defineEmits(['close', 'dock'])
+const emit = defineEmits(['close', 'dock'])
 
 const { move: moveWindow, setDirection: setWindowDirection, toggleCollapse } = usePanelWindows()
 
@@ -133,6 +134,8 @@ provide('anchorVersion', anchorVersion)
 
 // The ⠿ handle on the window's root rail drags the window. No snapping here:
 // a floating window stays where it is put; only the clamp keeps its rail on screen.
+// While it is being dragged, whatever panel is under the pointer lights up and
+// becomes the drop target — see `finish`.
 function startDrag(e) {
   if (typeof e.button === 'number' && e.button !== 0) return
   e.preventDefault()
@@ -148,20 +151,31 @@ function startDrag(e) {
     )
     moveWindow(props.win.id, next.x, next.y)
     anchorVersion.value++
+    // Never this window's own unit: letting go over itself must not swallow it.
+    dropTargetEl.value = targetAt(ev.clientX, ev.clientY, props.win.id)
   }
-  function finish() {
+  function finish(dropped) {
     window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', finish)
-    window.removeEventListener('pointercancel', finish)
+    window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointercancel', onCancel)
     dumpPanelLayoutSoon('window-drag-release', {
       windowId: props.win.id,
       anchor: { ...anchorCenter.value },
       direction: props.win.direction,
     })
+    const target = dropTargetEl.value
+    dropTargetEl.value = null
+    // Dropped onto a panel, the window stops being a window and becomes that
+    // panel's **child** — the semantics the human settled: it joins the chain and
+    // its position becomes the parent's business, so the window closes itself.
+    // (A cancel is not a drop: the gesture was aborted, so the window stays put.)
+    if (dropped && target && openChildAt(target, props.win.spec)) emit('close')
   }
+  const onUp = () => finish(true)
+  const onCancel = () => finish(false)
   window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', finish)
-  window.addEventListener('pointercancel', finish)
+  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onCancel)
   dumpPanelLayoutSoon('window-drag-start', { windowId: props.win.id, anchor: { ...anchorCenter.value } })
   onViewportResize()
 }

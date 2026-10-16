@@ -1,16 +1,16 @@
 <template>
-  <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle" :data-panel-uid="diagId" :data-panel-depth="depth" :data-panel-window="windowId">
+  <div ref="wrapperEl" class="panel-node" :class="{ nested, 'is-lifting': lifting, 'is-drop-target': isDropTarget }" :style="[nodeStyle, liftStyle]" :data-panel-uid="diagId" :data-panel-depth="depth" :data-panel-window="windowId">
     <!-- v-show="!isDepthHidden && !isCollapsed": the rail hides when a panel
          collapses — chain panels hand their controls to the parent's chip strip,
          and a collapsed root carries them in its own header ([▸] title [×]). -->
     <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right', 'is-row': isVertical, 'is-down': direction === 'down', 'is-up': direction === 'up' }" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
-      <!-- Drag handle (drag-only): on the anchor rail it moves the whole stack
-           (the anchor); on any other rail it slides this panel along its
-           parent's edge (button-drift's manual override). -->
-      <Button class="panel-action-btn panel-drag-handle" variant="ghost" size="icon" :title="isShallowestVisible ? 'Move the panel anchor' : 'Slide along the parent'" @pointerdown="onHandleDown">⠿</Button>
-      <!-- Detach: leave the chain and float as its own window (the window parks
-           exactly where the panel is, so nothing jumps). -->
-      <Button v-if="!isRoot && onDetach" class="panel-action-btn" variant="neutral" size="icon" title="Detach into a floating window" @click="onDetach(detachAnchor())">⤢</Button>
+      <!-- Drag handle (drag-only in its pointer half): on the anchor rail it
+           moves the whole stack (the anchor); on any other rail it slides this
+           panel along its parent's edge — and, on a panel that can detach,
+           pulling it *away* from the parent tears the panel out into a floating
+           window. It is a Button, so it is also the keyboard path to detaching
+           (Enter/Space) now that the ⤢ button is gone. -->
+      <Button class="panel-action-btn panel-drag-handle" variant="ghost" size="icon" :title="handleTitle" @pointerdown="onHandleDown" @keydown.enter.prevent="onHandleActivate" @keydown.space.prevent="onHandleActivate">⠿</Button>
       <!-- Dock: only while a live panel matching the window's remembered parent
            identity is open (a re-opened parent counts). -->
       <Button v-if="canDock" class="panel-action-btn" variant="neutral" size="icon" title="Dock back into its parent" @click="$emit('dock')">⤓</Button>
@@ -107,6 +107,7 @@
 import { shallowRef, ref, reactive, computed, markRaw, inject, provide, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { panelKey, panelIdentityKey, registerPanelIdentity, unregisterPanelIdentity } from '@/composables/usePanel.js'
+import { registerDropTarget, dropTargetEl } from '@/composables/usePanelDrop.js'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
 import { VIEWPORT_MARGIN } from '@/composables/usePanelAnchor.js'
 import { nextPanelDiagId, registerPanelReporter, unregisterPanelReporter, dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
@@ -622,6 +623,37 @@ function onAnchorDragStart(e) {
 // span (prefer-own-center becomes a manual override once dragged).
 const slideOffset = ref(0)
 
+// How far the handle must be pulled *away* from the parent before the gesture
+// means "detach" rather than "slide". Measured perpendicular to the edge the
+// slide runs along, so it is the direction of the pull that decides, not the
+// distance travelled along the parent.
+const DETACH_THRESHOLD = 52
+
+// True while a detach is armed, so the panel can follow the pointer and show it.
+const lifting = ref(false)
+const liftOffset = ref({ x: 0, y: 0 })
+const liftStyle = computed(() => (lifting.value
+  ? { transform: `translate(${liftOffset.value.x}px, ${liftOffset.value.y}px)` }
+  : {}))
+
+// The panel a dragged floating window would land in (see usePanelDrop). Read as
+// an identity compare, so exactly one panel lights up.
+const isDropTarget = computed(() => !!dropTargetEl.value && dropTargetEl.value === wrapperEl.value)
+
+const handleTitle = computed(() => {
+  if (isShallowestVisible.value) return 'Move the panel anchor'
+  if (props.onDetach) return 'Slide along the parent — pull away to detach, or press Enter'
+  return 'Slide along the parent'
+})
+
+// The handle is the keyboard path to detaching now that the ⤢ button is gone.
+// Deliberately *not* bound to `click`: the same pointerdown starts a slide, so a
+// tap on the handle would tear the panel out of the chain.
+function onHandleActivate() {
+  if (!props.onDetach) return
+  props.onDetach(detachAnchor())
+}
+
 function onHandleDown(e) {
   if (isShallowestVisible.value) {
     onAnchorDragStart(e)
@@ -653,8 +685,27 @@ function beginSlide(e) {
   const baseCenter = startCenter == null ? null : startCenter - startOffset
   const minOffset = baseCenter == null || lo == null ? null : lo - baseCenter
   const maxOffset = baseCenter == null || hi == null ? null : hi - baseCenter
+  // Pulling the handle *away* from the parent — perpendicular to the edge the
+  // slide runs along — tears the panel out instead of sliding it. `canDetach` is
+  // the same condition the ⤢ button used, so a root (no `onDetach`) keeps the
+  // handle's old meaning: it moves the anchor.
+  const canDetach = !!props.onDetach
+  let armed = false
+  let last = { x: startX, y: startY }
 
   function onMove(ev) {
+    last = { x: ev.clientX, y: ev.clientY }
+    if (canDetach) {
+      const perp = vertical ? ev.clientY - startY : ev.clientX - startX
+      // Hysteresis: once armed it stays armed, so pulling back does not flicker
+      // between lifting the panel and sliding it.
+      if (!armed && (perp > DETACH_THRESHOLD || perp < -DETACH_THRESHOLD)) armed = true
+      if (armed) {
+        lifting.value = true
+        liftOffset.value = { x: ev.clientX - startX, y: ev.clientY - startY }
+        return
+      }
+    }
     const delta = vertical ? ev.clientX - startX : ev.clientY - startY
     let next = startOffset + delta
     if (minOffset != null && next < minOffset) next = minOffset
@@ -669,6 +720,13 @@ function beginSlide(e) {
     window.removeEventListener('pointerup', finish)
     window.removeEventListener('pointercancel', finish)
     dumpPanelLayoutSoon('panel-slide-release', { key: props.id || props.title, windowId: props.windowId })
+    if (armed) {
+      lifting.value = false
+      liftOffset.value = { x: 0, y: 0 }
+      // Anchored where the pointer let go, so the panel reappears under the
+      // cursor instead of back where it started.
+      props.onDetach({ x: last.x, y: last.y, direction: props.direction })
+    }
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', finish)
@@ -953,6 +1011,14 @@ const selfKey = computed(() => panelIdentityKey(props.spec?.component, props.spe
 let identityHandle = null
 
 onMounted(() => {
+  // Every panel can take a panel dropped on it, keyed by its own node. Registered
+  // whether or not it has an identity: the chain root has no `spec.id`, so the
+  // identity registry that dock-back uses cannot see it — and dropping a window
+  // back onto the GM panel is the most natural target there is.
+  registerDropTarget(wrapperEl.value, openChild)
+})
+
+onMounted(() => {
   if (!selfKey.value) return
   identityHandle = { openChild, close: closeSelf }
   registerPanelIdentity(selfKey.value, identityHandle)
@@ -1041,6 +1107,19 @@ provide(panelKey, {
 .panel-node {
   position: absolute;
   pointer-events: auto;
+}
+
+/* Following the pointer while a detach is armed: the panel is coming out of the
+   chain, so it should read as picked up rather than as a slide. */
+.panel-node.is-lifting {
+  opacity: 0.9;
+}
+
+/* Where a dragged floating window would land — the whole panel is outlined, not
+   its edge, because the drop makes it that panel's child wherever it lands. */
+.panel-node.is-drop-target > .panel {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Static wrapper whose children are absolutely positioned relative to

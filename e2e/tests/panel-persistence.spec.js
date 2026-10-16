@@ -19,10 +19,9 @@
 // role, so arrange mode has to be seeded before load rather than mocked after it.
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
-import { bootGmPanel, enterPrep } from '../helpers/gm.js'
+import { bootGmPanel, enterPrep, detachByDrag } from '../helpers/gm.js'
 
 const TEST_CHARACTER = 'character-kael-drift-e555ccde'
-const DETACH = '[title="Detach into a floating window"]'
 // Both the chain and the floating windows render inside a `.panel-viewport`, and
 // both are `.panel-node[data-panel-window]` — the root panel is the one whose
 // window id is `root`, the floats are `gm-win-N`.
@@ -46,7 +45,7 @@ test('an entity panel: detach, reload, still floating', async ({ page }) => {
 
   await page.locator('.tree-row').first().click()
   await page.waitForTimeout(1400)
-  await page.locator(DETACH).last().click()
+  await detachByDrag(page)
   await page.waitForTimeout(900)
 
   const afterDetach = await stored(page)
@@ -75,7 +74,7 @@ test('an SFX panel: detach, reload, still floating', async ({ page }) => {
   // Scope to the SFX panel's own node: `.entity-row` is a shared row shell.
   await page.locator('.panel-node').last().locator('.entity-row').first().click()
   await page.waitForTimeout(1500)
-  await page.locator(DETACH).last().click()
+  await detachByDrag(page)
   await page.waitForTimeout(900)
 
   const afterDetach = await stored(page)
@@ -102,7 +101,7 @@ test('a collapsed window comes back collapsed', async ({ page }) => {
 
   await page.locator('.tree-row').first().click()
   await page.waitForTimeout(1400)
-  await page.locator(DETACH).last().click()
+  await detachByDrag(page)
   await page.waitForTimeout(900)
   await expect(page.locator(WINDOWS)).toHaveCount(1)
 
