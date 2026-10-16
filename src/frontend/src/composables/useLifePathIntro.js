@@ -17,6 +17,34 @@ import { ref } from 'vue'
 
 const STORAGE_KEY = 'sfx.lifePathIntros'
 
+/**
+ * Which surface a `client/life_path` belongs on, and whether that is a guess.
+ *
+ * **Pure, and exported, so it can be executed rather than inspected.** The bug
+ * this exists for is an ordering one: the rule fires *inside* `createEntity`, so
+ * the SSE push beats the HTTP response that names the new character. Measured on
+ * the live server — the action was published while the session was still
+ * connected as the *previous* character, and it only reconnected as the new one
+ * afterwards. So at the moment this runs, `lastCreatedId` is still empty and
+ * `playingId` is somebody else, and a rule that only accepted those two dropped
+ * the reveal on the floor. That is exactly what shipped.
+ *
+ * Hence `creating`: a create in flight is itself evidence that this is our
+ * character — the only one this client is making. It is a *guess*, so
+ * `provisional` says so, and the caller checks it once the real id lands.
+ *
+ * @returns {null | { surface: 'overlay' | 'sheet', provisional: boolean }}
+ *   null = not ours to act on (the event reaches every session).
+ */
+export function routeLifePathIntro({ recipientId, lastCreatedId, playingId, creating }) {
+  if (!recipientId) return null
+  const justCreated = recipientId === lastCreatedId
+  const playing = recipientId === playingId
+  const midCreate = !!creating && !playing
+  if (!justCreated && !playing && !midCreate) return null
+  return { surface: (justCreated || midCreate) ? 'overlay' : 'sheet', provisional: midCreate && !justCreated }
+}
+
 function _load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)

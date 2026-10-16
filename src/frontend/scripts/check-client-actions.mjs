@@ -193,20 +193,62 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
   const intro = fn('handleLifePathIntro')
   yes('the router exists and reads the two fields the contract carries',
     intro.length > 0 && /data\.recipient_id/.test(intro) && /data\.life_path_id/.test(intro))
-  yes('the surface comes from what *this client* created, never from the payload',
-    /const surface = justCreated \? 'overlay' : 'sheet'/.test(intro)
+  yes('the surface comes from the router, never from the payload',
+    /const surface = route\.surface/.test(intro)
       && !/data\.surface/.test(app))
   yes('an intro with no character or no path is dropped rather than half-shown',
     /if \(!characterId \|\| !lifePathId\) return/.test(intro))
   // It is published to every session, so being let through the shared guard must
   // not mean every screen reacts: only this client's own character, or the one it
   // is playing, is ours to act on.
-  yes('a stranger\'s character is ignored — the gate the shared guard would have been',
-    /const justCreated = characterId === lastCreatedId\.value/.test(intro)
-      && /if \(!justCreated && characterId !== entityId\.value\) return/.test(intro))
+  //
+  // **Executed, not inspected.** `routeLifePathIntro` is a pure function precisely
+  // so this can run the real decision against the ordering that failed in the wild:
+  // the rule fires inside `createEntity`, so the SSE push arrives while the session
+  // is still the *previous* character and before the response names the new one.
+  {
+    const { routeLifePathIntro } = await import('../src/composables/useLifePathIntro.js')
+    const OLD = 'character-old'
+    const NEW = 'character-new'
+
+    // The measured failure: mid-create, nothing knows the new id yet.
+    const race = routeLifePathIntro({ recipientId: NEW, lastCreatedId: '', playingId: OLD, creating: true })
+    yes('the create race is won: mid-create with an unknown id still routes (this is the bug that shipped)',
+      race?.surface === 'overlay' && race.provisional === true, JSON.stringify(race))
+    yes('…and would have been dropped by the two signals alone, which is what happened',
+      routeLifePathIntro({ recipientId: NEW, lastCreatedId: '', playingId: OLD, creating: false }) === null)
+
+    // Once the response lands, the same action is unambiguous — not provisional.
+    const settled = routeLifePathIntro({ recipientId: NEW, lastCreatedId: NEW, playingId: OLD, creating: false })
+    yes('after the response it is certain, and still the overlay',
+      settled?.surface === 'overlay' && settled.provisional === false, JSON.stringify(settled))
+
+    // Playing it yourself is the sheet route; a stranger is nothing at all.
+    const playing = routeLifePathIntro({ recipientId: OLD, lastCreatedId: NEW, playingId: OLD, creating: false })
+    yes('a path for the character you are playing goes to the sheet',
+      playing?.surface === 'sheet' && playing.provisional === false, JSON.stringify(playing))
+    yes('a stranger\'s character is ignored whenever we can tell',
+      routeLifePathIntro({ recipientId: 'character-theirs', lastCreatedId: '', playingId: OLD, creating: false }) === null
+        && routeLifePathIntro({ recipientId: 'character-theirs', lastCreatedId: NEW, playingId: OLD, creating: false }) === null)
+    // The honest limit of the fix: **mid-create it cannot be told apart from ours**,
+    // which is the whole reason the provisional flag exists. It is bounded by the
+    // response — the watch on `lastCreatedId` drops it if it turns out not to be
+    // ours — and that is asserted above rather than assumed here.
+    yes('…and mid-create it is provisional, not silently kept',
+      routeLifePathIntro({ recipientId: 'character-theirs', lastCreatedId: NEW, playingId: OLD, creating: true })?.provisional === true)
+    yes('and an empty recipient is never anything',
+      routeLifePathIntro({ recipientId: '', lastCreatedId: NEW, playingId: NEW, creating: true }) === null)
+  }
+  yes('the shell uses that function rather than restating the rule',
+    /const route = routeLifePathIntro\(\{/.test(intro)
+      && /if \(!route\) return/.test(intro)
+      && /import \{ useLifePathIntro, routeLifePathIntro \}/.test(app))
+  yes('…and checks a provisional accept when the real id lands',
+    /const provisionalLifePathIntros = ref\(\[\]\)/.test(app)
+      && /watch\(lastCreatedId, \(id\) => \{[\s\S]{0,460}?dismissLifePathIntro\(cid\)/.test(app))
   yes('the overlay route records it for the overlay; the sheet route also asks the sheet',
     /introduceLifePath\(characterId, lifePathId, surface\)/.test(intro)
-      && /surface === 'sheet'[\s\S]{0,140}?sheetLifePathRequest\.value = \{ entityId: characterId, lifePathId, nonce: Date\.now\(\) \}/.test(intro))
+      && /surface === 'sheet'[\s\S]{0,160}?sheetLifePathRequest\.value = \{ entityId: characterId, lifePathId, nonce: Date\.now\(\) \}/.test(intro))
   yes('the finder is what remembers the character this client made',
     /lastCreatedId\.value = eid/.test(readFileSync('src/composables/useCharacterFinder.js', 'utf8'))
       && /lastCreatedId,/.test(app))

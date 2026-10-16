@@ -316,7 +316,7 @@ import FullscreenBlock from '@/components/app/FullscreenBlock.vue'
 import AppearanceBlock from '@/components/app/AppearanceBlock.vue'
 import CharacterListBlock from '@/components/app/CharacterListBlock.vue'
 import LifePathBlock from '@/components/app/LifePathBlock.vue'
-import { useLifePathIntro } from '@/composables/useLifePathIntro.js'
+import { useLifePathIntro, routeLifePathIntro } from '@/composables/useLifePathIntro.js'
 import SupportBlock from '@/components/app/SupportBlock.vue'
 import PeersBar from '@/components/app/PeersBar.vue'
 import MediaImage from './components/MediaImage.vue'
@@ -945,6 +945,23 @@ const overlayLifePathUniverse = computed(() => {
 // twice (a re-show after a dismiss) without the sheet ignoring the second ask.
 const sheetLifePathRequest = ref(null)
 
+// Character ids accepted **only** because a create was in flight, so the guess can
+// be checked the moment the response names the real one.
+const provisionalLifePathIntros = ref([])
+
+// The create's response is when the guess can be checked: an intro taken on
+// "a create is in flight" for a character that is not the one that came back was
+// somebody else's create arriving in the same window — a rare coincidence, and
+// not one to leave a stranger's life path sitting in this player's overlay.
+watch(lastCreatedId, (id) => {
+  const provisional = provisionalLifePathIntros.value
+  provisionalLifePathIntros.value = []
+  if (!id) return
+  for (const cid of provisional) {
+    if (cid !== id && lifePathIntroFor(cid)?.surface === 'overlay') dismissLifePathIntro(cid)
+  }
+})
+
 /**
  * Route a shown life path to the surface that owns it ([[B303]]).
  *
@@ -959,12 +976,26 @@ function handleLifePathIntro(data) {
   const lifePathId = String(data.life_path_id || '')
   if (!characterId || !lifePathId) return
   // The event reaches **every** session, so this is the gate that replaces the one
-  // it was let through: act only for the character this client just made, or the
-  // one it is playing. Without it a rule's life path would surface on a stranger's
-  // screen — the leak the shared `recipient_id` guard exists to prevent.
-  const justCreated = characterId === lastCreatedId.value
-  if (!justCreated && characterId !== entityId.value) return
-  const surface = justCreated ? 'overlay' : 'sheet'
+  // it was let through: act only for a character that is plausibly ours. Without
+  // it a rule's life path would surface on a stranger's screen — the leak the
+  // shared `recipient_id` guard exists to prevent.
+  //
+  // The decision itself is `routeLifePathIntro`, kept pure and executed by
+  // `check-client-actions.mjs` rather than described to it — the case that matters
+  // is an *ordering* one (see that function), and a race is not something a
+  // source-text assertion can be trusted about.
+  const route = routeLifePathIntro({
+    recipientId: characterId,
+    lastCreatedId: lastCreatedId.value,
+    playingId: entityId.value,
+    creating: creatingChar.value,
+  })
+  if (!route) return
+  const surface = route.surface
+  // A guess made on "a create is in flight" is checked when the real id lands.
+  if (route.provisional) {
+    provisionalLifePathIntros.value = [...provisionalLifePathIntros.value, characterId]
+  }
   introduceLifePath(characterId, lifePathId, surface)
   if (surface === 'sheet') {
     sheetLifePathRequest.value = { entityId: characterId, lifePathId, nonce: Date.now() }
