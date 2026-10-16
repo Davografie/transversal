@@ -9,22 +9,24 @@
  *     -v /path/to/src/frontend/src:/app/src:ro \
  *     -w /app transversal2-frontend:latest node scripts/check-tree-expand.mjs
  *
- * A change here was started and never finished. The intent: **▾ means nothing is
- * left hidden at that level; ▸ means press for the rest.** A level the filter (or
- * the focus chain) only partly reveals therefore reads ▸, and pressing it is what
- * brings the other children in. Two things were missing:
+ * The chevron has **three modes, and cycles all three** (the human, 2026-10-13):
  *
- *  1. **Pressing ▸ revealed nothing.** The children it recursed into were pruned
- *     by the filter one frame later (`if (filterMode && !onPath) continue`), so
- *     the chevron flipped to ▾ over an unchanged list.
- *  2. **Collapsing a chain level broke the chain.** `expandedNodes[id] = false`
- *     skipped the child render entirely while the glyph was still forced to ▾,
- *     leaving a node drawn as open with nothing under it.
+ *     partial (a filter's path) → expanded (everything) → collapsed (nothing) → partial …
  *
- * Also pinned: collapsing returns the level to its baseline (the filter's path,
- * the chain) — except where the baseline already *is* everything, where it must
- * hide the lot or the press would do nothing at all. And the toggle takes the
- * state to move to from the row, because a level can open by default while
+ * `partial` used to be a state you could only fall back into, never choose: with a
+ * filter active, pressing ▾ walked ▾ → ▿ and no further, because an explicit
+ * collapse returned the level to its baseline. A filtered level therefore could not
+ * be collapsed at all. Collapsing is now collapsing, and the filter's path is the
+ * mode one press *after* it. Where there is nothing partial to return to — every
+ * level in the plain view, whose baseline is either everything or nothing — the
+ * cycle skips it, so no press is a press that does nothing. The row carries which
+ * mode is next (`nextReveal`); the store keeps `undefined` for "no choice made",
+ * which is what `partial` is.
+ *
+ * Also pinned: a level the filter only partly reveals reads ▿ and pressing it brings
+ * the rest in (`forced`, so the filter's prune cannot drop it again); collapsing a
+ * chain level hides the chain until the next press brings it back; and the toggle
+ * takes its target from the row, because a level can open by default while
  * `expandedNodes[id]` is still undefined.
  *
  * Every assertion is a state the pre-fix code could not reach.
@@ -141,6 +143,10 @@ const row = (t, id) => t.flatTree.value.find((n) => n.id === id)
 // deliverable, so the harness should fail if a state's symbol changes.
 const REVEAL_GLYPH = { collapsed: '▸', partial: '▿', expanded: '▾' }
 const glyph = (t, id) => { const n = row(t, id); return n ? REVEAL_GLYPH[n.reveal] : '—' }
+// The row has to hand the *mode* to the store, not a boolean: the whole point of
+// the cycle is that `partial` is expressible.
+const TREE_SRC = (await import('node:fs')).readFileSync(
+  new URL('../src/components/gm/GmLocationTree.vue', import.meta.url), 'utf8')
 // Rows directly under `id`, in render order: its own occupants and its immediate
 // child locations, but nothing deeper. Scanned to the end of that node's subtree
 // — filtering the whole flat list by depth would also pick up every *other*
@@ -159,26 +165,33 @@ const under = (t, id) => {
 }
 const kids = (t, id) => under(t, id).filter((n) => n.kind === 'location').map((n) => n.name)
 const roster = (t, id) => under(t, id).filter((n) => n.kind === 'occupant').map((n) => n.name)
-// Press the chevron the way the row does: it names the state to move to, which is
-// "everything" unless it is already everything.
-const press = (t, id) => { const n = row(t, id); t.toggleTreeNode(id, n.reveal !== 'expanded') }
+// Press the chevron the way the row does: the row names the *mode* one press from
+// here, and the store records the choice.
+const press = (t, id) => { const n = row(t, id); t.toggleTreeNode(id, n.nextReveal) }
 const chip = (v) => [{ type: 'name', value: v, label: v }]
 
-// ── 0. three states, three symbols ──────────────────────────────────────
-console.log('\nreveal — collapsed · partial · expanded\n')
+// ── 0. three modes, three symbols, one cycle ────────────────────────────
+console.log('\nreveal — collapsed · partial · expanded, and the cycle\n')
 
 {
+  // The human's ask: a filtered level could never be collapsed (▾ → ▿ was the
+  // whole cycle). Now one press walks each mode in turn, and the third press
+  // brings the filter's path back.
   const t = world({ chips: chip('Alice') })
   ok('a level the filter partly reveals reads partial', row(t, 'loc-europe').reveal, 'partial')
   press(t, 'loc-europe')
-  ok('…expanded once pressed', row(t, 'loc-europe').reveal, 'expanded')
+  ok('…expanded on the first press', row(t, 'loc-europe').reveal, 'expanded')
   press(t, 'loc-europe')
-  ok('…back to partial when collapsed to the path again', row(t, 'loc-europe').reveal, 'partial')
+  ok('…collapsed on the second (the press that used to bounce back to partial)',
+    row(t, 'loc-europe').reveal, 'collapsed')
+  press(t, 'loc-europe')
+  ok('…and back to the filter\'s path on the third', row(t, 'loc-europe').reveal, 'partial')
 
   const p = world({})
   ok('a level showing nothing reads collapsed', row(p, 'u-earth').reveal, 'collapsed')
   press(p, 'u-earth')
-  ok('…and expanded once pressed', row(p, 'u-earth').reveal, 'expanded')
+  ok('…and expands on one press — no partial to stop at in the plain view',
+    row(p, 'u-earth').reveal, 'expanded')
 
   ok('the three states are three distinct symbols', new Set(Object.values(REVEAL_GLYPH)).size, 3)
   ok('— collapsed / partial / expanded',
@@ -196,8 +209,13 @@ console.log('\nfilter — the partial glyph brings the rest in\n')
   ok('pressing ▸ reveals the other children', kids(t, 'loc-europe'), ['France', 'Germany', 'Spain'])
   ok('…and the glyph becomes ▾', glyph(t, 'loc-europe'), '▾')
   press(t, 'loc-europe')
-  ok('pressing ▾ returns to the filter path', kids(t, 'loc-europe'), ['France'])
-  ok('…and the glyph returns to partial', glyph(t, 'loc-europe'), '▿')
+  ok('pressing ▾ collapses the level — the match and all (this is the new press)',
+    [glyph(t, 'loc-europe'), kids(t, 'loc-europe')], ['▸', []])
+  ok('…so the matched occupant is hidden with it', roster(t, 'loc-fr'), [])
+  press(t, 'loc-europe')
+  ok('and the next press returns to the filter\'s path',
+    [glyph(t, 'loc-europe'), kids(t, 'loc-europe')], ['▿', ['France']])
+  ok('…with the match on screen again', roster(t, 'loc-fr'), ['Alice'])
 }
 
 {
@@ -237,7 +255,10 @@ console.log('\nfilter — a hidden roster makes the level read ▸\n')
     roster(t, 'loc-camp'), ['Echo Two'])
   ok('…and then it reads ▾', glyph(t, 'loc-camp'), '▾')
   press(t, 'loc-camp')
-  ok('pressing ▾ returns to the filtered view', [glyph(t, 'loc-camp'), roster(t, 'loc-camp')], ['▿', []])
+  ok('pressing ▾ collapses it outright', [glyph(t, 'loc-camp'), roster(t, 'loc-camp')], ['▸', []])
+  press(t, 'loc-camp')
+  ok('pressing ▸ returns to the filtered view (children on the path, no roster)',
+    [glyph(t, 'loc-camp'), kids(t, 'loc-camp'), roster(t, 'loc-camp')], ['▿', ['The Tent'], []])
 }
 
 // ── 3. when the baseline is already everything, ▾ has to hide ────────────
@@ -266,9 +287,13 @@ console.log('\nfocus — the chain collapses back to the chain\n')
   ok('pressing ▸ brings the siblings in', kids(t, 'loc-swamp'), ['Iron Roots', 'Iron Grove', 'The Hut'])
   ok('…and drops the stub', [glyph(t, 'loc-swamp'), !!t.flatTree.value.find((n) => n.id === 'more:loc-swamp')], ['▾', false])
   press(t, 'loc-swamp')
-  ok('pressing ▾ collapses back to the chain, not to nothing',
+  ok('pressing ▾ collapses the chain level outright (it used to stop at partial)',
+    [glyph(t, 'loc-swamp'), kids(t, 'loc-swamp')], ['▸', []])
+  ok('…so the chain below it is off screen, deliberately', !!row(t, 'loc-iron'), false)
+  press(t, 'loc-swamp')
+  ok('pressing ▸ brings the chain back, and only the chain',
     [glyph(t, 'loc-swamp'), kids(t, 'loc-swamp')], ['▿', ['Iron Roots']])
-  ok('the chain itself is still on screen (the old bug lost it)', !!row(t, 'loc-iron'), true)
+  ok('…with the chain itself on screen again', !!row(t, 'loc-iron'), true)
 }
 
 // ── 5. the plain view keeps traditional chevron behaviour ───────────────
@@ -335,14 +360,22 @@ console.log('\ntoggle contract\n')
 
 {
   const t = world({})
-  t.toggleTreeNode('loc-europe', false)
-  ok('it stores the state it is told to move to (false)', t.expandedNodes.value['loc-europe'], false)
-  t.toggleTreeNode('loc-europe', true)
-  ok('…and true', t.expandedNodes.value['loc-europe'], true)
-  t.toggleTreeNode('loc-europe')
-  ok('a caller that passes nothing still toggles', t.expandedNodes.value['loc-europe'], false)
-  ok('a default-open row names false as its next state, so one press closes it',
-    row(t, 'u-three').reveal !== 'expanded', false)
+  t.toggleTreeNode('loc-europe', 'expanded')
+  ok('it stores the mode it is told to move to (expanded → true)',
+    t.expandedNodes.value['loc-europe'], true)
+  t.toggleTreeNode('loc-europe', 'collapsed')
+  ok('…and collapsed → false', t.expandedNodes.value['loc-europe'], false)
+  t.toggleTreeNode('u-earth', 'partial')
+  ok('partial is "no choice made", so the key is dropped rather than stored',
+    'u-earth' in t.expandedNodes.value, false)
+  ok('…which leaves the row reading its baseline', row(t, 'u-earth').reveal, 'collapsed')
+  ok('a default-open row still names the mode that closes it, so one press works',
+    row(t, 'u-three').nextReveal, 'collapsed')
+  ok('every row carries the mode a press lands in',
+    ['u-three', 'u-earth'].every((id) => ['collapsed', 'partial', 'expanded'].includes(row(t, id).nextReveal)),
+    true)
+  ok('and the chevron emits that mode, not a boolean',
+    /@click\.stop="\$emit\('toggle-expand', node\.id, node\.nextReveal\)"/.test(TREE_SRC), true)
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

@@ -27,15 +27,34 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
     }
   }
 
-  // `next` is the state the row should move to, which the row knows because it
-  // is drawn from the same computation (`expanded` on the flattened node). It
-  // cannot be derived here: a level can open *by default* — the current
-  // universe, the filter's path, the focus chain — so `expandedNodes[id]` is
-  // undefined while the row already reads as open, and toggling that from
-  // undefined set `true`, a press that did nothing.
+  // ── The chevron's three modes ───────────────────────
+  // `partial` — the reveal a filter or the focus chain puts on screen by itself —
+  // is a mode the GM can *choose*, not only one that happens to them. The chevron
+  // cycles the three states the row already draws and names:
+  //
+  //     partial (the filter's path) → expanded (everything) → collapsed (nothing) → partial …
+  //
+  // and where there is nothing partial to return to — a level whose baseline is
+  // either everything or nothing, which is every level in the plain view — it
+  // cycles the two that exist, so no press is a press that does nothing. The row
+  // says which state that is (`nextReveal` on the flattened node); the store only
+  // records the choice.
+  //
+  // `next` is that state, and it has to come from the row: a level can open *by
+  // default* — the current universe, the filter's path, the focus chain — so
+  // `expandedNodes[id]` is still undefined while the row already reads as open, and
+  // a toggle that read the store would make the first press do nothing.
+  //
+  // `undefined` in the store means "no choice made — use the baseline", which is
+  // what the `partial` mode *is*; so choosing it drops the key rather than storing
+  // a third value, and the store stays a tri-state.
   function toggleTreeNode(id, next) {
-    const value = next === undefined ? !expandedNodes.value[id] : next
-    expandedNodes.value = { ...expandedNodes.value, [id]: value }
+    if (next === 'partial') {
+      const { [id]: _dropped, ...rest } = expandedNodes.value
+      expandedNodes.value = rest
+      return
+    }
+    expandedNodes.value = { ...expandedNodes.value, [id]: next === 'expanded' }
   }
 
   // ── Occupant grouping ──────────────────────────────
@@ -352,20 +371,16 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
         defaultUnplaced = baselineOpen
       }
 
-      // Pressing ▾ has to hide something. It returns the level to its baseline
-      // when that baseline hides part of the level (the filter's path, the focus
-      // chain); where the baseline *is* everything — the plain view's current
-      // universe, or a filter that happens to match every child — "back to the
-      // baseline" would be a press that does nothing, so it hides the lot.
-      // Compared against the FULL rosters: people the filter dropped are hidden
-      // content, and hiding them is what ▸ is for.
-      const baselineHides =
-        defaultKids.length < kids.length ||
-        (allOcc.length > 0 && !defaultRoster) ||
-        (allUnplacedHere.length > 0 && !defaultUnplaced)
+      // Pressing ▾ has to hide something, and now it always does. It used to
+      // return the level to its baseline when the baseline hid part of the level
+      // (the filter's path, the focus chain) — which is why a filtered level could
+      // never be collapsed: ▾ walked ▾ → ▿ and no further. Collapsing is now
+      // *collapsing*; "back to the filter's path" is the `partial` mode, and the
+      // chevron reaches it on the next press (the human, 2026-10-13: *"I also want
+      // it to be able to collapse when filter is active"*).
       const explicit = expandedNodes.value[node.id]
       const revealAll = explicit === true
-      const hideAll = explicit === false && !baselineHides
+      const hideAll = explicit === false
 
       const revealedKids = revealAll ? kids : (hideAll ? [] : defaultKids)
       // An explicit expand shows the whole roster, not only the matched part —
@@ -376,9 +391,8 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
 
       // Three states, not two. `expanded` is everything on screen, `collapsed` is
       // nothing, and the third is the **partial** reveal a filter or the focus
-      // chain puts there on its own. A two-state chevron had to call that partial
-      // case one of the other two, and both were wrong: drawn `▸` while children
-      // were already below it, and pressing it did nothing.
+      // chain puts there on its own — drawn ▿, and now a mode the chevron cycles
+      // through rather than one it can only fall back into.
       // The universe-level roster counts as content too: Valhalla has no child
       // locations at all, and its one occupant would otherwise be unreachable.
       const hasChildren = kids.length > 0 || allOcc.length > 0 || allUnplacedHere.length > 0
@@ -387,9 +401,23 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
       const reveal = shownContent === 0 ? 'collapsed'
         : shownContent === totalContent ? 'expanded'
           : 'partial'
+      // …and the mode one press from here lands in. Read off the *baseline* — what
+      // this level shows with no choice recorded — because that is the only thing
+      // between nothing and everything: with a filter or on the focus chain it can
+      // be a strict subset, and in the plain view it never is (a level is either
+      // fully open at the root or showing nothing).
+      const baselineContent = defaultKids.length
+        + (defaultRoster ? occ.length : 0)
+        + (defaultUnplaced ? unplacedHere.length : 0)
+      const baselineReveal = baselineContent === 0 ? 'collapsed'
+        : baselineContent === totalContent ? 'expanded'
+          : 'partial'
+      const nextReveal = reveal === 'partial' ? 'expanded'
+        : reveal === 'expanded' ? 'collapsed'
+          : (baselineReveal === 'partial' ? 'partial' : 'expanded')
       result.push({
         id: node.id, name: node.name, universe: node.universe,
-        depth, hasChildren, kind, reveal,
+        depth, hasChildren, kind, reveal, nextReveal,
         unpublished: unpublishedIds.value.has(node.id),
       })
       // In filter mode the matched roster of any place on the path is listed. In

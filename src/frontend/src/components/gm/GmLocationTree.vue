@@ -24,18 +24,17 @@
         <span class="entity-name more-name" :title="`Show the other ${node.count} children of this level`">⋯ {{ node.name }}</span>
       </template>
       <template v-else>
-      <!-- Three states. `partial` is the reveal a filter or the focus chain puts
-           on screen by itself — some of the level's content, not all of it and not
-           none — drawn as an *outline* of the same triangle: same shape (the
-           children are below), different weight. The row names the state to move
-           to, because a level can be open by default while `expandedNodes[id]` is
-           still undefined, so one press has to collapse it. -->
+      <!-- Three states, and all three are reachable by pressing: the chevron
+           cycles partial (a filter's path) → expanded → collapsed → partial. The
+           row says which state is next (`nextReveal`), because a level can be open
+           by default while `expandedNodes[id]` is still undefined — so the store
+           cannot say what a press should do. -->
       <span
         v-if="node.hasChildren"
         class="tree-toggle"
         :class="'reveal-' + node.reveal"
         :title="TOGGLE_TITLE[node.reveal]"
-        @click.stop="$emit('toggle-expand', node.id, node.reveal !== 'expanded')"
+        @click.stop="$emit('toggle-expand', node.id, node.nextReveal)"
       >{{ REVEAL_GLYPH[node.reveal] }}</span>
       <span v-else class="tree-toggle" :class="{ leaf: node.kind === 'location', occupant: node.kind === 'occupant', universe: node.kind === 'universe' }"></span>
       <span v-if="node.kind === 'universe'" class="entity-type-badge type-UNIVERSE">UNI</span>
@@ -73,11 +72,13 @@ const props = defineProps({
 const emit = defineEmits(['select-universe', 'select-location', 'select-occupant', 'toggle-expand', 'move-entity', 'select-more', 'add-entity'])
 
 // What the chevron shows for each of the three reveal states, and what pressing
-// it will do. `partial` is the one worth a tooltip: it is not a state the GM set,
-// it is what the filter or the focus chain left on screen.
+// it will do. `partial` is the one worth naming carefully: it is the reveal a
+// filter or the focus chain leaves, and it is also a mode you can press back to.
+// `collapsed` deliberately does not promise "everything" — with a filter on, the
+// press after it lands on that filter's path, not on the whole level.
 const REVEAL_GLYPH = { collapsed: '▸', partial: '▿', expanded: '▾' }
 const TOGGLE_TITLE = {
-  collapsed: 'Collapsed — click to show everything inside',
+  collapsed: 'Collapsed — click to show what is inside',
   partial: 'Showing matches — click to show everything inside',
   expanded: 'Expanded — click to collapse',
 }
