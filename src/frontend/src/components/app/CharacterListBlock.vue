@@ -47,7 +47,19 @@
           @input="$emit('update:newCharName', $event.target.value)"
           @keyup.enter="$emit('create')"
         />
-        <button class="char-create-btn" :disabled="!newCharName.trim() || creating" @click="$emit('create')">✓</button>
+        <!-- The app's standard confirm control rather than a bare ✓ in a circle
+             (the human, 2026-10-16): a tick says "save this edit", and there was
+             nothing to say what it would save. `variant="success"` + `solid` is
+             the same commit treatment the panels' Save buttons use. -->
+        <Button
+          class="char-create-btn"
+          size="sm"
+          variant="success"
+          solid
+          :loading="creating"
+          :disabled="!newCharName.trim() || creating"
+          @click="$emit('create')"
+        >Create</Button>
       </template>
       <button v-else class="new-char-toggle" @click="$emit('update:showNewChar', true)">+ New character</button>
     </div>
@@ -65,7 +77,15 @@
           @input="$emit('update:newCharName', $event.target.value)"
           @keyup.enter="$emit('create')"
         />
-        <button :disabled="!newCharName.trim() || creating" @click="$emit('create')">+</button>
+        <Button
+          class="char-create-btn"
+          size="sm"
+          variant="success"
+          solid
+          :loading="creating"
+          :disabled="!newCharName.trim() || creating"
+          @click="$emit('create')"
+        >Create</Button>
       </div>
     </template>
     <button v-else class="new-char-toggle" @click="$emit('update:showNewChar', true)">+ New character</button>
@@ -75,6 +95,7 @@
 
 <script setup>
 import MediaImage from '@/components/MediaImage.vue'
+import Button from '@/components/ui/Button.vue'
 
 // The player's own characters in the settings overlay — skeletons, chips with
 // portrait / MAIN badge / location, the set-as-main star and the long-press

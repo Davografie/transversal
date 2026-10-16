@@ -679,6 +679,21 @@ select option {
   align-self: center;
   justify-content: center;
 }
+/* The create control is the app's `Button` now, so this only keeps it from
+   being stretched by the row's flex, and stops the label wrapping. */
+.char-create-btn {
+  flex: none;
+  white-space: nowrap;
+  width: auto;
+}
+/* The empty state puts it in a `.switch-row`, whose generic `button` rule sizes
+   a bare glyph control (36px). More specific on purpose: it is a labelled button
+   now, not a `+`. */
+.switch-row .char-create-btn {
+  width: auto;
+  padding: 4px 12px;
+  font-size: 12px;
+}
 .settings-empty {
   gap: 4px;
 }
@@ -699,17 +714,8 @@ select option {
   padding: 4px 8px;
   font-size: 12px;
 }
-.char-create-btn {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  font-size: 14px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--success);
-  color: var(--text-invert);
-}
+/* `.char-create-btn` is styled where `.char-create-row` is, above — it is a
+   `Button` now, and a circle rule here would override the component's own. */
 .find-char-wrapper {
   width: 100%;
   max-width: 320px;
