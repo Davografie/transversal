@@ -425,10 +425,19 @@ def _stub_cutout_job(monkeypatch):
 
 
 def _drain_job(imagen_mod, owner_id):
-    """A stubbed job never reports completion, so clear its queue entry."""
-    imagen_mod.active_jobs.pop(owner_id, None)
-    if owner_id in imagen_mod._job_order:
-        imagen_mod._job_order.remove(owner_id)
+    """A stubbed job never reports completion, so clear its queue entry.
+
+    Clears it under any campaign: the tracker is keyed by ``(campaign, owner)`` (B305),
+    and the campaign is whatever the request middleware chose.
+    """
+    for key in [
+        k for k in list(imagen_mod.active_jobs)
+        if k == owner_id or (isinstance(k, tuple) and k[-1] == owner_id)
+    ]:
+        imagen_mod.active_jobs.pop(key, None)
+    for order in imagen_mod._job_order.values():
+        if owner_id in order:
+            order.remove(owner_id)
 
 
 @requires_db

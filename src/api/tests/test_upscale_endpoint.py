@@ -66,9 +66,15 @@ def _stub_job(monkeypatch):
 
 
 def _drain(imagen_mod, owner_id):
-    imagen_mod.active_jobs.pop(owner_id, None)
-    if owner_id in imagen_mod._job_order:
-        imagen_mod._job_order.remove(owner_id)
+    """Drop the tracker entry for an owner, whatever campaign filed it (B305)."""
+    for key in [
+        k for k in list(imagen_mod.active_jobs)
+        if k == owner_id or (isinstance(k, tuple) and k[-1] == owner_id)
+    ]:
+        imagen_mod.active_jobs.pop(key, None)
+    for order in imagen_mod._job_order.values():
+        if owner_id in order:
+            order.remove(owner_id)
 
 
 @requires_db
@@ -87,7 +93,10 @@ def test_upscale_queues_a_job_keyed_by_the_owner(monkeypatch):
         # The gallery that offered the button polls jobs[owner_id], so the key
         # matters as much as the call.
         assert calls == [(ENTITY, SMALL)]
-        assert imagen_mod.active_jobs[ENTITY]["type"] == "upscale"
+        # Asserted through the surface the gallery actually polls: the tracker is keyed
+        # by (campaign, owner) now, and this read is what has to keep working (B305).
+        jobs = client.get("/api/v1/imagen/jobs").json()["jobs"]
+        assert jobs[ENTITY]["type"] == "upscale"
     finally:
         _drain(imagen_mod, ENTITY)
         _cleanup(repo)
