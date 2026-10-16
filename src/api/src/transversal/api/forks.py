@@ -25,6 +25,7 @@ import os
 from fastapi import APIRouter, HTTPException, Request
 
 from transversal.api.account_auth import require_account
+from transversal.api.tenancy import base_domain
 from transversal.db.registry_repository import RegistryRepository
 from transversal.services.provisioner import fork_slug, provision_fork
 
@@ -47,12 +48,8 @@ def creation_is_open() -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
-def _base_domain() -> str:
-    return (os.getenv("FORKS_BASE_DOMAIN", "") or "").strip().strip(".")
-
-
 def _public(fork) -> dict:
-    base = _base_domain()
+    base = base_domain()
     return {
         "id": fork.id,
         "name": fork.name,

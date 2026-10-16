@@ -96,6 +96,13 @@ from transversal.api import auth as _auth  # noqa: E402
 
 app.middleware("http")(_auth.session_refresh_middleware)
 
+# B88: scope a request to the fork its host names (inert without FORKS_BASE_DOMAIN).
+# A pure ASGI middleware, added rather than registered with `app.middleware`, because
+# the database context variable must be set in the same task as the endpoint.
+from transversal.api.tenancy import ForkScopeMiddleware  # noqa: E402
+
+app.add_middleware(ForkScopeMiddleware)
+
 # ── Suppress noisy polling logs ──────────────────────
 
 import logging
