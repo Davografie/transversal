@@ -132,8 +132,11 @@ services:
       context: ./src/frontend
       dockerfile: Dockerfile.prod
     container_name: tv2_frontend_prod
+    # Loopback, like the dev server: this is the *gated* prod surface, and the
+    # public way in is the VPS's reverse proxy reaching it over the tailnet. Binding
+    # it to every interface would put the app on the LAN for no reason (SEC-2).
     ports:
-      - "3001:80"
+      - "127.0.0.1:3001:80"
     depends_on:
       - api
 
