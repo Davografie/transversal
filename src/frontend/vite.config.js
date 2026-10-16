@@ -32,6 +32,17 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // **`/` must not be answered from the precache at all.** Workbox's default
+        // `directoryIndex: 'index.html'` rewrites a request for `/` into
+        // `/index.html` and serves the precached shell, and the precache route matches
+        // **before** the navigation fallback — so no `navigateFallbackDenylist` entry
+        // can reach the root. That is why denying `/` changed nothing: the apex
+        // redirects `/` to `/portal`, the redirect never ran, and the SPA booted the
+        // game on the apex (no campaign session there → its Unauthorized screen).
+        // Verified in workbox's own source that the default is a destructuring default
+        // (`directoryIndex = 'index.html'`) and the rewrite is guarded by
+        // `if (directoryIndex && …)`, so an explicit null disables it for real.
+        directoryIndex: null,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Routes the **server** owns must never be answered by the app shell.
         // Workbox's navigation fallback (`createHandlerBoundToURL('index.html')`)
