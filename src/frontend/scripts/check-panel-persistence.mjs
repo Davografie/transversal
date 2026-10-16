@@ -201,8 +201,11 @@ const lookup = (name) => (name === 'GmEntityEditPanel' ? COMP : name === 'GmTrai
 // ── 3b. the collapsed chip state ────────────────────────────────────────
 // A Panel's collapse is `props.collapsed ?? localCollapsed` (Panel.vue): pass the
 // prop and the state is the caller's, leave it off and the Panel keeps it to
-// itself — which is why a reload always came back expanded. These are the two
-// places a *root* panel is rendered, and both now pass it.
+// itself — which is why a reload always came back expanded. A *floating window*
+// passes it, so its chip survives a reload. The **stack root does not**, and that
+// is a decision rather than an omission: collapsing the chain's own root only ever
+// produced a chip of the panel you were working in, so the control is gone from
+// that panel and the state it used to write is no longer read.
 console.log('\na panel\'s collapsed state is the caller\'s, and is stored\n')
 
 {
@@ -225,10 +228,17 @@ ok('a Panel with no `collapsed` prop keeps the state locally — the reason it w
 ok('a floating window passes its registry field in', /:collapsed="!!win\.collapsed"/.test(WINDOW), true)
 ok('and routes the toggle back to the registry', /@toggle-collapse="toggleCollapsed"/.test(WINDOW)
   && /toggleCollapse\(props\.win\.id\)/.test(WINDOW), true)
-ok('the stack root passes its own persisted ref in', /:collapsed="rootCollapsed"/.test(STACK), true)
-ok('and writes the toggle back', /@toggle-collapse="rootCollapsed = !rootCollapsed"/.test(STACK), true)
-ok('through the write-through storage helper, keyed per device',
-  /usePersistedRef\('gmPanelStackCollapsed', false\)/.test(STACK), true)
+ok('the stack root is not collapsible', /:collapsible="false"/.test(STACK), true)
+ok('so it binds no collapse state into the root', /:collapsed="rootCollapsed"/.test(STACK), false)
+// The *code* form, deliberately: the key is still named in a comment explaining
+// why the binding went, and a bare mention would match that.
+ok('and stores none — an old `gmPanelStackCollapsed` cannot strand it',
+  /usePersistedRef\(\s*'gmPanelStackCollapsed'/.test(STACK), false)
+// The gate is the `collapsible` prop, not `isRoot`: a floating window's root
+// Panel is a root too (`isRoot` is `!nested`), and it must keep its collapse.
+ok('the collapse control is gated on `collapsible`', /v-if="collapsible"/.test(PANEL), true)
+ok('which defaults to on, so only the stack root turns it off',
+  /collapsible: \{ type: Boolean, default: true \}/.test(PANEL), true)
 
 // ── 4. the wiring ───────────────────────────────────────────────────────
 console.log('\nthe registry is an allow-list, and the store is wired\n')

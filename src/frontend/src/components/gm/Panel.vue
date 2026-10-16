@@ -15,7 +15,7 @@
            identity is open (a re-opened parent counts). -->
       <Button v-if="canDock" class="panel-action-btn" variant="neutral" size="icon" title="Dock back into its parent" @click="$emit('dock')">⤓</Button>
       <Button v-if="closable" class="panel-action-btn" title="Close" variant="neutral" size="icon" @click="$emit('close')">×</Button>
-      <Button type="button" class="panel-action-btn" variant="neutral" size="icon" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</Button>
+      <Button v-if="collapsible" type="button" class="panel-action-btn" variant="neutral" size="icon" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</Button>
     </div>
     <!-- ⚠ Depth hiding uses visibility/display via :style (see panelVisibilityStyle).
          A depth-hidden panel is removed from layout so the chain re-anchors. -->
@@ -137,6 +137,14 @@ const props = defineProps({
   // Controlled collapse. null = uncontrolled (panel owns its own local state,
   // e.g. the root). Any boolean = controlled by the parent.
   collapsed: { type: Boolean, default: null },
+  // Whether the rail offers the collapse control at all. On by default, because
+  // collapsing is how a chain panel hands its controls to the parent's chip
+  // strip and how a floating window becomes a chip. The **stack root** turns it
+  // off: collapsing the chain's own root only ever produced a chip of the panel
+  // you were working in, so that panel keeps its body. Note this is a separate
+  // prop rather than `isRoot` — a floating window's root Panel is a root too
+  // (`isRoot` is `!nested`), and it must keep its collapse.
+  collapsible: { type: Boolean, default: true },
   // Whether this panel is the active child (signalled to slot content so
   // singleton-composable panels can reload their data on tab switch).
   active: { type: Boolean, default: true },

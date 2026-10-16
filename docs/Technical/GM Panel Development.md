@@ -76,11 +76,20 @@ is resolved by *Panel stacking* below — clicking either brings it to the front
 
 ## Panel persistence (per device)
 
-Floating windows — and whether a panel is **collapsed** to its chip — are
-remembered in `localStorage` beside the anchor (`gmPanelAnchor`), because they
-belong to *this screen*, not to the campaign. Keys: `gmPanelWindows` (the
-windows) and `gmPanelStackCollapsed` (the stack root's chip state, a
-`usePersistedRef`). A window's collapse rides in its own record.
+Floating windows — and whether one is **collapsed** to its chip — are remembered
+in `localStorage` beside the anchor (`gmPanelAnchor`), because they belong to
+*this screen*, not to the campaign. The key is `gmPanelWindows`, and a window's
+collapse rides in its own record.
+
+**The stack root is deliberately not collapsible** (2026-10-16, at the human's
+direction). It used to be, through a `gmPanelStackCollapsed` key of its own; but
+collapsing the chain's own root only ever produced a chip of the panel you were
+working in, so that panel now keeps its body. The control is gated on `Panel`'s
+**`collapsible`** prop rather than on `isRoot`, and the stack passes
+`:collapsible="false"` — the distinction matters because a floating window's root
+`Panel` is a root too (`isRoot` is `!nested`), and it must keep its collapse.
+Nothing reads the old key, so a value an older build left behind cannot strand
+the root as a chip; `check-panel-persistence` pins both halves.
 
 **A spec cannot be stored, and that is the whole shape of this.** A spec is
 `{ component, title, id, props, listeners, context, badge }`: the component is a

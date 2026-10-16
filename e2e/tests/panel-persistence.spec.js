@@ -19,7 +19,7 @@
 // role, so arrange mode has to be seeded before load rather than mocked after it.
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
-import { bootGmPanel, enterPrep, openStack } from '../helpers/gm.js'
+import { bootGmPanel, enterPrep } from '../helpers/gm.js'
 
 const TEST_CHARACTER = 'character-kael-drift-e555ccde'
 const DETACH = '[title="Detach into a floating window"]'
@@ -121,20 +121,25 @@ test('a collapsed window comes back collapsed', async ({ page }) => {
   await expect(page.locator(`${WINDOWS} .panel-header`), 'still a chip, not a hole').toHaveCount(1)
 })
 
-test('a collapsed stack root comes back collapsed', async ({ page }) => {
+// The stack root is deliberately **not** collapsible (2026-10-16, at the human's
+// direction): collapsing the chain's own root only ever produced a chip of the
+// panel you were working in. The control is gone from that panel, and the chip
+// state an older build wrote to `gmPanelStackCollapsed` is no longer read — so a
+// value left behind cannot strand the root as a chip.
+test('the stack root offers no collapse, and a stale stored state cannot strand it', async ({ page }) => {
+  // What an older build would have left behind, written before the app boots.
+  await page.addInitScript(() => localStorage.setItem('gmPanelStackCollapsed', 'true'))
+
+  // `bootGmPanel` opens the chain itself, and this spec never closes it.
   await bootGmPanel(page, character)
-  const root = page.locator('[data-panel-window="root"]')
-  await expect(root.locator('.panel'), 'the root starts expanded').not.toHaveClass(/is-collapsed/)
 
-  await root.locator('[title="Collapse"]').first().click()
-  await page.waitForTimeout(600)
-  expect(await page.evaluate(() => localStorage.getItem('gmPanelStackCollapsed'))).toBe('true')
+  const root = '[data-panel-window="root"][data-panel-depth="0"]'
+  await expect(page.locator(`${root} .panel-actions [title="Collapse"]`),
+    'no collapse control on the root').toHaveCount(0)
+  await expect(page.locator(`${root} .panel`),
+    'and the stale value did not leave it a chip').not.toHaveClass(/is-collapsed/)
+  await expect(page.locator(`${root} .panel-body`), 'its body is there').toBeVisible()
 
-  // The stack's own open/closed state is *not* persisted (that is the 🛠, not a
-  // collapse), so the root has to be switched back on before it can be read.
-  await page.reload()
-  await page.waitForTimeout(3000)
-  await openStack(page)
-  await expect(page.locator('[data-panel-window="root"] .panel.is-collapsed'),
-    'the root came back collapsed').toHaveCount(1)
+  // The floating-window half of this is the test above: a window's own rail
+  // still offers `Collapse`, which is what keeps its chip across a reload.
 })
