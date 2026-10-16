@@ -2,8 +2,21 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 import transversal.services.state_events as se
+from transversal.services.campaign_scope import use_campaign
 from transversal.services.effects_engine import EventOutcome
+
+#: Armed state is per-campaign (B305). These tests exercise in-request behaviour,
+#: and every request names a campaign.
+_CAMPAIGN = "tv2-test-state-events"
+
+
+@pytest.fixture(autouse=True)
+def _scoped():
+    with use_campaign(_CAMPAIGN):
+        yield
 
 
 class FakeRepo:

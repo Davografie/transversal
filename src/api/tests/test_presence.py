@@ -1,6 +1,19 @@
 """Tests for player presence — the grace-window online registry."""
 
+import pytest
+
 from transversal.services import presence
+from transversal.services.campaign_scope import use_campaign
+
+#: Presence is per-campaign (B305). These tests exercise in-request behaviour, and
+#: every request names a campaign.
+_CAMPAIGN = "tv2-test-presence"
+
+
+@pytest.fixture(autouse=True)
+def _scoped():
+    with use_campaign(_CAMPAIGN):
+        yield
 
 
 def _reset():

@@ -3,10 +3,16 @@
 Roll events (``on_roll``/``on_set``/``on_result``) are ephemeral and per-roll,
 so they can't live in the persisted scheduled-events store (which advances on
 state-change / global events). This module keeps *armed SFXs* in memory, keyed
-by entity, and fires their roll-timing effects when the matching roll event
-happens. It is the "rolls" side of the temporal spine: an SFX is armed at
-trigger time for its ``SFX.duration`` (default one roll), and its effects fire
-on each matching roll event until that duration is exhausted.
+by campaign and entity, and fires their roll-timing effects when the matching
+roll event happens. It is the "rolls" side of the temporal spine: an SFX is
+armed at trigger time for its ``SFX.duration`` (default one roll), and its
+effects fire on each matching roll event until that duration is exhausted.
+
+**Armed state belongs to a campaign** ([[B305]]). The entity-keyed register and
+the global (passive) register both used to be process-global, so a rule armed at
+one campaign's table could fire on another's rolls. "Global" here means *every
+entity in one campaign*, never every campaign; with no campaign the store fires
+nothing rather than everything.
 
 ``SFX.duration`` splits into two axes:
 
@@ -24,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from transversal.domain import Effect, EffectTiming
+from transversal.services.campaign_scope import current_campaign
 
 log = logging.getLogger("transversal.sfx")
 
@@ -61,13 +68,26 @@ class ArmedSfx:
     scope: str = "self"  # listener scope: self | global | listener_spec
 
 
-_armed: dict[str, list[ArmedSfx]] = {}
+#: (campaign, entity_id) → the SFXs armed for that entity ([[B305]]). One
+#: campaign's armed rolls are not another's.
+_armed: dict[tuple[str, str], list[ArmedSfx]] = {}
 
-# Passive rules (e.g. One Trick) arm once per session and apply to *every*
-# entity's rolls — not keyed by entity, so late joiners are covered. They carry
-# no ``source_sfx_id`` (that stamp is the player-choice signal); selection is
-# declarative via ``die_filter``/spec.
-_global_armed: list[ArmedSfx] = []
+#: campaign → the passive rules armed in it. Passive rules (e.g. One Trick) arm
+#: once per session and apply to *every* entity's rolls **within their campaign**
+#: — not keyed by entity, so late joiners are covered. They carry no
+#: ``source_sfx_id`` (that stamp is the player-choice signal); selection is
+#: declarative via ``die_filter``/spec. "Every entity" deliberately stops at the
+#: campaign boundary: a global rule leaking across campaigns is the bug (B305).
+_global_armed: dict[str, list[ArmedSfx]] = {}
+
+
+def _scope(campaign: str | None = None) -> str:
+    """The campaign to act under: the argument, else this context's scope.
+
+    Empty is a refusal, not a wildcard ([[B305]]): an armed SFX keyed by no
+    campaign would fire for every campaign's rolls.
+    """
+    return campaign or current_campaign()
 
 
 def _split_duration(duration) -> tuple[Optional[int], list[str]]:
@@ -114,6 +134,7 @@ def arm_sfx(
     duration=None,
     scope: str = "self",
     bindings: dict | None = None,
+    campaign: str | None = None,
 ) -> None:
     """Arm an SFX's roll-timing ``effects`` so they fire at their roll events.
 
@@ -135,6 +156,13 @@ def arm_sfx(
 
     Idempotent per ``source_sfx_id`` for this entity (see ``_drop_existing``).
     """
+    camp = _scope(campaign)
+    if not camp:
+        log.warning(
+            "[roll_deferral.arm_sfx] entity=%s sfx=%s with no campaign — not armed",
+            entity_id, source_sfx_id,
+        )
+        return
     rolls, expiry_events = _split_duration(duration)
     log.info(
         "[roll_deferral.arm_sfx] entity=%s sfx=%s scope=%s effects=%s rolls=%s expiry=%s",
@@ -142,8 +170,9 @@ def arm_sfx(
         [(e.timing.value, e.type, e.action, e.target, e.die_filter) for e in effects],
         rolls, expiry_events,
     )
-    _armed[entity_id] = _drop_existing(_armed.get(entity_id, []), source_sfx_id)
-    _armed[entity_id].append(
+    key = (camp, entity_id)
+    _armed[key] = _drop_existing(_armed.get(key, []), source_sfx_id)
+    _armed[key].append(
         ArmedSfx(
             effects=list(effects),
             rolls=rolls,
@@ -165,6 +194,7 @@ def arm_passive(
     source_kind: str | None = None,
     source_id: str | None = None,
     bindings: dict | None = None,
+    campaign: str | None = None,
 ) -> None:
     """Arm a rule's roll-timing effects in the *global* set (scope = ``global``).
 
@@ -178,6 +208,13 @@ def arm_passive(
     one rule no matter how many entities carry it or how often it activates.
     ``bindings`` carries the activation's typed seeds, as in :func:`arm_sfx`.
     """
+    camp = _scope(campaign)
+    if not camp:
+        log.warning(
+            "[roll_deferral.arm_passive] sfx=%s with no campaign — not armed",
+            source_sfx_id,
+        )
+        return
     rolls, expiry_events = _split_duration(duration)
     log.info(
         "[roll_deferral.arm_passive] scope=global sfx=%s effects=%s rolls=%s expiry=%s",
@@ -185,8 +222,9 @@ def arm_passive(
         [(e.timing.value, e.type, e.action, e.target, e.die_filter) for e in effects],
         rolls, expiry_events,
     )
-    _global_armed[:] = _drop_existing(_global_armed, source_sfx_id)
-    _global_armed.append(
+    register = _global_armed.setdefault(camp, [])
+    register[:] = _drop_existing(register, source_sfx_id)
+    register.append(
         ArmedSfx(
             effects=list(effects),
             rolls=rolls,
@@ -201,7 +239,8 @@ def arm_passive(
 
 
 def bind_activation(entity_id: str, source_sfx_id: str, name: str, value: str, element: str = "",
-                    values: list[str] | None = None, cardinality: str = "one") -> None:
+                    values: list[str] | None = None, cardinality: str = "one",
+                    campaign: str | None = None) -> None:
     """Write a typed output binding into the matching armed SFX's activation scope.
 
     Used when an immediate effect's ``choose`` resolves *after* arming: the
@@ -212,9 +251,16 @@ def bind_activation(entity_id: str, source_sfx_id: str, name: str, value: str, e
     """
     if not source_sfx_id or not name or not value:
         return
+    camp = _scope(campaign)
+    if not camp:
+        log.debug(
+            "[roll_deferral.bind_activation] sfx=%s with no campaign — not bound",
+            source_sfx_id,
+        )
+        return
     from transversal.services.target_resolver import Binding
     ids = list(values) if values else ([value] if value else [])
-    for armed in _armed.get(entity_id, []):
+    for armed in _armed.get((camp, entity_id), []):
         if armed.source_sfx_id == source_sfx_id:
             armed.bindings[name] = Binding(
                 value=value, values=ids, element=element or "", cardinality=cardinality,
@@ -227,22 +273,31 @@ def fire_armed(
     event_type: str,
     universe: str,
     context: dict | None = None,
+    campaign: str | None = None,
 ) -> list[Effect]:
     """Fire armed-SFX effects whose timing matches ``event_type``; consume a roll.
 
     Returns the applied effects. Each armed SFX survives ``rolls`` matching
     events (``None`` = indefinite); a one-roll SFX fires once and is dropped.
-    Global (scope=``global``) entries fire for every entity but still honor their
-    own ``rolls`` budget the same way.
+    Global (scope=``global``) entries fire for every entity *in this campaign* but
+    still honor their own ``rolls`` budget the same way.
     """
-    local = _armed.get(entity_id, [])
-    if not local and not _global_armed:
+    camp = _scope(campaign)
+    if not camp:
+        log.warning(
+            "[roll_deferral.fire_armed] entity=%s event=%s with no campaign — "
+            "firing nothing", entity_id, event_type,
+        )
+        return []
+    local = _armed.get((camp, entity_id), [])
+    globals_ = _global_armed.get(camp, [])
+    if not local and not globals_:
         return []
     log.info(
         "[roll_deferral.fire_armed] entity=%s event=%s local=%s global=%s",
         entity_id, event_type,
         [(a.source_sfx_id, [e.timing.value for e in a.effects], a.rolls) for a in local],
-        [(a.source_sfx_id, [e.timing.value for e in a.effects], a.rolls) for a in _global_armed],
+        [(a.source_sfx_id, [e.timing.value for e in a.effects], a.rolls) for a in globals_],
     )
     if not universe:
         from transversal.main import _get_repo
@@ -268,13 +323,13 @@ def fire_armed(
             kept.append(armed)
         else:
             kept.append(armed)
-    _armed[entity_id] = kept
+    _armed[(camp, entity_id)] = kept
 
     # Passive (global) rules — also consume their roll budget. A global entry
     # with a ``rolls`` timer fires that many times then drops; ``rolls=None``
     # (e.g. a session-scoped passive) stays armed until a boundary drops it.
     kept_global: list[ArmedSfx] = []
-    for armed in _global_armed:
+    for armed in globals_:
         if any(e.timing.value == event_type for e in armed.effects):
             applied.extend(_apply_armed(armed, event_type, entity_id, universe, context, rolls, structured))
             if armed.rolls is not None:
@@ -284,7 +339,7 @@ def fire_armed(
             kept_global.append(armed)
         else:
             kept_global.append(armed)
-    _global_armed[:] = kept_global
+    _global_armed[camp] = kept_global
 
     if structured:
         from transversal.services.roll_orchestrator import _emit_pending_choices
@@ -563,11 +618,15 @@ def _apply_spec_target(
     return applied
 
 
-def expire_armed(entity_id: str, event_type: str) -> None:
+def expire_armed(entity_id: str, event_type: str, campaign: str | None = None) -> None:
     """Drop armed SFX whose boundary expiry matches ``event_type``."""
-    if entity_id not in _armed:
+    camp = _scope(campaign)
+    if not camp:
         return
-    _armed[entity_id] = [a for a in _armed[entity_id] if event_type not in a.expiry_events]
+    key = (camp, entity_id)
+    if key not in _armed:
+        return
+    _armed[key] = [a for a in _armed[key] if event_type not in a.expiry_events]
 
 
 def _selects_die(source_sfx_id: str | None, effect: Effect, die: dict) -> bool:
@@ -604,58 +663,77 @@ def _substitute_die_context(effect: Effect, die: dict, context: dict) -> Effect:
     return _substitute_effect_context(effect, merged)
 
 
-def clear_armed(entity_id: str) -> None:
+def clear_armed(entity_id: str, campaign: str | None = None) -> None:
     """Drop all armed SFX for an entity (e.g. when its pool is cleared)."""
-    _armed.pop(entity_id, None)
+    camp = _scope(campaign)
+    if not camp:
+        return
+    _armed.pop((camp, entity_id), None)
 
 
-def drop_armed(entity_id: str, source_sfx_id: str) -> int:
+def drop_armed(entity_id: str, source_sfx_id: str, campaign: str | None = None) -> int:
     """Drop this entity's waiting entries for one SFX — and its global ones.
 
     Used when a manual activation is *ended*: the parts of it that were still
     waiting on a roll never fire. Returns how many entries were dropped.
     """
-    global _global_armed
     if not source_sfx_id:
         return 0
-    before = list(_armed.get(entity_id, []))
-    _armed[entity_id] = [a for a in before if a.source_sfx_id != source_sfx_id]
-    global_before = len(_global_armed)
-    _global_armed = [a for a in _global_armed if a.source_sfx_id != source_sfx_id]
-    return (len(before) - len(_armed[entity_id])) + (global_before - len(_global_armed))
+    camp = _scope(campaign)
+    if not camp:
+        return 0
+    key = (camp, entity_id)
+    before = list(_armed.get(key, []))
+    _armed[key] = [a for a in before if a.source_sfx_id != source_sfx_id]
+    global_list = _global_armed.get(camp, [])
+    global_before = len(global_list)
+    global_kept = [a for a in global_list if a.source_sfx_id != source_sfx_id]
+    _global_armed[camp] = global_kept
+    return (len(before) - len(_armed[key])) + (global_before - len(global_kept))
 
 
-def list_armed(entity_id: str) -> list[Effect]:
+def list_armed(entity_id: str, campaign: str | None = None) -> list[Effect]:
     """The armed roll-timing effects currently queued for an entity (tests/debug)."""
+    camp = _scope(campaign)
+    if not camp:
+        return []
     out: list[Effect] = []
-    for armed in _armed.get(entity_id, []):
+    for armed in _armed.get((camp, entity_id), []):
         out.extend(armed.effects)
     return out
 
 
-def list_armed_sfx_ids(entity_id: str) -> list[str]:
+def list_armed_sfx_ids(entity_id: str, campaign: str | None = None) -> list[str]:
     """The SFX ids currently armed for an entity (for client re-stamp/display)."""
-    return [a.source_sfx_id for a in _armed.get(entity_id, []) if a.source_sfx_id]
+    camp = _scope(campaign)
+    if not camp:
+        return []
+    return [a.source_sfx_id for a in _armed.get((camp, entity_id), []) if a.source_sfx_id]
 
 
-def list_global_armed_sfx_ids() -> list[str]:
-    """The SFX ids armed in the *global* register (the passives), for display.
+def list_global_armed_sfx_ids(campaign: str | None = None) -> list[str]:
+    """The SFX ids armed in *this campaign's* global register (the passives), for display.
 
     Global entries are not entity-keyed — a passive armed at session start covers
-    every entity, late joiners included — so they belong to no single entity's
-    take-back window and :func:`list_armed_sfx_ids` deliberately omits them. The
-    Active rail unions these in, because "this rule is on you" is true for
-    everyone; the manual take-back chip does not, because a passive is not the
-    player's bargain to cancel.
+    every entity *in that campaign*, late joiners included — so they belong to no
+    single entity's take-back window and :func:`list_armed_sfx_ids` deliberately
+    omits them. The Active rail unions these in, because "this rule is on you" is
+    true for everyone; the manual take-back chip does not, because a passive is
+    not the player's bargain to cancel.
     """
+    camp = _scope(campaign)
+    if not camp:
+        return []
     out: list[str] = []
-    for armed in _global_armed:
+    for armed in _global_armed.get(camp, []):
         if armed.source_sfx_id and armed.source_sfx_id not in out:
             out.append(armed.source_sfx_id)
     return out
 
 
-def armed_entry_for(entity_id: str, sfx_id: str) -> Optional[ArmedSfx]:
+def armed_entry_for(
+    entity_id: str, sfx_id: str, campaign: str | None = None
+) -> Optional[ArmedSfx]:
     """The armed entry for a rule as seen by an entity — its own, or a global passive.
 
     Display-only: the entry's ``source_id`` and ``bindings`` exist nowhere else.
@@ -663,36 +741,48 @@ def armed_entry_for(entity_id: str, sfx_id: str) -> Optional[ArmedSfx]:
     declared seeds, condition outputs) and are deliberately **not** persisted on
     the timer rows, so a rule known only by a row has no entry here.
     """
-    for entry in _armed.get(entity_id, []):
+    camp = _scope(campaign)
+    if not camp:
+        return None
+    for entry in _armed.get((camp, entity_id), []):
         if entry.source_sfx_id == sfx_id:
             return entry
-    for entry in _global_armed:
+    for entry in _global_armed.get(camp, []):
         if entry.source_sfx_id == sfx_id:
             return entry
     return None
 
 
-def expire_global(event_type: str) -> None:
-    """Drop passive rules whose boundary expiry matches ``event_type``."""
-    global _global_armed
-    _global_armed = [a for a in _global_armed if event_type not in a.expiry_events]
+def expire_global(event_type: str, campaign: str | None = None) -> None:
+    """Drop this campaign's passive rules whose boundary expiry matches ``event_type``."""
+    camp = _scope(campaign)
+    if not camp:
+        return
+    _global_armed[camp] = [
+        a for a in _global_armed.get(camp, []) if event_type not in a.expiry_events
+    ]
 
 
-def clear_global_armed() -> None:
-    """Drop every passive rule (e.g. at session end)."""
-    global _global_armed
-    _global_armed = []
+def clear_global_armed(campaign: str | None = None) -> None:
+    """Drop every passive rule in this campaign (e.g. at session end)."""
+    camp = _scope(campaign)
+    if not camp:
+        return
+    _global_armed.pop(camp, None)
 
 
-def list_global_armed() -> list[Effect]:
+def list_global_armed(campaign: str | None = None) -> list[Effect]:
     """The passive (global) roll-timing effects currently armed (tests/debug)."""
+    camp = _scope(campaign)
+    if not camp:
+        return []
     out: list[Effect] = []
-    for armed in _global_armed:
+    for armed in _global_armed.get(camp, []):
         out.extend(armed.effects)
     return out
 
 
 def reset() -> None:
-    """Clear the whole store (tests)."""
+    """Clear the whole store, every campaign (tests)."""
     _armed.clear()
     _global_armed.clear()

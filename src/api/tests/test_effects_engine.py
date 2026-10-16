@@ -1,5 +1,7 @@
 """Tests for the effects engine."""
 
+import pytest
+
 from transversal.domain import (
     TargetRef,
     DieType,
@@ -7,11 +9,22 @@ from transversal.domain import (
     EffectTiming,
     SFX,
 )
+from transversal.services.campaign_scope import use_campaign
 from transversal.services.effects_applier import EffectRegistry
 from transversal.services.effects_engine import (
     EffectsEngine,
     GameEvent,
 )
+
+#: Armed state is per-campaign (B305). These tests exercise in-request behaviour,
+#: and every request names a campaign.
+_CAMPAIGN = "tv2-test-effects-engine"
+
+
+@pytest.fixture(autouse=True)
+def _scoped():
+    with use_campaign(_CAMPAIGN):
+        yield
 
 
 # Set up a test registry with a tracking applier
@@ -726,7 +739,7 @@ class TestListenerSpec:
 
             self._arm(repo, self._path("gmc"))
 
-            entry = roll_deferral._armed["gmc-1"][0]
+            entry = roll_deferral.armed_entry_for("gmc-1", "sfx-curse")
             assert entry.scope == "listener_spec"
             assert entry.source_sfx_id == "sfx-curse"
         finally:

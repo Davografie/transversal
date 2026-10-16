@@ -21,6 +21,7 @@ from transversal.domain import (
     Timer,
 )
 from transversal.services import roll_deferral
+from transversal.services.campaign_scope import use_campaign
 from transversal.services.effect_refs import recipient_value
 from transversal.services.scheduled_events import (
     activation_booking,
@@ -113,10 +114,16 @@ def _route_applier(monkeypatch, repo, entity):
     )
 
 
+#: Armed state is per-campaign (B305). These tests exercise in-request behaviour,
+#: and every request names a campaign.
+_CAMPAIGN = "tv2-test-flight-window"
+
+
 @pytest.fixture(autouse=True)
 def _clean_armed():
     roll_deferral.reset()
-    yield
+    with use_campaign(_CAMPAIGN):
+        yield
     roll_deferral.reset()
 
 

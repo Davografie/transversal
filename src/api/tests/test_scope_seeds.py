@@ -17,8 +17,20 @@ from types import SimpleNamespace as NS
 import pytest
 
 from transversal.domain import Condition, ConditionType, DieType, Effect, EffectTiming, Entity, EntityType, SFX, TargetSpec
+from transversal.services.campaign_scope import use_campaign
 from transversal.services.target_catalog import element_for_variable, scope_seed_names
 from transversal.services.target_resolver import TargetContext, resolve
+
+
+#: Armed state is per-campaign (B305). These tests exercise in-request behaviour,
+#: and every request names a campaign.
+_CAMPAIGN = "tv2-test-scope-seeds"
+
+
+@pytest.fixture(autouse=True)
+def _scoped():
+    with use_campaign(_CAMPAIGN):
+        yield
 
 
 # ── The declaration ───────────────────────────────────
@@ -240,24 +252,23 @@ def test_armed_effects_keep_the_activation_seeds():
     """A roll-timed effect fires after the moment that armed it has passed, so the
     seeds are snapshotted with the rest of the activation — the same reason
     ``source_id`` is carried there."""
-    from transversal.services.roll_deferral import _armed, arm_passive, arm_sfx
+    from transversal.services import roll_deferral
+    from transversal.services.roll_deferral import arm_passive, arm_sfx
     from transversal.services.target_resolver import Binding
 
     seeds = {"trait_setting": Binding(value="e1:cultivation", element="traitsetting", cardinality="one")}
     effect = Effect(timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_up", target="self")
     try:
-        _armed.clear()
+        roll_deferral._armed.clear()
         arm_sfx("e1", [effect], source_sfx_id="sfx-x", source_kind="trait_setting",
                 source_id="e1:cultivation", bindings=seeds)
-        assert _armed["e1"][0].bindings == seeds
+        assert roll_deferral._armed[(_CAMPAIGN, "e1")][0].bindings == seeds
 
-        from transversal.services import roll_deferral
         roll_deferral._global_armed.clear()
         arm_passive([effect], source_sfx_id="sfx-x", bindings=seeds)
-        assert roll_deferral._global_armed[0].bindings == seeds
+        assert roll_deferral._global_armed[_CAMPAIGN][0].bindings == seeds
     finally:
-        _armed.clear()
-        from transversal.services import roll_deferral
+        roll_deferral._armed.clear()
         roll_deferral._global_armed.clear()
 
 

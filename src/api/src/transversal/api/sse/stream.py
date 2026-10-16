@@ -56,7 +56,7 @@ async def stream(
         player_id,
     )
     sub = event_bus.subscribe(session_id, campaign)
-    if player_id and mark_online(player_id):
+    if player_id and mark_online(player_id, campaign):
         broadcast_presence_changed()
 
     async def event_generator():
@@ -70,7 +70,9 @@ async def stream(
         finally:
             sub.close()
             if player_id:
-                mark_offline(player_id)
+                # Named explicitly: the generator outlives the endpoint body, and
+                # presence must land in the campaign that opened the stream (B305).
+                mark_offline(player_id, campaign)
             logger.info("SSE subscription closed — session=%s", session_id)
 
     return EventSourceResponse(event_generator())

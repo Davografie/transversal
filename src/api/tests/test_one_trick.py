@@ -12,8 +12,21 @@ the tests assert the *shape* the wizard produces, not a seed function.
 
 from types import SimpleNamespace
 
+import pytest
+
 import transversal.main as main
 import transversal.services.roll_deferral as roll_deferral
+from transversal.services.campaign_scope import use_campaign
+
+#: Armed state is per-campaign (B305). These tests exercise in-request behaviour,
+#: and every request names a campaign.
+_CAMPAIGN = "tv2-test-one-trick"
+
+
+@pytest.fixture(autouse=True)
+def _scoped():
+    with use_campaign(_CAMPAIGN):
+        yield
 
 
 class OneTrickRepo:

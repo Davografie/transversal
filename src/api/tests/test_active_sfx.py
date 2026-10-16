@@ -18,6 +18,7 @@ import pytest
 from transversal.api.graphql.resolvers.queries_sfx import QueriesSfx
 from transversal.domain import Effect, EffectTiming, ScheduledEvent, Timer
 from transversal.services import roll_deferral
+from transversal.services.campaign_scope import use_campaign
 from transversal.services.scheduled_events import in_flight_sfx_ids
 from transversal.services.target_resolver import Binding
 
@@ -71,10 +72,16 @@ def _duration_row(sfx_id, entity_id="pc-rail", source=None):
     )
 
 
+#: Armed state is per-campaign (B305). These tests exercise in-request behaviour,
+#: and every request names a campaign.
+_CAMPAIGN = "tv2-test-active-sfx"
+
+
 @pytest.fixture(autouse=True)
 def _clean_armed():
     roll_deferral.reset()
-    yield
+    with use_campaign(_CAMPAIGN):
+        yield
     roll_deferral.reset()
 
 

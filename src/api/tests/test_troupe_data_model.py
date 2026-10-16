@@ -9,6 +9,7 @@ import pytest
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import DieType, Entity, EntityType, Player, RatingType
+from transversal.services.campaign_scope import use_campaign
 
 try:
     _repo = EntityRepository()
@@ -18,6 +19,17 @@ except Exception:
     HAVE_DB = False
 
 pytestmark = pytest.mark.skipif(not HAVE_DB, reason="ArangoDB not available")
+
+
+#: The active-main/current-body registries are per-campaign (B305). These tests
+#: exercise in-request behaviour, and every request names a campaign.
+_CAMPAIGN = "tv2-test-troupe"
+
+
+@pytest.fixture(autouse=True)
+def _scoped():
+    with use_campaign(_CAMPAIGN):
+        yield
 
 
 P_ID = "test-b54-player"

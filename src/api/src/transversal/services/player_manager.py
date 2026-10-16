@@ -7,42 +7,93 @@ resolved from the graph at read time rather than stored on the player document.
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import Player
+from transversal.services.campaign_scope import current_campaign
 
-# Module-level active-main registry: player_id → the main entity currently
-# controlled by that player. In-memory (mirrors the in-memory SSE bus); written
-# only by ``record_control``, read by the troupe availability query (B57).
-_active_main: dict[str, str] = {}
+logger = logging.getLogger("transversal.players")
 
-# Module-level current-body registry: player_id → the entity currently
-# controlled by that player (main OR support character). Written on every
-# ``record_control``; read by the troupe overview's "now playing" column (B66+).
-_current_body: dict[str, str] = {}
+# Module-level active-main registry: (campaign, player_id) → the main entity
+# currently controlled by that player. In-memory (mirrors the in-memory SSE
+# bus); written only by ``record_control``, read by the troupe availability
+# query (B57). The campaign half is [[B305]]: one campaign's active mains are
+# not another's.
+_active_main: dict[tuple[str, str], str] = {}
+
+# Module-level current-body registry: (campaign, player_id) → the entity
+# currently controlled by that player (main OR support character). Written on
+# every ``record_control``; read by the troupe overview's "now playing" column
+# (B66+). Campaign-keyed for the same reason as ``_active_main``.
+_current_body: dict[tuple[str, str], str] = {}
 
 
-def _set_active_main(player_id: str, main_id: str | None) -> None:
+def _scope(campaign: str | None = None) -> str:
+    """The campaign to act under: the argument, else this context's scope.
+
+    Empty is a refusal, not a wildcard ([[B305]]).
+    """
+    return campaign or current_campaign()
+
+
+def _set_active_main(
+    player_id: str, main_id: str | None, campaign: str | None = None
+) -> None:
+    scope = _scope(campaign)
+    if not scope:
+        logger.debug(
+            "active main for %s with no campaign — not recorded", player_id
+        )
+        return
+    key = (scope, player_id)
     if main_id is None:
-        _active_main.pop(player_id, None)
+        _active_main.pop(key, None)
     else:
-        _active_main[player_id] = main_id
+        _active_main[key] = main_id
 
 
-def is_main_active(player_id: str, main_id: str) -> bool:
-    """Whether ``main_id`` is currently the active main of ``player_id``."""
-    return _active_main.get(player_id) == main_id
+def is_main_active(
+    player_id: str, main_id: str, campaign: str | None = None
+) -> bool:
+    """Whether ``main_id`` is the active main of ``player_id`` (in this campaign)."""
+    scope = _scope(campaign)
+    if not scope:
+        return False
+    return _active_main.get((scope, player_id)) == main_id
 
 
-def list_active_mains() -> dict[str, str]:
-    """Snapshot of the active mains: player_id → active main entity id (B66)."""
-    return dict(_active_main)
+def list_active_mains(campaign: str | None = None) -> dict[str, str]:
+    """Snapshot of *this campaign's* active mains: player_id → main entity id (B66)."""
+    scope = _scope(campaign)
+    if not scope:
+        logger.warning(
+            "list_active_mains() with no campaign — returning nothing rather than "
+            "every campaign's mains"
+        )
+        return {}
+    return {
+        player_id: main_id
+        for (owner, player_id), main_id in _active_main.items()
+        if owner == scope
+    }
 
 
-def list_current_bodies() -> dict[str, str]:
-    """Snapshot of player_id → currently-controlled entity id (main or SC)."""
-    return dict(_current_body)
+def list_current_bodies(campaign: str | None = None) -> dict[str, str]:
+    """Snapshot of *this campaign's* player_id → currently-controlled entity id."""
+    scope = _scope(campaign)
+    if not scope:
+        logger.warning(
+            "list_current_bodies() with no campaign — returning nothing rather than "
+            "every campaign's bodies"
+        )
+        return {}
+    return {
+        player_id: entity_id
+        for (owner, player_id), entity_id in _current_body.items()
+        if owner == scope
+    }
 
 
 class PlayerManager:
@@ -113,7 +164,10 @@ class PlayerManager:
         updates["last_spotlight_at"] = timestamp or datetime.now(timezone.utc).isoformat()
         return self._repo.update_player(player_id, updates)
 
-    def record_control(self, player_id: str, entity_id: str, stamp: bool = True) -> bool:
+    def record_control(
+        self, player_id: str, entity_id: str, stamp: bool = True, *,
+        campaign: str | None = None,
+    ) -> bool:
         """Handle a player taking control of an entity (B55).
 
         Stamps ``last_spotlight_at``/``last_main_entity_id`` only when the
@@ -139,9 +193,16 @@ class PlayerManager:
             fire_state_sfx,
         )
 
+        scope = _scope(campaign)
+
         # Track the current body on every switch — main, support character, or a
         # GM's possessed GMC.
-        _current_body[player_id] = entity_id
+        if scope:
+            _current_body[(scope, player_id)] = entity_id
+        else:
+            logger.debug(
+                "record_control(%s) with no campaign — body not tracked", player_id
+            )
 
         # "Someone took control of this entity" — the state change, fired for
         # every switch and both audiences. What it *means* (a GM assuming a
@@ -157,7 +218,7 @@ class PlayerManager:
 
         if is_main:
             self.set_spotlight(player_id, entity_id)
-            _set_active_main(player_id, entity_id)
+            _set_active_main(player_id, entity_id, scope)
             broadcast_main_active(player_id, entity_id, True)
             return True
 
@@ -165,17 +226,23 @@ class PlayerManager:
         # main is no longer active. Do not stamp spotlight.
         p = self._repo.get_player(player_id)
         if p is not None and p.last_main_entity_id:
-            _set_active_main(player_id, None)
+            _set_active_main(player_id, None, scope)
             broadcast_main_active(player_id, p.last_main_entity_id, False)
         return False
 
-    def clear_control(self, player_id: str) -> None:
+    def clear_control(self, player_id: str, *, campaign: str | None = None) -> None:
         """Forget the body a player was driving (they went to free-roam).
 
         Without this the last possessed entity would stay in ``playerBodies``
         forever, and its map dot would stay sized up after the GM let go.
         """
-        if _current_body.pop(player_id, None) is not None:
+        scope = _scope(campaign)
+        if not scope:
+            logger.debug(
+                "clear_control(%s) with no campaign — nothing to forget", player_id
+            )
+            return
+        if _current_body.pop((scope, player_id), None) is not None:
             from transversal.services.state_events import broadcast_body_changed
             broadcast_body_changed(player_id, None)
 

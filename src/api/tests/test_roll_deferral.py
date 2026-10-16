@@ -1,5 +1,7 @@
 """Tests for roll-scoped SFX deferral (the "rolls" temporal spine)."""
 
+import pytest
+
 from transversal.domain import (
     Effect,
     EffectDuration,
@@ -8,6 +10,17 @@ from transversal.domain import (
     TimerCombine,
 )
 from transversal.services import roll_deferral
+from transversal.services.campaign_scope import use_campaign
+
+#: Armed state is per-campaign (B305). These tests exercise in-request behaviour,
+#: and every request names a campaign.
+_CAMPAIGN = "tv2-test-roll-deferral"
+
+
+@pytest.fixture(autouse=True)
+def _scoped():
+    with use_campaign(_CAMPAIGN):
+        yield
 
 
 def _make_effect(timing=EffectTiming.ON_RESULT, target="hazard", result=None, die_filter=None):
