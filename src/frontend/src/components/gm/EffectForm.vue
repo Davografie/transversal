@@ -605,8 +605,11 @@ const ratingControl = computed(() => ({
   'onUpdate:spec': (v) => { newEffect.resultSpec = v },
   canRow: ratingIsRow.value,
   variables: dieVariables.value,
-  sourceElement: sourceElement.value,
-  outputVariables: outputVariables.value,
+  // `props.` is not decoration: inside `<script setup>` a prop is **not** a bare
+  // binding. Reading `sourceElement` here threw a ReferenceError the moment the
+  // slot rendered — the screen went blank and only the console said why.
+  sourceElement: props.sourceElement || '',
+  outputVariables: props.outputVariables || null,
 }))
 
 // The element the target path currently resolves to, reported by the builder.
