@@ -36,8 +36,9 @@ from transversal.services.media_utils import (
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
 
-MEDIA_DIR = Path("/app/media")
-IMAGEN_DIR = MEDIA_DIR / "imagen"
+# Where media lives is `services/media_store`'s business now, not this module's: a
+# campaign owns what it creates, so the path depends on the request's database
+# (B88). Nothing here may name `/app/media` directly.
 # `.svg` is deliberately absent: it is passed through un-re-encoded, served
 # from the app's own origin, and can carry script — i.e. stored XSS (SEC-4).
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif"}
@@ -149,8 +150,6 @@ async def upload_media(
     If empty, the owner's own universe is used — an entity's `current_universe`,
     or a trait's first listed universe.
     """
-    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-
     entity_id = entity_id or ""
     owner_id = owner_id or entity_id
     variant_id = variant_id or projection_id or ""

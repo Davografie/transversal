@@ -11,6 +11,19 @@ from fastapi import HTTPException, UploadFile
 from PIL import Image
 
 from transversal.api.rest import media as media_mod
+from transversal.services import media_store
+
+#: The campaign an upload belongs to. Media is written under
+#: ``<MEDIA_ROOT>/<campaign>/…`` (B88), so these tests read it from where the code
+#: writes it rather than naming a root of their own — the constants they used to
+#: patch are gone, and a patch that no longer reaches the code is worse than none.
+CAMPAIGN = "test-campaign"
+
+
+@pytest.fixture(autouse=True)
+def _media_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(media_store, "MEDIA_ROOT", tmp_path)
+    monkeypatch.setattr(media_store, "campaign_name", lambda: CAMPAIGN)
 
 
 def _png_bytes() -> bytes:
@@ -78,21 +91,17 @@ def test_svg_is_not_an_allowed_upload_extension():
 
 
 async def test_valid_upload_lands_inside_the_media_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
-    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
 
     res = await media_mod.upload_media(_Tasks(), entity_id="", universe="", file=_upload())
 
-    written = tmp_path / res["filename"]
+    written = tmp_path / CAMPAIGN / res["filename"]
     assert written.exists()
-    assert written.parent == tmp_path
+    assert written.parent == tmp_path / CAMPAIGN
     assert res["path"] == f"/media/{res['filename']}"
 
 
 async def test_bad_stored_universe_cannot_traverse(tmp_path, monkeypatch):
     """A malicious universe already in the data must not escape either."""
-    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
-    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: _FakeRepo("../../evil"))
 
     res = await media_mod.upload_media(_Tasks(), entity_id="loc-1", universe="", file=_upload())
@@ -137,8 +146,6 @@ async def test_a_colon_bearing_variant_id_is_accepted(tmp_path, monkeypatch):
     with the path pattern made every one of them a 400, which put the whole
     override out of reach — the file has never named the variant.
     """
-    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
-    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     repo = _RecordingRepo()
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: repo)
 
@@ -151,7 +158,7 @@ async def test_a_colon_bearing_variant_id_is_accepted(tmp_path, monkeypatch):
     assert res["image_id"], "the upload registered"
     assert repo.created[0].variant_id == setting, "the rung is the setting"
     # The file names the owner, never the variant: the variant is metadata.
-    assert (tmp_path / "imagen" / "trait-probe" / "earth").is_dir()
+    assert (tmp_path / CAMPAIGN / "imagen" / "trait-probe" / "earth").is_dir()
     # And the sole-image rule fires on that rung, so the first instance picture
     # overrides the definition for every role without a tagging step.
     assert repo.updated[res["image_id"]]["roles"] == ["background", "sheet", "navdot"]
@@ -160,8 +167,6 @@ async def test_a_colon_bearing_variant_id_is_accepted(tmp_path, monkeypatch):
 async def test_a_variant_id_cannot_reach_the_filesystem(tmp_path, monkeypatch):
     """It is an id, not a path, so traversal in it is inert — the file lands under
     the owner's directory whatever it says."""
-    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
-    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
 
     res = await media_mod.upload_media(_Tasks(), 
@@ -170,15 +175,13 @@ async def test_a_variant_id_cannot_reach_the_filesystem(tmp_path, monkeypatch):
     )
 
     assert res["image_id"]
-    written = [p for p in (tmp_path / "imagen").rglob("*") if p.is_file()]
+    written = [p for p in (tmp_path / CAMPAIGN / "imagen").rglob("*") if p.is_file()]
     assert written and all("trait-probe" in str(p) for p in written)
     assert not (tmp_path.parent / "evil").exists()
 
 
 async def test_a_control_character_in_a_variant_id_is_refused(tmp_path, monkeypatch):
     """Bounded rather than path-checked — it is stored and echoed in the list."""
-    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
-    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     with pytest.raises(HTTPException) as exc:
         await media_mod.upload_media(_Tasks(), 
             owner_kind="trait", owner_id="trait-probe", variant_id="a\nb",
@@ -193,8 +196,6 @@ async def test_a_control_character_in_a_variant_id_is_refused(tmp_path, monkeypa
 async def test_an_occupant_upload_queues_a_matte(tmp_path, monkeypatch):
     """A character's picture is a subject, so the matte is part of the upload —
     queued, because the response must not wait on the GPU."""
-    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
-    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
     tasks = _Tasks()
 
@@ -210,8 +211,6 @@ async def test_an_occupant_upload_queues_a_matte(tmp_path, monkeypatch):
 
 
 async def test_a_trait_upload_queues_a_matte(tmp_path, monkeypatch):
-    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
-    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
     tasks = _Tasks()
 
@@ -225,8 +224,6 @@ async def test_a_trait_upload_queues_a_matte(tmp_path, monkeypatch):
 async def test_a_location_upload_queues_nothing(tmp_path, monkeypatch):
     """A room is a scene: there is nothing to cut out of it, and the GPU pass
     would be wasted."""
-    monkeypatch.setattr(media_mod, "MEDIA_DIR", tmp_path)
-    monkeypatch.setattr(media_mod, "IMAGEN_DIR", tmp_path / "imagen")
     monkeypatch.setattr(
         media_mod, "EntityRepository", lambda: _FakeRepo("earth", entity_type="location")
     )
