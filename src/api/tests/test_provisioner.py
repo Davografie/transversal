@@ -73,12 +73,29 @@ class _FakeDB:
 
 
 class _Registry:
-    def __init__(self):
-        self.forks: dict[str, Fork] = {}
+    def __init__(self, forks=None):
+        # keyed by database, which is what the existing assertions read
+        self.forks: dict[str, Fork] = dict(forks or {})
         self.created = 0
 
     def find_fork_by_database(self, database):
         return self.forks.get(database)
+
+    def find_fork_by_slug(self, slug):
+        return next((f for f in self.forks.values() if f.slug == slug), None)
+
+    def get_fork(self, fork_id):
+        return next((f for f in self.forks.values() if f.id == fork_id), None)
+
+    def list_forks(self):
+        return list(self.forks.values())
+
+    def delete_fork(self, fork_id):
+        found = self.get_fork(fork_id)
+        if not found:
+            return False
+        self.forks.pop(found.database, None)
+        return True
 
     def create_fork(self, name, database, owner_account, *, kind="fork", slug=""):
         self.created += 1
@@ -120,6 +137,9 @@ class _FakeSysDB:
 
     def has_database(self, name):
         return name in self.databases
+
+    def delete_database(self, name):
+        self.databases.discard(name)
 
 
 class _FakeClient:
@@ -364,3 +384,70 @@ def test_provisioning_does_not_leave_the_target_database_scoped(wired):
     )
 
     assert current_database() is None
+
+
+# ── Dropping ──────────────────────────────────────────────────────────
+
+
+def _with_server(monkeypatch, databases):
+    client = _FakeClient(None, set(databases))
+    monkeypatch.setattr(arango, "ArangoClient", lambda hosts=None: client)
+    return client
+
+
+def test_dropping_a_fork_removes_the_database_and_the_row(monkeypatch):
+    registry = _Registry()
+    fork = registry.create_fork("g", "tv2_fork_dave", "a", slug="g")
+    client = _with_server(monkeypatch, {"tv2_fork_dave"})
+
+    assert provisioner.drop_fork(registry, fork.id) is True
+
+    assert "tv2_fork_dave" not in client.sys_db.databases
+    assert registry.get_fork(fork.id) is None
+    assert client.closed is True
+
+
+def test_dropping_a_fork_whose_database_is_already_gone_still_clears_the_row(monkeypatch):
+    registry = _Registry()
+    fork = registry.create_fork("g", "tv2_fork_dave", "a")
+    _with_server(monkeypatch, set())
+
+    assert provisioner.drop_fork(registry, fork.id) is True
+    assert registry.get_fork(fork.id) is None
+
+
+def test_dropping_an_unknown_fork_is_a_no_op(monkeypatch):
+    client = _with_server(monkeypatch, set())
+
+    assert provisioner.drop_fork(_Registry(), "fork-ghost") is False
+    assert client.closed is False
+
+
+# ── Enumerating every database a migration must reach ─────────────────
+
+
+def test_campaign_databases_lists_the_global_first_then_each_fork(monkeypatch):
+    monkeypatch.delenv("GLOBAL_DATABASE", raising=False)
+    registry = _Registry()
+    registry.create_fork("a", "tv2_fork_a", "x")
+    registry.create_fork("b", "tv2_fork_b", "x")
+
+    names = provisioner.campaign_databases(registry, global_database="transversal_global")
+
+    assert names == ["transversal_global", "tv2_fork_a", "tv2_fork_b"]
+
+
+def test_campaign_databases_does_not_visit_one_database_twice(monkeypatch):
+    monkeypatch.delenv("GLOBAL_DATABASE", raising=False)
+    registry = _Registry()
+    registry.create_fork("the global itself", "transversal", "x")
+
+    assert provisioner.campaign_databases(registry, global_database="transversal") == [
+        "transversal"
+    ]
+
+
+def test_campaign_databases_takes_the_global_from_the_environment(monkeypatch):
+    monkeypatch.setenv("GLOBAL_DATABASE", "tv2_global")
+
+    assert provisioner.campaign_databases(_Registry())[0] == "tv2_global"

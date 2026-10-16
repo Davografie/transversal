@@ -169,9 +169,32 @@ class RegistryRepository:
         return _to_fork(found[0]) if found else None
 
     def list_forks_for(self, account_id: str) -> list[Fork]:
-        rows = list(self._campaigns.find({"owner_account": account_id}))
+        return self._sorted(self._campaigns.find({"owner_account": account_id}))
+
+    def list_forks(self) -> list[Fork]:
+        """Every fork in the registry, newest first.
+
+        This is what a schema change has to visit: the global plus each fork
+        ([[B88]]'s "migrations must enumerate every database").
+        """
+        return self._sorted(self._campaigns.all())
+
+    @staticmethod
+    def _sorted(rows) -> list[Fork]:
+        rows = list(rows)
         rows.sort(key=lambda row: row.get("created_at") or "", reverse=True)
         return [fork for fork in (_to_fork(row) for row in rows) if fork]
+
+    def delete_fork(self, fork_id: str) -> bool:
+        """Forget a fork's routing row. False when there was none.
+
+        The database is dropped by the caller (:func:`services.provisioner.drop_fork`),
+        because the registry cannot drop a campaign's database for it.
+        """
+        if not self._campaigns.get(fork_id):
+            return False
+        self._campaigns.delete(fork_id)
+        return True
 
     # ── Email links ───────────────────────────────────────────────────
 

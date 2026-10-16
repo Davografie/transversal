@@ -184,6 +184,19 @@ def reset_db_cache() -> None:
         _close_quietly(entry)
 
 
+def forget_database(database: str) -> bool:
+    """Close and forget every cached connection to ``database``.
+
+    For a **dropped** campaign: without this, the pool for a deleted database stays
+    in the cache (and in the LRU's working set) until eviction, and a re-created
+    database of the same name would keep using the dead connection.
+    """
+    keys = [key for key in _db_cache if key[3] == database]
+    for key in keys:
+        _close_quietly(_db_cache.pop(key))
+    return bool(keys)
+
+
 def get_db(
     config: ArangoConfig | None = None, *, ensure_indexes: bool = True
 ) -> "StandardDatabase":

@@ -20,6 +20,7 @@ from transversal.db.arango import (
     ArangoConfig,
     _db_cache_max,
     current_database,
+    forget_database,
     get_db,
     reset_db_cache,
     use_database,
@@ -154,6 +155,22 @@ def test_reset_closes_every_cached_connection():
 
     assert db_module._db_cache == {}
     assert len(_FakeClient.closed) == 2
+
+
+def test_forgetting_one_database_leaves_the_others_alone():
+    """A dropped campaign must not leave its pool cached — a later database of the
+    same name would inherit a dead connection."""
+    get_db(_config("tv2_a"))
+    get_db(_config("tv2_b"))
+
+    assert forget_database("tv2_a") is True
+
+    assert [list(client.dbs) for client in _FakeClient.closed] == [["tv2_a"]]
+    assert [key[3] for key in db_module._db_cache] == ["tv2_b"]
+
+
+def test_forgetting_a_database_that_is_not_cached_is_harmless():
+    assert forget_database("tv2_never_opened") is False
 
 
 # ── Request-scoped resolution ─────────────────────────────────────────

@@ -41,6 +41,7 @@ no row is refused as an orphan, because a half-created campaign is worse than no
 from __future__ import annotations
 
 import logging
+import os
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -53,6 +54,7 @@ from transversal.db.arango import (
     SCHEDULED_EVENTS,
     ArangoConfig,
     _ensure_indexes,
+    forget_database,
     get_db,
     use_database,
 )
@@ -246,12 +248,7 @@ def provision_fork(
 
     # Does the target already exist? `get_db` would create it, so ask the server
     # first: an existing database with no routing row is an orphan, not a fork.
-    from arango import ArangoClient
-
-    client = ArangoClient(hosts=source_config.url)
-    sys_db = client.db(
-        "_system", username=source_config.username, password=source_config.password
-    )
+    client, sys_db = _system_db(source_config)
     try:
         already_there = sys_db.has_database(target_name)
     finally:
@@ -284,3 +281,67 @@ def provision_fork(
     _ensure_indexes(target_db)
 
     return registry.create_fork(name, target_name, owner_account, slug=slug)
+
+
+def _system_db(config: ArangoConfig):
+    """A client and its ``_system`` database — for the operations that are not
+    scoped to a campaign (create/has/delete a database)."""
+    from arango import ArangoClient
+
+    client = ArangoClient(hosts=config.url)
+    sys_db = client.db("_system", username=config.username, password=config.password)
+    return client, sys_db
+
+
+def drop_fork(registry, fork_id: str, *, config: ArangoConfig | None = None) -> bool:
+    """Delete a fork's database and its routing row. Returns whether it existed.
+
+    This is the act the database-per-campaign architecture was chosen for
+    ([[Tenancy Rollout Plan]] §1: *"delete/archive via ``drop_database``"*). It is a
+    **service, not a route**: dropping a campaign is irreversible and the policy for
+    who may do it is the owner's, so it is left reachable only from an operator path
+    until that is decided.
+
+    Order matters: drop the database first, then forget the routing row. A failure
+    between the two leaves a row naming a missing database — visible and re-droppable
+    — rather than a database nothing knows about.
+    """
+    fork = registry.get_fork(fork_id)
+    if not fork:
+        return False
+
+    resolved = config or ArangoConfig.from_env()
+    client, sys_db = _system_db(resolved)
+    try:
+        if sys_db.has_database(fork.database):
+            sys_db.delete_database(fork.database)
+    finally:
+        # The pool for a deleted database must not stay cached: a later database of
+        # the same name would inherit a dead connection.
+        forget_database(fork.database)
+        client.close()
+
+    logger.warning(
+        "[provisioner] dropped fork %s (%s, slug %r)", fork.id, fork.database, fork.slug
+    )
+    return registry.delete_fork(fork_id)
+
+
+def campaign_databases(
+    registry, *, global_database: str | None = None, config: ArangoConfig | None = None
+) -> list[str]:
+    """Every database a schema change must reach: the global, then each fork.
+
+    ``migrate_*.py`` scripts each call ``get_db()`` and so touch one database; this is
+    the list they should loop instead ([[B88]]: *"migrations must enumerate every
+    campaign database. One forgotten database is a silent divergence."*). The global
+    comes first and names are deduplicated, so a fork that happens to be the global is
+    visited once.
+    """
+    resolved = config or ArangoConfig.from_env()
+    global_name = global_database or os.getenv("GLOBAL_DATABASE") or resolved.database
+    names = [global_name]
+    for fork in registry.list_forks():
+        if fork.database and fork.database not in names:
+            names.append(fork.database)
+    return names
