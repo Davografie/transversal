@@ -6,6 +6,10 @@
       :life-path="lifePath"
       :output-variables="outputVariables"
       :scope-variables="scopeVariables || {}"
+      :portal-destination="portalDestination"
+      :portal-target-type="portalTargetType"
+      :portal-universe="portalUniverse"
+      :portal-root-id="portalRootId"
       @save="onSave"
       @cancel="close"
     />
@@ -39,6 +43,14 @@ const props = defineProps({
   index: { type: Number, default: null },
   universe: { type: String, default: '' },
   lifePath: { type: String, default: '' },
+  // A portal's effects are the third consumer of this panel, and they need the
+  // destination in scope so the form can offer portal-relative targets — the same
+  // four props `EffectEditor` used to forward when that list was edited inline.
+  // Empty for the other two consumers, which is exactly the old behaviour.
+  portalDestination: { type: String, default: '' },
+  portalTargetType: { type: String, default: '' },
+  portalUniverse: { type: String, default: '' },
+  portalRootId: { type: String, default: '' },
 })
 
 const panel = usePanel()

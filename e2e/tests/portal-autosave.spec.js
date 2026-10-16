@@ -97,6 +97,25 @@ test('the panel has no Save button, and an edit lands on its own', async ({ page
   await expect(portal.locator('.ee-del'), 'and the row is gone').toHaveCount(0)
 })
 
+test('one effect is edited in a child panel, not inline', async ({ page }) => {
+  const portal = await openPortalPanel(page)
+
+  // The editor is not inline any more: nothing to fill in until a row is opened.
+  await expect(portal.locator('.ee-form-title'), 'no inline effect form').toHaveCount(0)
+
+  await portal.locator('.ee-add').click()
+  await page.waitForTimeout(1200)
+
+  // A child panel of the portal — depth 3 under the chain root — which is the
+  // shape every other effect list uses.
+  const editor = page.locator('.panel-node[data-panel-depth="3"]:visible')
+  await expect(editor, 'the effect editor is a child panel').toHaveCount(1)
+  await expect(editor.locator('.ee-form-title'), 'and it holds the form').toHaveCount(1)
+  // The list has to stay in view while an effect is edited — which is the whole
+  // reason it is a panel rather than an inline form.
+  await expect(portal, 'with the portal and its list still beside it').toHaveCount(1)
+})
+
 test('an edit made just before closing still lands', async ({ page, request }) => {
   const portal = await openPortalPanel(page)
 

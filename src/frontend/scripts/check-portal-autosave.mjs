@@ -48,7 +48,9 @@ ok('and no Cancel button either — the rail closes a panel', /class="cancel-btn
 // `panel.close()`, so a whole-file grep for it passes for the wrong reason.
 ok('the save no longer closes the panel',
   !/panel\.close\(\)/.test(PANEL.slice(PANEL.indexOf('async function save()'))), true)
-ok('so the panel context is not needed at all', /usePanel\(\)/.test(PANEL), false)
+// It opens the child panel with it — but never closes itself with it, which is
+// the assertion just above.
+ok('the panel context is used to open the child panel', /panel\.open\(/.test(PANEL), true)
 // A button used to be the only feedback that a write happened.
 ok('something still says so — the write is visible while it is in flight',
   /Saving…/.test(PANEL) && /is-saved/.test(PANEL) && /savedAt\.value = Date\.now\(\)/.test(PANEL), true)
@@ -57,8 +59,8 @@ ok('something still says so — the write is visible while it is in flight',
 console.log('\nloading is not an edit\n')
 
 {
-  const seed = PANEL.indexOf('const effects = ref((props.link.effects')
-  const watchAt = PANEL.indexOf('watch(effects, scheduleSave')
+  const seed = PANEL.indexOf('const draft = reactive({ effects: (props.link.effects')
+  const watchAt = PANEL.indexOf('watch(draft, scheduleSave')
   ok('the draft is seeded at all', seed > 0, true)
   ok('and the watcher is registered after the seeding, so the first copy is not an edit',
     seed > 0 && watchAt > seed, true)
@@ -68,7 +70,7 @@ console.log('\nloading is not an edit\n')
 console.log('\nthe three rules of the house pattern\n')
 
 ok('the whole draft is watched, deeply — not a list of field names',
-  /watch\(effects, scheduleSave, \{ deep: true, flush: 'sync' \}\)/.test(PANEL), true)
+  /watch\(draft, scheduleSave, \{ deep: true, flush: 'sync' \}\)/.test(PANEL), true)
 ok('behind a debounce',
   /clearTimeout\(_saveTimer\)[\s\S]{0,80}setTimeout\(\(\) => \{ save\(\) \}, \d+\)/.test(PANEL), true)
 ok('a pending write is flushed on close',
@@ -76,12 +78,12 @@ ok('a pending write is flushed on close',
 ok('and the guard makes the flush idempotent (a fired timer is nulled first)',
   /if \(_saveTimer\) \{[\s\S]{0,120}_saveTimer = null/.test(PANEL), true)
 ok('the parent copy is kept in step by every write, not only on the way out',
-  /props\.link\.effects = effects\.value/.test(PANEL), true)
+  /props\.link\.effects = draft\.effects/.test(PANEL), true)
 ok('and that line is inside the save, after the response is accepted',
   (() => {
     const save = PANEL.slice(PANEL.indexOf('async function save()'))
     const okCheck = save.indexOf('if (!r.ok) throw')
-    const assign = save.indexOf('props.link.effects = effects.value')
+    const assign = save.indexOf('props.link.effects = draft.effects')
     return okCheck > 0 && assign > okCheck
   })(), true)
 ok('a rejected write is reported rather than swallowed', /catch \(e\) \{[\s\S]{0,120}console\.error/.test(PANEL), true)
@@ -95,13 +97,49 @@ ok('a rejected write is reported rather than swallowed', /catch \(e\) \{[\s\S]{0
 console.log('\nthe write carries only what it edits\n')
 
 ok('the body carries the edge type of the *lookup* and the effects, nothing else',
-  /body: JSON\.stringify\(\{ type: 'transversal', effects: effects\.value \}\)/.test(PANEL), true)
+  /body: JSON\.stringify\(\{ type: 'transversal', effects: draft\.effects \}\)/.test(PANEL), true)
 // Scoped to the body on purpose: the panel *reads* `link.transversal_type` to draw
 // the head, so a whole-file grep for the name would pass for the wrong reason.
 ok('it never rewrites the mode', (() => {
   const body = /body: JSON\.stringify\(\{([^}]*)\}\)/.exec(PANEL)
   return !!body && !body[1].includes('transversal_type')
 })(), true)
+
+// ── 5. the effect is edited in a child panel ────────────────────────────
+// It was the last list still edited **inline** (`EffectEditor`). Every other one
+// opens a child panel — the SFX editor's `GmEffectEditPanel`, a roll-table row's
+// and a life-path step's `GmDraftEffectPanel` — because an effect is a stacked
+// builder of unbounded height and the list has to stay in view while one is
+// edited. `GmDraftEffectPanel` is deliberately draft-agnostic: it edits whatever
+// `effects` array the opener hands it in the spec's `context`.
+console.log('\nthe list stays in view: one effect is edited in a child panel\n')
+
+const DRAFT = read('../src/components/gm/GmDraftEffectPanel.vue')
+
+ok('the panel renders the list, not an inline editor',
+  /<EffectList/.test(PANEL) && /<EffectEditor/.test(PANEL), false)
+ok('and the list is wired to the draft it owns',
+  /:model-value="draft\.effects"/.test(PANEL) && /@update:model-value="draft\.effects = \$event"/.test(PANEL), true)
+ok('a row opens the shared child panel',
+  /component: GmDraftEffectPanel/.test(PANEL), true)
+ok('which one — add or edit — is the index it is given',
+  /openEffectEditor\(index\)[\s\S]{0,200}index === null \? 'Add effect' : 'Edit effect'/.test(PANEL), true)
+ok('the draft travels as a live reference through the spec context, which is the only way in',
+  /context: \{ rowDraft: draft \}/.test(PANEL), true)
+ok('and the panel writes into it rather than persisting anything itself',
+  /if \(adding\) \{[\s\S]{0,80}draft\.effects = \[\.\.\.draft\.effects, eff\]/.test(DRAFT), true)
+// The four portal-only props are what let the targeting wizard offer
+// portal-relative targets. A straight swap to the shared panel would have dropped
+// them silently, so both the passing and the forwarding are asserted.
+ok('the portal destination travels with the form',
+  /portalDestination: props\.link\.name/.test(PANEL)
+  && /portalTargetType: props\.link\.type/.test(PANEL)
+  && /portalUniverse: props\.link\.current_universe/.test(PANEL)
+  && /portalRootId: props\.link\.type === 'location' \? props\.link\._key : ''/.test(PANEL), true)
+ok('and the shared panel forwards them to the form, empty by default for its other two consumers',
+  /portalDestination: \{ type: String, default: '' \}/.test(DRAFT)
+  && /:portal-destination="portalDestination"/.test(DRAFT)
+  && /:portal-root-id="portalRootId"/.test(DRAFT), true)
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)
