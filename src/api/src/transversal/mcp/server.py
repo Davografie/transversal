@@ -1874,12 +1874,141 @@ def get_entity(args: dict) -> dict:
     return data.get("entity")
 
 
+def _location_tree_index(tree) -> tuple[dict[str, str], dict[str, list[str]]]:
+    """``{location_id: ancestry path}`` and ``{location_id: descendant ids}``.
+
+    **``/locations/tree`` returns a forest of every universe, not the subtree you
+    asked for.** The requested location is buried somewhere inside it, so
+    "locations with X in their ancestry" and "locations in the whole payload" are
+    different sets — and conflating them is a mistake this tool existed long
+    enough to cause: a query scoped to the Valley of Ascension swept in separate
+    holdings (a soul-refining sect, a gateway) that merely shared the payload, and
+    reported five Nascent Soul cultivators who were standing somewhere else.
+
+    So ancestry is computed from the walk, once, and both maps come from it.
+    """
+    parent: dict[str, str] = {}
+    children: dict[str, list[str]] = {}
+
+    def walk(node, par: str, stack: frozenset) -> None:
+        nid = node.get("id") or ""
+        if not nid or nid in stack:
+            return
+        children.setdefault(nid, [])
+        if par and nid not in parent:
+            parent[nid] = par
+        if par and nid not in children[par]:
+            children[par].append(nid)
+        for kid in (node.get("children") or []):
+            walk(kid, nid, stack | {nid})
+
+    roots = tree if isinstance(tree, list) else [tree]
+    for r in roots:
+        walk(r or {}, "", frozenset())
+
+    def ancestry(nid: str) -> list[str]:
+        path, seen = [], set()
+        cur = nid
+        while cur and cur not in seen:
+            seen.add(cur)
+            path.append(cur)
+            cur = parent.get(cur, "")
+        return path
+
+    ancestors = {nid: ancestry(nid) for nid in children}
+    return ancestors, children
+
+
+def _subtree_of(root_id: str, children: dict[str, list[str]]) -> set[str]:
+    """Every id under ``root_id``, inclusive, without recursing forever."""
+    out, stack, seen = set(), [root_id], set()
+    while stack:
+        nid = stack.pop()
+        if nid in seen or nid not in children:
+            continue
+        seen.add(nid)
+        out.add(nid)
+        stack.extend(children.get(nid) or [])
+    return out
+
+
 def query_entities(args: dict) -> dict:
+    """List entities by type, universe, **location subtree**, or **held trait**.
+
+    The last two exist because the raw read is type+universe only, so every other
+    scope had to be assembled by hand — which is how a location gets confused with
+    a GMC id, and how "in the subtree" gets confused with "in the payload".
+
+    * ``location_id`` — any entity standing in that location **or anywhere beneath
+      it**. Ancestry is walked from the location tree, so a holding you are not
+      under is excluded even though it shares the tree.
+    * ``traitset_id`` — any entity holding a trait from that set.
+    * ``statement`` — with ``traitset_id``, substring-match on the trait instance's
+      statement (case-insensitive). **This one is a local scan**: the API exposes no
+      statement filter (`traitsetting` is filterable by `trait_id`, `rating`, … but
+      not by its text), so it fetches each candidate's settings. It reports
+      ``scanned`` and ``truncated`` rather than silently stopping at ``limit``.
+    """
     etype = args.get("type")
     universe = args.get("universe")
     data = _graphql(_QUERY_ENTITIES, {"type": etype, "universe": universe})
-    entities = data.get("entities") or []
-    return {"count": len(entities), "results": entities}
+    rows = data.get("entities") or []
+
+    location_id = (args.get("location_id") or "").strip()
+    if location_id:
+        tree = location_tree({"location_id": location_id})
+        _ancestors, children = _location_tree_index(tree)
+        in_scope = _subtree_of(location_id, children)
+        if not in_scope:
+            return {"count": 0, "results": [],
+                    "note": f"'{location_id}' is not in the location tree, so no "
+                            f"descendants could be resolved"}
+        rows = [r for r in rows if (r.get("currentLocation") or "") in in_scope]
+
+    traitset_id = (args.get("traitset_id") or "").strip()
+    statement = (args.get("statement") or "").strip()
+    out = {"count": len(rows), "results": rows}
+    if location_id:
+        out["location_id"] = location_id
+        out["locations_in_scope"] = len(in_scope)
+
+    if traitset_id or statement:
+        limit = args.get("limit") or 400
+        needle = statement.lower()
+        matched, scanned, truncated = [], 0, False
+        q = ("query($id: ID!){ entity(id: $id){ traitSettings "
+             "{ traitId traitsetId dice statement } } }")
+        for r in rows:
+            if scanned >= limit:
+                truncated = True
+                break
+            scanned += 1
+            try:
+                d = _graphql(q, {"id": r["id"]})
+            except Exception:
+                continue
+            settings = ((d.get("entity") or {}).get("traitSettings")) or []
+            hits = [
+                s for s in settings
+                if (not traitset_id or s.get("traitsetId") == traitset_id)
+                and (not needle or needle in (s.get("statement") or "").lower())
+            ]
+            if not hits:
+                continue
+            row = dict(r)
+            row["matchedTraits"] = [
+                {k: h.get(k) for k in ("traitId", "traitsetId", "dice", "statement")}
+                for h in hits
+            ]
+            matched.append(row)
+        out.update({
+            "count": len(matched), "results": matched,
+            "scanned": scanned, "truncated": truncated,
+        })
+        if truncated:
+            out["note"] = (f"stopped after scanning {scanned} entities at limit="
+                           f"{limit} — raise limit to cover the rest")
+    return out
 
 
 def faction_canvas(args: dict) -> dict:
@@ -3265,12 +3394,16 @@ TOOL_SCHEMAS = {
     },
     "query_entities": {
         "name": "query_entities",
-        "description": "List entities by type and optional universe.",
+        "description": "List entities by type and optional universe, and optionally narrow by location subtree or by a trait they hold. `location_id` returns entities standing in that location OR anywhere beneath it (ancestry walked from the location tree, so a holding you are not under is excluded). `traitset_id` returns entities holding a trait from that set. `statement` (with traitset_id, or alone) substring-matches the trait instance's text case-insensitively — this one is a local scan because the API exposes no statement filter, so it reports `scanned`/`truncated` rather than silently stopping at `limit`.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "type": {"type": "string"},
-                "universe": {"type": "string"},
+                "type": {"type": "string", "description": "EntityType: CHARACTER, GMC, LOCATION, FACTION, ASSET, UNIVERSE"},
+                "universe": {"type": "string", "description": "universe key, e.g. three_realms"},
+                "location_id": {"type": "string", "description": "scope to this location and everything beneath it"},
+                "traitset_id": {"type": "string", "description": "only entities holding a trait from this trait set"},
+                "statement": {"type": "string", "description": "substring match on a held trait's statement (case-insensitive)"},
+                "limit": {"type": "integer", "description": "max entities to scan when filtering by trait/statement (default 400)"},
             },
         },
     },
