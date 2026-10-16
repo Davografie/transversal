@@ -66,12 +66,14 @@
         />
       </div>
       <!-- The in-line trait editor describes the trait this effect *creates* —
-           its rating type, polarity, statement and notes — so for a gain verb it
-           renders directly under the trait picker. `orderedInputs` places it
-           there; it used to render after every field, which is what separated the
-           two halves the author reads as one control. The **dice** are not here:
-           they are a rating, which is a row, so the Die Rating field answers them
-           in one control with a literal row, a named die, or a path ([[B307]]). -->
+           its rating type, its **rating**, its polarity, statement and notes — so
+           for a gain verb it renders directly under the trait picker.
+           `orderedInputs` places it there; it used to render after every field,
+           which is what separated the two halves the author reads as one control.
+           The rating goes **inside** the box (`after-dice`, between the rating
+           type and the statement) rather than in its own field: the rating type
+           and the dice are one answer, and the field is hidden on a gain verb so
+           there is only ever one control ([[B307]]). -->
       <TraitInstanceEditor
         v-else-if="item.kind === 'gainEditor'"
         mode="single"
@@ -86,7 +88,11 @@
         @update:rating-type="newEffect.context.rating_type = $event.toLowerCase()"
         @update:statement="newEffect.context.statement = $event"
         @update:notes="newEffect.context.notes = $event"
-      />
+      >
+        <template #after-dice>
+          <EffectRatingControl v-bind="ratingControl" />
+        </template>
+      </TraitInstanceEditor>
       <template v-else>
       <div class="ee-field">
         <label>{{ item.f.label }}</label>
@@ -155,44 +161,7 @@
 
         <template v-else>
           <template v-if="isResultDieField(item.f)">
-            <div class="ee-result-mode">
-              <button type="button" :class="{ active: resultMode === 'die' }" @click="setResultMode('die')">Dice</button>
-              <button type="button" :class="{ active: resultMode === 'variable' }" @click="setResultMode('variable')">Variable</button>
-              <!-- A die can also be a *fact in the world* — a challenge's next
-                   capacity slot, or the rating the rule's own source already has
-                   — which no literal names. Then it is a path, and a path takes
-                   **every** die it resolves ([[B307]]). -->
-              <button type="button" :class="{ active: resultMode === 'spec' }" @click="setResultMode('spec')">Path</button>
-            </div>
-            <!-- A rating is a row of dice, not one die: a resource holds several
-                 and a challenge usually three. `context.dice` is the row and
-                 `result` carries its first die, which is what every single-die
-                 reader already understands ([[B307]]). An action that takes one
-                 die keeps the plain dropdown. -->
-            <DiePicker
-              v-if="resultMode === 'die' && ratingIsRow"
-              multiple
-              :model-value="resultDice"
-              @update:model-value="setResultDice"
-            />
-            <select v-else-if="resultMode === 'die'" v-model="valueStore(item.f)[item.f.name]">
-              <option v-for="(o, i) in (item.f.options || [])" :key="o" :value="o">{{ (item.f.optionLabels || [])[i] || o }}</option>
-            </select>
-            <template v-else-if="resultMode === 'variable'">
-              <select :value="valueStore(item.f)[item.f.name] || ''"
-                      @change="valueStore(item.f)[item.f.name] = $event.target.value">
-                <option value="">— variable —</option>
-                <option v-for="v in dieVariableChoices" :key="v" :value="v">{{ v }}</option>
-              </select>
-            </template>
-            <PathField
-              v-else
-              v-model="newEffect.resultSpec"
-              :destination="resultSpecDestination"
-              :source-element="sourceElement"
-              :variables="outputVariables"
-              title="Die from a path"
-            />
+            <EffectRatingControl v-bind="ratingControl" />
           </template>
           <!-- A context field with its own editor: the dice array, the effect-die
                die/`{variable}` toggle, and the shared-table return map. -->
@@ -310,6 +279,7 @@ import { ratingFieldsFor, ratingRowFor } from '@/composables/effectRatingRow.js'
 import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
+import EffectRatingControl from './EffectRatingControl.vue'
 import ReturnMapEditor from './ReturnMapEditor.vue'
 import DiePicker from '@/components/DiePicker.vue'
 import Button from '@/components/ui/Button.vue'
@@ -584,11 +554,6 @@ const ownerHelp = computed(() => {
   return `Anchored to ${OWNER_ELEMENT_LABEL[element] || element}.`
 })
 
-// A die named by a path resolves to a *die* — either a slot of a challenge's
-// capacity (the ceiling) or a die of a trait instance's rating (what it holds).
-// Both carry a die size, so both are offered, and nothing else is.
-const resultSpecDestination = { elements: ['capacity_die', 'rating_die'] }
-
 // Only an action that **declares** the row creates a whole rating from it — the
 // trait-gain family. `Add Die`, `Set Die`, `Play as Rating` and `Set Trait` take
 // one die, so offering them a row would collect dice their handler drops.
@@ -620,15 +585,29 @@ function setResultMode(mode) {
   }
 }
 
-// The named dice this field may read, plus whatever is stored — an editor never
-// rewrites a value it cannot represent (the rule the placement and arming-scope
-// selects follow).
-const dieVariableChoices = computed(() => {
-  const out = dieVariables.value.map((name) => `{${name}}`)
-  const current = strVal(newEffect.fields.result)
-  if (current.startsWith('{') && !out.includes(current)) out.push(current)
-  return out
-})
+// The action's own `result` field — its `options` are the literal dice the plain
+// dropdown offers.
+const resultFieldDef = computed(() =>
+  (selectedAction.value?.fields || []).find((f) => f.name === 'result') || null)
+
+// Everything `EffectRatingControl` needs, bound once and used by **both** hosts:
+// an action's own `result` field, and the rating slot inside a gain verb's trait
+// instance editor. `v-bind` keeps the two from drifting.
+const ratingControl = computed(() => ({
+  field: resultFieldDef.value,
+  mode: resultMode.value,
+  'onUpdate:mode': setResultMode,
+  row: resultDice.value,
+  'onUpdate:row': setResultDice,
+  result: strVal(newEffect.fields.result),
+  'onUpdate:result': (v) => { newEffect.fields.result = v },
+  spec: newEffect.resultSpec,
+  'onUpdate:spec': (v) => { newEffect.resultSpec = v },
+  canRow: ratingIsRow.value,
+  variables: dieVariables.value,
+  sourceElement: sourceElement.value,
+  outputVariables: outputVariables.value,
+}))
 
 // The element the target path currently resolves to, reported by the builder.
 // A change to a *rating* die is a fact about the character, so it can carry a
@@ -682,11 +661,10 @@ const visibleFields = computed(() => {
   return (selectedAction.value.fields || []).filter(f => {
     if (f.name === 'target' && selectedAction.value.implicitTarget) return false
     if (f.name === 'result' && selectedAction.value.implicitResult) return false
-    // `result` used to be hidden on a gain verb, with the in-line trait editor
-    // rendering the die in its place. It is the rating **control** now — a row of
-    // dice, a named die, or a path — so the in-line editor no longer shows a die
-    // at all and this one field is the single place the rating is answered
-    // ([[B307]]).
+    // On a gain verb the in-line trait editor renders the rating, inside its own
+    // box and beside the rating type it belongs with — so the field steps aside,
+    // exactly as it did before the rating gained its third mode ([[B307]]).
+    if (f.name === 'result' && isGainAction.value) return false
     // A field a reference supersedes is the fallback form: once the reference is
     // authored the field steps aside (its stored value is still kept). A ref may
     // be authored as a path *or* as a picker value, so both count ([[B261]]).
@@ -712,10 +690,10 @@ const visibleContextFields = computed(() => {
   return (selectedAction.value?.contextFields || []).filter(f => {
     if (f.name === 'projection' && (newEffect.context.transversal_type || 'inapposite') !== 'consciousness') return false
     if (isGainAction.value && (f.name === 'statement' || f.name === 'notes')) return false
-    // The rating row is answered on the **Die Rating** field, which renders every
-    // mode (row / named die / path) in one control. Rendering the declared `dice`
-    // field too would be a second input for one question ([[B307]]).
-    if (f.name === 'dice') return false
+    // The rating row is answered by `EffectRatingControl`, which renders every
+    // mode in one control — on the trait-creating actions that declare it. Any
+    // other action's `dice` field (Add Dice's own "Dice") renders normally.
+    if (f.name === 'dice' && ratingIsRow.value) return false
     return true
   })
 })

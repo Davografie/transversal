@@ -76,6 +76,7 @@ ok('and stable again', ratingFieldsFor('die', ratingRowFor(stored.dice, stored.r
 
 // ── The form is actually wired to it ──────────────────────────
 const form = readFileSync(new URL('../src/components/gm/EffectForm.vue', import.meta.url), 'utf8')
+const control = readFileSync(new URL('../src/components/gm/EffectRatingControl.vue', import.meta.url), 'utf8')
 no('EffectForm imports the rule', form.includes("from '@/composables/effectRatingRow.js'"),
    'the import is gone — the screen no longer follows the checked rule')
 no('the row is read through it', /resultDice\s*=\s*computed\(\(\)\s*=>\s*ratingRowFor\(/.test(form),
@@ -85,6 +86,23 @@ no('the payload is built through it', /ratingFieldsFor\(resultMode\.value/.test(
 no('the load seeds the row through it', /knownCtx\.dice\s*=\s*ratingRowFor\(/.test(form),
    'populate no longer seeds the row from a legacy result')
 
+// ── The rating has ONE control, in TWO hosts ──────────────────
+// An action's own `result` field renders it, and a gain verb renders it inside the
+// trait instance editor — where the rating type it belongs beside already is. It
+// lived only in the field for a day, and "where did the rating go" was the answer.
+no('the control is its own component',
+   control.includes('ee-result-mode') && control.includes('multiple'),
+   'the mode row and the dice row are no longer together in EffectRatingControl.vue')
+no('a gain verb renders it inside the trait instance editor',
+   /<TraitInstanceEditor[\s\S]*?<template #after-dice>[\s\S]{0,120}<EffectRatingControl/.test(form),
+   'the rating is not in the trait instance editor\'s after-dice slot')
+no('the plain result field renders it too',
+   /isResultDieField\(item\.f\)[\s\S]{0,80}<EffectRatingControl/.test(form),
+   'the non-gain actions lost their rating control')
+no('both hosts bind one set of props',
+   (form.match(/v-bind="ratingControl"/g) || []).length === 2,
+   'the two hosts bind the control differently — they can drift')
+
 // ── Only an action that declares the row gets one ─────────────
 // `Add Die`, `Set Die`, `Play as Rating` and `Set Trait` take a single die, and
 // their handlers ignore `context.dice` — a row there would collect dice that are
@@ -92,15 +110,18 @@ no('the load seeds the row through it', /knownCtx\.dice\s*=\s*ratingRowFor\(/.te
 no('the row is gated on the action declaring it',
    /ratingIsRow\s*=\s*computed\([\s\S]{0,200}f\.name === 'dice'/.test(form),
    'ratingIsRow no longer reads the declared context field')
-no('the row picker is gated', /resultMode === 'die' && ratingIsRow/.test(form),
+no('the row picker is gated', /mode === 'die' && canRow/.test(control),
    'the dice row renders unconditionally — a single-die action would get one')
 no('the payload is gated too',
    /ratingIsRow\.value\s*\?\s*ratingFieldsFor\(/.test(form),
    'buildEffect writes context.dice for every action')
 no('the load is gated', /if \(ratingIsRow\.value\) knownCtx\.dice/.test(form),
    'populate seeds context.dice for every action')
+no('the declared `dice` field is hidden only where the control covers it',
+   /f\.name === 'dice' && ratingIsRow\.value/.test(form),
+   "Add Dice's own Dice field is hidden too")
 no('a single-die action still gets its dropdown',
-   /v-else-if="resultMode === 'die'"[\s\S]{0,200}item\.f\.options/.test(form),
+   /v-else-if="mode === 'die'"[\s\S]{0,200}field\?\.options/.test(control),
    'the plain die dropdown is gone')
 
 console.log(`\n${pass} pass / ${fail} fail\n`)
