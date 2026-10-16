@@ -378,11 +378,18 @@ mutation(
 
 # An effect is the substance of a rule: a four-field SFX response could not show
 # a condition or an action, so an author could write a rule and see none of it.
+# A condition's `spec` must be selected, or a read-then-write erases it. The
+# selection carried `type subject target value operator narrative` and omitted
+# `spec` — but `spec` is where a `TARGET_PATH` condition keeps its whole targeting
+# path, and **18 live conditions carry one** (`sfx-heal`'s is 5 steps, the
+# elemental rules 2–3). Every write path round-trips what the read handed it, so
+# `update_sfx` on any of those erased the path. One field list feeds the effect,
+# roll-table row and SFX selections, so the fix is one string.
 _EFFECT_FIELDS = (
     "timing type action target entity result dieFilter negative context "
     "duration { timers { event remaining } combine } "
     "targetSpec entitySpec ownerSpec resultSpec refs output "
-    "conditions { type subject target value operator narrative }"
+    "conditions { type subject target value operator narrative spec }"
 )
 
 # A path **wraps** tables: `entryStep` is the step a term begins at and `steps` is
@@ -535,7 +542,7 @@ mutation(
 
 _ROLL_ENTRY_FIELDS = (
     "key label description minValue maxValue weight tier "
-    "conditions { type subject target value operator narrative } "
+    "conditions { type subject target value operator narrative spec } "
     "costEffects { %s } effects { %s } "
     "boundVariables { name spec element cardinality }"
 ) % (_EFFECT_FIELDS, _EFFECT_FIELDS)
@@ -572,7 +579,7 @@ mutation(
 _SFX_WRITE_FIELDS = (
     "id name description trigger limit sourceKind placement armingScope "
     "listenerSpec reach "
-    "boundVariables { name spec } conditions { type subject target value operator narrative } "
+    "boundVariables { name spec } conditions { type subject target value operator narrative spec } "
     "duration { timers { event remaining } combine } "
     "effects { %s }"
 ) % _EFFECT_FIELDS
