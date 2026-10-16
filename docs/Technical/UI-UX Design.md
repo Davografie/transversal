@@ -546,20 +546,54 @@ Picking is already one system; new surfaces should compose it rather than reach
 for a raw `<select>` (that was the point of **B47**).
 
 - **`ui/TargetPicker`** — the universal picker: a search field plus a filtered
-  dropdown, backed by the server's `targetCandidates(kind, entityId, scope,
+  result list, backed by the server's `targetCandidates(kind, entityId, scope,
   action, filter)`. The *kind* is the whole vocabulary, and it is server-defined:
   `location` (410 candidates), `trait` (802), `roll_table`, `universe`, plus the
   scoped kinds (`character` / `gmc` / … resolve within an entity or location —
   an empty list just means "none in scope"). It also takes `excludeIds`,
   `allowRandom` (🎲) and `clearable`. Nine call sites today, from the canvas and
   the effect/condition builders to the entity panel's location fields.
-- **`ui/SearchDropdown`** — the input + dropdown it is built on; use it directly
-  for a free-text search that isn't a target lookup. Since it moved onto
+- **`ui/SearchDropdown`** — the input + inline result list it is built on; use it
+  directly for a free-text search that isn't a target lookup. Since it moved onto
   [[#Autocomplete core]] it is **keyboard-navigable** (arrows, Enter, Escape,
   combobox/listbox roles) and takes an async `options` function — so
   `TargetPicker`'s nine call sites gained keyboard support without changing
   them. It is controlled: listen for `@select` / `@clear`, there is no
   `v-model`.
+
+**A picker's results are a list, not an overlay** (2026-10-17; the author: *"the
+dropdown list gets cropped wherever the component is embedded. Instead of a
+dropdown list, an actual list might be more convenient"*). The results used to be
+`position: absolute` under the field, so **any ancestor with `overflow` cropped
+them** — and that is most hosts: a GM panel's scroll zone, the sheet, the wizard.
+The same field therefore clipped in one place and not another, which is the defect
+rather than a bug in any one host.
+
+So the list renders **in flow**: the host panel is the scroller, and the list keeps
+no `max-height` and no `overflow` of its own (one scroller, not two — the
+[[#Embedding a surface in a panel]] rule), and there is no viewport measurement to
+flip it upward because there is nothing left to flip. The rows are the app's own
+`.entity-row` shell — `.entity-name` flexes, `.entity-universe` is the dim
+secondary — so a picker row reads like a panel row instead of a private 10px
+vocabulary. What it costs is honest and visible: focusing a field pushes the form
+down, where an overlay would have floated.
+
+Two things that follow, both worth knowing before touching it again:
+
+- **A host's buttons pin to the field's line.** `TargetPicker`'s 🎲 and ⚙ are
+  `align-self: flex-start`, because the field can now be far taller than they are
+  and centring would float them in the middle of the list. With the list closed
+  this changes nothing — the row is already the buttons' own height.
+- **The ⚙ filter popout is still an overlay**, so it is still croppable in exactly
+  these hosts. Inlining it is the same fix, and it is deliberately its own change
+  (it is a small form, not a list, and it needs the root to wrap).
+
+The shell is pinned by `scripts/check-picker-list.mjs` (in flow, no second
+scroller, the shared row class, and that every option carries the `id` its
+`aria-activedescendant` points at — a defect that was invisible because the core
+exported `optionId` and only `TagInput` used it). The rendered fact is pinned in
+`target-spec-literal.spec.js`, the one spec that reaches the picker nested three
+panels deep; run against an overlay it fails on the first assertion.
 - **`DiePicker`** — die faces (d4…d12), single or `multiple`. This is the
   **rating-die picker**: `TraitInstanceEditor` and the sheet's trait editor use
   it for ratings, the GM forms for effect dice.
