@@ -45,7 +45,10 @@ def test_the_client_family_declares_all_three_actions():
         assert m.inverse is None
         assert m.category == "either"
     assert metas["show_toast"].group == "Client"
-    assert metas["show_life_path"].group == "Client"
+    # Filed with the other life-path verbs rather than under Client (the author,
+    # 2026-10-16): Client groups by *mechanism*, and an author looking for "give
+    # the player a life path" looks on the life-path shelf.
+    assert metas["show_life_path"].group == "Life Path"
 
 
 def test_both_client_actions_are_on_the_engine_registry():

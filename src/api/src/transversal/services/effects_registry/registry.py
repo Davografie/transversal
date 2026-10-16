@@ -183,11 +183,18 @@ _ACTION_GROUPS: dict[str, str] = {
     "open_roll_table": "Roll Table",
     "draft_life_path": "Life Path", "force_muster": "Life Path",
     "muster": "Life Path", "enroll_life_path": "Life Path",
+    # Shown with the other life-path verbs (the author, 2026-10-16): an author
+    # looking for "give the player a life path" looks *here*, not under Client —
+    # which groups by mechanism, and is where you look for a screen you are
+    # driving rather than for a path. The action still lives in
+    # ``actions_client.py``, because what it *is* is a client-directed effect
+    # (nothing in the world changes); the group is the editor's topic shelf.
+    "show_life_path": "Life Path",
     "create_relationship": "Relationship", "entity_targeting_ban": "Relationship",
     "start_contest": "Contest",
     "grant_sfx": "Rules",
     # Client-directed: they change nothing in the world, only what a screen shows.
-    "open_sheet": "Client", "show_toast": "Client", "show_life_path": "Client",
+    "open_sheet": "Client", "show_toast": "Client",
 }
 
 for _m in EFFECT_ACTION_REGISTRY:
