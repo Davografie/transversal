@@ -56,6 +56,9 @@ services:
       FORKS_ALLOW_CREATE: "${FORKS_ALLOW_CREATE:-}"
       # Account links: `console` logs them (dev); `smtp` uses the block below; any
       # other value fails loudly rather than dropping the only credential.
+      # The portal's public origin, for links that leave the app (email). Set it
+      # to https://transversal.app once the domain points here.
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-}"
       MAIL_TRANSPORT: "${MAIL_TRANSPORT:-}"
       SMTP_HOST: "${SMTP_HOST:-}"
       SMTP_PORT: "${SMTP_PORT:-}"

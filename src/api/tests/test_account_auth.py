@@ -83,6 +83,10 @@ def _configured(monkeypatch):
     # The send cap has its own tests; here it is always open, so a suite that
     # registers the same address repeatedly is not silently throttled.
     monkeypatch.setattr(account_auth.send_limits, "allow_send", lambda *a, **k: True)
+    # Where an emailed link points is its own test; make it deterministic rather
+    # than dependent on the machine's `.env`.
+    monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
+    monkeypatch.delenv("FORKS_BASE_DOMAIN", raising=False)
 
 
 @pytest.fixture
@@ -330,3 +334,31 @@ async def test_the_send_cap_silences_sign_in_too(repo, outbox, monkeypatch):
 
     assert result == {"sent": True}
     assert outbox.sent == []
+
+
+# ── Where an emailed link points ──────────────────────────────────────
+
+
+async def test_the_emailed_link_is_absolute_when_an_origin_is_set(repo, outbox, monkeypatch):
+    """An inbox has no page to be relative to."""
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://transversal.app")
+
+    await account_auth.register(_Request(), {"email": "dave@example.com"})
+
+    assert "https://transversal.app/api/v1/accounts/verify?t=" in outbox.sent[0]["body"]
+
+
+async def test_the_origin_falls_back_to_the_fork_base_domain(repo, outbox, monkeypatch):
+    monkeypatch.setenv("FORKS_BASE_DOMAIN", "transversal.app")
+
+    await account_auth.register(_Request(), {"email": "dave@example.com"})
+
+    assert "https://transversal.app/api/v1/accounts/verify?t=" in outbox.sent[0]["body"]
+
+
+async def test_without_an_origin_the_link_stays_relative(repo, outbox):
+    await account_auth.register(_Request(), {"email": "dave@example.com"})
+
+    body = outbox.sent[0]["body"]
+    assert "/api/v1/accounts/verify?t=" in body
+    assert "https://" not in body

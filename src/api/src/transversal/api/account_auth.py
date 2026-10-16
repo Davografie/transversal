@@ -23,6 +23,7 @@ recovery identifier to anything ([[Identity Programme]] §5.4).
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -52,6 +53,8 @@ ENTER_PATH = "/api/v1/accounts/enter"
 #: Where a sign-in link is redeemed. Shared with the CLI, which can mint one when
 #: mail is not configured.
 SIGN_IN_PATH = "/api/v1/accounts/sign-in"
+#: Where a verification link is redeemed (mailed at registration).
+VERIFY_PATH = "/api/v1/accounts/verify"
 #: Where the account flows land: the portal, not the game. On the apex those are
 #: different surfaces, and someone who just verified an address wants their
 #: campaigns, not a character sheet. (The *fork-entry* redirect stays at `/` — that
@@ -151,12 +154,28 @@ def _configured() -> bool:
 # ── Sending a link ────────────────────────────────────────────────────
 
 
+def public_base() -> str:
+    """The portal's public origin, for links that leave the app.
+
+    An emailed link has no page to be relative *to* — ``/api/v1/...`` in an inbox is
+    not a link. ``PUBLIC_BASE_URL`` names the origin explicitly (it is the portal,
+    not a campaign host); failing that, the fork base domain is the same origin's
+    apex. Neither set means dev, where a relative path is still readable from the
+    console transport's log.
+    """
+    explicit = (os.getenv("PUBLIC_BASE_URL", "") or "").strip().rstrip("/")
+    if explicit:
+        return explicit
+    base = (os.getenv("FORKS_BASE_DOMAIN", "") or "").strip().strip(".")
+    return f"https://{base}" if base else ""
+
+
 def _send_link(to: str, purpose: str, token: str) -> None:
     if purpose == PURPOSE_VERIFY:
-        path, subject = "/api/v1/accounts/verify", "Confirm your Transversal account"
+        path, subject = VERIFY_PATH, "Confirm your Transversal account"
     else:
-        path, subject = "/api/v1/accounts/sign-in", "Your Transversal sign-in link"
-    url = f"{path}?t={token}"
+        path, subject = SIGN_IN_PATH, "Your Transversal sign-in link"
+    url = f"{public_base()}{path}?t={token}"
     minutes = account_links.LINK_TTL_SECONDS // 60
     mailer.get_mailer().send(
         to,
