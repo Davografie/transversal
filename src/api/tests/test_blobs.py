@@ -74,7 +74,7 @@ def test_a_file_is_moved_into_the_store(tmp_path):
 def test_a_record_with_blobs_is_served_from_the_store():
     digest = blobs.put(b"picture", suffix="_Large", ext="webp")
 
-    url = RepositoryImages()._image_url(_image(blobs={"_Large": digest}))
+    url = RepositoryImages().image_url(_image(blobs={"_Large": digest}))
 
     assert url == blobs.url_for(digest, suffix="_Large", ext="webp")
 
@@ -84,18 +84,18 @@ def test_a_record_without_blobs_keeps_its_legacy_url():
     repo = RepositoryImages()
     img = _image()
 
-    assert repo._image_url(img) == "/media/imagen/character-1/earth/upload_1_Large.webp"
+    assert repo.image_url(img) == "/media/imagen/character-1/earth/upload_1_Large.webp"
     assert (
-        repo._image_url(img, render="cutout")
+        repo.image_url(img, render="cutout")
         == "/media/imagen/character-1/earth/upload_1_Cutout_Large.webp"
     )
-    assert repo._image_url(img, render="animated") == "/media/animated/character-1/earth/upload_1.webp"
+    assert repo.image_url(img, render="animated") == "/media/animated/character-1/earth/upload_1.webp"
 
 
 def test_a_cutout_blob_is_webp_whatever_the_still_is():
     digest = blobs.put(b"matte", suffix="_Cutout_Large", ext="webp")
 
-    url = RepositoryImages()._image_url(
+    url = RepositoryImages().image_url(
         _image(extension="png", blobs={"_Cutout_Large": digest}), render="cutout"
     )
 
@@ -105,7 +105,7 @@ def test_a_cutout_blob_is_webp_whatever_the_still_is():
 def test_a_loop_uses_its_own_container():
     digest = blobs.put(b"loop", ext="webm")
 
-    url = RepositoryImages()._image_url(
+    url = RepositoryImages().image_url(
         _image(extension="webp", animated_extension="webm", blobs={"": digest}),
         render="animated",
     )

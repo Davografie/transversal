@@ -259,7 +259,7 @@ class RepositoryImages:
                     "[media] could not release blob %s for image %s", digest, img.id
                 )
 
-    def _image_url(self, img: MediaImage, render: str = "static", tier: str = "Large") -> str:
+    def image_url(self, img: MediaImage, render: str = "static", tier: str = "Large") -> str:
         """Public media URL for one render of a picture — the one place its shape lives.
 
         ``render`` is ``static`` (a tier of the image itself), ``cutout`` (a tier of
@@ -345,7 +345,7 @@ class RepositoryImages:
         if img is None:
             return None
         render, tier = render_for(role, img.renders)
-        return self._image_url(img, render, tier)
+        return self.image_url(img, render, tier)
 
     def resolve_role_image(
         self, owner_id: str, role: str, variant_id: str | None = None

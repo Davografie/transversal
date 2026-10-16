@@ -351,17 +351,21 @@ def test_upload_registers_an_image_for_a_trait_owner():
         assert img.roles == ["background", "sheet", "navdot"]
         assert img.universe == "three_realms"
         # It answers for every role surface, and for a traitsetting tier that has
-        # no image of its own.
+        # no image of its own. The URL is content-addressed now, so the check is that
+        # each surface resolves *into the store* — this is the owner's only picture, so
+        # anything it resolves is necessarily this one (B88).
         for role in ("sheet", "background", "navdot"):
-            assert image_id in repo.resolve_role_image(TRAIT, role)
-        assert image_id in repo.resolve_role_image(TRAIT, "sheet", SETTING)
+            assert repo.resolve_role_image(TRAIT, role).startswith("/media/blobs/")
+        assert repo.resolve_role_image(TRAIT, "sheet", SETTING).startswith("/media/blobs/")
 
         # The GM trait editor reads the picture back over this same list — the
-        # endpoint an entity gallery uses, now keyed by any owner id, with the
-        # URL built from owner_id rather than the legacy entity_id.
+        # endpoint an entity gallery uses, now keyed by any owner id. The URL is
+        # content-addressed (B88), so it no longer names the owner at all: it names
+        # the bytes, which is what lets two owners share one file.
         listing = client.get(f"/api/v1/imagen/{TRAIT}").json()
         row = next(i for i in listing["images"] if i["id"] == image_id)
-        assert row["path_large"] == f"/media/imagen/{TRAIT}/three_realms/upload_{image_id}_Large.webp"
+        assert row["path_large"].startswith("/media/blobs/")
+        assert row["path_large"].endswith("_Large.webp")
         assert row["variant_id"] is None and row["projection_id"] is None
     finally:
         if repo.get_image(image_id) is not None:

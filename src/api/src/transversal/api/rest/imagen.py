@@ -575,11 +575,11 @@ async def list_images(entity_id: str, universe: str | None = None):
 
     def _file_size(img: MediaImage) -> int:
         try:
-            if "animated" in img.renders:
-                ext = img.animated_extension or img.extension
-                path = f"/app/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{ext}"
-            else:
-                path = f"/app/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}"
+            # Size comes off the file the URL names, whatever storage wrote it — the
+            # blob store, or the legacy tree (B88). Deriving it from the URL keeps one
+            # source of truth for where a picture is.
+            render = "animated" if "animated" in img.renders else "static"
+            path = "/app/media" + repo.image_url(img, render=render)[len("/media"):]
             return os.path.getsize(path)
         except OSError:
             return 0
@@ -608,9 +608,12 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "credits": [c.model_dump() for c in img.credits],
                 "license": img.license,
                 "credit_text": img.credit_text,
-                "path_large": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Large.{img.extension}",
-                "path_xlarge": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_XLarge.{img.extension}",
-                "path_cutout": f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Cutout_Large.webp",
+                # Every media URL comes from the repository, which is the one place
+                # that knows a picture's shape — content-addressed when the record
+                # carries blobs, legacy otherwise (B88).
+                "path_large": repo.image_url(img),
+                "path_xlarge": repo.image_url(img, tier="XLarge"),
+                "path_cutout": repo.image_url(img, render="cutout"),
                 # What an "Upscale" button needs to know: is there anything left
                 # to gain, and has this one already been through the pass?
                 "can_upscale": bool(
@@ -622,9 +625,7 @@ async def list_images(entity_id: str, universe: str | None = None):
                     f"{img.filename}_PreUpscale.{img.extension}"
                 ),
                 "path_animated": (
-                    f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}."
-                    f"{img.animated_extension or img.extension}"
-                    if "animated" in img.renders else ""
+                    repo.image_url(img, render="animated") if "animated" in img.renders else ""
                 ),
             }
             for img in images
