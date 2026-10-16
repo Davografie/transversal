@@ -14,6 +14,12 @@ export function useCharacterFinder({
   fetchPlayerEntities,
   fetchLocationNames,
   onChoose = () => {},
+  /**
+   * What to do with a character that was just created. Falls back to `onChoose`,
+   * and is separate so the caller can decide *when* to switch: the app holds the
+   * activation back while a rule has something to show the player first ([[B303]]).
+   */
+  onCreated,
 }) {
   // Find character
   const charSearch = ref('')
@@ -131,7 +137,13 @@ export function useCharacterFinder({
         // and a rule that fired *for* that character had nowhere to land. Switching
         // puts you in it, which is what makes the reveal mean anything, and it is
         // the same path the character chips already take.
-        onChoose({ id: eid, name: json.data?.createEntity?.name || '', type: 'CHARACTER' })
+        //
+        // Through `onCreated` rather than straight to the switch, so the app can
+        // hold it back while a rule's reveal is on screen: activating first swept
+        // the player to the play surface and the life path flashed for one frame.
+        const created = { id: eid, name: json.data?.createEntity?.name || '', type: 'CHARACTER' }
+        if (onCreated) onCreated(created)
+        else onChoose(created)
       } else {
         createCharError.value = 'Failed to create character'
       }

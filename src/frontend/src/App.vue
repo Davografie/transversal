@@ -70,7 +70,7 @@
         :life-path-id="overlayLifePathIntro.lifePathId"
         :name="entName(overlayLifePathIntro.characterId)"
         :universe="overlayLifePathUniverse"
-        @dismiss="dismissLifePathIntro(overlayLifePathIntro.characterId)"
+        @dismiss="onLifePathDismiss(overlayLifePathIntro.characterId)"
       />
 
       <!-- Mode + Characters (hidden during switch, and while a shown life path
@@ -921,7 +921,39 @@ const {
 } = useCharacterFinder({
   playerId, playerEntities, fetchPlayerEntities, fetchLocationNames,
   onChoose: (e) => beginCharacterSwitch(e),
+  onCreated: (e) => activateCreatedCharacter(e),
 })
+
+/**
+ * Put a newly created character on screen — **after** anything a rule has to show
+ * first ([[B303]]).
+ *
+ * The author, watching it happen: the life path appeared for **one frame**, then
+ * "Preparing <character>", then the play area. The switch was racing the reveal.
+ * So when a rule has shown this character something, the activation is **held**
+ * until that is dismissed, and the reveal is what the player sees. With nothing to
+ * show, it switches at once, as before.
+ */
+const pendingCreatedActivation = ref(null)
+
+function activateCreatedCharacter(created) {
+  if (!created?.id) return
+  if (lifePathIntroFor(created.id)) {
+    pendingCreatedActivation.value = created.id
+    return
+  }
+  beginCharacterSwitch(created)
+}
+
+/** Dismiss a shown life path, and take up a held activation if that was the gate. */
+function onLifePathDismiss(characterId) {
+  dismissLifePathIntro(characterId)
+  const held = pendingCreatedActivation.value
+  if (held && held === characterId) {
+    pendingCreatedActivation.value = ''
+    beginCharacterSwitch({ id: held, name: entName(held) })
+  }
+}
 
 // Life paths a rule has shown to a player ([[B303]]) — `client/life_path`. The
 // pending set is keyed by character and persisted, so an onboarding moment

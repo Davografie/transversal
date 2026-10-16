@@ -258,7 +258,7 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
   yes('the overlay renders the block only when there is an intro for it',
     /<LifePathBlock\s+v-if="overlayLifePathIntro && !charSwitchLoading"/.test(app))
   yes('…and dismissing clears it for that character',
-    /@dismiss="dismissLifePathIntro\(overlayLifePathIntro\.characterId\)"/.test(app))
+    /@dismiss="onLifePathDismiss\(overlayLifePathIntro\.characterId\)"/.test(app))
   yes('the block embeds the real wizard, entity-addressed and narrowed to the path',
     /<LifePathWizard[\s\S]{0,300}?embedded[\s\S]{0,200}?:entity-id="characterId"[\s\S]{0,200}?:initial-path-id="lifePathId"/.test(block))
   yes('…and the wizard\'s ✕ is the block\'s dismiss, not a dead close',
@@ -315,9 +315,20 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
   // with a rule that fired *for* the new one and nowhere to land.
   const finder = readFileSync('src/composables/useCharacterFinder.js', 'utf8')
   yes('a created character is entered, through the same switch the chips use',
-    /onChoose\(\{ id: eid, name: json\.data\?\.createEntity\?\.name \|\| '', type: 'CHARACTER' \}\)/.test(finder))
+    /if \(onCreated\) onCreated\(created\)/.test(finder)
+      && /const created = \{ id: eid, name: json\.data\?\.createEntity\?\.name \|\| '', type: 'CHARACTER' \}/.test(finder)
+      && /onCreated: \(e\) => activateCreatedCharacter\(e\)/.test(app))
   yes('…after `lastCreatedId` is set, so the intro is judged as created-here',
-    /lastCreatedId\.value = eid[\s\S]{0,900}?onChoose\(/.test(finder))
+    /lastCreatedId\.value = eid[\s\S]{0,1600}?if \(onCreated\) onCreated\(created\)/.test(finder))
+
+  // …but the activation **waits** for a reveal. Activating first swept the player
+  // to the play surface and the life path was on screen for a single frame — the
+  // author watched exactly that, and it is why the reveal "never appeared".
+  yes('a rule\'s reveal is shown before the switch, not after it',
+    /function activateCreatedCharacter\(created\) \{[\s\S]{0,260}?if \(lifePathIntroFor\(created\.id\)\) \{[\s\S]{0,140}?pendingCreatedActivation\.value = created\.id/.test(app))
+  yes('…and dismissing the reveal is what releases the held activation',
+    /function onLifePathDismiss\(characterId\) \{[\s\S]{0,420}?beginCharacterSwitch\(\{ id: held, name: entName\(held\) \}\)/.test(app)
+      && /@dismiss="onLifePathDismiss\(overlayLifePathIntro\.characterId\)"/.test(app))
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
