@@ -25,12 +25,15 @@ import sys
 
 from transversal.api.account_auth import ENTER_PATH
 from transversal.api.tenancy import base_domain
+from transversal.db.arango import use_database
 from transversal.db.registry_repository import (
     PURPOSE_ENTER_FORK,
     RegistryRepository,
     normalize_email,
 )
+from transversal.db.repository import EntityRepository
 from transversal.services import account_links
+from transversal.services.campaign_provisioning import provision_campaign
 from transversal.services.provisioner import (
     campaign_databases,
     drop_fork,
@@ -185,6 +188,29 @@ def _databases(args) -> int:
     return 0
 
 
+def _provision(args) -> int:
+    """Apply the campaign provisioning (SFX + backfills) to every campaign database.
+
+    A fork is a **verbatim clone**, so it has every rule that existed when it was
+    made — and **nothing added since**. This is how it catches up. It is idempotent,
+    so re-running it when nothing has changed is harmless, which is the point: the
+    alternative is remembering which forks predate which change.
+    """
+    registry = _registry()
+    if args.database:
+        names = list(args.database)
+    else:
+        names = campaign_databases(registry, global_database=args.global_database)
+        if args.skip_global:
+            names = names[1:]
+
+    for name in names:
+        with use_database(name):
+            provision_campaign(EntityRepository())
+        print(name)
+    return 0
+
+
 # ── Entry point ───────────────────────────────────────────────────────
 
 
@@ -234,6 +260,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     databases.add_argument("--global", dest="global_database", help="the global's name")
     databases.set_defaults(handler=_databases)
+
+    provision = sub.add_parser(
+        "provision",
+        help="apply the SFX provisioning + backfills to every campaign database",
+    )
+    provision.add_argument(
+        "--database", action="append", help="only this one (repeatable)"
+    )
+    provision.add_argument("--global", dest="global_database", help="the global's name")
+    provision.add_argument(
+        "--skip-global", action="store_true", help="leave the global database alone"
+    )
+    provision.set_defaults(handler=_provision)
 
     return parser
 

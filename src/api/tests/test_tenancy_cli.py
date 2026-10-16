@@ -12,6 +12,7 @@ import pytest
 
 from transversal.api import access_tokens
 from transversal.db import registry
+from transversal.db.arango import current_database
 from transversal.db.registry_repository import PURPOSE_ENTER_FORK, RegistryRepository
 from transversal.tenancy_cli import main
 
@@ -290,3 +291,45 @@ def test_enter_fork_refuses_an_unverified_owner(repo, capsys):
 
     assert main(["enter-fork", fork.id]) == 1
     assert "unverified" in capsys.readouterr().err
+
+
+# ── provision ─────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def provisioned(monkeypatch):
+    """Record which database each provisioning pass ran in, touching none of them."""
+    seen: list[str | None] = []
+    monkeypatch.setattr(
+        "transversal.tenancy_cli.provision_campaign",
+        lambda repo: seen.append(current_database()),
+    )
+    monkeypatch.setattr("transversal.tenancy_cli.EntityRepository", lambda: object())
+    return seen
+
+
+def test_provision_applies_to_the_global_and_every_fork(repo, provisioned, capsys):
+    owner = _verified(repo)
+    repo.create_fork("One", "tv2_fork_one", owner.id, slug="one")
+
+    assert main(["provision"]) == 0
+
+    assert provisioned == ["transversal", "tv2_fork_one"]
+    assert capsys.readouterr().out.split() == ["transversal", "tv2_fork_one"]
+
+
+def test_provision_can_skip_the_global(repo, provisioned):
+    owner = _verified(repo)
+    repo.create_fork("One", "tv2_fork_one", owner.id, slug="one")
+
+    assert main(["provision", "--skip-global"]) == 0
+
+    assert provisioned == ["tv2_fork_one"]
+
+
+def test_provision_can_name_a_single_database(repo, provisioned):
+    _verified(repo)
+
+    assert main(["provision", "--database", "tv2_fork_one"]) == 0
+
+    assert provisioned == ["tv2_fork_one"]

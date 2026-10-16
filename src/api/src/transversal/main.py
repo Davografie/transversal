@@ -38,6 +38,7 @@ from transversal.api.account_auth import router as account_auth_router
 from transversal.api.forks import router as forks_router
 from transversal.db.arango import current_database
 from transversal.db.repository import EntityRepository
+from transversal.services.campaign_provisioning import provision_campaign
 from transversal.services.effects_engine import EffectsEngine
 from transversal.services.entity_manager import EntityManager
 from transversal.services.razmerit import RazmeritService
@@ -238,63 +239,14 @@ async def _startup():
     All data is migrated, not seeded — see ``migrate_*.py``.
     """
     from transversal.services.effects_applier import _register_core_handlers
-    from transversal.services.sfx_owner import (
-        ensure_sfx_owners,
-        ensure_give_in_sfx,
-        ensure_targeting_ban_sfx,
-        ensure_contest_complication_sfx,
-        ensure_prevent_taken_out_sfx,
-        ensure_hitch_gain_complication_sfx,
-        ensure_opportunity_sfx,
-        ensure_offer_negative_sfx,
-        ensure_starter_location_sfx,
-        ensure_support_cast_sfx,
-        ensure_teleport_to_main_sfx,
-        ensure_base_move_sfxs,
-        ensure_gmc_base_difficulty,
-        remove_legacy_contest_complication_sfx,
-        remove_legacy_buy_hitch_sfx,
-        backfill_trait_default_sfx,
-        backfill_support_default_sfx,
-        backfill_source_kinds,
-        backfill_play_as_rating_targets,
-    )
 
     _register_core_handlers(_get_em(), _get_raz())
 
-    # Load SFXs from database into the in-memory effects engine
-    repo = _get_repo()
-    repo = _get_repo()
-    ensure_sfx_owners(repo)
-    ensure_give_in_sfx(repo)
-    ensure_targeting_ban_sfx(repo)
-    ensure_contest_complication_sfx(repo)
-    ensure_prevent_taken_out_sfx(repo)
-    ensure_hitch_gain_complication_sfx(repo)
-    ensure_opportunity_sfx(repo)
-    ensure_offer_negative_sfx(repo)
-    ensure_starter_location_sfx(repo)
-    ensure_support_cast_sfx(repo)
-    ensure_teleport_to_main_sfx(repo)
-    ensure_base_move_sfxs(repo)
-    ensure_gmc_base_difficulty(repo)
-    remove_legacy_contest_complication_sfx(repo)
-    remove_legacy_buy_hitch_sfx(repo)
-    backfill_trait_default_sfx(repo)
-    # The support character's way home ([[B61]]). Wired on the author's call
-    # (2026-09-24): the live 7 support characters are player-owned, so provisioning
-    # them was a decision rather than a migration — with it made, a rule exists on
-    # every SC whether it was created through the flow or before the rule did.
-    backfill_support_default_sfx(repo)
-    backfill_source_kinds(repo)
-    backfill_play_as_rating_targets(repo)
-    # Roll-table tie anchors move off the legacy context pair onto the owner path
-    # ([[B164]]). Idempotent; the one `{term_faction}` rule in the shared tables is
-    # skipped and logged, since a runtime token is not a literal filter.
-    from transversal.services.roll_table import backfill_rolltable_anchor_paths
-
-    backfill_rolltable_anchor_paths(repo)
-    repo.collapse_legacy_personal_relationship_types()
+    # Everything a campaign database needs beyond its schema. Callable on purpose:
+    # a fork is a verbatim clone, so it never receives a rule added after it was
+    # made — the operator re-runs this for forks (see
+    # `services.campaign_provisioning` and `tenancy_cli provision`).
+    provision_campaign(_get_repo())
 
     # Warm the default database's SFX registry — *after* the provisioning above,
     # because `_get_engine` loads it from the database on first use and caches it per
