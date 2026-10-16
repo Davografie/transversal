@@ -246,7 +246,10 @@ def test_show_life_path_declares_the_path_as_a_target_role_ref():
 
     meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "show_life_path")
     roles = {r.name: r.role for r in meta.refs}
-    assert roles == {"recipient": "entity", "life_path": "target"}
-    assert meta.fields[0].hidden_when_ref == "recipient"
-    assert meta.fields[1].hidden_when_ref == "life_path"
+    # **Only** the path: the recipient is the effect's subject, and declaring a
+    # `recipient` ref made the editor inject a `select self` whose card clause read
+    # "show the Life on Earth on you life path".
+    assert roles == {"life_path": "target"}
+    assert [f.name for f in meta.fields] == ["target"]
+    assert meta.fields[0].hidden_when_ref == "life_path"
     assert meta.target_kind == "life_path"

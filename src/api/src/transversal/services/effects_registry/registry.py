@@ -106,7 +106,12 @@ _DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool
     "set_trait_statement": [("trait", "Trait", ('trait',), 'target', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
     "set_traitset_limit": [("recipient", "Entity", ('entity',), 'entity', False), ("traitset", "Trait Set", ('traitset',), 'target', False)],
     "show_toast": [("recipient", "On Whose Screen", ('entity',), 'entity', False), ("tap_target", "Tap Target", ('entity',), 'target', False)],
-    "show_life_path": [("recipient", "On Whose Screen", ('entity',), 'entity', False), ("life_path", "Life Path", ('life_path',), 'target', False)],
+    # No `recipient` ref: the subject *is* the screen here (the character the rule
+    # fired for), so declaring one made the editor inject a `select self` and the
+    # card read "show the Life on Earth on you life path". An author who really
+    # means somebody else's screen uses the `entity` field, which stays as the
+    # positional form.
+    "show_life_path": [("life_path", "Life Path", ('life_path',), 'target', False)],
     "spend_razmerit": [("recipient", "Entity", ('entity',), 'entity', False)],
     "split_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
     "start_contest": [("opponent", "Opponent", ('entity',), 'target', False)],

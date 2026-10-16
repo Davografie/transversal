@@ -81,13 +81,18 @@ ACTIONS: list[EffectActionMeta] = [
         effect_type="client",
         effect_action="life_path",
         valid_timings=["IMMEDIATE"],
+        # **No "On Whose Screen" field, and no `recipient` ref.** The screen is the
+        # effect's subject — the character the rule fired for — so an override
+        # would only add a second way to say the same thing, and declaring the ref
+        # made the editor inject a `select self` whose card clause read "show the
+        # Life on Earth on you life path". The invariant tests agree: a
+        # recipient-style field *must* have its declared ref, so the honest answer
+        # is to want neither.
         fields=[
-            EffectFieldDef(name="entity", label="On Whose Screen", field_type="entity",
-                          required=False, hidden_when_ref="recipient"),
-            # The path is an ordinary target, so it is authored as a targeting
-            # path like every other target ([[B261]]) — a literal id is the same
-            # field with the picker form. `discover_life_path` declares its own
-            # the same way; this action only *shows* what that one would grant.
+            # The path is an ordinary target, so it is authored as a targeting path
+            # like every other target ([[B261]]) — a literal id is the same field
+            # with the picker form. `discover_life_path` declares its own the same
+            # way; this action only *shows* what that one would grant.
             EffectFieldDef(name="target", label="Life Path", field_type="text",
                           required=True, hidden_when_ref="life_path"),
         ],
