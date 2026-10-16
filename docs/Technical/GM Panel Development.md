@@ -400,6 +400,34 @@ Panels receive IDs or small config (`id`, `index`, `universe`), or the specific
 object being edited when the opener already holds it. They never receive a data
 tree that a parent assembled specifically to pass down.
 
+## Auto-save is the convention — there are no Save buttons
+
+Every authoring panel persists its own edits (B211, at the human's direction:
+*"Saves should always, everywhere be automatic"*). **`GmPortalConfigPanel` was the
+last one still holding a manual Save** (2026-10-17 — the request came in through
+[[effects]]), and its save *was* the close, so there was no way to save and keep
+working. It now follows the same shape as the rest.
+
+Copy `GmRollTableEditPanel.vue`'s auto-save block when adding one; the three rules
+are written down there at length, and each is silent when broken:
+
+- **watch the whole draft**, never a list of field names. A list is a promise to
+  keep in step with the document; it falls behind, and a field that never saves
+  reads as "auto-save is broken" rather than as a missing name.
+- **loading is not an edit** (`_suppressEdits`), and a queued write is dropped on
+  load, or it fires against the state it was queued from and overwrites what was
+  just read. Seed the draft *before* registering the watcher.
+- **a pending write is flushed on close**, or closing inside the debounce window
+  drops the last edit with no trace at all. This one only exists because the button
+  is gone.
+
+Two habits that go with it: give the write the **narrowest body the endpoint
+accepts** (the portal's POST is a patch upsert — it writes `effects` only when
+present and mirrors onto the reverse edge — so the panel must not send the mode
+back; that read-modify-write is the shape that destroyed content in [[B273]]), and
+keep the **opener's copy in step on every write**, not only on the way out, or its
+summary goes stale while the GM works.
+
 ## Shared table component — what the GM surfaces need
 
 > [!note] Handover to [[ui-ux]], 2026-09-20 — requirements, not conventions
