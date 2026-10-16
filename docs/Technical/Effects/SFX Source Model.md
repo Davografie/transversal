@@ -56,6 +56,7 @@ They stay separate. `manual` is **not** split into four triggers — the only th
 | `traitset_setting` | `{traitset_setting}` | a `TraitSetSetting` (instance) | `entity_id`, `traitset_id`, `limit` |
 | `entity` | `{entity}` | an `Entity` | `razmerit`, `type`, `current_location`, `current_universe` |
 | `location` | `{location}` | the **place** that owns the rule (a location entity) | `occupants` (a path may walk straight to them), `name`, `universe` |
+| `faction` | `{faction}` | the **organisation** that owns the rule (a faction entity) | element `entity` (paths walk entity edges), `name`, members |
 | `projection` | `{projection}` | a `Projection` | `entity_id`, `current_location`, `type` |
 | `table` | *(none)* | the `table` owner bucket (everyone) | — |
 | `gm` | *(none)* | the `gm` owner bucket (GM contexts) | — |
@@ -98,6 +99,12 @@ Because `source_kind` is singular and enforced, one SFX can't be both a trait-SF
 > owner surface, so `add_sfx_to_owner` refuses to attach a location-sourced rule
 > to a character instead of letting it quietly resolve to them later. See
 > [[Place-Owned Rules]].
+>
+> `faction` is its own kind for the same reason: the rule is attached to the
+> organisation and applies to its members, so the source is the faction — not the
+> member it reaches. Its element is `entity` (a faction **is** an entity, so paths
+> from it walk entity edges); the `{faction}` variable is what makes the token mean
+> the organisation rather than the character.
 
 ## Scope asymmetry
 
