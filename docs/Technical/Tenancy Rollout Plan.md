@@ -18,9 +18,27 @@ status: draft
 
 # Tenancy Rollout Plan
 
-The buildable path from where the code is today to **accounts → sandboxes/campaigns → a switcher**,
-which is what the owner asked for: *"a UI/UX for creating/managing sandboxes, where I can switch
-between campaigns and sandboxes connected to my account … and a way to spin up TV instances."*
+> [!warning] REVISED 2026-10-15 — the phases below assume the package model; the current path is simpler
+> The owner replaced the package/sandbox design with **[[Global Multiverse and Forks]]**: one shared
+> global multiverse, accounts, and a **verbatim fork** per campaign. That model needs **no** `packages`
+> field, closure, reference map or acquisition — so:
+> - **Phase 1 stands** (the registry database and accounts), **minus the catalog**; it is now the small
+>   routing/permissions table (account → fork → rights on the global).
+> - **Phase 2 is reshaped:** provisioning becomes **"clone the canonical database"** instead of
+>   "create empty + seed + acquire packages". Its plumbing half — per-request database resolution and
+>   the `_db_cache` LRU — is **unchanged and still required**.
+> - **Phase 3 stands**, reshaped: the switcher lists your **forks** rather than packages/sandboxes.
+> - **Phase 4 largely disappears.** [[B251]] (packages) moves to the **future option** column with
+>   [[Content Packages]] and [[Content Registry]].
+> - **Phase 5 is unchanged** (enforcement and exposure), and still parked with the platform.
+>
+> The rest of this document is kept as the **more capable future model**, and its phase structure is
+> still the right shape if the sharing work ever returns. Read [[Global Multiverse and Forks]] §7
+> before building any of it.
+
+The buildable path from where the code is today to **accounts → forks → a switcher**, which is what
+the owner asked for: *"a UI/UX for creating/managing sandboxes, where I can switch between campaigns
+and sandboxes connected to my account … and a way to spin up TV instances."*
 
 Design lives elsewhere — [[Identity Programme]] (tenancy, identity, recovery), [[Content Registry]]
 (the catalog, sandbox, GPU boundary), [[Content Packages]] (the package mechanism). **This document is

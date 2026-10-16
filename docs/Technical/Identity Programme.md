@@ -23,6 +23,23 @@ The design for **SEC-3 / SEC-6 / SEC-8**, the tenant boundary, and the invitatio
 programme behind [[B88]] and the precondition for going online. Security-owned documentation.
 The sibling design for the shared content surface is [[Content Registry]].
 
+> [!note] Updated 2026-10-15 — what is current, and what moved to the future
+> The multi-tenancy direction is now the simpler **[[Global Multiverse and Forks]]**: one shared
+> global multiverse, accounts, and a **verbatim fork** per campaign. Under that model:
+> - **Current and unaffected:** the **tenant is a campaign**, accounts for owners/creators, and the
+>   whole **admission and player** model of §3–§4 — a fork is a campaign, so this applies *inside* one
+>   essentially as written. SEC-3 is landed and live (§ below).
+> - **Moved to the future column:** §2's *database per campaign plus a shared registry* as the
+>   mechanism for **sharing** content, the package/tenancy registry as a **catalog**, and §5's
+>   marketplace/GPU-entitlement consequences. A fork needs per-request database resolution and the
+>   `_db_cache` bound (still current) but **not** the catalog.
+> - **Still true and worth keeping:** §5.9's finding that campaign-scoped admission means
+>   **player-level privacy is gone by construction** — a fork does not change that, and [[B43]]
+>   remains the open question it was.
+>
+> The design below is **retained, not discarded**; [[Global Multiverse and Forks]] §7 says what would
+> bring the sharing model back.
+
 > [!success] SEC-3 is landed and live
 > The first slice (SEC-3 alone, against the current single database, no campaigns) is merged to
 > `release-build` and running. Backend: **2333 tests pass**, including a flow test that drives the

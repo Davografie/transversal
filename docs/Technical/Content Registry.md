@@ -26,6 +26,15 @@ Sibling design: [[Identity Programme]] (tenancy, identity, invites, recovery). S
 documentation of the trust boundaries; the browsing UX, curation and pricing are **not** mine —
 this doc marks where my scope ends.
 
+> [!warning] RETAINED AS FUTURE WORK — this is not the current direction
+> As of **2026-10-15** the multi-tenancy direction is the simpler **[[Global Multiverse and Forks]]**
+> model: one shared global multiverse, accounts, and a **verbatim fork** per campaign. Under that
+> model **only one part of this document survives as current** — the small routing/permissions table
+> (account → fork → edit rights on the global), which is §2's "tenancy registry" idea. The **catalog**
+> — browsing, curation, publishing, versions, and the **GPU entitlement** boundary in §5 — belongs to
+> the future column with [[Content Packages]] and the parked marketplace ([[B114]]).
+> See [[Global Multiverse and Forks]] §4 and §7.
+
 > [!warning] Design under review — nothing is implemented
 > Written 2026-09-26 from the owner's direction. No code changed.
 

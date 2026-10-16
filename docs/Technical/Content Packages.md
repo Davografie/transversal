@@ -27,6 +27,18 @@ Sibling designs: [[Content Registry]] (the cross-campaign catalog, sandbox and G
 [[Identity Programme]] (tenancy, identity, invites, recovery). This doc refines Content Registry §4,
 which described publication in the abstract ("build → share → load"); here is the concrete unit.
 
+> [!warning] RETAINED AS FUTURE WORK — this is not the current direction
+> As of **2026-10-15** the multi-tenancy direction is the simpler **[[Global Multiverse and Forks]]**
+> model: one shared global multiverse, accounts, and a **verbatim fork** per campaign. That model
+> needs none of the machinery here — its §2 shows why (all 20,443 `_key`s are strings, so a fork
+> copies without remapping *any* handle).
+>
+> This document is **kept deliberately**, at the owner's explicit instruction, because packages buy
+> things a fork cannot: sharing content instead of duplicating it, receiving updates after acquiring,
+> partial acquisition, versions and a curated catalog. [[Global Multiverse and Forks]] §7 records the
+> concrete triggers that would bring it back. **Do not build from this document without checking
+> that trigger first.**
+
 > [!warning] Design under review — nothing is implemented
 > Written 2026-09-29 from the owner's direction, refined through review with the [[Overseer]].
 > No code and no data has changed. Every measurement in §9 was taken read-only against the live
