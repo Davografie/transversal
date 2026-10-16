@@ -218,7 +218,7 @@ mutation($input: UpdateEntityInput!) {
     id name razmerit currentUniverse currentLocation hidden unpublished ownedBy
     supportEligible knownTo starterLocation navPositions
     backgroundImage overlay loraConfig promptSteering promptIncludeAncestors
-    palette
+    palette namingTheme
   }
 }
 """
@@ -242,7 +242,7 @@ _QUERY_ENTITY = """
 query($id: ID!) {
   entity(id: $id) {
     id type name razmerit currentUniverse currentLocation hidden ownedBy
-    palette promptSteering promptIncludeAncestors
+    palette promptSteering promptIncludeAncestors namingTheme
   }
 }
 """
@@ -252,7 +252,7 @@ _TS_READ_FIELDS = (
     "id traitId name statement notes dice ratingType polarity capacity "
     "traitsetId traitsetName traitsetTab traitsetOrder parentTraitsettingId "
     "fromType projectionId relationshipType relationshipContactId relationshipContactName "
-    "enabled order sfxIds"
+    "enabled order sfxIds pickedImageId"
 )
 
 #: Everything needed to *grasp* an entity in one call — see ``character_build``.
@@ -437,7 +437,8 @@ mutation(
 # `capacity` both stayed hidden.
 _TS_WRITE_FIELDS = (
     "id entityId traitId traitsetId dice ratingType capacity polarity statement "
-    "notes order tags fromType projectionId parentTraitsettingId sfxIds knownTo enabled"
+    "notes order tags fromType projectionId parentTraitsettingId sfxIds knownTo enabled "
+    "pickedImageId"
 )
 
 # The general form of `addRelationshipTrait` (the one `set_rank_role` uses is pinned to
@@ -597,6 +598,14 @@ mutation($input: SfxUpdateInput!) {
   }
 }
 """ % _SFX_WRITE_FIELDS
+
+_MUT_DUPLICATE_SFX = """
+mutation($id: ID!, $name: String!) {
+  duplicateSfx(id: $id, name: $name) {
+    id name
+  }
+}
+"""
 
 _MUT_DELETE_SFX = """
 mutation($id: ID!) {
@@ -1157,6 +1166,9 @@ def update_trait_setting(args: dict) -> dict:
     new definition. The rules (a container may only become another container, and a
     definition the owner already holds is not a legal destination) are enforced by
     the same function the ``change_trait`` effect uses.
+
+    ``picked_image_id`` points this instance at one of its registry trait's own
+    pictures, or ``""`` to stop using one; omit it to leave the current pick alone.
     """
     if args.get("from_type") is None and (
         args.get("parent_traitsetting_id") is not None or args.get("projection_id") is not None
@@ -1173,7 +1185,7 @@ def update_trait_setting(args: dict) -> dict:
         ("enabled", "enabled"), ("known_to", "knownTo"), ("sfx_ids", "sfxIds"),
         ("from_type", "fromType"), ("projection_id", "projectionId"),
         ("parent_traitsetting_id", "parentTraitsettingId"),
-        ("trait_id", "traitId"),
+        ("trait_id", "traitId"), ("picked_image_id", "pickedImageId"),
     ):
         if args.get(key) is not None:
             value = args[key]
@@ -1392,6 +1404,35 @@ def delete_sfx(args: dict) -> dict:
         return result
     ids = {r.get("id") for r in (_graphql(_QUERY_SFX_IDS).get("sfxs") or [])}
     return _read_back(result, args["sfx_id"] not in ids, "sfxs")
+
+
+def duplicate_sfx(args: dict) -> dict:
+    """Copy an SFX under a new name, and return the copy.
+
+    The point is to author a family of rules from one working example, rather than
+    re-entering every condition and effect. The copy carries the source's
+    conditions, effects and other content; ``name`` must be a name it does not
+    already have.
+
+    **A copy starts unattached.** ``duplicateSfx`` does not carry the source's
+    owner surfaces, so the new rule is on nobody until ``add_owner_sfx`` puts it
+    there — the same state a freshly created SFX is in, and the reason this tool
+    confirms by finding the copy rather than by reading a surface back.
+    """
+    result = _call_mutation("duplicateSfx",
+                            _MUT_DUPLICATE_SFX,
+                            {"id": args["sfx_id"], "name": args["name"]},
+                            args.get("dry_run", True), "duplicateSfx")
+    if args.get("dry_run", True):
+        return result
+    # `_call_mutation` unwraps the result key, so the copy's SfxRef *is* the result.
+    new_id = (result or {}).get("id") if isinstance(result, dict) else ""
+    if not new_id:
+        return _read_back(result, False, "sfxs",
+                          note="the mutation returned no id, so there was nothing to read back")
+    ids = {r.get("id") for r in (_graphql(_QUERY_SFX_IDS).get("sfxs") or [])}
+    return _read_back(result, new_id in ids, "sfxs",
+                      note="" if new_id in ids else "the copy was not returned by the read")
 
 
 def remove_owner_sfx(args: dict) -> dict:
@@ -2306,6 +2347,7 @@ def update_entity(args: dict) -> dict:
         ("prompt_steering", "promptSteering"),
         ("prompt_include_ancestors", "promptIncludeAncestors"),
         ("palette", "palette"),
+        ("naming_theme", "namingTheme"),
     ):
         if args.get(key) is not None:
             inp[gql_key] = args[key]
@@ -2957,6 +2999,7 @@ TOOLS = {
     "add_owner_sfx": add_owner_sfx,
     "update_sfx": update_sfx,
     "delete_sfx": delete_sfx,
+    "duplicate_sfx": duplicate_sfx,
     "remove_owner_sfx": remove_owner_sfx,
     "add_journal_entry": add_journal_entry,
     "send_message": send_message,
@@ -3864,6 +3907,19 @@ TOOL_SCHEMAS = {
                 "dry_run": _dry_run_property(),
             },
             "required": ["sfx_id"],
+        },
+    },
+    "duplicate_sfx": {
+        "name": "duplicate_sfx",
+        "description": "Copy an SFX under a new name, returning the copy. Use it to author a family of rules from one working example instead of re-entering every condition and effect. name must be one the copy does not already have. The copy starts UNATTACHED — duplicateSfx does not carry the source's owner surfaces, so call add_owner_sfx to put it on a surface.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sfx_id": {"type": "string", "description": "the SFX to copy"},
+                "name": {"type": "string", "description": "the new SFX's name"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["sfx_id", "name"],
         },
     },
     "remove_owner_sfx": {
