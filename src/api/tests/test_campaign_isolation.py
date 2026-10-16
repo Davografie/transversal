@@ -26,17 +26,43 @@ B = "tv2-probe-b"
 
 
 @pytest.fixture
-def mgr():
-    """The real manager (Redis-backed when the test container has Redis)."""
-    manager = SessionManager()
-    yield manager
-    if manager._redis is not None:
-        for campaign in (A, B, "tv2-probe-legacy"):
-            ids = manager._redis.smembers(manager._active_key(campaign)) or set()
-            for sid in ids:
-                manager._redis.delete(manager._key(campaign, sid))
-            manager._redis.delete(manager._active_key(campaign))
-        manager._redis.delete(manager._LEGACY_ACTIVE)
+def mgr(monkeypatch):
+    """The real manager, pointed at a **scratch Redis database**.
+
+    The suite shares the dev Redis with the running app, and an earlier version of this
+    fixture deleted the live ``sessions:active`` set on teardown — 463 real session
+    records lost their index (rebuilt from the records themselves). Index 1 is used by
+    nothing, so these tests can be ruthless there while the live instance stays
+    untouched: the teardown is a ``flushdb`` of the scratch database.
+    """
+    import os
+
+    import redis as redis_sync
+
+    url = os.environ.get("REDIS_URL", "")
+    scratch = None
+    if url:
+        try:
+            scratch = redis_sync.Redis.from_url(f"{url}/1", decode_responses=True)
+            scratch.ping()
+            scratch.flushdb()
+        except Exception:
+            scratch = None
+    if scratch is not None:
+        monkeypatch.setattr(sm_mod, "get_redis_client", lambda: scratch)
+
+    yield SessionManager()
+
+    if scratch is not None:
+        scratch.flushdb()
+        scratch.close()
+
+
+@pytest.fixture(autouse=True)
+def _never_publish_to_the_live_broker(monkeypatch):
+    """The bus would publish to the app's Redis. Local delivery is what is asserted,
+    and a probe campaign has no business on the live broker at all."""
+    monkeypatch.setattr(event_bus, "_redis", None)
 
 
 def _drain(sub) -> list[StreamEvent]:
@@ -169,8 +195,3 @@ def test_the_legacy_namespace_is_readable_only_by_the_default_campaign(mgr, monk
         mgr._put(session)
     assert [s.id for s in mgr.list_active(A)] == [legacy]
     assert [s.name for s in mgr.list_active(A)] == ["Migrated"]
-
-    mgr._redis.delete(f"session:{legacy}")
-    mgr._redis.srem(mgr._LEGACY_ACTIVE, legacy)
-    mgr._redis.delete(mgr._key(A, legacy))
-    mgr._redis.srem(mgr._active_key(A), legacy)
