@@ -28,13 +28,14 @@ The Transversal backend uses **ArangoDB 3.12** — a graph + document database. 
 | Collection | Type | Purpose | Edge `_from` → `_to` |
 |-----------|------|---------|----------------------|
 | `entities` | Document | Core entity metadata | — |
-| `entity_images` | Document | Entity/projection images (background, sheet, navdot) | — |
 | `historical_records` | Document | Blue Book — change log and history | — |
+| `images` | Document | Image metadata, owned by an entity, a projection **or a trait** ([[B200]]) | — |
+| `join_tokens` | Document | Campaign admission token *liveness* (SEC-3) — id, minted/expires/closed. The token itself is signed and self-describing; this exists so a window can be closed early | — |
 | `life_paths` | Document | Life-path catalog (sect, guild, career terms) | — |
 | `messages` | Document | In-fiction messages / log entries | — |
 | `players` | Document | Player identity for session persistence | — |
 | `projections` | Document | Per-universe body — name, image, location, morph traits | — |
-| `relationships` | **Edge** | Entity → Entity connections (also anchors relation traits) | `entities/{from}` → `entities/{to}` |
+| `relationships` | **Edge** | Connections between entities, **bodies and players** (also anchors relation traits) | `entities` / `projections` / `players` → `entities` / `projections` |
 | `roll_tables` | Document | Reusable roll tables; entries execute effects | — |
 | `sfxs` | Document | SFX registry — trigger, conditions, effects, duration | — |
 | `sfx_owners` | Document | Named SFX-owner buckets (`table`, `gm`) | — |
@@ -45,6 +46,15 @@ The Transversal backend uses **ArangoDB 3.12** — a graph + document database. 
 | `plan_entities` | Document | GM draft staging — entities not yet published | — |
 | `plan_relationships` | **Edge** | GM draft staging — relationships in a plan | `plan_entities/{from}` → `plan_entities/{to}` |
 | `scheduled_events` | Document | Persisted timed reverts fired when their timers expire | — |
+
+> [!warning] `entity_images` is dead — `images` is the live collection
+> `migrate_images_owner.py` **copied** `entity_images` to `images` (Arango has no
+> rename) and left the old collection in place, so both exist and only one is read:
+> measured 2026-09-29, `entity_images` holds **1,134** rows that nothing reads and
+> `images` holds **1,023** that everything does (`db/arango.py` registers `images`
+> alone). This table named the dead one until 2026-09-29. A reader that enumerates
+> collections, or an export that copies documents, must use `images`.
+
 
 **Graph traversal path:** `entity →(traitsetting)→ trait → traitset →(possible_sfx_ids)→ sfx`
 
@@ -215,7 +225,12 @@ Core entity metadata. Every significant thing in Transversal is an entity. Trait
 | `active_universes` | string[] | | Faction-only: where active |
 | `suitable_life_path_ids` | string[] | | Faction-only: offered paths |
 | `discovered_life_paths` | string[] | | `_key`s of discovered paths |
-| `pending_term` | PendingTerm? | | In-progress term state (checkpoint) |
+| `pending_terms` | dict[str, PendingTerm] | | In-progress terms, keyed by `{entity_id}:{universe}` — one checkpoint per body |
+| `pending_term` | PendingTerm? | | **Legacy** singular term state; the model still reads it (a checkpoint whose key could not be resolved) and the migration moves it into `pending_terms` |
+| `destination_location` | string? | | Guided route: the objective a character has been given directions to (`next_hop` is measured from the location being viewed, not from this) |
+| `trait_positions` | dict | | Sheet layout: `{traitsetting_id: {x, y}}`. The **key is a reference** — the only place a reference is stored as a map key rather than a value |
+| `hitch_threshold` | int | | Dice-limit dial: the value a die must roll at or below to be a hitch (default `1`) |
+| `prompt_include_ancestors` | bool | | Universe-only: whether an ancestor location's prompt material is folded into a descendant's |
 | `consequence_options` | ConsequenceOption[] | | Post-roll consequence menu authored on the entity |
 
 **ID conventions:**
@@ -440,16 +455,31 @@ Declarative effect — describes *what* changes, not *how*. Shared by SFX and li
 
 ### `relationships` (edge)
 
-Entity-to-entity connections.
+Connections between the things a connection can join: **entities, bodies and players**.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `_key` | string | ✅ | Deterministic: `edge:{from}:{to}:{type}` |
-| `_from` | string | ✅ | `entities/{from_id}` |
-| `_to` | string | ✅ | `entities/{to_id}` |
+| `_key` | string | ✅ | `edge:{from}:{to}:{type}` **when minted by the canonical writer**, else an opaque id |
+| `_from` | string | ✅ | `entities/{id}`, `projections/{id}` or `players/{id}` |
+| `_to` | string | ✅ | `entities/{id}` or `projections/{id}` |
 | `type` | string | ✅ | `super`, `membership`, `agency`, `transversal`, `commands`, `support`, `relation` |
 | `description` | string | | Optional description (e.g. relationship narrative) |
 | `main` | bool | | On `agency` edges only: whether the entity is one of the player's mains (see [[Troupe Play]]) |
+| `transversal_type` | string? | | On `transversal` edges: the body policy the crossing used |
+| `effects` | Effect[] | | A crossing may carry effects (`travel`), read on arrival |
+
+> [!note] There are **two** key conventions live, and neither is enforced
+> Measured 2026-09-29 over 1,532 edges: **1,301 carry an opaque numeric key** and 231
+> carry the deterministic `edge:{from}:{to}:{type}`. Nothing in the model requires
+> either, so an edge's key is not a fact to parse — resolve an edge by its
+> `(_from, _to, type)` or read it by key, never by splitting the key.
+>
+> The endpoints are broader than "entity to entity": live today are
+> `entities → entities` (1,448), `projections → projections` (41),
+> `players → entities` (39, all `agency`) and `projections → entities` (4). A
+> `projections → projections` tie is how one body holds a posture toward another;
+> conflating the collection would have made `agency` a claim about an entity.
+
 
 ### `sfx_owners`
 
@@ -513,14 +543,19 @@ Player identity for session persistence.
 > field reads this in-memory set.
 
 
-### `entity_images`
+### `images`
 
-Metadata for a generated image stored per-entity, per-universe. Files live at `media/imagen/{entity_id}/{universe}/{image_id}_{variant}.{ext}`.
+Metadata for an image stored per-owner, per-universe. The **owner is not always an
+entity**: [[B200]] generalised it, so a trait or a trait instance can carry a picture
+too, and the row says which with `owner_kind`. Files live at
+`media/imagen/{entity_id}/{universe}/{image_id}_{variant}.{ext}`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `_key` | string | ✅ | UUID |
-| `entity_id` | string | ✅ | Owning entity |
+| `owner_kind` | string | ✅ | `entity` or `trait` ([[B200]]) |
+| `owner_id` | string | ✅ | The owning entity / trait / trait instance — **not** named `entity_id` |
+| `entity_id` | string | ✅ | Denormalized owning entity, kept so the entity-facing reads stay one clause |
 | `projection_id` | string? | | Owning body; empty = entity-level default (fallback for any body) |
 | `universe` | string | ✅ | Universe key |
 | `image_type` | ImageType | ✅ | `uploaded`, `imagen`, or `animated` |
@@ -528,8 +563,15 @@ Metadata for a generated image stored per-entity, per-universe. Files live at `m
 | `prompt` / `negative_prompt` | string | | Generation prompts |
 | `loras` | string[] | | LoRA tags |
 | `width` / `height` / `seed` / `steps` | int | | Generation parameters |
-| `filename` | string | | Base filename without variant suffix/extension |
+| `filename` | string | | Base filename without variant suffix/extension. **The bytes are a file under `media/`, not a row** — a reference to an image is a reference to a filename |
 | `extension` | string | | `png` (or `webp`, etc.) |
+| `animated_extension` | string | | Set when an animation exists alongside the still |
+| `variant_id` | string? | | Groups a cutout/variant set |
+| `renders` | string[] | | Derived renders that exist (e.g. `cutout`) |
+| `transparent` | bool | | Whether the still has an alpha channel |
+| `flags` | string[] | | e.g. `ai_generated` |
+| `credits` | object[] | | `{role, name, url}` — provenance for a sourced image |
+| `credit_text` / `license` | string | | Attribution, rendered and stored |
 | `created_at` | string | | ISO 8601 |
 
 ### `historical_records`
@@ -716,7 +758,9 @@ Selectable entry in the post-roll consequence menu.
 | `weight` | int? | weight scheme |
 | `tier` | OutcomeTier? | tier scheme |
 | `conditions` | Condition[] | Entry gates |
+| `cost_effects` | Effect[] | Effects that **pay** for the row — read before `effects`, and carrying the same reference shapes as any other effect list. On **169** live rows; documented since 2026-09-29 (an export that walked only `effects` would have dropped a row's cost) |
 | `effects` | Effect[] | Effects executed on selection |
+| `bound_variables` | BoundVariable[] | Names this row supplies to the effects above |
 
 `RollTableCheck` (legacy dice-pool check metadata): `trait_ids`, `difficulty` (DieType, default d6), `free_choice` (bool).
 
@@ -754,6 +798,10 @@ Built by the repository, not stored. Assembles entity + projections + trait sett
 
 ## Indexes
 
+**Read as live, not as declared** — measured over the running database on 2026-09-29.
+`_add_hash_index` swallows a creation failure, so the difference between these two is
+not academic (see the warning below).
+
 | Collection | Index | Type | Purpose |
 |-----------|-------|------|---------|
 | `entities` | `type` | hash | Filter by entity type |
@@ -762,16 +810,34 @@ Built by the repository, not stored. Assembles entity + projections + trait sett
 | `entities` | `known_to[*]` | persistent | Array membership queries |
 | `projections` | `entity_id` | hash | Find projections for entity |
 | `projections` | `universe` | hash | Filter by universe |
-| `traits` | `[name, universe]` | hash (unique) | Lookup trait by name in universe |
 | `traits` | `traitset_id` | hash | Find traits in a set |
 | `traits` | `universe` | hash | Filter by universe |
 | `traitsets` | `[name, universe]` | hash (unique) | Lookup traitset by name in universe |
 | `traitsets` | `universe` | hash | Filter by universe |
 | `traitsettings` | `entity_id` | hash | Find all trait settings for entity |
 | `traitsettings` | `trait_id` | hash | Find entities with a given trait |
-| `traitsettings` | `traitset_id` | hash | Find settings in a traitset |
+| `traitsettings` | `traitset_id` | hash | Legacy: the stored copy [[B209]] removed. Kept because 10,752 documents still carry the key |
+| `traitsetsettings` | `entity_id` | hash | Find an entity's set-level overrides |
+| `traitsetsettings` | `traitset_id` | hash | Find who has overridden a set |
+| `images` | `owner_id` | hash | Find an owner's images (entity, trait or instance) |
+| `images` | `[owner_id, universe]` | hash | The same, scoped to a world |
+| `life_paths` | `universe` | hash | Filter by universe |
+| `roll_tables` | `life_path` | hash | Find a life path's tables |
+| `roll_tables` | `universe` | hash | Filter by universe |
+| `plan_entities` | `plan_id` | hash | List a plan's drafts |
 | `sfxs` | `name` | hash (unique) | Lookup SFX by name |
 | `relationships` | `type` | hash | Filter edges by relationship type |
+
+> [!warning] `traits (name, universe)` unique has **never existed**
+> `db/arango.py` declares it; the live collection does not have it — verified
+> 2026-09-29, and flagged by [[B88]] the same way. **57 duplicate groups / 64
+> documents** share a name within one universe (e.g. `ablative armor`, `age`,
+> `analyse`, all with `universe: null`), which is why the creation failed and why
+> the failure was invisible: `_add_hash_index` catches and logs. Two live traits
+> called `role` is the consequence, and it is not cosmetic — a lookup by name
+> silently picks one, which is how the faction roster read returned `members: 0`
+> for every faction ([[B88]], and the `8880e6cf` fix that matched by name anyway).
+
 
 ---
 
@@ -789,7 +855,7 @@ Built by the repository, not stored. Assembles entity + projections + trait sett
 | Trait | `trait-{slug}-{hash4}` | `trait-hacking-7f2a` |
 | TraitSetting | `{entity}:{trait}` (default) / `{entity}:{trait}:{hash8}` when `allow_duplicates` and the instance has a statement (the statement only *seeds* the key; the first instance under it keeps it) / `…-{hex6}` when a key is already taken — two instances are two instances however alike their text / `{parent}:{trait}[:{hash8}]` for a **nested** setting (keyed to its parent, so many settings of one generic trait can share a container, with the same taken-key suffix) | `kael-1:trait-hacking-7f2a` |
 | SFX | `sfx-{slug}` | `sfx-hinder` |
-| Relationship | `edge:{from}:{to}:{type}` | `edge:loc-platform:loc-valley:super` |
+| Relationship | `edge:{from}:{to}:{type}` **or an opaque id** — 1,301 of 1,532 live edges are opaque, so a key is never parsed (see [[#`relationships` (edge)]]) | `edge:loc-platform:loc-valley:super` |
 | Projection | `{entity}:{origin_universe}` | `kael-1:three_realms` |
 
 ---
