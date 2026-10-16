@@ -455,6 +455,23 @@ An index column is usually **position-derived** (`#{{ i + 1 }}`), not stored.
   is **not** a table consumer — its rows come from `useLocationTree.flattenTree`
   (depth, `more`/`add` rows, three reveal states) — so do not try to fold it in,
   but changing the row shell or the drag composable reaches it.
+- **The tree's chevron has three modes, and cycles all three** (2026-10-13):
+  `partial` (the reveal a filter or the focus chain puts there) → `expanded`
+  (everything at the level) → `collapsed` (nothing) → back to `partial`. Before,
+  `partial` could only be *fallen back into*: with a filter active, an explicit
+  collapse returned the level to its baseline, so a filtered level could not be
+  collapsed at all and the cycle was two states wearing three glyphs.
+  - `partial` is stored as **no choice at all** (`undefined` in `expandedNodes`),
+    which is what it is: the level's own baseline decides. A third stored value
+    would be a second source of truth for the same thing.
+  - A level with **no partial to return to** — every level in the plain view, whose
+    baseline is either everything or nothing — skips that step, so no press is a
+    press that does nothing. The row carries the mode a press lands in
+    (`nextReveal` on the flattened node); `toggle-expand` passes that mode, never a
+    boolean, because a boolean cannot express three states.
+  - Collapsing a filtered level **hides the matches under it** until the next
+    press. That is the point of the mode, and it is why `hideAll` no longer asks
+    whether the baseline hides something.
 - **Don't regress the a11y that exists.** `SearchDropdown`, `TagInput` and
   `SegmentedControl` carry proper combobox/listbox/option or radiogroup roles;
   most table-ish GM surfaces carry none, so there is room to add, not to remove.
