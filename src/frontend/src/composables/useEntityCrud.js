@@ -26,11 +26,18 @@ export function createEntityCrud() {
   const jobStatuses = ref({})  // {entity_id: {type, status, percent, message}}
 
   // ── Queries ────────────────────────────────────────
+  // `carriedLocations` and `carrier` are the two halves of an inner world: what
+  // this entity carries, and who carries it. Read-only here — the entity panel
+  // lists the first and names the second, and the Places tree shows neither
+  // ([[B308]]). ⚠ No comments *inside* the query below: a GraphQL document has no
+  // `//`, and one there is a syntax error that fails every panel silently.
   const ENTITY_QUERY = `query($id: ID!) {
     entity(id: $id) {
       id type name razmerit currentUniverse currentLocation currentProjection
       hidden unpublished supportEligible starterLocation loraConfig promptSteering namingTheme
       agency { playerId playerName main }
+      carriedLocations { id name currentUniverse }
+      carrier { id name type }
       projections {
         id entityId originUniverse universe name backgroundImage currentLocation transversalType
       }

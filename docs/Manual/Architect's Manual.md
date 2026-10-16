@@ -70,6 +70,7 @@ The editor's sections are a small common set, and a section only appears when it
 | **Zones** | The doors on a place's picture — each one links to a child place. |
 | **Fires on arrival** | The rule that runs when someone walks in. |
 | **Members / Factions** | Who belongs to a faction, in what role. |
+| **Inner locations** | The places this thing carries inside it — an inner world. They stay out of the Places tree, and a row opens one as a child panel. |
 | **Danger Zone** | **Publish** or **Unpublish** — unpublished is GM-only and badged *draft* in the tree — and **Delete**, which is a two-click confirm and cannot be undone. |
 
 Two buttons in the header are for running the game rather than authoring: **🎭 Assume** (act as this character) and **📥 Import to Location** (bring them to where you are).

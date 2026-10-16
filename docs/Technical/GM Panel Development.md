@@ -115,6 +115,40 @@ unit is excluded, or letting go over itself would swallow it. `check-panel-drag`
 drives this registry with a stub `document`; `e2e/tests/panel-drag.spec.js` proves
 the gestures themselves, because a pointer drag is a browser fact.
 
+## Inner locations — a place an entity carries
+
+A place can be **held inside an entity** rather than filed under a universe: an
+inner world, parented by a `super` edge to a character, a GMC, an asset or a
+faction. It is the same edge the tree already used, and it makes the carrier's
+universe its own — which need not be the carried location's (the live example is a
+`three_realms` character holding an `earth` location).
+
+**The tree deliberately does not show one** (2026-10-16, at the human's direction),
+and the endpoint says so with a third node kind: `/api/v1/locations/tree` returns
+the carrier as `node_type: 'carrier'`, deliberately **not** filed under any
+universe, with the node beneath it flagged `carried: true`. `useLocationTree`'s
+`dropCarriers` removes that node **and its subtree** as the tree is stored, which is
+why everything downstream can go on treating a node as a universe or a location:
+the `kind` mapping stays two-valued and a carrier can never surface as a place.
+The filter is exported so `check-inner-locations` drives it for real.
+
+The surface for them is the **entity panel**. Its *Inner locations* section lists
+`Entity.carriedLocations`, a row opens one as a **child panel** (the component
+opens another instance of itself, exactly as the Members section does), and
+**+ Add** creates a new location and parents it to the entity by writing the
+`super` edge — the parent need not be a place, which is the only reason an entity
+can carry one. A carried location's own panel says `Held by <carrier>`, because
+nothing in the tree will explain why it is not there. The reads are
+`Entity.carriedLocations` / `Entity.carrier` ([[B308]], backend-platform);
+attaching an existing location and unlinking are deliberately not built yet.
+
+> [!warning] A `//` comment inside a GraphQL document is a syntax error
+> And the failure is silent and total: `selectEntity` gets no data, so
+> `openEntityEdit` returns early and **no** entity panel opens. Adding the two
+> fields above is how that was learned — every node check stayed green and only
+> the browser showed it. `check-inner-locations` now pins the class: no GraphQL
+> document in that composable may contain `//`.
+
 ## Panel persistence (per device)
 
 Floating windows — and whether one is **collapsed** to its chip — are remembered

@@ -12,6 +12,21 @@ const focusId = ref('')
 // ── Constants ────────────────────────────────────────
 const OCCUPANT_TYPES = new Set(['CHARACTER', 'GMC', 'ASSET'])
 
+// An entity can **carry** a location — an inner world, parented by a `super` edge
+// to a character or an object rather than to a place. The tree deliberately does
+// not show one (2026-10-16, at the human's direction): a carrier is not a place,
+// its `universe` is its *own* and need not be the carried location's, and the
+// endpoint reports it as a third kind — `node_type: 'carrier'` — precisely so a
+// reader can tell. Dropping the node **and its subtree** here is why the rest of
+// the tree can go on treating everything as a universe or a location; the places
+// it holds are read and made in the entity panel instead, which opens them as
+// child panels. Exported because `check-inner-locations.mjs` drives it.
+export function dropCarriers(nodes) {
+  return (nodes || [])
+    .filter((n) => (n.node_type || n.kind) !== 'carrier')
+    .map((n) => (n.children?.length ? { ...n, children: dropCarriers(n.children) } : n))
+}
+
 export function useLocationTree({ entities, filteredEntities, agencyByEntity, activeFilters, currentUniverse }) {
   // The focused node: its ancestor chain stays expanded, its siblings stub.
   function setFocus(id) {
@@ -21,7 +36,7 @@ export function useLocationTree({ entities, filteredEntities, agencyByEntity, ac
   async function fetchLocationTree() {
     try {
       const r = await fetch('/api/v1/locations/tree')
-      locationTree.value = await r.json()
+      locationTree.value = dropCarriers(await r.json())
     } catch {
       locationTree.value = []
     }

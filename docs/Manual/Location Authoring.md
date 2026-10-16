@@ -61,6 +61,8 @@ There is no such thing as a location without a parent. A place that is a root �
 
 **A child location is two things, not one.** The entity in the tree, **and** a zone on its parent's background. Creating it with a parent does half of that — it appends a default zone at the centre of the picture. Placing it properly is Layer 2.
 
+**A place can also be held *inside* something** rather than filed under a world — an inner world that a character, a GMC, an asset or a faction carries. It is the same parent link, with an entity on the other end instead of a place, and **it does not appear in the Places tree at all**: you make it and read it from that entity's own panel, where the **Inner locations** section lists what it carries and opens any of them as a child panel. Reach for this when the place belongs to a *thing* rather than to a world — and note that the carrier's universe need not be the carried place's.
+
 ### What a developed place looks like
 
 **Krasnoyarsk-45** is the standard to aim at. The place itself carries `climate` *"frozen from October to May"*, `function` *"a town that exists to support a thing above it"*, `population` *"a closed town the maps leave out"*, and its own doom pool; the facility above it carries `function` *"the state's anomalous-artifact programme"*, `surveillance` *"every corridor, and one agent"* and `resources` *"a budget that appears from nowhere"*.

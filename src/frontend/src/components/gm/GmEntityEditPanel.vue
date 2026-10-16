@@ -5,6 +5,11 @@
         <span v-if="agencyHolder" class="agency-line" :title="agencyTitle">
           Agency: {{ agencyHolder.playerName }}<template v-if="!agencyHolder.main"> · support</template>
         </span>
+        <!-- A place held inside an entity has no place in the tree, so without
+             this line nothing on the panel would explain that (B308). -->
+        <span v-if="carrierName" class="agency-line" title="Held inside another entity — an inner world, not a place in the tree">
+          Held by {{ carrierName }}
+        </span>
       </div>
       <div class="panel-top-actions">
         <!-- `actingEntityId` is the LIVE perspective (App's provide), not the
@@ -201,6 +206,32 @@
         <input v-model="newZoneName" class="zone-input" placeholder="New sub-location name…" @keyup.enter="createZone" />
         <Button class="section-btn zone-add-btn" variant="neutral" :loading="creatingZone" :disabled="!newZoneName.trim() || creatingZone" @click="createZone">
           {{ creatingZone ? '…' : '+ Add' }}
+        </Button>
+      </div>
+    </div>
+    <!-- Inner locations — the places this entity *carries* (an inner world). The
+         Places tree does not show them: a carrier is not a place, and its universe
+         need not be the carried location's. So this panel is where they are read
+         and where one is made, and a row opens it as a child panel (2026-10-16, at
+         the human's direction). Gated to the types that can hold one — the edge's
+         validator only requires the *child* to be a location. -->
+    <div v-if="canCarry" class="members-section inner-locations">
+      <div class="gallery-header">
+        <h4>Inner locations</h4>
+      </div>
+      <p class="section-hint">Places this entity carries inside it. They stay out of the Places tree.</p>
+      <div v-if="!carriedLocations.length" class="gallery-empty">None yet.</div>
+      <div v-else class="members-list">
+        <div v-for="loc in carriedLocations" :key="loc.id" class="member-row" @click="openInnerLocation(loc)">
+          <span class="entity-type-badge type-LOCATION">LOC</span>
+          <span class="member-name">{{ loc.name }}</span>
+          <span class="member-rank">{{ loc.currentUniverse }}</span>
+        </div>
+      </div>
+      <div class="zones-add">
+        <input v-model="newInnerName" class="zone-input" placeholder="New inner location name…" @keyup.enter="createInnerLocation" />
+        <Button class="section-btn zone-add-btn" variant="neutral" :loading="creatingInner" :disabled="!newInnerName.trim() || creatingInner" @click="createInnerLocation">
+          {{ creatingInner ? '…' : '+ Add' }}
         </Button>
       </div>
     </div>
@@ -864,6 +895,67 @@ async function createZone() {
 watch(() => [props.entityId, form.value?.type], ([id, type]) => {
   if (id && (type === 'LOCATION' || type === 'UNIVERSE')) loadZones()
 }, { immediate: true })
+
+// ── Inner locations (carried) ───────────────────────
+// The whole model is one `super` edge from the location to its carrier, and the
+// endpoint's validator only requires the **child** to be a location — so a
+// character, a GMC, an asset or a faction can hold one. The reads are
+// `Entity.carriedLocations` and `Entity.carrier` ([[B308]]), and the Places tree
+// is told to drop carriers, which is why this panel is the surface for them.
+const carriedLocations = computed(() => selected.value?.carriedLocations || [])
+const carrierName = computed(() => selected.value?.carrier?.name || '')
+// A place can neither be carried nor carry: a location is the thing carried, and
+// a universe is a world rather than a thing inside one.
+const canCarry = computed(() => !!form.value.type && !['LOCATION', 'UNIVERSE'].includes(form.value.type))
+const newInnerName = ref('')
+const creatingInner = ref(false)
+
+function openInnerLocation(loc) {
+  if (!loc?.id) return
+  panel.open({
+    component: GmEntityEditPanel,
+    title: loc.name || 'Location',
+    id: loc.id,
+    badge: 'LOCATION',
+    props: {
+      entityId: loc.id,
+      currentEntityId: actingEntityId.value,
+      currentLocationId: gmLocationId.value || props.currentLocationId,
+    },
+    listeners: { 'go-to-location': () => bus.emit('switch-view-location', loc.id) },
+  })
+}
+
+async function createInnerLocation() {
+  const name = newInnerName.value.trim()
+  if (!name || creatingInner.value) return
+  creatingInner.value = true
+  try {
+    const data = await graphql(
+      `mutation($input: CreateEntityInput!) { createEntity(input: $input) { id } }`,
+      { input: { name, type: 'LOCATION', universe: form.value.current_universe, location: null, razmerit: 0 } },
+    )
+    const newId = data?.createEntity?.id
+    if (!newId) return
+    // The parent is an **edge**, not a field, and here the parent is *this
+    // entity* — which need not be a place. Same two steps the tree's create rows
+    // do when a location's parent is a location.
+    await fetch(`/api/v1/locations/${newId}/edges/${props.entityId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'super' }),
+    })
+    newInnerName.value = ''
+    // Re-read so the new row appears. This flushes any pending auto-save first
+    // (see useEntityCrud's selectEntity), so creating one cannot revert an edit.
+    await selectEntity({ id: props.entityId })
+    bus.emit('locations-changed')
+  } catch (e) {
+    console.error('[inner-locations] create failed', e)
+  } finally {
+    creatingInner.value = false
+  }
+}
 
 // ── Members (faction entities) ──────────────────────
 // The roster read and the membership tie are both backend-platform's; the panel
