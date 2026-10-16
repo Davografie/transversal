@@ -69,6 +69,7 @@ from transversal.services.effects_applier.handlers_traits import (
     _apply_copy_trait,
     _apply_cortex_gain,
     _apply_discover,
+    _apply_enter_life_path,
     _apply_gain,
     _apply_gain_or_step_up,
     _apply_invert_polarity,
@@ -157,6 +158,7 @@ _MUTATION_HANDLERS = {
     ("transfer_razmerit", "spend"): _apply_spend,
     ("transfer_razmerit", "transfer"): _apply_transfer,
     ("life_path", "discover"): _apply_discover,
+    ("life_path", "enter"): _apply_enter_life_path,
     # The roll's own result, changed after it is set — the one effect family that
     # acts on a committed result rather than on an entity (see handlers_outcome).
     ("modify_outcome", "step_up_effect"): _apply_step_up_effect,

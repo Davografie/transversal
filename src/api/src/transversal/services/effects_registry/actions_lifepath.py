@@ -22,6 +22,25 @@ ACTIONS: list[EffectActionMeta] = [
         target_kind="life_path",
     ),
     EffectActionMeta(
+        action_id="enter_life_path",
+        label="Enter Life Path",
+        description=(
+            "Begin a term in a life path for the entity — the door the life-path "
+            "wizard's own chooser opens. Writes the cursor, so a rule can drop a "
+            "character straight into the path's first table; pair it with Show "
+            "Life Path to put that table in front of the player, ready to roll"
+        ),
+        category="either",
+        effect_type="life_path",
+        effect_action="enter",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Life Path", field_type="text",
+                          required=True, hidden_when_ref="life_path"),
+        ],
+        target_kind="life_path",
+    ),
+    EffectActionMeta(
         action_id="open_roll_table",
         label="Open Roll Table (Menu)",
         description="Open a roll table as an interactive menu: pick an entry, pay its cost effects, then gain its effects",

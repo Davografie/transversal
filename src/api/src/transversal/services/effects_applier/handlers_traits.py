@@ -532,6 +532,39 @@ def _apply_discover(entity, effect, repo, result):
     else:
         result.applied.append(AppliedEffect(effect, f"life path {target} already discovered"))
 
+def _apply_enter_life_path(entity, effect, repo, result):
+    """Begin a term in a life path for the entity ([[B303]]).
+
+    This is the **cursor**, and it is a different act from showing the path:
+    ``client/life_path`` puts the wizard in front of a player and writes nothing,
+    while this writes the checkpoint a term walks from — so a rule can drop a
+    character straight into a path's first table rather than merely telling them
+    the path exists. The pair is how an onboarding rule lands on a roll table.
+
+    It is deliberately *not* ``life_path/next_step``: a path with declared
+    ``steps`` owns its own graph and ignores ``next_step`` effects in the entry
+    (``services/lifepath_executor``), which is every wrapped path — including the
+    one this was written for. Entering goes through ``start_term``, the same
+    operation the wizard's own chooser performs.
+    """
+    target = _resolve_target(entity, effect, result, repo)
+    if target is None:
+        result.applied.append(AppliedEffect(effect, "no life path to enter"))
+        return
+
+    from transversal.services.lifepath_executor import start_term
+
+    try:
+        pt = start_term(entity, "", target, repo)
+    except ValueError as exc:
+        # An unknown path, or one with no entry step: say so rather than leaving a
+        # half-started term for the wizard to trip over.
+        result.applied.append(AppliedEffect(effect, f"could not enter {target}: {exc}"))
+        return
+    result.applied.append(AppliedEffect(
+        effect, f"entered life path {target} at {pt.current_table_id}"))
+
+
 def _apply_remove(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:

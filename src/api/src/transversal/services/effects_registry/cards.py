@@ -70,6 +70,8 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("entity", "targeting_ban"): "impose a targeting ban on {target}",
     ("contest", "start"): "start a contest with {target}",
     ("entity", "learn"): "learn {target}",
+    # Entering writes the cursor; *showing* is the client action beside it ([[B303]]).
+    ("life_path", "enter"): "enter the {target} life path",
     # The recipient is the reader, so the card addresses the screen the rule lands on.
     ("client", "open_sheet"): "open {target}'s sheet",
     ("client", "toast"): "show a toast: {result}",

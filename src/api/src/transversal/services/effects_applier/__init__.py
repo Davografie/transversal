@@ -81,6 +81,7 @@ from transversal.services.effects_applier.handlers_traits import (  # noqa: F401
     _apply_reveal,
     _resolve_learners,
     _apply_discover,
+    _apply_enter_life_path,
 )
 
 

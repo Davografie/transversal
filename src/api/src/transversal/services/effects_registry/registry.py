@@ -55,6 +55,7 @@ _DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool
     "delete_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
     "disable_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
     "discover_life_path": [("life_path", "Life Path", ('life_path',), 'target', False)],
+    "enter_life_path": [("life_path", "Life Path", ('life_path',), 'target', False)],
     "double_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
     "draft_life_path": [("life_path", "Life Path", ('life_path',), 'target', False)],
     "earn_razmerit": [("recipient", "Entity", ('entity',), 'entity', False)],
@@ -182,7 +183,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "discover_life_path": "Life Path", "next_step": "Life Path",
     "open_roll_table": "Roll Table",
     "draft_life_path": "Life Path", "force_muster": "Life Path",
-    "muster": "Life Path", "enroll_life_path": "Life Path",
+    "muster": "Life Path", "enroll_life_path": "Life Path", "enter_life_path": "Life Path",
     # Shown with the other life-path verbs (the author, 2026-10-16): an author
     # looking for "give the player a life path" looks *here*, not under Client —
     # which groups by mechanism, and is where you look for a screen you are

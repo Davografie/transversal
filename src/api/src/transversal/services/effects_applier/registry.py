@@ -205,6 +205,9 @@ def _register_core_handlers(em, raz):
                    "change", "invert_polarity", "set_polarity", "set_rating_type", "set_statement"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
+    # Entering a path writes the body's term cursor ([[B303]]) — a real entity
+    # write, so it commits through the shared applier like the rest.
+    effect_registry.register("life_path", "enter", _commit)
     effect_registry.register("relationship", "create", _commit)
     effect_registry.register("projection", "create", _commit)
     effect_registry.register("projection", "restore", _commit)
