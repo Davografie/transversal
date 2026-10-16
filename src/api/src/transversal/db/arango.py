@@ -184,7 +184,9 @@ def reset_db_cache() -> None:
         _close_quietly(entry)
 
 
-def get_db(config: ArangoConfig | None = None) -> "StandardDatabase":
+def get_db(
+    config: ArangoConfig | None = None, *, ensure_indexes: bool = True
+) -> "StandardDatabase":
     """Return a (cached) connection, creating database and collections if needed.
 
     Memoized per process on (url, username, password, database) in a bounded LRU,
@@ -194,6 +196,12 @@ def get_db(config: ArangoConfig | None = None) -> "StandardDatabase":
     An explicit ``config`` is used exactly as given — a caller that names a
     database means it. The env default, by contrast, is overridden by a
     request-scoped database (``use_database``) when one is set.
+
+    ``ensure_indexes=False`` creates the database and its 20 collections but skips
+    the index pass. That exists for **provisioning**: a clone must write its
+    documents before the unique indexes are built, or any source row that already
+    violates one is silently dropped instead of copied ([[B88]]). The flag is a
+    bootstrap-time decision — a database already in the cache is returned as-is.
     """
     if config is None:
         config = ArangoConfig.from_env()
@@ -221,7 +229,8 @@ def get_db(config: ArangoConfig | None = None) -> "StandardDatabase":
         if not db.has_collection(name):
             db.create_collection(name, edge=is_edge)
 
-    _ensure_indexes(db)
+    if ensure_indexes:
+        _ensure_indexes(db)
     from transversal.db.profiling import instrument_db
 
     wrapped = instrument_db(db)
