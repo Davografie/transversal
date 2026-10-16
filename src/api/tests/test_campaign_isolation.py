@@ -18,7 +18,11 @@ import pytest
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.services import session_manager as sm_mod
-from transversal.services.campaign_scope import current_campaign, use_campaign
+from transversal.services.campaign_scope import (
+    capture_scope,
+    current_campaign,
+    use_campaign,
+)
 from transversal.services.session_manager import SessionManager
 
 A = "tv2-probe-a"
@@ -195,3 +199,80 @@ def test_the_legacy_namespace_is_readable_only_by_the_default_campaign(mgr, monk
         mgr._put(session)
     assert [s.id for s in mgr.list_active(A)] == [legacy]
     assert [s.name for s in mgr.list_active(A)] == ["Migrated"]
+
+
+# ── The imagen job tracker, and background work ───────────────────────
+
+
+def test_a_background_task_runs_in_the_campaign_that_queued_it():
+    """A generation outlives its request, so its scope travels with it ([[B305]]).
+
+    This is the media lesson made explicit: the orchestrator has no request context,
+    and resolving the wrong campaign there writes records and files into the wrong world.
+    """
+    from transversal.api.rest.imagen import background_scoped
+
+    seen = {}
+
+    @background_scoped
+    def _task(*, _scope=None):
+        seen["campaign"] = current_campaign()
+
+    with use_campaign(A):
+        scope = capture_scope()
+    assert current_campaign() == ""
+
+    _task(_scope=scope)
+    assert seen["campaign"] == A
+
+    # Without a captured scope it still runs — but names no campaign rather than a
+    # guessed one, and the tracker then declines to record it.
+    _task()
+    assert seen["campaign"] == ""
+
+
+def test_imagen_jobs_are_per_campaign():
+    from transversal.api.rest import imagen
+
+    imagen.active_jobs.clear()
+    imagen._job_order.clear()
+    try:
+        with use_campaign(A):
+            imagen._queue_job("entity-1", "imagen")
+            assert list(imagen.active_jobs) == [(A, "entity-1")]
+            assert imagen._job_entry("entity-1")["status"] == "queued"
+
+        # Another campaign has no job for the same entity id — the ids are shared
+        # between a campaign and its ancestor, so the tracker key has to carry it.
+        with use_campaign(B):
+            assert imagen._job_entry("entity-1") is None
+            imagen._queue_job("entity-1", "animate")
+            assert imagen._job_entry("entity-1")["type"] == "animate"
+            assert imagen._job_with_queue(
+                "entity-1", imagen._job_entry("entity-1")
+            )["queue_position"] == 1
+
+        with use_campaign(A):
+            assert imagen._job_entry("entity-1")["type"] == "imagen"
+            imagen._update_job("entity-1", "imagen", "complete")
+            assert imagen._job_entry("entity-1") is None
+
+        with use_campaign(B):
+            assert imagen._job_entry("entity-1") is not None  # A's finish did not touch it
+    finally:
+        imagen.active_jobs.clear()
+        imagen._job_order.clear()
+
+
+def test_imagen_jobs_are_not_tracked_without_a_campaign():
+    from transversal.api.rest import imagen
+
+    imagen.active_jobs.clear()
+    imagen._job_order.clear()
+    try:
+        imagen._queue_job("entity-1", "imagen")
+        assert imagen.active_jobs == {}
+        assert imagen._job_entry("entity-1") is None
+    finally:
+        imagen.active_jobs.clear()
+        imagen._job_order.clear()

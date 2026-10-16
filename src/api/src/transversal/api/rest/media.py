@@ -88,9 +88,14 @@ def _enqueue_matte(
     """
     from transversal.api.rest.imagen import _queue_job, _run_remove_bg_bg
     from transversal.imagen.models import GenerationType
+    from transversal.services.campaign_scope import capture_scope
 
     _queue_job(owner_id, GenerationType.REMOVE_BG.value)
-    background_tasks.add_task(_run_remove_bg_bg, owner_id, image_id, display_name)
+    # The task finishes after this request is gone, so it is told which campaign queued
+    # it rather than being left to guess from ambient context ([[B305]]).
+    background_tasks.add_task(
+        _run_remove_bg_bg, owner_id, image_id, display_name, _scope=capture_scope()
+    )
 
 
 def _parse_flags(raw: str) -> list[str]:

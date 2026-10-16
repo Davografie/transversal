@@ -10,14 +10,22 @@ Progress is published via SSE events (event type: 'imagen_progress').
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import os
+from contextlib import nullcontext
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.domain import CREDIT_ROLES, IMAGE_FLAGS, ImageType, MediaImage
 from transversal.services import gpu_jobs
+from transversal.services.campaign_scope import (
+    Scope,
+    capture_scope,
+    current_campaign,
+    use_scope,
+)
 from transversal.services.media_utils import ROLE_RENDER
 from transversal.imagen.orchestrator import UPSCALE_MASTER_CAP
 from transversal.imagen.models import (
@@ -36,6 +44,27 @@ logger = logging.getLogger("transversal.imagen")
 router = APIRouter(prefix="/api/v1", tags=["imagen"])
 
 
+def background_scoped(fn):
+    """Run a background task in the campaign that queued it ([[B305]]).
+
+    A generation job is started by a request and finishes long after it, under
+    ``asyncio.run`` and inside a ``BackgroundTasks`` callable. Neither is guaranteed to
+    still carry the request's context, and this module's whole job is to write files and
+    records *somewhere* — the media work already found the orchestrator resolving the
+    wrong database for exactly this reason. So the scope is captured at submission
+    (``capture_scope()``) and restored here, rather than read from ambient context.
+
+    The wrapped callable takes the scope as a keyword: ``_scope=``.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(*args, _scope: "Scope | None" = None, **kwargs):
+        with use_scope(_scope) if _scope else nullcontext():
+            return fn(*args, **kwargs)
+
+    return wrapper
+
+
 def require_gpu() -> None:
     """Refuse a GPU-spending request when this deployment has GPU jobs off (B88).
 
@@ -48,38 +77,64 @@ def require_gpu() -> None:
         raise HTTPException(status_code=503, detail=gpu_jobs.REFUSAL)
 
 # ── Job tracker ────────────────────────────────────────
-# Keyed by entity_id. Each entry: {type, status, percent, message, queued_at}
-active_jobs: dict[str, dict] = {}
-_job_order: list[str] = []  # submission order for queue position
+# Keyed by (campaign, entity_id) — a job belongs to the campaign that asked for it,
+# and the job list must not show another campaign's work ([[B305]]). Each entry:
+# {type, status, percent, message, queued_at}
+active_jobs: dict[tuple[str, str], dict] = {}
+_job_order: dict[str, list[str]] = {}  # campaign → entity ids, in submission order
 
-def _queue_job(entity_id: str, gen_type: str):
+
+def _scope_of(campaign: str | None = None) -> str:
+    """The campaign for a tracker call: the argument, else the scope in context."""
+    return campaign or current_campaign()
+
+
+def _job_entry(entity_id: str, campaign: str | None = None) -> dict | None:
+    """This campaign's job for ``entity_id``, if it has one."""
+    return active_jobs.get((_scope_of(campaign), entity_id))
+
+
+def _queue_job(entity_id: str, gen_type: str, campaign: str | None = None):
     """Register a job as queued before it starts processing."""
-    if entity_id not in active_jobs:
-        _job_order.append(entity_id)
-    active_jobs[entity_id] = {
+    scope = _scope_of(campaign)
+    if not scope:
+        # Fail closed: an untracked job is a missing progress bar, and that is better
+        # than a job attributed to the wrong campaign.
+        logger.warning("not tracking a %s job — no campaign in scope", gen_type)
+        return
+    key = (scope, entity_id)
+    order = _job_order.setdefault(scope, [])
+    if key not in active_jobs:
+        order.append(entity_id)
+    active_jobs[key] = {
         "type": gen_type,
         "status": "queued",
         "percent": 0,
         "message": "Waiting for GPU...",
     }
 
-def _update_job(entity_id: str, gen_type: str, status: str, message: str = "", percent: int = 0):
+def _update_job(entity_id: str, gen_type: str, status: str, message: str = "", percent: int = 0,
+                campaign: str | None = None):
     """Update or remove a job entry. COMPLETE/FAILED removes."""
+    scope = _scope_of(campaign)
+    key = (scope, entity_id)
     if status in ("complete", "failed"):
-        active_jobs.pop(entity_id, None)
-        if entity_id in _job_order:
-            _job_order.remove(entity_id)
+        active_jobs.pop(key, None)
+        order = _job_order.get(scope)
+        if order and entity_id in order:
+            order.remove(entity_id)
     else:
-        active_jobs[entity_id] = {
+        active_jobs[key] = {
             "type": gen_type,
             "status": status,
             "percent": percent,
             "message": message,
         }
 
-def _job_with_queue(entity_id: str, job: dict) -> dict:
+def _job_with_queue(entity_id: str, job: dict, campaign: str | None = None) -> dict:
     """Attach queue_position to a job entry."""
-    pos = _job_order.index(entity_id) + 1 if entity_id in _job_order and job.get("status") == "queued" else 0
+    order = _job_order.get(_scope_of(campaign)) or []
+    pos = order.index(entity_id) + 1 if entity_id in order and job.get("status") == "queued" else 0
     return {**job, "queue_position": pos}
 
 
@@ -105,9 +160,10 @@ def _get_orchestrator() -> ImagenOrchestrator:
     return ImagenOrchestrator(repository=repo, progress_callback=progress_cb)
 
 
+@background_scoped
 def _run_imagen_bg(entity_id: str, universe: str, projection_id: str = ""):
     """Background task: generate image and publish final SSE event."""
-    if entity_id not in active_jobs:
+    if _job_entry(entity_id) is None:
         logger.info(f"Imagen for {entity_id} was cancelled before starting — skipping")
         return
     orchestrator = _get_orchestrator()
@@ -146,9 +202,10 @@ def _run_imagen_bg(entity_id: str, universe: str, projection_id: str = ""):
         _update_job(entity_id, GenerationType.IMAGEN.value, GenerationStatus.FAILED.value)
 
 
+@background_scoped
 def _run_upscale_bg(owner_id: str, image_id: str):
     """Background task: ESRGAN detail pass on one image's master."""
-    if owner_id not in active_jobs:
+    if _job_entry(owner_id) is None:
         logger.info(f"Upscale for {owner_id} was cancelled before starting — skipping")
         return
     orchestrator = _get_orchestrator()
@@ -182,9 +239,10 @@ def _run_upscale_bg(owner_id: str, image_id: str):
         _update_job(owner_id, GenerationType.UPSCALE.value, GenerationStatus.FAILED.value)
 
 
+@background_scoped
 def _run_animate_bg(entity_id: str, universe: str, duration: float, source_image_id: str = "", motion_hint: str = ""):
     """Background task: generate video loop and publish final SSE event."""
-    if entity_id not in active_jobs:
+    if _job_entry(entity_id) is None:
         logger.info(f"Animate for {entity_id} was cancelled before starting — skipping")
         return
     orchestrator = _get_orchestrator()
@@ -225,6 +283,7 @@ def _run_animate_bg(entity_id: str, universe: str, duration: float, source_image
         _update_job(entity_id, GenerationType.ANIMATE.value, GenerationStatus.FAILED.value)
 
 
+@background_scoped
 def _run_remove_bg_bg(entity_id: str, image_id: str, display_name: str = ""):
     """Background task: remove the background from a static image.
 
@@ -232,7 +291,7 @@ def _run_remove_bg_bg(entity_id: str, image_id: str, display_name: str = ""):
     whichever asked. The cutout's owner comes from the *source image*, not from
     here.
     """
-    if entity_id not in active_jobs:
+    if _job_entry(entity_id) is None:
         logger.info(f"Background removal for {entity_id} was cancelled before starting — skipping")
         return
     orchestrator = _get_orchestrator()
@@ -317,7 +376,9 @@ async def generate_image(
     logger.info(f"Enqueuing imagen for {entity_id} ({entity.name}) in {universe} (projection={projection_id or 'entity'})")
 
     _queue_job(entity_id, GenerationType.IMAGEN.value)
-    background_tasks.add_task(_run_imagen_bg, entity_id, universe, projection_id)
+    background_tasks.add_task(
+        _run_imagen_bg, entity_id, universe, projection_id, _scope=capture_scope()
+    )
 
     return {
         "accepted": True,
@@ -365,7 +426,10 @@ async def generate_animation(
 
     _queue_job(entity_id, GenerationType.ANIMATE.value)
     motion_hint = request.motion_hint if request else ""
-    background_tasks.add_task(_run_animate_bg, entity_id, universe, duration, source_image_id, motion_hint)
+    background_tasks.add_task(
+        _run_animate_bg, entity_id, universe, duration, source_image_id, motion_hint,
+        _scope=capture_scope(),
+    )
 
     return {"accepted": True, "entity_id": entity_id, "generation_type": "animate"}
 
@@ -421,7 +485,9 @@ async def remove_background(
     logger.info(f"Enqueuing background removal for {owner_kind} {owner_id} ({owner_name}) from image {request.image_id}")
 
     _queue_job(owner_id, GenerationType.REMOVE_BG.value)
-    background_tasks.add_task(_run_remove_bg_bg, owner_id, request.image_id, owner_name)
+    background_tasks.add_task(
+        _run_remove_bg_bg, owner_id, request.image_id, owner_name, _scope=capture_scope()
+    )
 
     return {"accepted": True, "owner_id": owner_id, "generation_type": "remove_bg"}
 
@@ -459,7 +525,9 @@ async def upscale_image(
 
     logger.info(f"Enqueuing upscale for image {image_id} (owner {img.owner_id})")
     _queue_job(img.owner_id, GenerationType.UPSCALE.value)
-    background_tasks.add_task(_run_upscale_bg, img.owner_id, image_id)
+    background_tasks.add_task(
+        _run_upscale_bg, img.owner_id, image_id, _scope=capture_scope()
+    )
 
     return {"accepted": True, "image_id": image_id, "owner_id": img.owner_id,
             "generation_type": GenerationType.UPSCALE.value}
@@ -468,7 +536,7 @@ async def upscale_image(
 @router.post("/imagen/{entity_id}/cancel")
 async def cancel_job(entity_id: str):
     """Interrupt an active imagen/animate job for an entity."""
-    job = active_jobs.get(entity_id)
+    job = _job_entry(entity_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"No active job for entity '{entity_id}'")
 
@@ -494,8 +562,15 @@ async def cancel_job(entity_id: str):
 
 @router.get("/imagen/jobs")
 async def list_jobs():
-    """Return all active generation/animation jobs with status and queue position."""
-    return {"jobs": {eid: _job_with_queue(eid, j) for eid, j in active_jobs.items()}}
+    """Return this campaign's active generation/animation jobs, with queue position."""
+    scope = current_campaign()
+    return {
+        "jobs": {
+            eid: _job_with_queue(eid, job, scope)
+            for (owner, eid), job in active_jobs.items()
+            if owner == scope
+        }
+    }
 
 @router.get("/imagen/loras")
 async def list_loras():
