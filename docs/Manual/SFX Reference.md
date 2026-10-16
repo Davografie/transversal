@@ -363,7 +363,7 @@ _Count: 10._
 
 **Reading the sign column.** *cost* / *benefit* / *either* is the editor's hint — it groups the picker and colours the row, and stores nothing. A rule is free to use a cost verb for a benefit. *Refs* names the inputs the action declares; the editor labels each one, and a target is normally written as a targeting path.
 
-_Count: 80._
+_Count: 82._
 
 
 **Change a Die**
@@ -483,11 +483,13 @@ _Count: 80._
 | Action | What it does | Sign | Retired |
 |---|---|---|---|
 | **Discover Life Path** <br>`discover_life_path` | Add a life path to the entity's discovered paths <br>Refs: `life_path` | benefit | — |
+| **Enter Life Path** <br>`enter_life_path` | Begin a term in a life path for the entity — the door the life-path wizard's own chooser opens. Writes the cursor, so a rule can drop a character straight into the path's first table; pair it with Show Life Path to put that table in front of the player, ready to roll <br>Refs: `life_path` | either | — |
 | **Next Step** <br>`next_step` | Advance the term to a roll table (target = table id, empty to continue) <br>Refs: `table` | either | — |
 | **Draft Into Life Path** <br>`draft_life_path` | Draft the entity into another life path <br>Refs: `life_path` | either | — |
 | **Force Muster Out** <br>`force_muster` | Force the entity out of the current life path (dishonorable) | cost | — |
 | **Muster Out** <br>`muster` | End the current life path term on respectful terms | either | — |
 | **Enroll In Life Path** <br>`enroll_life_path` | Record the entity's membership in the current faction path | either | — |
+| **Show Life Path** <br>`show_life_path` | Put a life path in front of the player, embedded — in the settings overlay when they created the character there, otherwise in that character's sheet. Nothing is granted or discovered: the path is shown, and whether they may walk it stays the path's own business <br>Refs: `life_path` | either | — |
 
 **Roll Table**
 
@@ -520,7 +522,6 @@ _Count: 80._
 |---|---|---|---|
 | **Open Character Sheet** <br>`open_sheet` | Bring a character sheet up on the recipient's screen — their own when no target is named, otherwise somebody else's <br>Refs: `recipient`, `owner` | either | — |
 | **Show Toast** <br>`show_toast` | Show a message on the recipient's screen; sticky keeps it until it is dismissed, and a tap can open a chosen entity's sheet <br>Refs: `recipient`, `tap_target` | either | — |
-
 
 **Retired actions.** A retired action is hidden from the picker but **still works**: rules already using it keep firing and keep reverting, and nothing is rewritten under you. Author new rules with its replacement — the retired rows above say what they do, and the modern equivalent sits in the same group.
 
