@@ -210,6 +210,21 @@ async def test_an_occupant_upload_queues_a_matte(tmp_path, monkeypatch):
     assert args[:2] == ("char-1", res["image_id"])
 
 
+async def test_an_upload_queues_no_matte_when_gpu_jobs_are_off(monkeypatch):
+    """The matte is GPU work, so an upload must not be the back door to ComfyUI
+    while the generation endpoints are refusing (B88)."""
+    monkeypatch.setenv("GPU_JOBS", "off")
+    monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
+    tasks = _Tasks()
+
+    res = await media_mod.upload_media(
+        tasks, owner_kind="entity", owner_id="char-1", universe="", file=_upload(),
+    )
+
+    assert res["image_id"], "the upload still registers normally"
+    assert tasks.tasks == [], "and queues no GPU work"
+
+
 async def test_a_trait_upload_queues_a_matte(tmp_path, monkeypatch):
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
     tasks = _Tasks()

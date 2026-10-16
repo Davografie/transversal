@@ -27,6 +27,7 @@ except ImportError:
 
 from transversal.domain import IMAGE_FLAGS, ImageType, MediaImage
 from transversal.db.repository import EntityRepository
+from transversal.services import gpu_jobs
 from transversal.services import media_store
 from transversal.services.media_utils import (
     has_transparency,
@@ -259,7 +260,13 @@ async def upload_media(
                     # awaited**: an upload response must not wait on the GPU, and
                     # the gallery already polls `/imagen/jobs` for this owner, so
                     # the matte appears on its own a few seconds later.
-                    if wants_auto_matte(owner_kind, getattr(owner, "type", None)):
+                    #
+                    # Skipped outright when GPU jobs are off (B88): the matte is GPU
+                    # work, and an upload must not be the back door that reaches
+                    # ComfyUI while the generation endpoints are refusing.
+                    if gpu_jobs.enabled() and wants_auto_matte(
+                        owner_kind, getattr(owner, "type", None)
+                    ):
                         _enqueue_matte(
                             background_tasks, owner_id, image_id,
                             getattr(owner, "name", ""),

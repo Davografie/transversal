@@ -35,6 +35,12 @@ services:
       # back to the local generator, so this is a preference, never a dependency;
       # set NAME_REMOTE=0 to keep it strictly offline (see [[Name Generation]]).
       NAME_REMOTE: "${NAME_REMOTE:-1}"
+      # B88: the GPU lives in the machine that serves this app, and the app is on the
+      # public internet. `GPU_JOBS=off` refuses the GPU endpoints and stops uploads
+      # queuing an automatic matte, so nothing reaches ComfyUI; unset means on. Named
+      # here for the same reason as everything above — compose passes only what a
+      # service lists, so a value in `.env` alone would sit unseen.
+      GPU_JOBS: "${GPU_JOBS:-}"
       REDIS_URL: "redis://redis:6379"
       # ── Tenancy: accounts, forks and routing (B255/B88) ───────────────
       # Listed for exactly the reason ARCHITECT_TOKEN is: compose passes only what

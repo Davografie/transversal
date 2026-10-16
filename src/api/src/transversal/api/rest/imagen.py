@@ -13,10 +13,11 @@ import asyncio
 import logging
 import os
 
-from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.domain import CREDIT_ROLES, IMAGE_FLAGS, ImageType, MediaImage
+from transversal.services import gpu_jobs
 from transversal.services.media_utils import ROLE_RENDER
 from transversal.imagen.orchestrator import UPSCALE_MASTER_CAP
 from transversal.imagen.models import (
@@ -33,6 +34,18 @@ from transversal.services.entity_manager import EntityManager, EntityNotFoundErr
 
 logger = logging.getLogger("transversal.imagen")
 router = APIRouter(prefix="/api/v1", tags=["imagen"])
+
+
+def require_gpu() -> None:
+    """Refuse a GPU-spending request when this deployment has GPU jobs off (B88).
+
+    A dependency rather than a check inside each handler, so a new GPU endpoint has
+    to opt *out* of the guard rather than remember to opt in. Reads — the gallery,
+    the job list, the image list — deliberately do not carry it: they never touched
+    the GPU, and the surface has to stay usable while generation is off.
+    """
+    if not gpu_jobs.enabled():
+        raise HTTPException(status_code=503, detail=gpu_jobs.REFUSAL)
 
 # ── Job tracker ────────────────────────────────────────
 # Keyed by entity_id. Each entry: {type, status, percent, message, queued_at}
@@ -276,6 +289,7 @@ async def generate_image(
     entity_id: str,
     background_tasks: BackgroundTasks,
     request: ImagenRequest | None = None,
+    _guard: None = Depends(require_gpu),
 ):
     """Trigger Flux image generation for an entity (async).
 
@@ -318,6 +332,7 @@ async def generate_animation(
     entity_id: str,
     background_tasks: BackgroundTasks,
     request: AnimateRequest | None = None,
+    _guard: None = Depends(require_gpu),
 ):
     """Trigger video loop generation for an entity (async).
 
@@ -361,6 +376,7 @@ async def remove_background(
     background_tasks: BackgroundTasks,
     owner_kind: str = "entity",
     request: RemoveBackgroundRequest | None = None,
+    _guard: None = Depends(require_gpu),
 ):
     """Remove the background from an existing static image (async).
 
@@ -411,7 +427,11 @@ async def remove_background(
 
 
 @router.post("/upscale/{image_id}")
-async def upscale_image(image_id: str, background_tasks: BackgroundTasks):
+async def upscale_image(
+    image_id: str,
+    background_tasks: BackgroundTasks,
+    _guard: None = Depends(require_gpu),
+):
     """Upscale one image's master and re-render its tiers (async).
 
     Offered per image rather than run as a batch: the point is to spend the GPU
