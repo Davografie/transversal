@@ -5,7 +5,6 @@ thing: nothing in the game state changes, so none of them take a duration or an
 inverse. What they need instead is a wire contract with the client, which lives in
 ``services/client_actions.py``.
 """
-
 from transversal.services.effects_registry.action_types import (
     EffectActionMeta,
     EffectFieldDef,
@@ -68,5 +67,30 @@ ACTIONS: list[EffectActionMeta] = [
                           options=["none", "open_sheet"]),
         ],
         target_kind="entity",
+    ),
+    EffectActionMeta(
+        action_id="show_life_path",
+        label="Show Life Path",
+        description=(
+            "Put a life path in front of the player, embedded — in the settings "
+            "overlay when they created the character there, otherwise in that "
+            "character's sheet. Nothing is granted or discovered: the path is "
+            "shown, and whether they may walk it stays the path's own business"
+        ),
+        category="either",
+        effect_type="client",
+        effect_action="life_path",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="entity", label="On Whose Screen", field_type="entity",
+                          required=False, hidden_when_ref="recipient"),
+            # The path is an ordinary target, so it is authored as a targeting
+            # path like every other target ([[B261]]) — a literal id is the same
+            # field with the picker form. `discover_life_path` declares its own
+            # the same way; this action only *shows* what that one would grant.
+            EffectFieldDef(name="target", label="Life Path", field_type="text",
+                          required=True, hidden_when_ref="life_path"),
+        ],
+        target_kind="life_path",
     ),
 ]

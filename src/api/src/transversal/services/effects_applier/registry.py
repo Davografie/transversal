@@ -372,6 +372,7 @@ def _register_core_handlers(em, raz):
     # Client-directed effects (B132): the handler publishes, the commit is a no-op.
     effect_registry.register("client", "open_sheet", _commit)
     effect_registry.register("client", "toast", _commit)
+    effect_registry.register("client", "life_path", _commit)
     # The rest of the dice-pool actions are still resolver-context only.
     effect_registry.register("modify_roll", "*",
         lambda a, eid, u, ctx: None)  # passed through to resolver context

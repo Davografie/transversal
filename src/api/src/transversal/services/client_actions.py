@@ -1,9 +1,9 @@
 """Client-directed effect actions — the SSE contract ([[B132]]).
 
 Some effects act on the **client** rather than on game state: bring a character
-sheet up on someone's screen, or show a toast that stays until it is dismissed.
-Nothing about the world changes, so there is no revert and no persistence — the
-whole effect is "tell a device to do something".
+sheet up on someone's screen, show a toast that stays until it is dismissed, or
+put a life path in front of a player. Nothing about the world changes, so there is
+no revert and no persistence — the whole effect is "tell a device to do something".
 
 Two homes, on purpose:
 
@@ -20,13 +20,20 @@ event safe to replay to a reconnecting tab.
 
 Payload (all ids are entity ids):
 
-    action        "open_sheet" | "toast"
+    action        "open_sheet" | "toast" | "life_path"
     recipient_id  whose screen reacts
     target_id     the entity the action is about ("whoses sheet", a tap target)
     message       toast text
     sticky        toast stays until dismissed
     tap           what tapping the toast does: "none" | "open_sheet"
+    life_path_id  the life path to put in front of the recipient
     sfx_id        provenance, for dedupe and for saying where a toast came from
+
+``life_path`` deliberately carries **no surface**. Where the path appears is the
+client's call, because only the client knows how the character came to exist: a
+character the player created in the settings overlay is shown there, and one that
+appeared some other way (a rule's, say) is shown in that character's sheet. The
+server does not know which, so it does not guess.
 """
 
 from __future__ import annotations
@@ -46,6 +53,7 @@ def client_action_payload(
     message: str = "",
     sticky: bool = False,
     tap: str = "none",
+    life_path_id: str = "",
     sfx_id: str = "",
 ) -> dict[str, Any]:
     """The wire shape of one client action, with the empties left out.
@@ -62,6 +70,8 @@ def client_action_payload(
         payload["sticky"] = True
     if tap and tap != "none":
         payload["tap"] = tap
+    if life_path_id:
+        payload["life_path_id"] = life_path_id
     if sfx_id:
         payload["sfx_id"] = sfx_id
     return payload

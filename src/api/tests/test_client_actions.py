@@ -9,7 +9,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from transversal.domain import Effect, EffectTiming
+from transversal.domain import Effect, EffectTiming, TargetRef
 from transversal.services.client_actions import (
     CLIENT_ACTION_EVENT,
     client_action_payload,
@@ -36,15 +36,16 @@ class Repo:
 
 # ── The declaration ────────────────────────────
 
-def test_the_client_family_declares_both_actions():
+def test_the_client_family_declares_all_three_actions():
     metas = {m.action_id: m for m in EFFECT_ACTION_REGISTRY if m.effect_type == "client"}
-    assert set(metas) == {"open_sheet", "show_toast"}
+    assert set(metas) == {"open_sheet", "show_toast", "show_life_path"}
     for m in metas.values():
         # Nothing in the world changes, so there is nothing to revert.
         assert m.supports_duration is False
         assert m.inverse is None
         assert m.category == "either"
     assert metas["show_toast"].group == "Client"
+    assert metas["show_life_path"].group == "Client"
 
 
 def test_both_client_actions_are_on_the_engine_registry():
@@ -64,6 +65,7 @@ def test_both_client_actions_are_on_the_engine_registry():
         handlers = applier.effect_registry._handlers
         assert ("client", "open_sheet") in handlers
         assert ("client", "toast") in handlers
+        assert ("client", "life_path") in handlers
     finally:
         applier.effect_registry = original
 
@@ -172,3 +174,76 @@ def test_a_toast_only_carries_a_tap_target_when_tapping_opens_something(monkeypa
     assert seen[1]["target_id"] == "char-7"
     # An author who turned sticky off gets the plain toast the app already has.
     assert "sticky" not in seen[1]
+
+
+# ── Show Life Path ─────────────────────────────
+
+def test_show_life_path_tells_the_recipient_which_path(monkeypatch):
+    seen = []
+    import transversal.services.client_actions as ca
+    monkeypatch.setattr(ca, "publish_client_action", lambda payload: seen.append(payload))
+
+    result = apply_effects(
+        _entity(), [_effect("life_path", entity="char-2", target="lp-24f963a8")], Repo())
+    assert seen == [{"action": "life_path", "recipient_id": "char-2",
+                     "life_path_id": "lp-24f963a8"}]
+    assert "lp-24f963a8" in result.applied[0].summary
+
+
+def test_show_life_path_reads_the_path_from_its_reference(monkeypatch):
+    """The authored form is a **reference** ([[B261]]), and the positional `target`
+    is empty on live content. A handler that read only `effect.target` would work
+    in this test file and resolve to nothing in the world — so this pins the ref."""
+    seen = []
+    import transversal.services.client_actions as ca
+    monkeypatch.setattr(ca, "publish_client_action", lambda payload: seen.append(payload))
+
+    effect = _effect("life_path", entity="char-2")
+    effect.refs = {"life_path": TargetRef(value="lp-24f963a8")}
+    apply_effects(_entity(), [effect], Repo())
+    assert seen == [{"action": "life_path", "recipient_id": "char-2",
+                     "life_path_id": "lp-24f963a8"}]
+
+
+def test_show_life_path_carries_no_surface(monkeypatch):
+    """Where the wizard appears is the *client's* call — it is the only side that
+    knows whether the player created the character in the overlay or the character
+    arrived some other way. A surface on the wire would be the server guessing."""
+    seen = []
+    import transversal.services.client_actions as ca
+    monkeypatch.setattr(ca, "publish_client_action", lambda payload: seen.append(payload))
+    apply_effects(_entity(), [_effect("life_path", target="lp-1")], Repo())
+    assert "surface" not in seen[0] and "where" not in seen[0]
+
+
+def test_show_life_path_defaults_to_the_actors_own_screen(monkeypatch):
+    seen = []
+    import transversal.services.client_actions as ca
+    monkeypatch.setattr(ca, "publish_client_action", lambda payload: seen.append(payload))
+    apply_effects(_entity(id="char-9"), [_effect("life_path", target="lp-1")], Repo())
+    assert seen[0]["recipient_id"] == "char-9"
+
+
+def test_show_life_path_with_no_path_shows_nothing_and_says_so(monkeypatch):
+    """A path that resolved to nothing is the [[B282]] shape one layer out: telling
+    a client to embed an empty wizard is worse than saying nothing happened."""
+    seen = []
+    import transversal.services.client_actions as ca
+    monkeypatch.setattr(ca, "publish_client_action", lambda payload: seen.append(payload))
+    result = apply_effects(_entity(), [_effect("life_path", entity="char-2")], Repo())
+    assert seen == []
+    assert "no life path to show" in result.applied[0].summary
+
+
+def test_show_life_path_declares_the_path_as_a_target_role_ref():
+    """The handler reads it through `_resolve_target` → `target_value`, which looks
+    up the ref by **role**, not by name. A ref declared as anything else would
+    resolve to nothing and the action would silently never fire."""
+    from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
+
+    meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "show_life_path")
+    roles = {r.name: r.role for r in meta.refs}
+    assert roles == {"recipient": "entity", "life_path": "target"}
+    assert meta.fields[0].hidden_when_ref == "recipient"
+    assert meta.fields[1].hidden_when_ref == "life_path"
+    assert meta.target_kind == "life_path"

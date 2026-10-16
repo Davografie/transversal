@@ -15,6 +15,7 @@ from transversal.services.effects_applier.datatypes import (
 )
 from transversal.services.effects_applier.handlers_client import (
     _apply_open_sheet,
+    _apply_show_life_path,
     _apply_toast,
 )
 from transversal.services.effects_applier.handlers_change_die import (
@@ -167,6 +168,7 @@ _MUTATION_HANDLERS = {
     # Client-directed, no world change (B132).
     ("client", "open_sheet"): _apply_open_sheet,
     ("client", "toast"): _apply_toast,
+    ("client", "life_path"): _apply_show_life_path,
     ("relationship", "create"): _apply_relationship_create,
     ("travel", "move"): _apply_travel,
     ("location", "set"): _apply_set_location,

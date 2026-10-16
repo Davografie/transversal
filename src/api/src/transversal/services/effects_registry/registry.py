@@ -105,6 +105,7 @@ _DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool
     "set_trait_statement": [("trait", "Trait", ('trait',), 'target', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
     "set_traitset_limit": [("recipient", "Entity", ('entity',), 'entity', False), ("traitset", "Trait Set", ('traitset',), 'target', False)],
     "show_toast": [("recipient", "On Whose Screen", ('entity',), 'entity', False), ("tap_target", "Tap Target", ('entity',), 'target', False)],
+    "show_life_path": [("recipient", "On Whose Screen", ('entity',), 'entity', False), ("life_path", "Life Path", ('life_path',), 'target', False)],
     "spend_razmerit": [("recipient", "Entity", ('entity',), 'entity', False)],
     "split_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
     "start_contest": [("opponent", "Opponent", ('entity',), 'target', False)],
@@ -186,7 +187,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "start_contest": "Contest",
     "grant_sfx": "Rules",
     # Client-directed: they change nothing in the world, only what a screen shows.
-    "open_sheet": "Client", "show_toast": "Client",
+    "open_sheet": "Client", "show_toast": "Client", "show_life_path": "Client",
 }
 
 for _m in EFFECT_ACTION_REGISTRY:

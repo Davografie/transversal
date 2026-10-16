@@ -98,3 +98,42 @@ def _apply_toast(entity, effect: Effect, repo, result: EffectsResult) -> None:
     publish_client_action(payload)
     result.applied.append(AppliedEffect(
         effect, f"toast on {_recipient(subject)}: {payload['message']}"))
+
+
+def _apply_show_life_path(entity, effect: Effect, repo, result: EffectsResult) -> None:
+    """Put a life path in front of the player, embedded ([[B132]]).
+
+    **Display only.** Nothing is granted and nothing is discovered — a rule that
+    wants the character to *have* the path uses ``life_path/discover``, which is a
+    different action on a different family of effect. This one only shows what is
+    there, which is why it belongs to the client at all.
+
+    The payload therefore names the path and nothing else about the presentation.
+    **Where** it appears is the client's decision, because only the client knows
+    how the character came to exist — created in the settings overlay by this
+    player, or arrived some other way — and the server does not know that.
+    """
+    from transversal.services.client_actions import (
+        client_action_payload,
+        publish_client_action,
+    )
+
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    life_path_id = _resolve_target(subject, effect, result, repo) or ""
+    if not life_path_id:
+        # A path that resolved to nothing is the B282 shape one layer out: say so
+        # rather than telling a client to embed an empty wizard.
+        result.applied.append(AppliedEffect(effect, "no life path to show"))
+        return
+    payload = client_action_payload(
+        "life_path", _recipient(subject),
+        life_path_id=life_path_id,
+        sfx_id=str((effect.context or {}).get("sfx_id") or ""),
+    )
+    publish_client_action(payload)
+    result.applied.append(AppliedEffect(
+        effect, f"showing life path {life_path_id} on {_recipient(subject)}"))
