@@ -22,14 +22,29 @@ const account = ref(null)
 const forks = ref([])
 const email = ref('')
 const newName = ref('')
+/** The machine that runs Transversal is away (B88).
+ *
+ * A page nobody has loaded cannot be helped by the edge's offline page, so a tab that
+ * is already open has to say this itself. Distinguished from an ordinary failure on
+ * purpose: `401` is a legitimate account-tier answer ("not signed in"), while a thrown
+ * fetch or a `5xx` means the multiverse is not answering at all. */
+const away = ref(false)
 
 async function call(path, { method = 'GET', body } = {}) {
-  const response = await fetch(`${API}${path}`, {
-    method,
-    credentials: 'same-origin',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  let response
+  try {
+    response = await fetch(`${API}${path}`, {
+      method,
+      credentials: 'same-origin',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    })
+  } catch (e) {
+    away.value = true
+    throw e
+  }
+  if (response.status >= 500) away.value = true
+  else away.value = false
   let payload = null
   try {
     payload = await response.json()
@@ -42,6 +57,10 @@ async function call(path, { method = 'GET', body } = {}) {
 /** One neutral answer for both links, because the registry must not become a
  *  directory of who has an account. */
 const NEUTRAL = 'If that address can receive mail, a link is on its way.'
+
+function attune() {
+  window.location.reload()
+}
 
 async function loadAccount() {
   const { ok, payload } = await call('/accounts/session')
@@ -139,8 +158,24 @@ onMounted(async () => {
     <p v-if="loading" class="muted">Loading…</p>
 
     <template v-else>
+      <!-- The multiverse is not answering. A sign-in form here would be a lie: the
+           form cannot work either, and "wrong password"-shaped failure is the worst
+           possible reading. Same words as the edge's page, since it is the same
+           condition seen from a tab that was already open. -->
+      <section v-if="away" class="card">
+        <h2>No universes within resonance</h2>
+        <p class="muted">
+          The multiverse is not answering, and there is insufficient razmerit here to
+          hold the attunement. Re-attune shortly — the carrier should resolve on its
+          own.
+        </p>
+        <div class="row">
+          <button @click="attune">Attune again</button>
+        </div>
+      </section>
+
       <!-- Signed out: one address, two links. -->
-      <section v-if="!account" class="card">
+      <section v-else-if="!account" class="card">
         <h2>Sign in or create an account</h2>
         <p class="muted">
           We email you a single-use link. No password to remember, and nothing to

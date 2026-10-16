@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>No universes within resonance — Transversal</title>
+    <meta name="theme-color" content="#0a0a0f" />
+    <!-- Re-attune on its own. The page is served by the edge while the machine that
+         runs Transversal is away, so nothing on it may come from that machine: no
+         fonts, no images, no scripts. The wave below is inline SVG. -->
+    <meta http-equiv="refresh" content="20" />
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; display: grid; place-items: center;
+        background: #0a0a0f; color: #cfd2e6;
+        font: 16px/1.6 ui-serif, Georgia, "Times New Roman", serif;
+        padding: 2rem;
+      }
+      main { max-width: 34rem; text-align: center; }
+      .signal { width: 100%; height: 84px; margin-bottom: 1.5rem; opacity: .8; }
+      .signal path {
+        fill: none; stroke: #7d5cff; stroke-width: 1.5;
+        animation: drift 7s ease-in-out infinite alternate;
+      }
+      .signal path.faint { stroke: #3a3f5c; animation-delay: -3s; }
+      @keyframes drift {
+        from { transform: translateX(-14px); opacity: .55; }
+        to   { transform: translateX(14px); opacity: 1; }
+      }
+      h1 {
+        font-size: 1.35rem; font-weight: 500; letter-spacing: .01em;
+        margin: 0 0 .75rem; color: #e8e9f5;
+      }
+      p { margin: 0 0 1rem; }
+      .dim { color: #8b90ab; }
+      .small { font-size: .8rem; color: #6a6f8c; margin-top: 2rem; }
+      a.attune {
+        display: inline-block; margin-top: .5rem; padding: .5rem 1.1rem;
+        border: 1px solid #3a3f5c; border-radius: 3px;
+        color: #cfd2e6; text-decoration: none; font-size: .9rem;
+        letter-spacing: .08em; text-transform: uppercase;
+      }
+      a.attune:hover { border-color: #7d5cff; color: #fff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Two oscillators, the second detuned and fading: a signature losing its
+           lock. Resonance is the project's own model of what a connection is
+           (docs/Game Design/Razmerit Resonance.md), so it is the honest image. -->
+      <svg class="signal" viewBox="0 0 400 84" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 42 C 25 6, 50 6, 75 42 S 125 78, 150 42 S 200 6, 225 42 S 275 78, 300 42 S 350 6, 375 42 S 400 60, 400 42" />
+        <path class="faint" d="M0 42 C 30 20, 60 64, 90 42 S 150 20, 180 42 S 240 64, 270 42 S 330 20, 360 42 S 390 52, 400 42" />
+      </svg>
+
+      <h1>No universes within resonance.</h1>
+      <p>
+        The multiverse is not answering, and there is insufficient razmerit here to hold
+        the attunement. Your signature has gone faint.
+      </p>
+      <p class="dim">Re-attune shortly — the carrier should resolve on its own.</p>
+      <a class="attune" href="/">Attune again</a>
+
+      <p class="small">
+        Transversal is hosted on its keeper's own machine, which is away at the moment.
+        Nothing is lost; the universes keep turning without us.
+      </p>
+    </main>
+  </body>
+</html>

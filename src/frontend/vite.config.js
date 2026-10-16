@@ -52,6 +52,12 @@ export default defineConfig({
           /^\/media\//,
           /^\/enter/,
           /^\/(\?.*)?$/,
+          // `/portal` too, so the **edge's offline page** can be shown when the machine
+          // that runs Transversal is switched off. A cached shell would boot the portal
+          // against a dead server and report a broken app; letting the network answer
+          // means Caddy's page appears instead. The shell is 642 bytes, so always
+          // fetching it costs nothing.
+          /^\/portal/,
         ],
         runtimeCaching: [
           {
