@@ -198,7 +198,9 @@ def test_the_unarm_helpers_stay_inside_their_campaign():
 
 
 def test_a_global_boundary_only_touches_its_own_campaign():
-    beat = EffectDuration(timers=[Timer(event="beat", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE)
+    beat = EffectDuration(
+        timers=[Timer(event="beat", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE
+    )
     with use_campaign(A):
         roll_deferral.arm_passive([_effect()], source_sfx_id="sfx-a", duration=beat)
 
