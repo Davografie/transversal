@@ -40,7 +40,19 @@ export default defineConfig({
         // API call never happened, and the game's own requests 401'd behind it
         // ("unauthorized", account still unverified). `/enter` is the architect and
         // passage entry; `/api/` and `/media/` are proxied by nginx.
-        navigateFallbackDenylist: [/^\/api\//, /^\/media\//, /^\/enter/],
+        //
+        // `/` is here for the same reason and was the one that got missed: the apex
+        // **redirects** it to `/portal`, and a worker answering that navigation from
+        // cache means the redirect never happens — the browser boots the *game* on
+        // the apex, which has no campaign session there, and shows its Unauthorized
+        // screen instead of the portal. Denying it costs nothing on a campaign host,
+        // where nginx serves the same shell from `location /` anyway.
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/media\//,
+          /^\/enter/,
+          /^\/(\?.*)?$/,
+        ],
         runtimeCaching: [
           {
             // Static image variants — cache-first, generous cap.
