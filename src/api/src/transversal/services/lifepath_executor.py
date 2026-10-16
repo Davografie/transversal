@@ -28,6 +28,7 @@ the executor never checked a universe.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional
 
 from transversal.domain import (
@@ -345,6 +346,8 @@ def resolve_step(
                              bindings=effect_context[BINDINGS_CONTEXT_KEY])
         _persist(entity, result, repo, old_razmerit)
 
+    _name_cache: dict = {}
+
     return {
         "done": flow.get("done", False),
         "step_id": step.id,
@@ -352,7 +355,9 @@ def resolve_step(
         "entry_key": key,
         "entry_label": entry.label,
         "bound": binding is not None,
-        "applied": [a.summary for a in result.applied],
+        # Named, not just ids ([[B303]]): a step's report is the one place a player
+        # reads what their effects actually did, and `loc-6549049` says nothing.
+        "applied": [named_summary(a.summary, repo, _name_cache) for a in result.applied],
         "scheduled": scheduled,
         "pending_choices": ([c.kind for c in result.pending_choices]
                             + [c.element for c in ref_choices]
@@ -591,6 +596,61 @@ def _ensure_enrollment(entity: Entity, pt: PendingTerm, repo,
 
     if repo.get_relationship(entity.id, faction_id, "membership") is None:
         repo.create_relationship(entity.id, faction_id, "membership")
+
+
+#: The id prefixes the world uses. A **fixed list** rather than "anything with a
+#: dash", because a summary is prose: a loose matcher would rewrite words
+#: ("non-player", a range, a count) into names nobody asked for.
+_ID_PREFIXES = (
+    "loc", "location", "character", "char", "gmc", "asset", "faction", "universe",
+    "trait", "traitsetting", "ts", "traitset", "rt", "lp", "sfx", "projection", "proj",
+)
+
+_ID_TOKEN_RE = re.compile(r"\b(?:" + "|".join(_ID_PREFIXES) + r")-[A-Za-z0-9][A-Za-z0-9_-]*")
+
+#: Readers that can turn an id into a name, in the order they are tried.
+_NAME_READERS = ("get_entity", "get_trait", "get_lifepath", "get_roll_table",
+                 "get_traitset_by_id", "get_projection")
+
+
+def named_summary(summary: str, repo, cache: Optional[dict] = None) -> str:
+    """Replace the ids in an applied-effect summary with the names they stand for.
+
+    The summaries are written by the **handlers**, which know the id they resolved
+    and nothing else — ``AppliedEffect.summary`` is a plain string — so a step's
+    report read *"relationship relation → loc-6549049"*. Names live in the
+    readers, so this is the pass that puts them back: the same job
+    ``sfx_text.repo_name_resolver`` does for card text, for the one surface that
+    says what an effect **did** ([[B303]]).
+
+    A token nobody answers for is left **exactly as it was**. A summary that gains
+    a name is an improvement; one that loses a fact is a regression, and a miss is
+    far more likely to be an id this does not know than a nameable thing.
+    """
+    if not summary or repo is None:
+        return summary or ""
+    cache = {} if cache is None else cache
+
+    def name_for(token: str) -> str:
+        if token in cache:
+            return cache[token]
+        found = token
+        for reader in _NAME_READERS:
+            fn = getattr(repo, reader, None)
+            if fn is None:
+                continue
+            try:
+                obj = fn(token)
+            except Exception:
+                obj = None
+            name = getattr(obj, "name", "") if obj is not None else ""
+            if name:
+                found = str(name)
+                break
+        cache[token] = found
+        return found
+
+    return _ID_TOKEN_RE.sub(lambda m: name_for(m.group(0)), summary)
 
 
 def _persist(entity: Entity, result: EffectsResult, repo, old_razmerit: Optional[int] = None) -> None:

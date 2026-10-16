@@ -25,6 +25,7 @@ from transversal.domain import Effect, EffectTiming, TargetRef, TargetSpec
 from transversal.services.effects_applier.entry import _publish_output, _result_counts
 from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY, EffectsResult
 from transversal.services.effects_engine.refs import resolve_refs
+from transversal.services.lifepath_executor import named_summary
 from transversal.services.target_resolver import Binding, TargetContext
 
 PATH_REF = "lp-24f963a8"
@@ -128,3 +129,47 @@ def test_an_unnamed_effect_publishes_nothing():
     context: dict = {}
     _publish_output(effect, result, context, {})
     assert not (context.get(BINDINGS_CONTEXT_KEY) or {})
+
+
+# ── 4. the report names things ────────────────────────────────────────────────
+
+class NamingRepo:
+    """Only the readers `named_summary` walks, so a miss is a miss."""
+
+    def __init__(self):
+        self.calls = []
+
+    def get_entity(self, eid):
+        self.calls.append(("entity", eid))
+        return NS(id=eid, name="Antarctica") if eid == "loc-1" else None
+
+    def get_trait(self, tid):
+        self.calls.append(("trait", tid))
+        return NS(id=tid, name="origin") if tid == "trait-1" else None
+
+
+def test_a_summary_names_the_ids_it_can_and_leaves_the_rest_alone():
+    """The matcher is deliberately a fixed prefix list: a summary is prose, and a
+    loose matcher would rewrite "d8" or "no-owner" into names nobody asked for."""
+    repo = NamingRepo()
+    assert named_summary("relationship relation → loc-1", repo) == "relationship relation → Antarctica"
+    assert named_summary("gained trait-1 at d8", repo) == "gained origin at d8"
+    # Unknown to the readers, prose, a die, a dashed word, a bare key: untouched.
+    for untouched in ("placed at loc-9999", "no owner path resolved",
+                      "d8 and no-owner note", "3 of them", "111981129"):
+        assert named_summary(untouched, repo) == untouched, untouched
+
+
+def test_the_same_id_is_looked_up_once():
+    repo = NamingRepo()
+    cache: dict = {}
+    named_summary("placed at loc-1", repo, cache)
+    before = len(repo.calls)
+    named_summary("and again at loc-1", repo, cache)
+    assert len(repo.calls) == before, "the cache did not hold"
+
+
+def test_a_repo_that_cannot_answer_leaves_the_summary_intact():
+    assert named_summary("placed at loc-1", object()) == "placed at loc-1"
+    assert named_summary("placed at loc-1", None) == "placed at loc-1"
+    assert named_summary("", NamingRepo()) == ""
