@@ -146,8 +146,15 @@ machinery rather than adding a parallel system.
 - **`select source`-dependent types** — a step whose element comes from
   `select source` now resolves in the SFX editor (it threads `sourceElement`);
   noted for completeness.
-- **`{name}` substitution vs `select variable`** — a `many` binding still can't
-  be referenced from a flat field (array re-use goes through `select variable`).
+- **`{name}` substitution vs `select variable`** — a `many` binding still cannot be
+  *substituted* into a flat field, and array re-use is `select variable`. **One
+  exception, and it is resolution rather than substitution ([[B307]]):** the
+  **rating** a trait-creating effect makes may state a `{name}`, because the field
+  it lives in is a row (`context['dice']`) rather than a string. `resolve_effect_dice`
+  reads it with the same `select variable` step and the same die reader a `result_spec`
+  path uses, so the handler cannot tell the two apart. Gated on
+  `effects_registry.declares_rating_row`, so `target`/`entity`/`refs.*.value` keep
+  the refusal they have always had.
 - **Per-die effects resolve everything per die** — a `die_filter` runs an armed
   effect once per matching die, and its `target_spec`, `entity_spec` and `refs`
   are each resolved with **that die as the roll** (`{rolled_dice: [die]}`), so

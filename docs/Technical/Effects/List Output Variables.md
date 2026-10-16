@@ -62,6 +62,24 @@ entities exposes only the first as `friends`; the other 4 are dropped and the
    substitutes `{name}` only when the binding is `"one"` (never stringifies a
    list). Array re-use is via `select variable`, not the flat string fields. This
    keeps `target`/`entity`/`result`/`refs.<name>.value` unambiguous.
+
+   > [!note] Amended 2026-10-16 ([[B307]]) — the **rating** is the exception
+   > Substitution is unchanged. What changed is that a trait-creating effect's
+   > rating is a **row** (`context['dice']`, with `result` as its first die), and a
+   > row can hold a name: `resolve_effect_dice` **resolves** `{formation_rating}`
+   > through the same `select variable` step a path uses and writes every die it
+   > holds. So where `effects_registry.declares_rating_row` is true, a `many` name
+   > is no longer reported as unbound in `result` — it has a consumer. Everywhere
+   > else decision 2 stands exactly as written, `target`/`entity`/`refs.*.value`
+   > included, and the editor offers list-valued names only where a row exists so
+   > the two cannot disagree.
+   >
+   > Also fixed underneath: `_lookup_literal` could not fetch a `rating_die` /
+   > `capacity_die` **at all**, so `select variable` over a rating returned
+   > nothing — and because several dice share their instance's id, a binding
+   > repeats one id and the lookup returned that instance's dice once per
+   > repetition (sixteen dice where four were named). `select variable` now visits
+   > each **id** once.
 3. **`select variable` is the array re-use path.** A `"many"` binding seeds
    `values = [lookup each id]` and `current_type = ValueType(element, "many")`.
    Downstream `target_spec` / `refs` fan-out (already implemented) then applies

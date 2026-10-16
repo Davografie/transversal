@@ -63,6 +63,13 @@ The rule of thumb: **prefer a general primitive over a bespoke effect.** "Reveal
 - **Actions (35):** dice-pool manipulation, outcome manipulation, trait step/set/gain/reveal, razmerit earn/spend/transfer, create asset, attune, travel, set location, life-path enroll/next/muster, relationship create, targeting ban.
 - **Timings (6):** `immediate`, `end_of_beat`, `end_of_scene`, `end_of_session`, `after_beats`, `on_condition` — plus timers.
 
+> [!warning] The inventory above is a **dated snapshot**, and its counts have drifted
+> Triggers, conditions, target kinds, filters and actions have all grown since it was
+> taken (the SFX editor's own reference counts **30 triggers, 27 conditions and 82
+> actions** as of 2026-10-16). For what the vocabulary is *now*, read
+> [[SFX Reference]] — it is emitted from the declarations rather than transcribed, so
+> it cannot drift. This page's value is the *argument* below, not these numbers.
+
 ## The variable problem
 
 Variables have **two halves that must agree**:
