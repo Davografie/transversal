@@ -24,8 +24,8 @@
         @clear="clear"
       >
         <template #option="{ option }">
-          <span class="tp-name">{{ option.name }}</span>
-          <span v-if="option.subtitle || option.universe" class="tp-universe">{{ option.subtitle || option.universe }}</span>
+          <span class="entity-name">{{ option.name }}</span>
+          <span v-if="option.subtitle || option.universe" class="entity-universe tp-universe">{{ option.subtitle || option.universe }}</span>
         </template>
       </SearchDropdown>
     </div>
@@ -285,18 +285,24 @@ watch(effective, load)
 }
 .tp-chip-x:hover { color: var(--accent); }
 .tp-input { flex: 1; min-width: 0; }
+/* The results are an inline list now, so the field can be far taller than these
+   buttons; `align-self` keeps them on the field's line instead of floating in
+   the middle of the list. When the list is closed the row is the buttons' own
+   height, so this changes nothing. */
 .tp-random {
-  flex: none; width: 26px; height: 24px; line-height: 1; cursor: pointer;
+  flex: none; align-self: flex-start; width: 26px; height: 24px; line-height: 1; cursor: pointer;
   background: var(--overlay-6); border: 1px solid var(--overlay-12);
   border-radius: var(--radius-xs); color: var(--text-dim); font-size: 13px;
 }
 .tp-random:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .tp-random:disabled { opacity: 0.4; cursor: not-allowed; }
-.tp-name { flex: 1; }
-.tp-universe { font-size: 8px; color: var(--text-dim); margin-left: 8px; white-space: nowrap; }
+/* Result rows are the app's `.entity-row` + `.entity-name` / `.entity-universe`
+   shell (assets/gm-panel.css), supplied by SearchDropdown; all this adds is the
+   trailing secondary that must not wrap. */
+.tp-universe { margin-left: 8px; white-space: nowrap; }
 
 .tp-filter {
-  flex: none; position: relative; width: 26px; height: 24px; line-height: 1; cursor: pointer;
+  flex: none; align-self: flex-start; position: relative; width: 26px; height: 24px; line-height: 1; cursor: pointer;
   background: var(--overlay-6); border: 1px solid var(--overlay-12);
   border-radius: var(--radius-xs); color: var(--text-dim); font-size: 12px;
 }

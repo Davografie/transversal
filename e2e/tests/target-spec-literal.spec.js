@@ -13,7 +13,11 @@
 //     actually resolve, not a list this component keeps;
 //   * picking a name stores the **id**, and the step then type-checks as
 //     `location / one` — which is the whole reason the step exists: a filtered
-//     collection can only ever be `many`.
+//     collection can only ever be `many`;
+//   * the picker's results are an **inline list the host panel scrolls**, not an
+//     overlay an `overflow` ancestor crops (B47). This is the only spec that
+//     reaches the picker nested three panels deep, so the geometry rides here
+//     rather than in a second spec that would duplicate the whole journey.
 //
 // It builds a path against a **scratch table**, because the panels auto-save: a spec
 // that typed into `rt-earth-regions` would write to authored content.
@@ -59,22 +63,35 @@ async function openPathBuilder(page) {
   const earth = page.locator('.entity-row.tree-row', { hasText: 'Earth' }).first()
   await earth.waitFor({ state: 'visible', timeout: 20000 })
   await earth.click()
-  await page.locator('.section-btn', { hasText: 'Roll Tables' }).click()
-  await page.locator('.rtp-group', { hasText: 'Shared' }).first().click()
+  // Wait for each step's own control before clicking it: these panels re-read
+  // themselves after a write, so a blind click can race a re-render — and on a
+  // cold Vite (a component just changed) the 30s test timeout is easy to hit.
+  const rollTables = page.locator('.section-btn', { hasText: 'Roll Tables' })
+  await rollTables.waitFor({ state: 'visible', timeout: 20000 })
+  await rollTables.click()
+  const shared = page.locator('.rtp-group', { hasText: 'Shared' }).first()
+  await shared.waitFor({ state: 'visible', timeout: 20000 })
+  await shared.click()
   const table = page.locator('.entity-name', { hasText: new RegExp(`^${NAME}$`) }).first()
   await table.waitFor({ state: 'visible', timeout: 20000 })
   await table.click()
   await expect(page.locator('.rte-root')).toBeVisible({ timeout: 20000 })
   await expect(page.locator('.rte-entry-body')).toHaveCount(2, { timeout: 20000 })
 
-  await page.locator('.rte-edit').first().click()
+  const edit = page.locator('.rte-edit').first()
+  await edit.waitFor({ state: 'visible', timeout: 20000 })
+  await edit.click()
   await expect(page.locator('.eep-root')).toBeVisible({ timeout: 20000 })
   // A **new** variable, so its path starts empty and the seed menu is what is on
   // screen. `.last()` on both: `.first()` would be a declaration the table already
   // has, and with auto-save editing it writes.
-  await page.locator('.eep-root .bv-add').click()
+  const addVar = page.locator('.eep-root .bv-add')
+  await addVar.waitFor({ state: 'visible', timeout: 20000 })
+  await addVar.click()
   await page.locator('.eep-root .bv-name').last().fill('picked_location')
-  await page.locator('.eep-root .pf-open').last().click()
+  const openPath = page.locator('.eep-root .pf-open').last()
+  await openPath.waitFor({ state: 'visible', timeout: 20000 })
+  await openPath.click()
   await expect(page.locator('.tsb-root')).toBeVisible({ timeout: 20000 })
 }
 
@@ -84,7 +101,9 @@ test('a literal step is a seed, and its value is picked by name', async ({ page,
   await openPathBuilder(page)
 
   // The empty builder's ＋ opens the seed menu.
-  await page.locator('.tsb-plus').first().click()
+  const plus = page.locator('.tsb-plus').first()
+  await plus.waitFor({ state: 'visible', timeout: 20000 })
+  await plus.click()
   // A literal starts a path, so it is offered there…
   const seed = page.locator('.tsb-add-btn', { hasText: 'Pick one thing' }).first()
   await expect(seed).toBeVisible({ timeout: 20000 })
@@ -108,6 +127,40 @@ test('a literal step is a seed, and its value is picked by name', async ({ page,
 
   const option = page.locator('.sd-item', { hasText: /^India/ }).first()
   await option.waitFor({ state: 'visible', timeout: 20000 })
+  await option.scrollIntoViewIfNeeded()
+
+  // ── the result list is an inline list, not an overlay a panel can crop (B47) ──
+  // The human: *"The dropdown list gets cropped wherever the component is
+  // embedded. Instead of a dropdown list, an actual list might be more
+  // convenient."* The cause was structural: the list was `position: absolute`
+  // inside a relative root, so any ancestor with `overflow` clipped it — and this
+  // picker is nested three panels deep, the case that clipped worst. These pin the
+  // *rendered* fact, so they hold whatever the markup becomes.
+  await expect(option).toHaveClass(/\bentity-row\b/)
+  const shape = await option.evaluate((el) => {
+    const list = el.parentElement
+    const cs = getComputedStyle(list)
+    // The nearest ancestor that scrolls — the panel the list must live inside.
+    let s = list.parentElement, scroller = null
+    while (s) {
+      if (/(auto|scroll)/.test(getComputedStyle(s).overflowY)) { scroller = s; break }
+      s = s.parentElement
+    }
+    return {
+      position: cs.position,
+      overflowY: cs.overflowY,
+      hasScroller: !!scroller,
+      rowHeight: Math.round(el.getBoundingClientRect().height),
+    }
+  })
+  expect(shape.position, 'the list must be in flow, so no ancestor can crop it').toBe('static')
+  expect(shape.overflowY, 'the list must not own a second scroller').not.toMatch(/auto|scroll/)
+  expect(shape.hasScroller, 'the row must sit inside the panel that scrolls it').toBe(true)
+  expect(shape.rowHeight, 'a row is the shared shell, not a one-line crumb').toBeGreaterThanOrEqual(28)
+
+  // That a clipped overlay cannot do this is the click below's own assertion:
+  // Playwright refuses to click an element that does not receive pointer events
+  // where it claims to be, so the pick is the hit-testability proof.
   await option.click()
 
   // Picking a *name* stores the id — the option offers the name, the step keeps the
@@ -123,8 +176,12 @@ test('the id box stays as the way out for an element with no candidates', async 
   await bootApp(page)
   await openPathBuilder(page)
 
-  await page.locator('.tsb-plus').first().click()
-  await page.locator('.tsb-add-btn', { hasText: 'Pick one thing' }).first().click()
+  const plus = page.locator('.tsb-plus').first()
+  await plus.waitFor({ state: 'visible', timeout: 20000 })
+  await plus.click()
+  const seed = page.locator('.tsb-add-btn', { hasText: 'Pick one thing' }).first()
+  await seed.waitFor({ state: 'visible', timeout: 20000 })
+  await seed.click()
   const step = page.locator('.tsb-step').first()
   await step.locator('select.tsb-kind').selectOption('literal')
   // `pool` is one of the nine catalog elements `targetCandidates` cannot list, so

@@ -1,7 +1,6 @@
 <template>
   <div class="sd-root">
     <input
-      ref="inputEl"
       class="sd-input"
       :class="{ 'sd-input-clearable': clearable && hasValue }"
       :value="open ? query : selectedLabel"
@@ -23,39 +22,49 @@
       title="Clear"
       @mousedown.prevent="clear"
     >×</button>
-    <div v-if="open" :id="listId" class="sd-drop" :class="{ 'sd-drop-up': dropUp }" role="listbox">
-      <div v-if="loading && !available.length" class="sd-empty">Searching…</div>
-      <div v-else-if="!available.length" class="sd-empty">No matches</div>
+    <div v-if="open" :id="listId" class="sd-list" role="listbox">
+      <div v-if="loading && !available.length" class="sd-state">Searching…</div>
+      <div v-else-if="!available.length" class="sd-state">No matches</div>
       <div
         v-for="(opt, i) in available"
+        :id="optionId(i)"
         :key="opt.value"
-        class="sd-item"
+        class="sd-item entity-row"
         :class="{ 'sd-item-active': i === highlighted }"
         role="option"
         :aria-selected="i === highlighted ? 'true' : 'false'"
         @mousedown.prevent="pickAt(i)"
         @mousemove="highlighted = i"
       >
-        <slot name="option" :option="opt.raw">{{ opt.label }}</slot>
+        <slot name="option" :option="opt.raw">
+          <span class="entity-name">{{ opt.label }}</span>
+        </slot>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, ref, onUnmounted } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
 import { useCombobox } from '@/composables/useCombobox.js'
 
 // Single-select typeahead. The list mechanics (filter, highlight, keyboard,
 // aria, an async source) come from `useCombobox`; this owns the input, the
-// clear affordance, the drop-up flip and the single-value commit.
+// clear affordance, the result list and the single-value commit.
+//
+// **The results are an inline list, never an overlay.** An absolutely
+// positioned list is cropped by any ancestor with `overflow` — which is most
+// hosts (a GM panel's scroll zone, the sheet, the wizard), so the same field
+// clipped in different places depending on where it was embedded. In flow the
+// host scrolls and nothing can clip, and the rows are the app's own
+// `.entity-row` shell. See [[UI-UX Design#Pickers]].
 const props = defineProps({
   // An array, or `(query) => options | Promise<options>` for a server-backed
   // lookup. The function form is new: pickers whose vocabulary is too large to
   // preload can now query as the author types.
   options: { type: [Array, Function], default: () => [] },
   // Currently selected value (single-select mode). Excluded from the
-  // dropdown and shown as the placeholder label once resolved.
+  // list and shown as the placeholder label once resolved.
   modelValue: { type: [String, Number], default: '' },
   // Extra ids to exclude (chip/append mode where several values are chosen).
   excludeIds: { type: Array, default: () => [] },
@@ -72,9 +81,7 @@ const props = defineProps({
 
 const emit = defineEmits(['select', 'clear'])
 
-const inputEl = ref(null)
 const query = ref('')
-const dropUp = ref(false)
 const hasValue = computed(() => props.modelValue !== '' && props.modelValue != null)
 
 const chosen = computed(() =>
@@ -100,7 +107,7 @@ const combo = useCombobox({
     raw: o,
   }),
 })
-const { listId, open, loading, highlighted, available, activeDescendant, move, openList, closeList } = combo
+const { listId, open, loading, highlighted, available, activeDescendant, optionId, move, openList, closeList } = combo
 
 const selectedLabel = computed(() => {
   if (props.modelValue === '' || props.modelValue == null) return ''
@@ -117,16 +124,8 @@ const selectedLabel = computed(() => {
   return (opt && opt[props.labelKey]) || props.fallbackLabel || String(props.modelValue)
 })
 
-async function openDrop() {
+function openDrop() {
   openList()
-  await nextTick()
-  const rect = inputEl.value?.getBoundingClientRect()
-  if (!rect) {
-    dropUp.value = false
-    return
-  }
-  // Dropdown max-height is 140px; flip upward when there's not enough room below.
-  dropUp.value = (window.innerHeight - rect.bottom) < 160
 }
 
 // A chosen value reads as *text*, not as placeholder-grey: the input shows the
@@ -192,15 +191,17 @@ onUnmounted(() => clearTimeout(closeTimer))
   padding: 0 2px; cursor: pointer; background: none; border: none; color: var(--text-dim);
 }
 .sd-clear:hover { color: var(--danger-soft); }
-.sd-drop {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
-  max-height: 140px; overflow-y: auto;
-  background: var(--bg-panel-raised); border: 1px solid var(--overlay-10); border-radius: var(--radius-xs);
+/* In flow, not an overlay (see the header comment). No max-height and no
+   scroller of its own: the host panel is the scroller, so a long list cannot
+   produce a second scrollbar inside the first. */
+.sd-list {
+  display: flex; flex-direction: column; gap: 3px;
+  margin-top: 4px;
 }
-.sd-drop-up { top: auto; bottom: 100%; }
-.sd-item {
-  font-size: 10px; padding: 4px 8px; cursor: pointer; color: var(--text);
-}
-.sd-item:hover, .sd-item-active { background: rgba(0,200,150,0.1); color: var(--accent); }
-.sd-empty { font-size: 10px; padding: 6px 8px; color: var(--text-dim); }
+/* The `.entity-row` shell (assets/gm-panel.css) supplies the chrome — row
+   padding, radius, fill and hover. Only the picker's own marks live here, and
+   the highlight is a token tint rather than the raw rgba this used to carry. */
+.sd-item.sd-item-active { background: var(--accent-12); }
+.sd-item.sd-item-active .entity-name { color: var(--accent); }
+.sd-state { font-size: 10px; padding: 6px 8px; color: var(--text-dim); }
 </style>
