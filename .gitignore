@@ -52,9 +52,6 @@ playwright-report/
 # stay on disk but deliberately out of version control — the GitHub repo is
 # public, and history is published along with the tree.
 #
-# Agent operations manual: names players, describes the private repo and the
-# ARCHITECT_TOKEN entry path.
-AGENTS.md
 # ArangoDB dumps — contain player characters and campaign content.
 .backups/
 backups/
