@@ -2,7 +2,13 @@
   <div class="ee-rating">
     <div class="ee-result-mode">
       <button type="button" :class="{ active: mode === 'die' }" @click="pick('die')">Dice</button>
-      <button type="button" :class="{ active: mode === 'variable' }" @click="pick('variable')">Variable</button>
+      <!-- Offered only when there is something to name. A mode that opens on an
+           empty list is a dead end, and "the rating the source already has" is a
+           *list* of dice — `rating_die`, `many` — which is the **Path**'s job, not
+           this one's ([[B307]]). A stored `{name}` keeps the mode visible, so a
+           value the author already chose is never stranded. -->
+      <button v-if="variableChoices.length" type="button" :class="{ active: mode === 'variable' }"
+              @click="pick('variable')">Variable</button>
       <!-- A die can also be a *fact in the world* — a challenge's next capacity
            slot, or the rating the rule's own source already has — which no literal
            names. Then it is a path, and a path takes **every** die it resolves
