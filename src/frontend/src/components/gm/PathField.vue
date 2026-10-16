@@ -42,7 +42,21 @@ const props = defineProps({
   // not be offered there ([[Dynamic SFX Reach]]). Default true — every other host
   // is an effect or a condition, where the source is real.
   allowSource: { type: Boolean, default: true },
+  // The identity of this path's child panel. **Two paths must not share it**, or
+  // opening the second replaces the first: `Panel.openChild` reuses the panel it
+  // finds for the same component and no id, so the first path vanished instead of
+  // staying open as a collapsed child, and its half-built steps showed under the
+  // second path's title (the author's report, 2026-10-17). Defaults to a
+  // per-instance id, which is correct for every host that renders one PathField
+  // per field; a host that *reuses* one instance for different fields passes the
+  // field's name here.
+  panelId: { type: String, default: '' },
 })
+
+//: Falls back to an id unique to this component instance, so two path fields are
+//: two children by construction rather than by each host remembering to say so.
+let pathFieldSeq = 0
+const instanceId = `path-${++pathFieldSeq}`
 
 // `resolve` says which element the path lands on — an effect that means different
 // things at different destinations reads it (a rating die can be timed, a pool die
@@ -99,6 +113,9 @@ const pathBinding = {
 
 function open() {
   panel.open({
+    // The path's own identity, so this panel is *this* path's. Without it every
+    // path in the editor collided on one child (see the `panelId` prop).
+    id: props.panelId || instanceId,
     component: GmPathEditPanel,
     title: props.title,
     context: { pathBinding },

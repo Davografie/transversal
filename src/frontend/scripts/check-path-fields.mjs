@@ -884,6 +884,17 @@ const objectAfter = (src, key) => {
     ok('the step panel writes into the path panel\'s live draft',
       /draft\.boundVariables\s*=/.test(stepPanel), true)
 
+    // **Every path field opens its own child panel.** `Panel.openChild` reuses the
+    // panel it finds for the same component with no id — so two path fields sharing
+    // one child meant the second *replaced* the first: it did not stay open as a
+    // collapsed child, and the first path's half-built steps showed under the
+    // second path's title (the author's report, 2026-10-17).
+    const pathField = readFileSync(join(SRC, 'components/gm/PathField.vue'), 'utf8')
+    ok('a path field gives its child panel an identity',
+      /id:\s*props\.panelId\s*\|\|\s*instanceId/.test(pathField), true)
+    ok('…so two path fields cannot collide by default',
+      /let pathFieldSeq = 0/.test(pathField) && /`path-\$\{\+\+pathFieldSeq\}`/.test(pathField), true)
+
     // The override is a real field rather than decoration: the editor offers it, the
     // read and the save carry it (above), and the resolver honours it.
     const bv = readFileSync(join(SRC, 'components/gm/BoundVariablesEditor.vue'), 'utf8')
