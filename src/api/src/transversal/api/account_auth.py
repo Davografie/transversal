@@ -27,9 +27,11 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from transversal.api import access_tokens
+from transversal.api import access_tokens, auth
 from transversal.api.auth import _is_https
+from transversal.db.arango import use_database
 from transversal.db.registry_repository import (
+    PURPOSE_ENTER_FORK,
     PURPOSE_SIGN_IN,
     PURPOSE_VERIFY,
     RegistryRepository,
@@ -43,6 +45,10 @@ logger = logging.getLogger("transversal.accounts")
 #: never read this one, and vice versa.
 COOKIE_NAME = "tv2_account"
 COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days, sliding-like lifetime
+
+#: Where a fork-entry link is redeemed. Shared with the forks API, which mints the
+#: link and so has to name the same path ([[B88]]).
+ENTER_PATH = "/api/v1/accounts/enter"
 
 router = APIRouter(prefix="/api/v1/accounts", tags=["accounts"])
 
@@ -269,4 +275,58 @@ async def whoami(request: Request) -> JSONResponse:
 async def sign_out() -> JSONResponse:
     response = JSONResponse({"signed_in": False})
     response.delete_cookie(COOKIE_NAME, path="/")
+    return response
+
+
+@router.get("/enter")
+async def enter_fork(request: Request, f: str = "") -> JSONResponse:
+    """Redeem a single-use fork-entry link for an architect session ([[B88]]).
+
+    **The link is the authority, so no account session is required** — and that is
+    the point. The account cookie is host-scoped to the portal, so it is not sent
+    to ``<slug>.<base-domain>``; this endpoint is what crosses that boundary, once,
+    with a token that is bound to the fork and short-lived.
+
+    Everything it needs comes from the consumed record: which account, which fork.
+    It then scopes the request to that fork's database and takes the architect seat
+    there — creating one if the fork has none, exactly as the architect-token path
+    does for a single-campaign install.
+    """
+    if not _configured():
+        raise HTTPException(status_code=503, detail="authentication is not configured")
+
+    repo = _repo()
+    record = account_links.consume(repo, f, PURPOSE_ENTER_FORK)
+    # One answer for forged, expired, spent, wrong-purpose and tampered alike.
+    if not record:
+        return JSONResponse({"detail": "that link is not valid"}, status_code=401)
+
+    account = repo.get_account(record.get("account_id") or "")
+    fork = repo.get_fork(record.get("fork_id") or "")
+    if (
+        not account
+        or not account.verified_at
+        or not fork
+        or fork.owner_account != account.id
+    ):
+        logger.warning(
+            "[accounts] fork entry refused for account %s", record.get("account_id")
+        )
+        return JSONResponse({"detail": "that link is not valid"}, status_code=401)
+
+    with use_database(fork.database):
+        owner_player = auth.ensure_owner()
+    if not owner_player:
+        return JSONResponse(
+            {"detail": "no owner seat could be established"}, status_code=503
+        )
+
+    response = RedirectResponse(url="/", status_code=302)
+    auth.set_session_cookie(response, request, owner_player, owner=True)
+    logger.warning(
+        "[accounts] %s entered fork %s (%s) as its architect",
+        account.id,
+        fork.id,
+        fork.database,
+    )
     return response

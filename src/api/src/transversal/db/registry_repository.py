@@ -31,9 +31,12 @@ from transversal.domain.accounts import Account, Fork
 if TYPE_CHECKING:
     from arango.database import StandardDatabase
 
-#: What an email link is for. One mechanism, two entry points (recovery is sign-in).
+#: What an account link is for. One mechanism, several entry points (recovery is
+#: sign-in; entering a fork you own is the third).
 PURPOSE_VERIFY = "verify"
 PURPOSE_SIGN_IN = "sign_in"
+#: A single-use link that enters one fork as its architect ([[B88]]).
+PURPOSE_ENTER_FORK = "enter_fork"
 
 
 def _now_iso() -> str:
@@ -199,14 +202,20 @@ class RegistryRepository:
     # ── Email links ───────────────────────────────────────────────────
 
     def create_account_token(
-        self, account_id: str, purpose: str, expires_at: str
+        self, account_id: str, purpose: str, expires_at: str, fork_id: str = ""
     ) -> str:
-        """Record a link's liveness. The link itself is signed (access_tokens)."""
+        """Record a link's liveness. The link itself is signed (access_tokens).
+
+        ``fork_id`` binds a fork-entry link to the fork it may open. The record is
+        the authority for that, not the token: the token names only this row, so the
+        binding cannot be tampered with and single use is enforceable.
+        """
         token_id = f"link-{uuid.uuid4().hex[:12]}"
         self._tokens.insert(
             {
                 "_key": token_id,
                 "account_id": account_id,
+                "fork_id": fork_id,
                 "purpose": purpose,
                 "created_at": _now_iso(),
                 "expires_at": expires_at,

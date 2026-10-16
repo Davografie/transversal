@@ -113,6 +113,16 @@ def _set_session_cookie(
     )
 
 
+def set_session_cookie(response, request: Request, player, owner: bool = False) -> None:
+    """Issue the campaign cookie for ``player``.
+
+    Public because the fork-entry path ([[B88]]) mints a campaign session from the
+    account tier, and the cookie's flags — httponly, samesite, ``Secure`` behind a
+    TLS edge — must not be re-stated in a second place.
+    """
+    _set_session_cookie(response, request, player.id, int(player.epoch), owner=owner)
+
+
 async def session_refresh_middleware(request: Request, call_next):
     """Slide an in-use session forward, but only when it is getting old."""
     response = await call_next(request)

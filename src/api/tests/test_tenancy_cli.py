@@ -10,8 +10,9 @@ provisioner is stubbed where the real one would clone.
 
 import pytest
 
+from transversal.api import access_tokens
 from transversal.db import registry
-from transversal.db.registry_repository import RegistryRepository
+from transversal.db.registry_repository import PURPOSE_ENTER_FORK, RegistryRepository
 from transversal.tenancy_cli import main
 
 
@@ -70,6 +71,8 @@ def _no_global_env(monkeypatch):
     # The default database is the global's default name; pin it so the assertion
     # does not depend on the machine's env.
     monkeypatch.setenv("ARANGO_DATABASE", "transversal")
+    # `enter-fork` mints a signed link, which fails closed without a usable key.
+    monkeypatch.setenv("SESSION_SECRET", "a" * 64)
 
 
 def _verified(repo, email="dave@example.com"):
@@ -244,3 +247,46 @@ def test_databases_prints_the_global_and_every_fork(repo, capsys):
 
     lines = capsys.readouterr().out.split()
     assert lines == ["transversal", "tv2_fork_one"]
+
+
+# ── enter-fork ────────────────────────────────────────────────────────
+
+
+def test_enter_fork_prints_a_link_bound_to_that_fork(repo, capsys):
+    owner = _verified(repo)
+    fork = repo.create_fork("One", "tv2_fork_one", owner.id, slug="one")
+
+    assert main(["enter-fork", fork.id]) == 0
+
+    link = capsys.readouterr().out.strip()
+    assert link.startswith("/api/v1/accounts/enter?f=")
+    payload = access_tokens.verify(link.split("f=", 1)[1], access_tokens.AUD_ACCOUNT_LINK)
+    record = repo.get_account_token(payload["token"])
+    assert record["purpose"] == PURPOSE_ENTER_FORK
+    assert record["fork_id"] == fork.id
+    assert record["account_id"] == owner.id
+
+
+def test_enter_fork_names_the_host_when_a_base_domain_is_set(repo, monkeypatch, capsys):
+    owner = _verified(repo)
+    fork = repo.create_fork("One", "tv2_fork_one", owner.id, slug="one")
+    monkeypatch.setenv("FORKS_BASE_DOMAIN", "transversal.app")
+
+    assert main(["enter-fork", fork.id]) == 0
+
+    assert capsys.readouterr().out.startswith(
+        "https://one.transversal.app/api/v1/accounts/enter?f="
+    )
+
+
+def test_enter_fork_refuses_an_unknown_fork(repo, capsys):
+    assert main(["enter-fork", "fork-ghost"]) == 1
+    assert "no fork" in capsys.readouterr().err
+
+
+def test_enter_fork_refuses_an_unverified_owner(repo, capsys):
+    account = repo.create_account("dave@example.com")
+    fork = repo.create_fork("One", "tv2_fork_one", account.id, slug="one")
+
+    assert main(["enter-fork", fork.id]) == 1
+    assert "unverified" in capsys.readouterr().err

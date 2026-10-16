@@ -24,9 +24,10 @@ import os
 
 from fastapi import APIRouter, HTTPException, Request
 
-from transversal.api.account_auth import require_account
+from transversal.api.account_auth import ENTER_PATH, require_account
 from transversal.api.tenancy import base_domain
-from transversal.db.registry_repository import RegistryRepository
+from transversal.db.registry_repository import PURPOSE_ENTER_FORK, RegistryRepository
+from transversal.services import account_links
 from transversal.services.provisioner import fork_slug, provision_fork
 
 logger = logging.getLogger("transversal.forks")
@@ -108,3 +109,42 @@ async def create_fork(request: Request, body: dict | None = None) -> dict:
         fork.slug,
     )
     return _public(fork)
+
+
+@router.post("/{fork_id}/enter")
+async def enter_fork(request: Request, fork_id: str) -> dict:
+    """Mint a single-use link that opens this fork as its architect ([[B88]]).
+
+    **Why a link and not a session.** The account session lives on the portal host
+    and is host-scoped, so it is not sent to ``<slug>.<base-domain>``; and handing
+    the account session to every fork host would make one cookie the key to all of
+    them. So the portal mints a short-lived, single-use capability, bound in the
+    registry to this fork, and the fork's own host redeems it.
+
+    Only the owner may ask. The link is returned once, here, to an authenticated
+    caller — treat it like the join token it resembles.
+    """
+    account = await require_account(request)
+    repo = _repo()
+    fork = repo.get_fork(fork_id)
+    if not fork:
+        raise HTTPException(status_code=404, detail="no such fork")
+    if fork.owner_account != account.id:
+        raise HTTPException(status_code=403, detail="not your fork")
+
+    token = account_links.issue(
+        repo,
+        account.id,
+        PURPOSE_ENTER_FORK,
+        ttl_seconds=account_links.ENTER_TTL_SECONDS,
+        fork_id=fork.id,
+    )
+    path = f"{ENTER_PATH}?f={token}"
+    base = base_domain()
+    logger.info("[forks] %s minted entry to %s", account.id, fork.id)
+    return {
+        "fork": _public(fork),
+        "token": token,
+        "enter_url": f"https://{fork.slug}.{base}{path}" if fork.slug and base else path,
+        "expires_in": account_links.ENTER_TTL_SECONDS,
+    }

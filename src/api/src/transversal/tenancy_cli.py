@@ -23,8 +23,14 @@ from __future__ import annotations
 import argparse
 import sys
 
+from transversal.api.account_auth import ENTER_PATH
 from transversal.api.tenancy import base_domain
-from transversal.db.registry_repository import RegistryRepository, normalize_email
+from transversal.db.registry_repository import (
+    PURPOSE_ENTER_FORK,
+    RegistryRepository,
+    normalize_email,
+)
+from transversal.services import account_links
 from transversal.services.provisioner import (
     campaign_databases,
     drop_fork,
@@ -140,6 +146,39 @@ def _drop_fork(args) -> int:
     return _fail(f"could not drop {args.fork_id!r}")
 
 
+def _enter_fork(args) -> int:
+    """Print a single-use link that opens a fork as its architect.
+
+    The same link the portal mints through ``POST /api/v1/forks/{id}/enter``; here
+    the operator is already trusted, so no account session is needed. Single use and
+    five minutes, so print it, do not paste it anywhere.
+    """
+    registry = _registry()
+    fork = registry.get_fork(args.fork_id)
+    if fork is None:
+        return _fail(f"no fork {args.fork_id!r}")
+
+    owner = registry.get_account(fork.owner_account)
+    if owner is None or not owner.verified_at:
+        return _fail("the fork's owner account is missing or unverified")
+
+    token = account_links.issue(
+        registry,
+        owner.id,
+        PURPOSE_ENTER_FORK,
+        ttl_seconds=account_links.ENTER_TTL_SECONDS,
+        fork_id=fork.id,
+    )
+    path = f"{ENTER_PATH}?f={token}"
+    base = base_domain()
+    print(f"https://{fork.slug}.{base}{path}" if fork.slug and base else path)
+    print(
+        f"# single use, expires in {account_links.ENTER_TTL_SECONDS // 60} minutes",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def _databases(args) -> int:
     for name in campaign_databases(_registry(), global_database=args.global_database):
         print(name)
@@ -183,6 +222,12 @@ def build_parser() -> argparse.ArgumentParser:
     drop.add_argument("fork_id")
     drop.add_argument("--yes", action="store_true", help="actually do it")
     drop.set_defaults(handler=_drop_fork)
+
+    enter = sub.add_parser(
+        "enter-fork", help="print a single-use link that opens a fork as its architect"
+    )
+    enter.add_argument("fork_id")
+    enter.set_defaults(handler=_enter_fork)
 
     databases = sub.add_parser(
         "databases", help="every database a schema change must reach"
