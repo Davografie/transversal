@@ -19,7 +19,10 @@ Graph:
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from collections import OrderedDict
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -92,27 +95,117 @@ COLLECTIONS = {
 }
 
 
-# Per-process connection cache. get_db() was previously re-running the full
-# bootstrap (ArangoClient + has_database + has_collection x16 + _ensure_indexes)
-# on every call — every EntityRepository() construction paid that cost, and the
-# GraphQL media resolvers construct a fresh repository per field per entity.
-# The connection pool is safe to share across the process.
-_db_cache: dict[tuple, "StandardDatabase"] = {}
+# ── The connection cache, and which database a context acts on ────────
+
+#: How many databases to keep connected at once. One pool per database for the
+#: process lifetime is correct for one campaign and unbounded at a thousand
+#: ([[B88]]), so the cache is an LRU. Override with ``DB_CACHE_MAX``.
+DEFAULT_DB_CACHE_MAX = 32
+
+
+def _db_cache_max() -> int:
+    """The bound, from ``DB_CACHE_MAX``; a malformed or non-positive value falls
+    back to the default rather than disabling the bound."""
+    raw = os.getenv("DB_CACHE_MAX", "").strip()
+    if not raw:
+        return DEFAULT_DB_CACHE_MAX
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_DB_CACHE_MAX
+    return value if value > 0 else DEFAULT_DB_CACHE_MAX
+
+
+@dataclass
+class _PooledConnection:
+    """A cached connection and the client that owns it.
+
+    The client is kept so eviction can **close** it. python-arango holds a
+    connection pool per client, so dropping only the ``db`` reference would leave
+    the sockets to GC rather than bounding them — which is the whole point of the
+    bound. Eviction takes the least-recently-used entry, so a request that is
+    actively using a database is not the one closed.
+    """
+
+    db: "StandardDatabase"
+    client: "ArangoClient"
+
+
+#: Per-process LRU, keyed by the connection tuple. get_db() was previously
+#: re-running the full bootstrap (ArangoClient + has_database + has_collection x20
+#: + _ensure_indexes) on every call — every EntityRepository() construction paid
+#: that cost, and the GraphQL media resolvers construct a fresh repository per
+#: field per entity. The connection pool is safe to share across the process.
+_db_cache: "OrderedDict[tuple, _PooledConnection]" = OrderedDict()
+
+#: The database the current context is acting on. ``None`` means the process
+#: default (``ARANGO_DATABASE``). The routing layer sets this once a request has
+#: been resolved to a fork; **nothing sets it yet**, so today's behaviour — one
+#: database for the process — is unchanged.
+_request_database: ContextVar[str | None] = ContextVar(
+    "transversal_request_database", default=None
+)
+
+
+def current_database() -> str | None:
+    """The database the current context is acting on, or None for the default."""
+    return _request_database.get()
+
+
+@contextmanager
+def use_database(database: str):
+    """Act on ``database`` for the duration of the block.
+
+    This is the seam per-request resolution hangs off ([[B88]]): a fork is an
+    ArangoDB database, and every ``get_db()`` inside one request must resolve to
+    it. It is a context variable rather than an argument because ``get_db()`` is
+    called from repository constructors all over the codebase, none of which carry
+    a request.
+    """
+    token = _request_database.set(database)
+    try:
+        yield
+    finally:
+        _request_database.reset(token)
+
+
+def _close_quietly(entry: _PooledConnection) -> None:
+    try:
+        entry.client.close()
+    except Exception:
+        # Closing is hygiene, never a reason to fail a caller.
+        pass
+
+
+def reset_db_cache() -> None:
+    """Close and forget every cached connection. For tests and teardown."""
+    while _db_cache:
+        _, entry = _db_cache.popitem(last=False)
+        _close_quietly(entry)
 
 
 def get_db(config: ArangoConfig | None = None) -> "StandardDatabase":
     """Return a (cached) connection, creating database and collections if needed.
 
-    Memoized per process on (url, username, password, database); the
-    create-db/collection/index bootstrap runs once and is skipped afterwards.
+    Memoized per process on (url, username, password, database) in a bounded LRU,
+    so the create-db/collection/index bootstrap runs once per database and the
+    number of live pools cannot grow without bound.
+
+    An explicit ``config`` is used exactly as given — a caller that names a
+    database means it. The env default, by contrast, is overridden by a
+    request-scoped database (``use_database``) when one is set.
     """
     if config is None:
         config = ArangoConfig.from_env()
+        requested = _request_database.get()
+        if requested and requested != config.database:
+            config = replace(config, database=requested)
 
     cache_key = (config.url, config.username, config.password, config.database)
     cached = _db_cache.get(cache_key)
     if cached is not None:
-        return cached
+        _db_cache.move_to_end(cache_key)
+        return cached.db
 
     from arango import ArangoClient
 
@@ -132,7 +225,11 @@ def get_db(config: ArangoConfig | None = None) -> "StandardDatabase":
     from transversal.db.profiling import instrument_db
 
     wrapped = instrument_db(db)
-    _db_cache[cache_key] = wrapped
+    _db_cache[cache_key] = _PooledConnection(db=wrapped, client=client)
+    _db_cache.move_to_end(cache_key)
+    while len(_db_cache) > _db_cache_max():
+        _, evicted = _db_cache.popitem(last=False)
+        _close_quietly(evicted)
     return wrapped
 
 
