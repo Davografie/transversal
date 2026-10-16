@@ -27,6 +27,7 @@ except ImportError:
 
 from transversal.domain import IMAGE_FLAGS, ImageType, MediaImage
 from transversal.db.repository import EntityRepository
+from transversal.services import media_store
 from transversal.services.media_utils import (
     has_transparency,
     wants_auto_matte,
@@ -184,7 +185,7 @@ async def upload_media(
     # Original flat-file path (backward compat)
     prefix = f"{owner_id}_" if owner_id else ""
     flat_filename = f"{prefix}{uuid.uuid4().hex[:12]}{out_ext}"
-    filepath = MEDIA_DIR / flat_filename
+    filepath = media_store.write_dir() / flat_filename
     filepath.write_bytes(converted)
 
     # ── Register as MediaImage for gallery + animation ──
@@ -220,7 +221,9 @@ async def upload_media(
                         universe or default_universe, "universe"
                     )
                     image_id = uuid.uuid4().hex[:8]
-                    output_dir = IMAGEN_DIR / owner_id / resolved_universe
+                    output_dir = media_store.write_dir(
+                        "imagen", owner_id, resolved_universe
+                    )
                     base_name = f"upload_{image_id}"
 
                     _save_image_variants(converted, output_dir, base_name)

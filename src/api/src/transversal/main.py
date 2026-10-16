@@ -298,6 +298,33 @@ class CachedStaticFiles(StaticFiles):
     cached indefinitely by browsers/CDNs.
     """
 
+    def lookup_path(self, path: str):
+        """Campaign first, then the shared tree (B88).
+
+        New media is written under the campaign's own directory
+        (``/app/media/<database>/…``) so a campaign owns what it creates, while every
+        file that predates that rule — a clone's, or anything written before it —
+        lives in the shared root. Resolving campaign-first here is what keeps
+        **every stored URL valid** across that change, so no file had to be moved and
+        no database path had to be rewritten.
+        """
+        from transversal.services import media_store
+
+        campaign = media_store.campaign_name()
+        if campaign:
+            directory = os.path.realpath(os.path.join(str(self.directory), campaign))
+            full_path = os.path.realpath(os.path.join(directory, path))
+            try:
+                inside = os.path.commonpath([full_path, directory]) == directory
+            except ValueError:  # different drives — not our tree at all
+                inside = False
+            if inside:
+                try:
+                    return full_path, os.stat(full_path)
+                except (FileNotFoundError, NotADirectoryError):
+                    pass
+        return super().lookup_path(path)
+
     def file_response(
         self,
         full_path,

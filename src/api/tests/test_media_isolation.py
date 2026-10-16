@@ -157,6 +157,64 @@ def test_an_owner_id_with_glob_metacharacters_cannot_widen_a_match(tmp_path, mon
     assert [path.name for path in found] == ["char*X.webp"]
 
 
+# ── Where new media goes, and how it is served ────────────────────────
+
+
+def test_new_media_is_written_under_the_campaign(tmp_path, monkeypatch):
+    monkeypatch.setattr(media_store, "MEDIA_ROOT", tmp_path)
+    monkeypatch.setattr(media_store, "campaign_name", lambda: "campaign_b")
+
+    path = media_store.write_dir("imagen", "character-probe", "three_realms")
+
+    assert path == tmp_path / "campaign_b" / "imagen" / "character-probe" / "three_realms"
+    assert path.is_dir(), "the caller gets a directory it can write into"
+
+
+@pytest.mark.parametrize("bad", ["..", ".", "a/b", "", "a\\b"])
+def test_a_traversing_component_is_refused(tmp_path, monkeypatch, bad):
+    monkeypatch.setattr(media_store, "MEDIA_ROOT", tmp_path)
+    monkeypatch.setattr(media_store, "campaign_name", lambda: "campaign_b")
+
+    with pytest.raises(ValueError):
+        media_store.write_dir("imagen", bad)
+
+
+def test_serving_prefers_the_campaign_copy_then_the_shared_one(tmp_path, monkeypatch):
+    """Every stored URL stays valid: campaign copy, else the shared tree."""
+    from transversal.main import CachedStaticFiles
+
+    monkeypatch.setattr(media_store, "campaign_name", lambda: "campaign_b")
+    shared = tmp_path / "imagen" / "owner"
+    shared.mkdir(parents=True)
+    (shared / "shared.webp").write_bytes(b"shared")
+    mine = tmp_path / "campaign_b" / "imagen" / "owner"
+    mine.mkdir(parents=True)
+    (mine / "mine.webp").write_bytes(b"mine")
+
+    files = CachedStaticFiles(directory=str(tmp_path))
+
+    found, stat_result = files.lookup_path("imagen/owner/mine.webp")
+    assert stat_result is not None and found.startswith(str(mine))
+    found, stat_result = files.lookup_path("imagen/owner/shared.webp")
+    assert stat_result is not None and found.startswith(str(shared))
+    _, stat_result = files.lookup_path("imagen/owner/missing.webp")
+    assert stat_result is None
+
+
+def test_the_campaign_copy_wins_when_both_exist(tmp_path, monkeypatch):
+    from transversal.main import CachedStaticFiles
+
+    monkeypatch.setattr(media_store, "campaign_name", lambda: "campaign_b")
+    for root in (tmp_path, tmp_path / "campaign_b"):
+        directory = root / "imagen" / "owner"
+        directory.mkdir(parents=True)
+        (directory / "same.webp").write_bytes(b"x")
+
+    found, _ = CachedStaticFiles(directory=str(tmp_path)).lookup_path("imagen/owner/same.webp")
+
+    assert found.startswith(str(tmp_path / "campaign_b"))
+
+
 # ── The delete paths use it ───────────────────────────────────────────
 
 
