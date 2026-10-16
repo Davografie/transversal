@@ -36,6 +36,7 @@ from transversal.api.sse.stream import router as sse_router
 from transversal.api.auth import router as auth_router
 from transversal.api.account_auth import router as account_auth_router
 from transversal.api.forks import router as forks_router
+from transversal.db.arango import current_database
 from transversal.db.repository import EntityRepository
 from transversal.services.effects_engine import EffectsEngine
 from transversal.services.entity_manager import EntityManager
@@ -166,6 +167,16 @@ def _log_profile(request: Request, elapsed_ms: float, stats) -> None:
 #: Test seam: when set, every service built here uses this repository instead of one
 #: for the request's database. `None` in production.
 _repo: EntityRepository | None = None
+
+#: The SFX registries, **one per database** ([[B88]]). A campaign's rules are its own:
+#: a fork starts as a clone, but it may diverge, and dispatching a trigger against
+#: another campaign's definition is a wrong effect rather than merely a leak. Keyed by
+#: the request-scoped database — `None` is the process default — and populated from
+#: that database on first use.
+_engines: dict[str | None, EffectsEngine] = {}
+
+#: Test seam: when set, `_get_engine` returns this engine whatever the database is.
+#: `None` in production.
 _effects_engine: EffectsEngine | None = None
 
 
@@ -189,16 +200,24 @@ def _get_raz() -> RazmeritService:
 
 
 def _get_engine() -> EffectsEngine:
-    """The in-memory SFX registry. Cached on purpose — it accumulates registrations.
+    """The SFX registry for the **current** database, or the seam's engine.
 
-    That caching is also why it is **campaign-agnostic**: ``_startup`` loads it from
-    the default database and every fork then shares it. Scoping it is an open B88
-    item; rebuilding it per request would simply empty it.
+    Cached per database, because it accumulates registrations — a single shared
+    registry answered every campaign with the first one's definitions. The first use
+    in a database loads that database's SFXs; ``_startup`` warms the default one
+    after its provisioning has run.
     """
-    global _effects_engine
-    if _effects_engine is None:
-        _effects_engine = EffectsEngine()
-    return _effects_engine
+    if _effects_engine is not None:
+        return _effects_engine
+
+    key = current_database()
+    engine = _engines.get(key)
+    if engine is None:
+        engine = EffectsEngine()
+        for sfx in _get_repo().get_all_sfxs():
+            engine.register(sfx)
+        _engines[key] = engine
+    return engine
 
 
 async def get_context(request: Request) -> dict:
@@ -245,7 +264,7 @@ async def _startup():
 
     # Load SFXs from database into the in-memory effects engine
     repo = _get_repo()
-    engine = _get_engine()
+    repo = _get_repo()
     ensure_sfx_owners(repo)
     ensure_give_in_sfx(repo)
     ensure_targeting_ban_sfx(repo)
@@ -276,9 +295,13 @@ async def _startup():
 
     backfill_rolltable_anchor_paths(repo)
     repo.collapse_legacy_personal_relationship_types()
-    db_sfxs = repo.get_all_sfxs()
-    for s in db_sfxs:
-        engine.register(s)
+
+    # Warm the default database's SFX registry — *after* the provisioning above,
+    # because `_get_engine` loads it from the database on first use and caches it per
+    # database. Warming it earlier would cache the set from before the `ensure_*`
+    # calls and then never see them.
+    _engines.pop(current_database(), None)
+    _get_engine()
 
     # Cross-worker SSE fan-in (no-op when Redis is unavailable).
     from transversal.api.sse.bus import event_bus

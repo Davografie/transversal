@@ -10,6 +10,8 @@ agency edges from every other campaign.
 No Arango: a recording repository captures which database it was built against.
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from transversal import main
@@ -79,12 +81,57 @@ def test_without_a_scope_the_default_database_is_used():
     assert main._get_repo().database is None
 
 
-def test_the_engine_is_deliberately_still_cached(monkeypatch):
-    """The documented exception. It accumulates registrations, so it cannot be
-    rebuilt per request — which is exactly why it is campaign-agnostic and open."""
+# ── The SFX registry, per campaign ────────────────────────────────────
+
+
+class _SfxRepo:
+    """A repository whose SFXs name the database they were read from."""
+
+    def __init__(self, *args, **kwargs):
+        self.database = arango_module.current_database()
+
+    def get_all_sfxs(self):
+        return [SimpleNamespace(id=f"sfx-{self.database or 'default'}")]
+
+
+@pytest.fixture
+def sfx_repo(monkeypatch):
+    monkeypatch.setattr(main, "_repo", None)
+    monkeypatch.setattr(main, "EntityRepository", _SfxRepo)
+    monkeypatch.setattr(main, "_engines", {})
+    # the engine seam must be unset, or every lookup would return it
     monkeypatch.setattr(main, "_effects_engine", None)
 
-    assert main._get_engine() is main._get_engine()
+
+def test_each_campaign_gets_its_own_sfx_registry(sfx_repo):
+    """A fork starts as a clone but may diverge, so a trigger must dispatch *that*
+    campaign's definition — not the first one loaded."""
+    with use_database("tv2_fork_dave"):
+        daves = main._get_engine()
+    with use_database("tv2_fork_ola"):
+        olas = main._get_engine()
+
+    assert daves is not olas
+    assert daves.get("sfx-tv2_fork_dave") is not None
+    assert daves.get("sfx-tv2_fork_ola") is None
+    assert olas.get("sfx-tv2_fork_ola") is not None
+
+
+def test_the_default_database_has_its_own_registry(sfx_repo):
+    default = main._get_engine()
+    with use_database("tv2_fork_dave"):
+        forked = main._get_engine()
+
+    assert default is not forked
+    assert default.get("sfx-default") is not None
+    assert default.get("sfx-tv2_fork_dave") is None
+
+
+def test_the_registry_is_still_cached_within_a_campaign(sfx_repo):
+    """Per database, not per request: it accumulates registrations, so rebuilding it
+    would empty it."""
+    with use_database("tv2_fork_dave"):
+        assert main._get_engine() is main._get_engine()
 
 
 # ── The player manager ────────────────────────────────────────────────
