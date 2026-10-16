@@ -80,6 +80,9 @@ class _RecordingMailer:
 @pytest.fixture(autouse=True)
 def _configured(monkeypatch):
     monkeypatch.setenv("SESSION_SECRET", GOOD_SECRET)
+    # The send cap has its own tests; here it is always open, so a suite that
+    # registers the same address repeatedly is not silently throttled.
+    monkeypatch.setattr(account_auth.send_limits, "allow_send", lambda *a, **k: True)
 
 
 @pytest.fixture
@@ -301,3 +304,29 @@ async def test_sign_out_clears_the_cookie():
     response = await account_auth.sign_out()
 
     assert _cookie(response).strip('"') == ""
+
+
+# ── The send cap ──────────────────────────────────────────────────────
+
+
+async def test_the_send_cap_silences_mail_but_not_the_answer(repo, outbox, monkeypatch):
+    """A refusal the caller can see would be an oracle; the answer stays identical
+    and the mail simply does not go out ([[Identity Programme]] §5.4)."""
+    monkeypatch.setattr(account_auth.send_limits, "allow_send", lambda *a, **k: False)
+
+    result = await account_auth.register(_Request(), {"email": "dave@example.com"})
+
+    assert result == {"sent": True}
+    assert outbox.sent == []
+    assert repo.find_account_by_email("dave@example.com").verified_at is None
+
+
+async def test_the_send_cap_silences_sign_in_too(repo, outbox, monkeypatch):
+    await _verified_account(repo, outbox)
+    outbox.sent.clear()
+    monkeypatch.setattr(account_auth.send_limits, "allow_send", lambda *a, **k: False)
+
+    result = await account_auth.request_sign_in(_Request(), {"email": "dave@example.com"})
+
+    assert result == {"sent": True}
+    assert outbox.sent == []

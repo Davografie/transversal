@@ -35,7 +35,7 @@ from transversal.db.registry_repository import (
     RegistryRepository,
     normalize_email,
 )
-from transversal.services import account_links, mailer
+from transversal.services import account_links, mailer, send_limits
 
 logger = logging.getLogger("transversal.accounts")
 
@@ -176,6 +176,11 @@ async def register(request: Request, body: dict | None = None) -> dict:
         return {"sent": True}
 
     account = existing or repo.create_account(email)
+    if not send_limits.allow_send(email):
+        # Identical answer, no mail: a refusal an attacker can see is an oracle for
+        # which addresses are being hammered, and whether they have an account.
+        logger.warning("[accounts] send cap reached; no link sent for %s", account.id)
+        return {"sent": True}
     token = account_links.issue(repo, account.id, PURPOSE_VERIFY)
     _send_link(email, PURPOSE_VERIFY, token)
     logger.info("[accounts] verification link issued for %s", account.id)
@@ -218,6 +223,9 @@ async def request_sign_in(request: Request, body: dict | None = None) -> dict:
     repo = _repo()
     account = repo.find_account_by_email(email)
     if account and account.verified_at:
+        if not send_limits.allow_send(email):
+            logger.warning("[accounts] send cap reached; no sign-in link for %s", account.id)
+            return {"sent": True}
         token = account_links.issue(repo, account.id, PURPOSE_SIGN_IN)
         _send_link(email, PURPOSE_SIGN_IN, token)
         logger.info("[accounts] sign-in link issued for %s", account.id)
