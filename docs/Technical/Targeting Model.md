@@ -113,7 +113,7 @@ widening every comparison would change meanings nobody asked to change. **Values
 
 **An enum filter takes one value or several.** Several is written as a list with `in` and means *any of*, and a list-valued field follows the same rule: `tags contains [fire, wood]` means *tagged either*. (The tags editor in the wizard writes that list.) — `polarity in [positive, negative]` matches either, and the card reads *each positive or negative trait instance you rolled*. The wizard stores a single pick as a string with `==` (so nothing already authored changes shape) and a multi-pick as a list with `in`.
 
-**A list-valued field is asked about with `contains`, and only that.** `["a"] == "a"` and `["a"] in ["a"]` are both false, so an id picker's habitual `==`/`in` would write a filter that reads as authored and matches nothing. A field is a list here when its declaration offers `contains` **and not** `in` (`known_to`, `tags`, `universes`) — which is what the wizard reads to choose the operator, so a single pick means *is on the list* and several mean *any of*. Such a field is declared with `contains` alone rather than offering operators that can never match. There is no `not contains`, so "on nobody's list" is not expressible.
+**A list-valued field is asked about with `contains`, and only that.** `["a"] == "a"` and `["a"] in ["a"]` are both false, so an id picker's habitual `==`/`in` would write a filter that reads as authored and matches nothing. A field is a list here when its declaration offers `contains` **and not** `in` (`known_to`, `tags`, `universes`) — which is what the wizard reads to choose the operator, so a single pick means *is on the list* and several mean *any of*. Such a field is declared with `contains` alone rather than offering operators that can never match. **`not contains` exists** (`target_spec.py` types it, `target_resolver.py` applies it), and it is the declared operator for *is off the list*: several values mean *none of*, and an absent list contains nothing. An earlier version of this page said there was no such operator; that was wrong, and the manual's operator table was right.
 
 **A filter can prove a type.** `entity.type == location` establishes that the value *is* a location, so the path may take the steps only a location has (`occupants`, `difficulty_pool`) afterwards — the same rule the resolver and the card text read (`target_catalog.narrowed_element`, declared in `ELEMENT_NARROWING`). Only equality with a value that names a catalog element narrows; `!=`, the ordering operators, a bound `{name}` and non-element types (`character`, `gmc`, `asset`, `faction`) prove nothing. This is what makes a path writable that starts at a trait instance on a place and then reaches the room: *the trait → its owner → (proven a location) → occupants*.
 
@@ -285,8 +285,16 @@ form applied zero times — the dispatch now **refuses** it instead: the effect 
 noted on the outcome so the author sees which name nothing bound ([[B282]]). A **many-valued** name was
 truncated to its first id while the path form expanded the set, and now compares as a set for the
 membership operators ([[B292]]). Both are the same seam: one name, two spellings. The refusal sits in the
-engine's immediate dispatch; an effect **deferred** to a roll is substituted when it fires, on a path that
-does not yet consult the accumulator — the same defect, still open there.
+engine's immediate dispatch **and — since 2026-10-17 — on the deferred path too**: an armed effect is
+substituted when it fires, so `roll_deferral._substitute_armed` gives the same accumulator to every
+substitution site there (the plain, per-die, named-reference and target-path branches) and refuses the
+effect when a name survives. One honest difference between the two paths: the *note* half of the refusal
+rides only the manual trigger's response (`POST /effects/trigger`, the one place `outcome.notes` is read);
+an effect that fires on a roll is applied in a later request than the activation and the roll endpoints do
+not carry notes back, so there the server log is the surface — true of the immediate roll-fired case too.
+**Measured before landing:** the two tenants carry **4** deferred effects between them (3 `on_result`, 1
+`on_roll`) and **none** names an unbound value in a flat field, so no live rule changes behaviour; the guard
+closes the hole [[B281]]'s "author it once, it runs where it applies" invites.
 
 The targeting model exists to power **passive rules** like One Trick:
 

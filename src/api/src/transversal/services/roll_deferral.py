@@ -348,6 +348,38 @@ def fire_armed(
     return applied
 
 
+def _substitute_armed(
+    effect: Effect,
+    context: dict | None,
+    bindings: dict | None,
+    source_sfx_id: str | None,
+) -> Optional[Effect]:
+    """Substitute a **deferred** effect's flat fields, refusing one that names nothing.
+
+    The engine's immediate dispatch already refuses such an effect ([[B282]]): a
+    ``{name}`` no binding explains is left verbatim by substitution, so applying
+    the effect points it at the literal ``"{name}"`` — a junk id, and silence on
+    the way out is what made it look like success. An armed effect is substituted
+    when it *fires* instead, on this path, which had no such check.
+
+    Returns ``None`` when the effect must be skipped (the caller drops it); the
+    names are logged, which is the only surface a deferred fire has — it happens
+    in a *later* request than the activation, so it cannot ride that response.
+    """
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    unresolved: list[str] = []
+    resolved = _substitute_effect_context(effect, context or {}, bindings, unresolved)
+    if unresolved:
+        names = ", ".join(f"{{{n}}}" for n in dict.fromkeys(unresolved))
+        log.warning(
+            "[roll_deferral] sfx=%s effect=%s/%s names unbound: %s — skipped",
+            source_sfx_id, effect.type, effect.action, names,
+        )
+        return None
+    return resolved
+
+
 def _apply_armed(
     armed: ArmedSfx,
     event_type: str,
@@ -359,7 +391,6 @@ def _apply_armed(
 ) -> list[Effect]:
     """Apply one armed entry's matching effects to ``rolls``; return them."""
     from transversal.services.effects_applier import BINDINGS_CONTEXT_KEY, effect_registry, resolve_effect_entity
-    from transversal.services.effects_engine import _substitute_effect_context
     from transversal.main import _get_repo
 
     bindings: dict = dict(armed.bindings)
@@ -410,7 +441,9 @@ def _apply_armed(
             )
             for die in dice:
                 resolved = _substitute_die_context(effect, die, context or {})
-                resolved = _substitute_effect_context(resolved, context or {}, bindings)
+                resolved = _substitute_armed(resolved, context, bindings, armed.source_sfx_id)
+                if resolved is None:
+                    continue  # names nothing bound — this die's effect is refused
                 resolved = resolve_armed_subject(resolved, entity_id, bindings, {"rolled_dice": [die]})
                 # Authored refs only: a ref declared for a positional field must
                 # not re-route stored content off its target path ([[B261]]).
@@ -438,7 +471,9 @@ def _apply_armed(
             resolved_list = _apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings=bindings, source_sfx_id=armed.source_sfx_id)
             applied.extend(resolved_list)
             continue
-        resolved = _substitute_effect_context(effect, context or {}, bindings)
+        resolved = _substitute_armed(effect, context, bindings, armed.source_sfx_id)
+        if resolved is None:
+            continue  # names nothing bound — never applied against the literal
         resolved = resolve_armed_subject(resolved, entity_id, bindings, {"rolled_dice": rolls})
         effect_registry.apply(resolved, entity_id, universe, effect_context)
         applied.append(resolved)
@@ -530,7 +565,7 @@ def _apply_refs_roll(
     once per resolved value (fan-out). Returns the applied effects."""
     from transversal.main import _get_repo
     from transversal.services.effects_applier import effect_registry
-    from transversal.services.effects_engine import _substitute_effect_context, resolve_refs
+    from transversal.services.effects_engine import resolve_refs
     from transversal.services.target_resolver import TargetContext, resolve_source
 
     repo = _get_repo()
@@ -538,8 +573,11 @@ def _apply_refs_roll(
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
     effect_context = _source_context(context, source, source_element, source_sfx_id, source_id)
     before = len(structured) if structured is not None else 0
+    resolved = _substitute_armed(effect, context, bindings, source_sfx_id)
+    if resolved is None:
+        return []
     resolved_list = resolve_refs(
-        resolve_armed_subject(_substitute_effect_context(effect, context or {}, bindings),
+        resolve_armed_subject(resolved,
                               entity_id, bindings or {}, {"rolled_dice": rolls}),
         TargetContext(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
@@ -576,7 +614,7 @@ def _apply_spec_target(
     when ``source_kind``/``source_id`` are provided."""
     from transversal.main import _get_repo
     from transversal.services.effects_applier import effect_registry
-    from transversal.services.effects_engine import _structured_choice, _substitute_effect_context
+    from transversal.services.effects_engine import _structured_choice
     from transversal.services.target_resolver import TargetContext, resolve, resolve_source
 
     repo = _get_repo()
@@ -584,8 +622,11 @@ def _apply_spec_target(
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
     effect_context = _source_context(context, source, source_element, source_sfx_id, source_id)
     # Substitute roll-context variables (e.g. ``{effect_die}``) before applying,
-    # mirroring ``_apply_refs_roll``.
-    effect = _substitute_effect_context(effect, context or {}, bindings)
+    # mirroring ``_apply_refs_roll`` — and refuse an effect whose flat field names
+    # a value nothing bound, rather than applying it against the literal ([[B282]]).
+    effect = _substitute_armed(effect, context, bindings, source_sfx_id)
+    if effect is None:
+        return []
     effect = resolve_armed_subject(effect, entity_id, bindings or {}, {"rolled_dice": rolls})
     resolution = resolve(
         effect.target_spec,

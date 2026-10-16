@@ -1,5 +1,7 @@
 """Tests for roll-scoped SFX deferral (the "rolls" temporal spine)."""
 
+import logging
+
 import pytest
 
 from transversal.domain import (
@@ -879,3 +881,160 @@ def test_armed_earn_pays_nothing_when_no_d4_trait_was_rolled(monkeypatch):
 
     assert earned == []
     assert fired == []
+
+
+# --- An unbound flat field is refused here too ([[B282]], one path over) -------
+#
+# The immediate dispatch refuses an effect whose flat field names a value nothing
+# bound: substitution leaves the token verbatim, so applying it points the effect
+# at the literal ``"{name}"`` — a junk id, and silence on the way out is what made
+# it look like success. An *armed* effect is substituted when it fires, on this
+# path, which had no such check. Each substitution site is pinned below, because
+# the defect's whole shape is "fixed on one path and left on the next".
+
+
+def _fake_registry(applied):
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    return FakeRegistry()
+
+
+def test_armed_effect_with_an_unbound_name_is_skipped(monkeypatch, caplog):
+    roll_deferral.reset()
+    applied = []
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry",
+                        _fake_registry(applied))
+
+    roll_deferral.arm_sfx("e1", [_make_effect(target="{picked}")],
+                          source_sfx_id="sfx-x", duration=_rolls_duration(1))
+
+    with caplog.at_level(logging.WARNING):
+        fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"total": 5})
+
+    assert fired == []
+    assert applied == []
+    assert "picked" in caplog.text
+    # The matching event still consumed the rule's roll budget — the effect was
+    # refused, not the activation.
+    assert roll_deferral.list_armed("e1") == []
+
+
+def test_armed_effect_applies_when_the_name_is_bound(monkeypatch, caplog):
+    """The counterpart: a bound name resolves and the effect lands."""
+    from transversal.services.target_resolver import Binding
+
+    roll_deferral.reset()
+    applied = []
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry",
+                        _fake_registry(applied))
+
+    roll_deferral.arm_sfx(
+        "e1", [_make_effect(target="{picked}")],
+        source_sfx_id="sfx-x",
+        bindings={"picked": Binding(value="ts-1", element="traitsetting")},
+        duration=_rolls_duration(1),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"total": 5})
+
+    assert [e.target for e in fired] == ["ts-1"]
+    assert len(applied) == 1
+    assert "unbound" not in caplog.text
+
+
+def test_armed_effect_keeps_a_context_policy_token(monkeypatch):
+    """A ``context`` value is exempt: ``{last_projection}`` is a policy keyword."""
+    roll_deferral.reset()
+    applied = []
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry",
+                        _fake_registry(applied))
+
+    effect = _make_effect(target="ts-1")
+    effect.context = {"projection": "{last_projection}"}
+    roll_deferral.arm_sfx("e1", [effect], source_sfx_id="sfx-x",
+                          duration=_rolls_duration(1))
+
+    fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"total": 5})
+
+    assert len(fired) == 1
+    assert applied[0].context["projection"] == "{last_projection}"
+
+
+def test_armed_die_scoped_effect_with_an_unbound_name_is_skipped(monkeypatch, caplog):
+    """The per-die branch substitutes per die, so it needs the guard too."""
+    roll_deferral.reset()
+    applied = []
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry",
+                        _fake_registry(applied))
+
+    roll_deferral.arm_sfx("e1", [_make_effect(target="{picked}", die_filter={"role": None})],
+                          source_sfx_id="sfx-x", duration=_rolls_duration(1))
+
+    rolls = [{"die": "d8", "result": 7, "role": None, "tier": "success",
+              "effect_die": "d6", "ts_id": "ts-x", "armed_sfx_ids": ["sfx-x"]}]
+    with caplog.at_level(logging.WARNING):
+        fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"rolls": rolls})
+
+    assert fired == []
+    assert applied == []
+    assert "picked" in caplog.text
+
+
+def test_armed_refs_effect_with_an_unbound_name_is_skipped(monkeypatch, caplog):
+    """The named-reference branch resolves its own ids, and is guarded too."""
+    import transversal.main as main
+    from types import SimpleNamespace
+    from transversal.domain import TargetRef
+
+    roll_deferral.reset()
+    repo = SimpleNamespace(get_entity=lambda eid: SimpleNamespace(id=eid))
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+    applied = []
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry",
+                        _fake_registry(applied))
+
+    effect = Effect(
+        timing=EffectTiming.ON_RESULT, type="modify_trait", action="gain",
+        refs={"trait": TargetRef(value="{picked}")},
+    )
+    roll_deferral.arm_sfx("e1", [effect], source_sfx_id="sfx-x",
+                          duration=_rolls_duration(1))
+
+    with caplog.at_level(logging.WARNING):
+        fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"total": 5})
+
+    assert fired == []
+    assert applied == []
+    assert "picked" in caplog.text
+
+
+def test_armed_spec_effect_with_an_unbound_name_is_skipped(monkeypatch, caplog):
+    """And the target-path branch, which substitutes before it resolves."""
+    import transversal.main as main
+    from types import SimpleNamespace
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    roll_deferral.reset()
+    repo = SimpleNamespace(get_entity=lambda eid: SimpleNamespace(id=eid))
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+    applied = []
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry",
+                        _fake_registry(applied))
+
+    effect = Effect(
+        timing=EffectTiming.ON_RESULT, type="modify_trait", action="step_down",
+        target="{picked}",
+        target_spec=TargetSpec(steps=[SelectStep(collection="self")]),
+    )
+    roll_deferral.arm_sfx("e1", [effect], source_sfx_id="sfx-x",
+                          duration=_rolls_duration(1))
+
+    with caplog.at_level(logging.WARNING):
+        fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"total": 5})
+
+    assert fired == []
+    assert applied == []
+    assert "picked" in caplog.text
