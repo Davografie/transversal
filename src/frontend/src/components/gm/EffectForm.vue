@@ -283,6 +283,11 @@ import TargetPicker from '@/components/ui/TargetPicker.vue'
 import PathField from './PathField.vue'
 import EffectRefField from './EffectRefField.vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
+import {
+  chipVariablesFor,
+  dieVariablesFor,
+  scopeEntries,
+} from '@/composables/effectScopeVariables.js'
 import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
@@ -393,13 +398,13 @@ watch(
   { immediate: true },
 )
 
-const ROLL_CONTEXT_VARIABLES = ['effect_die', 'total', 'triggered_die_tier', 'triggered_die_effect_die', 'triggered_die_result', 'triggered_die_die']
-const dieVariables = computed(() => {
-  const names = (props.variables || []).map(v => v.name || v)
-  const out = [...names]
-  if (isRollTiming.value) for (const v of ROLL_CONTEXT_VARIABLES) if (!out.includes(v)) out.push(v)
-  return out
-})
+// The names in scope for this effect — the activation's own, the declared bound
+// variables, an earlier effect's outputs, this effect's own earlier paths — and
+// the two lists built from them. The rule lives in `effectScopeVariables.js` so it
+// can be executed by a check; both readers used to read `props.variables` alone,
+// which is only the *activation's* names ([[B306]]).
+const inScope = computed(() => scopeEntries(props.variables, scopedVariables.value))
+const dieVariables = computed(() => dieVariablesFor(inScope.value, isRollTiming.value))
 
 // ── A numeric field may read a *named* value ──────────────────
 // The value carries its own mode (a bare `{name}` is a variable, digits are a
@@ -449,17 +454,9 @@ function setNumberMode(f, mode) {
   }
 }
 
-// The chips the author reads. A roll-timed effect gets the roll context too:
-// `{triggered_die_*}` resolves per die inside an effect with a die filter (the
-// die *is* the roll there), which is what lets an "add a die" granted per
-// unchosen die take its size from that die's tier.
-const chipVariables = computed(() => {
-  const out = [...(props.variables || [])]
-  if (!isRollTiming.value) return out
-  const known = new Set(out.map((v) => v.name || v))
-  for (const name of ROLL_CONTEXT_VARIABLES) if (!known.has(name)) out.push({ name, type: 'roll' })
-  return out
-})
+// The chips the author reads — every name in scope, with a `many` one marked
+// ([[B306]]; see `effectScopeVariables.js`).
+const chipVariables = computed(() => chipVariablesFor(inScope.value, isRollTiming.value))
 
 function dieRole() {
   if (!newEffect.dieFilter || !('role' in newEffect.dieFilter)) return ''

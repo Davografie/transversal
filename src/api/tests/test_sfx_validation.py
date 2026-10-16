@@ -800,3 +800,39 @@ def testa_reference_with_a_literal_value_satisfies_required_target():
         )],
     )
     assert not any("missing required field 'target'" in w for w in validate_sfx(sfx))
+
+
+def test_a_die_named_by_a_path_satisfies_required_result():
+    """`result_spec` is a way to name the die, so `result` may legitimately be empty.
+
+    The author's `sfx-cast-array` ([[B306]]) gains the `formation` trait *at the
+    rating its own source already has*: `select source → navigate rating dice`,
+    which `effects_applier.resolve_effect_result` turns into `d6` before the
+    handler sees it. With only `result` read, a complete effect was warned about.
+    """
+    from transversal.services.target_spec import NavigateStep, SelectStep, TargetSpec
+
+    spec = TargetSpec(steps=[
+        SelectStep(collection="source"),
+        NavigateStep(edge="rating_dice"),
+    ])
+    sfx = _sfx(
+        trigger="manual", source_kind="trait_setting",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+            target="trait-1", result=None, result_spec=spec,
+        )],
+    )
+    assert not any("missing required field 'result'" in w for w in validate_sfx(sfx))
+
+
+def test_an_empty_result_still_reports_missing_without_a_path():
+    """The control: the check above must not have removed the warning outright."""
+    sfx = _sfx(
+        trigger="manual",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+            target="trait-1", result=None,
+        )],
+    )
+    assert any("missing required field 'result'" in w for w in validate_sfx(sfx))

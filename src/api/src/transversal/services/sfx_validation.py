@@ -93,6 +93,14 @@ def _missing_required(effect: Effect) -> list[str]:
             continue
         if f.name == "entity" and (recipient_spec_of(effect, meta) or recipient_value(effect, meta)):
             continue
+        # A die can be named by a **path** as well as a literal or a `{token}` —
+        # `result_spec` is resolved into `result` at apply time
+        # (``effects_applier.resolve_effect_result``), which is how "gain this at
+        # the rating the source already has" is authored. Reading only `result`
+        # warned "missing required field 'result'" on exactly that effect, the
+        # same omission one field over from the target/entity case above.
+        if f.name == "result" and getattr(effect.result_spec, "steps", None):
+            continue
         if value in (None, ""):
             missing.append(f.name)
     return missing
