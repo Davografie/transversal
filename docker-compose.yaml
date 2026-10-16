@@ -36,6 +36,40 @@ services:
       # set NAME_REMOTE=0 to keep it strictly offline (see [[Name Generation]]).
       NAME_REMOTE: "${NAME_REMOTE:-1}"
       REDIS_URL: "redis://redis:6379"
+      # ── Tenancy: accounts, forks and routing (B255/B88) ───────────────
+      # Listed for exactly the reason ARCHITECT_TOKEN is: compose passes only what
+      # a service names, so a value in `.env` alone sits unseen. Here the symptom
+      # is quiet — routing is "on" but every host serves the same campaign, and
+      # mail falls back to the console — with nothing logged to say why.
+      # Empty means "use the code default"; the defaults are in
+      # `db/registry.py`, `services/provisioner.py` and `services/mailer.py`.
+      #
+      # The registry is its own database (never a campaign's), and GLOBAL_DATABASE
+      # is what a new fork is cloned FROM — until the global is split out of the
+      # played-in database (the owner's 2026-10-16 decision) that is `transversal`.
+      REGISTRY_DATABASE: "${REGISTRY_DATABASE:-}"
+      GLOBAL_DATABASE: "${GLOBAL_DATABASE:-}"
+      # The domain forks hang off: `<slug>.<this>`. Empty switches host routing off.
+      FORKS_BASE_DOMAIN: "${FORKS_BASE_DOMAIN:-}"
+      # Self-service fork creation — who may create a campaign is the owner's call,
+      # so this is off unless it is truthy.
+      FORKS_ALLOW_CREATE: "${FORKS_ALLOW_CREATE:-}"
+      # Account links: `console` logs them (dev); `smtp` uses the block below; any
+      # other value fails loudly rather than dropping the only credential.
+      MAIL_TRANSPORT: "${MAIL_TRANSPORT:-}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-}"
+      SMTP_USERNAME: "${SMTP_USERNAME:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      SMTP_STARTTLS: "${SMTP_STARTTLS:-}"
+      SMTP_SSL: "${SMTP_SSL:-}"
+      # Send caps, per address and per deployment (B255). Code defaults: 3 / 60 / 900s.
+      MAIL_MAX_PER_ADDRESS: "${MAIL_MAX_PER_ADDRESS:-}"
+      MAIL_MAX_PER_WINDOW: "${MAIL_MAX_PER_WINDOW:-}"
+      MAIL_RATE_WINDOW_SECONDS: "${MAIL_RATE_WINDOW_SECONDS:-}"
+      # How many campaign connections stay open at once (the B88 LRU bound).
+      DB_CACHE_MAX: "${DB_CACHE_MAX:-}"
     depends_on:
       arango:
         condition: service_healthy

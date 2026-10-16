@@ -64,7 +64,11 @@ class RegistryConfig:
             url=os.getenv("ARANGO_URL", "http://localhost:8529"),
             username=os.getenv("ARANGO_USERNAME", "root"),
             password=os.getenv("ARANGO_ROOT_PASSWORD", "transversal"),
-            database=os.getenv("REGISTRY_DATABASE", DEFAULT_REGISTRY_DATABASE),
+            # `or` rather than a getenv default: compose lists the variable and
+            # leaves it empty when `.env` does not set it, and `os.getenv(name,
+            # default)` returns "" for a variable that *is* set. An empty name
+            # would be a database called "".
+            database=os.getenv("REGISTRY_DATABASE", "") or DEFAULT_REGISTRY_DATABASE,
         )
 
 

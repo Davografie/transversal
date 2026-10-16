@@ -127,3 +127,11 @@ def test_the_default_is_beside_the_campaign_database_not_inside_it(monkeypatch):
     config = registry.RegistryConfig.from_env()
     assert config.database == registry.DEFAULT_REGISTRY_DATABASE
     assert config.database != "transversal"
+
+
+def test_an_empty_database_name_means_unset_not_a_database_called_blank(monkeypatch):
+    """Compose lists the variable and leaves it empty when `.env` does not set it,
+    and `os.getenv(name, default)` returns "" for a variable that *is* set."""
+    monkeypatch.setenv("REGISTRY_DATABASE", "")
+
+    assert registry.RegistryConfig.from_env().database == registry.DEFAULT_REGISTRY_DATABASE
