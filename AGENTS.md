@@ -37,6 +37,30 @@ running `git push` publishes to `github.com/Davografie/transversal` (**public** 
   the [[Overseer]]'s to publish, and only when the tree is verified.
 - Issues are the one thing worth *reading* from GitHub: see [[GitHub Issue Loop]].
 
+### ⚠ The coordination layer is NOT tracked — your doc and ticket edits are local-only
+
+When the repo went public on 2026-10-16, the internal material was **gitignored** rather than
+published. Verified: the public history contains **zero** commits touching these paths, so the
+redaction covers history as well as the tree.
+
+| ignored path | is |
+|---|---|
+| `docs/sessions/` | the session docs — **including yours** |
+| `docs/Process/` | tickets, the generated board, [[Division of Labor]] |
+| `docs/to-do.md` | the human's capture file |
+| `docs/Technical/Security Posture.md` | the unfixed-vulnerability register |
+| `deploy/headscale/`, `.backups/`, `backups/`, `*.data.json.gz` | the private tailnet config and DB dumps containing player characters |
+| `.deepseek/`, `.codewhale/` | agent internal state |
+
+**What this means in practice, and it will surprise you if nobody says it:** `git status` will not
+show your session-doc or ticket edits, `git add` refuses them, and **committing them does nothing**.
+The whole coordination layer now lives **on this machine only — no history, no backup**. So do not
+treat a commit as a save for those files; if you care about a change surviving, it has to be
+somewhere else too.
+
+`AGENTS.md` **is** tracked, and was generalised for publication before it was published — so **do not
+put personal names, player handles, or internal detail in it.** That is the file the public sees.
+
 ## Git Identity
 
 AI-agent commits must not reuse the user's `user.name` / `user.email`. Always commit under a distinct agent identity so agent-authored work is distinguishable in history:
@@ -137,13 +161,17 @@ yourself wanting to, that is a bug fix that goes to `release-build` and then get
 
 To re-base a role branch, target the **staging** branch: `git rebase release-build`.
 
-> [!warning] Branch protection is now available — but not yet enabled
-> The repo went **public on 2026-10-16**, so GitHub branch protection is available for the first
-> time; while it was private it required GitHub Pro (`HTTP 403, "Upgrade to GitHub Pro or make this
-> repository public"`). **It is not enabled yet**, so there is still no server-side rule stopping a
-> force-push or a direct commit to `production`. Until it is enabled, the guards are this convention
-> and `scripts/promote.sh`, which **refuses to promote a diverged `production`** precisely so a stray
-> direct commit cannot be papered over. Treat that refusal as the alarm it is.
+> [!success] Branch protection is ON — both long-lived branches (2026-10-16)
+> Enabled once the repo went public. Verified on **`release-build`** and **`production`**:
+> **force-pushes blocked**, **deletions blocked**, **admins enforced** — and deliberately **no
+> required PR reviews and no required status checks**, because the fleet fast-forwards and does not
+> open pull requests; requiring either would block every merge. So you can still fast-forward a merge
+> into `release-build`, and the [[Overseer]] can still promote `production`. What you *cannot* do is
+> rewrite either branch's history or delete it, by accident or otherwise.
+>
+> `scripts/promote.sh` still **refuses to promote a diverged `production`**, which remains the local
+> alarm that a direct commit landed; the server-side rules now stop the history rewrite that would
+> have hidden it.
 
 ### One branch per role
 
