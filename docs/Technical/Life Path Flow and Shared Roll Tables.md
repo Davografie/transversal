@@ -99,6 +99,39 @@ Two properties carry it:
 Flow is deliberately *not* read from a step's `effects`: a step's destinations are
 `next` and its bindings, which keeps "flow is structure, not effects" true.
 
+## A step with no table ([[B314]])
+
+A step's `table_id` may be **empty**, and then the step is the content: an
+**effects-only step**. There is no row to resolve, no binding to apply and nothing to
+roll — `resolve_step` applies `LifePathStep.effects` once and follows the step's own
+`next`, exactly as the flow above describes with the row half absent. Everything else
+about the wrapper model is unchanged, and a path may mix both kinds of step freely.
+
+Why it exists: before it, the only way to make a step *do* something was to author rows
+of a table and hang effects on them. The alternative the owner wanted is to author the
+effects on the step and let the player's choice come from a **`choose` step in an
+effect's targeting path** — one authored question over live data, instead of a row per
+option.
+
+**A `choose` in a step's effect is answered, and the step holds still until it is.** The
+contract is two calls to `resolveStep`:
+
+| call | what happens |
+| --- | --- |
+| `resolveStep(entityId)` | effects that resolve fully apply; a `choose` comes back in `structuredChoices` **with its candidate pool**, `done` is false, and the term **stays on this step** |
+| `resolveStep(entityId, resolutions: [...])` | only the effects the caller echoed are re-resolved — so nothing applies twice — and the step advances once nothing is pending |
+
+Two details are load-bearing. The step does **not** advance while a question is pending,
+because advancing would skip the answer and re-ask it out of its context; and an
+effects-only step has **no source**, so `select source` resolves to nobody rather than to
+something arbitrary (`table_bindings` takes the table as optional throughout).
+
+The authored form of a choice is a targeting path ending in `choose` — `select
+traitset → navigate traits → filter … → choose` — which is the same machinery an SFX
+uses. Its answer picks what the effect lands on. Making the answer steer *flow* (a
+per-choice `next`, i.e. a `choose` that replaces what rows do) is deliberately **not**
+in this step; it is the next one.
+
 ## Flow is structure, not effects
 
 What used to be `life_path`-type effects on a row is now declared by the path. The split was

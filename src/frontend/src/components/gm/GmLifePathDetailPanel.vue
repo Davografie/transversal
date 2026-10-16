@@ -53,7 +53,10 @@
             class="lpd-step-open"
             variant="ghost"
             size="sm"
-            :title="'Open ' + stepText(step) + ' — step id ' + step.id"
+            :disabled="!step.tableId"
+            :title="step.tableId
+              ? 'Open ' + stepText(step) + ' — step id ' + step.id
+              : 'Effects-only step ' + step.id + ' — it wraps no table to open'"
             @click="openTable(step)"
           >{{ step.id }}</Button>
           <span class="lpd-step-table">{{ stepText(step) }}</span>
@@ -64,13 +67,27 @@
 
         <div class="lpd-field">
           <label>Table</label>
-          <GmScopePicker
-            :model-value="step.tableId"
-            :options="entryTableOptions"
-            empty-label="Select table…"
-            placeholder="Roll table…"
-            @update:model-value="onPickStepTable(step, $event)"
-          />
+          <div class="lpd-step-table-row">
+            <GmScopePicker
+              :model-value="step.tableId"
+              :options="entryTableOptions"
+              empty-label="No table — effects only"
+              placeholder="Roll table…"
+              @update:model-value="onPickStepTable(step, $event)"
+            />
+            <Button
+              v-if="step.tableId"
+              variant="ghost"
+              size="sm"
+              title="Drop the table: this step runs its own effects"
+              @click="setStepTable(step, '')"
+            >Effects only</Button>
+          </div>
+          <span v-if="!step.tableId" class="lpd-hint">
+            <strong>Effects only.</strong> This step wraps no table: it runs its
+            <em>Step effects</em> once and follows <em>Default next</em>. Where a player
+            must choose, author a <em>choose</em> step in the effect's targeting path.
+          </span>
         </div>
         <div class="lpd-field">
           <label>Label</label>
@@ -84,7 +101,7 @@
             empty-label="End the term"
             placeholder="Next step…"
           />
-          <span class="lpd-hint">Where a row with no binding of its own goes.</span>
+          <span class="lpd-hint">Where a row with no binding of its own goes — and, on an effects-only step, where the step itself goes.</span>
         </div>
 
         <!-- The step's own context: the names its wrapped table reads ([[B290]]).
@@ -97,8 +114,9 @@
             <Button variant="secondary" size="sm" @click="openStepVariables(step)">Edit</Button>
           </div>
           <span class="lpd-hint">
-            Names this step supplies to the table it wraps, resolved before the table's
-            own — so a shared table reads the context of this step.
+            Names this step supplies to the table it wraps — or, on an effects-only
+            step, to its own effects — resolved before the table's own, so a shared
+            table reads the context of this step.
           </span>
         </div>
 
@@ -122,12 +140,18 @@
             @add="openStepEffectEditor(step, null)"
             @edit="(i) => openStepEffectEditor(step, i)"
           />
-          <span class="lpd-hint">
+          <span v-if="step.tableId" class="lpd-hint">
             Runs once for <strong>any</strong> row this step resolves — after the row's
             own effects and its binding's. Consume a bound variable as a
             <em>targeting path</em> (<em>Start from → Variable → …</em>); the names
             offered are the table's and its rows', and a name only some rows expose
             resolves on those and does nothing on the rest.
+          </span>
+          <span v-else class="lpd-hint">
+            The whole of this step: applied once, then <em>Default next</em> is taken.
+            To let the player decide what an effect lands on, build the effect's target
+            as a <em>targeting path</em> ending in <em>Choose</em> — the question is put
+            to them when the step runs, and the step waits for the answer.
           </span>
         </div>
       </div>
@@ -139,6 +163,9 @@
         placeholder="＋ Add a step…"
         @update:model-value="onPickNewStep"
       />
+      <Button class="lpd-add-table" variant="secondary" block @click="addEffectsOnlyStep">
+        ＋ Add effects-only step
+      </Button>
       <!-- A brand-new table needs a saved path to belong to: it is created
            through the roll table panel with this path as its owner. -->
       <Button v-if="path.id" class="lpd-add-table" variant="secondary" block @click="addTable">＋ Add roll table</Button>
@@ -596,12 +623,11 @@ function stepText(s) {
 const stepOptions = computed(() => form.steps.map(s => ({ value: s.id, label: stepText(s) })))
 
 // ── Steps ────────────────────────────────────────────
-function onPickNewStep(tableId) {
-  if (!tableId) return
-  form.steps.push({
+function _blankStep(overrides) {
+  return {
     id: nextStepId(),
-    tableId,
-    label: tableNames.value[tableId] || '',
+    tableId: '',
+    label: '',
     next: '',
     // The step's own declarations ([[B290]]) start empty and are authored in their
     // child panel; they are the *caller's* context, so re-pointing the step at
@@ -609,17 +635,35 @@ function onPickNewStep(tableId) {
     boundVariables: [],
     bindings: [],
     effects: [],
-  })
+    ...overrides,
+  }
+}
+
+function onPickNewStep(tableId) {
+  if (!tableId) return
+  form.steps.push(_blankStep({ tableId, label: tableNames.value[tableId] || '' }))
   newStepTableId.value = ''
 }
 
-function onPickStepTable(step, tableId) {
-  // A binding names a row of *this step's* table, so pointing the step at a
-  // different table invalidates every one of them — keep them and they would be
-  // keys the new table does not have.
-  if (step.tableId !== tableId) step.bindings = []
+/** A step with **no table** ([[B314]]): it applies its own effects and follows its
+ *  own `next`. What it is *for* is the authoring form the owner asked for — trigger
+ *  effects directly on the step, and let the player's choice come from a `{choose}`
+ *  in an effect's targeting path instead of from pre-authored rows. */
+function addEffectsOnlyStep() {
+  form.steps.push(_blankStep({ label: 'Effects only' }))
+}
+
+/** Point a step at no table, or back at one. Either way its row bindings go: a
+ *  binding names a row of the table it wraps, and there is no table. */
+function setStepTable(step, tableId) {
+  if (step.tableId === tableId) return
+  step.bindings = []
   step.tableId = tableId
-  if (!step.label) step.label = tableNames.value[tableId] || ''
+  if (tableId && !step.label) step.label = tableNames.value[tableId] || ''
+}
+
+function onPickStepTable(step, tableId) {
+  setStepTable(step, tableId)
 }
 
 function moveStep(i, delta) {
@@ -645,6 +689,7 @@ function removeStep(i) {
 // table — is the identity passed on: a path may wrap the same table twice, and
 // the table panel's connector column edits the one this step names.
 function openTable(step) {
+  if (!step.tableId) return  // an effects-only step has no rows to open ([[B314]])
   panel.open({
     component: GmRollTableEditPanel,
     title: stepText(step),
@@ -787,6 +832,10 @@ async function save() {
    the builder itself is unbounded height and belongs in a panel of its own. */
 .lpd-step-vars { display: flex; align-items: center; gap: 6px; }
 .lpd-step-vars .lpd-detail { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The table picker and the "drop the table" escape share a row, so an effects-only
+   step is one click from a table and back ([[B314]]). */
+.lpd-step-table-row { display: flex; align-items: center; gap: 6px; }
+.lpd-step-table-row > :first-child { flex: 1; min-width: 0; }
 
 .lpd-add-table { margin-top: 2px; }
 .lpd-subsection { margin-top: 8px; }

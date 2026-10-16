@@ -39,6 +39,9 @@ class ExecutorRepo:
     def get_entity(self, entity_id):
         return self.entities.get(entity_id)
 
+    def list_all_entities(self):
+        return list(self.entities.values())
+
     def get_lifepath(self, path_id):
         return self.lifepaths.get(path_id)
 

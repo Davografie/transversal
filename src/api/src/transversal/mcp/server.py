@@ -1638,9 +1638,12 @@ mutation($entityId: ID!, $projectionId: ID!, $location: ID) {
 """
 
 _MUT_RESOLVE_STEP = """
-mutation($entityId: ID!, $roll: Int, $tier: OutcomeTier, $index: Int) {
-  resolveStep(entityId: $entityId, roll: $roll, tier: $tier, index: $index) {
-    done applied pendingChoices mustered mishapMuster scheduled error tableId entryLabel
+mutation($entityId: ID!, $roll: Int, $tier: OutcomeTier, $index: Int,
+         $resolutions: [EffectTargetResolutionInput!]) {
+  resolveStep(entityId: $entityId, roll: $roll, tier: $tier, index: $index,
+              resolutions: $resolutions) {
+    done applied pendingChoices structuredChoices mustered mishapMuster scheduled
+    error tableId entryLabel
   }
 }
 """
@@ -1806,11 +1809,20 @@ def resolve_step(args: dict) -> dict:
 
     ``tier`` is FAIL | MARGINAL | SUCCESS | EXCEPTIONAL | PERFECT; give ``index`` to
     pick a specific table entry, or let the resolver choose.
+
+    A step may wrap **no table** — an effects-only step ([[B314]]) — and then there
+    is nothing to roll: the call applies the step's own effects. A step may also ask
+    a question: when its effects reach a `choose`, the response carries
+    ``structuredChoices`` with the candidate pool and ``done: false``, and the term
+    **stays on that step**. Answer it by calling again with ``resolutions`` (the
+    ``EffectTargetResolutionInput`` documents the question came with, plus the picked
+    ids) — only the echoed effects are re-resolved, so nothing applies twice.
     """
     return _call_mutation("resolveStep", _MUT_RESOLVE_STEP,
                           {"entityId": args["entity_id"], "roll": args.get("roll"),
                            "tier": _enum(args["tier"]) if args.get("tier") else None,
-                           "index": args.get("index")},
+                           "index": args.get("index"),
+                           "resolutions": args.get("resolutions")},
                           args.get("dry_run", True), "resolveStep")
 
 
@@ -3967,7 +3979,11 @@ TOOL_SCHEMAS = {
                         "properties": {
                             "id": {"type": "string",
                                    "description": "Stable step id; \"\" generates one (s1, s2, …)."},
-                            "tableId": {"type": "string", "description": "The wrapped roll table."},
+                            "tableId": {"type": "string",
+                                        "description": "The wrapped roll table. Empty = an "
+                                                       "effects-only step (B314): the step applies its "
+                                                       "own `effects` and follows its own `next`, with "
+                                                       "no table, row or binding."},
                             "label": {"type": "string"},
                             "next": {"type": "string",
                                      "description": "Step id this step flows to, or \"\" to stop."},
@@ -4002,7 +4018,7 @@ TOOL_SCHEMAS = {
                                 },
                             },
                         },
-                        "required": ["tableId"],
+                        "required": [],
                     },
                 },
                 "discovery": {"type": "object"},
@@ -4261,7 +4277,7 @@ TOOL_SCHEMAS = {
     },
     "resolve_step": {
         "name": "resolve_step",
-        "description": "Resolve one life-path step against a roll — the play-time roll result. tier is FAIL|MARGINAL|SUCCESS|EXCEPTIONAL|PERFECT; index picks a specific table entry.",
+        "description": "Resolve one life-path step against a roll — the play-time roll result. tier is FAIL|MARGINAL|SUCCESS|EXCEPTIONAL|PERFECT; index picks a specific table entry. A step may wrap no table (effects-only, B314) — then there is nothing to roll. If the step's effects ask a `choose`, the response carries structuredChoices and done:false and the term stays put; answer by calling again with `resolutions`.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -4269,6 +4285,13 @@ TOOL_SCHEMAS = {
                 "roll": {"type": "integer"},
                 "tier": {"type": "string", "description": "FAIL|MARGINAL|SUCCESS|EXCEPTIONAL|PERFECT"},
                 "index": {"type": "integer", "description": "specific table entry, optional"},
+                "resolutions": {
+                    "type": "array",
+                    "description": "Answers to a step's pending structuredChoices: the "
+                                   "EffectTargetResolutionInput documents the question came "
+                                   "with, plus the chosen ids. Only these effects re-resolve.",
+                    "items": {"type": "object"},
+                },
                 "dry_run": _dry_run_property(),
             },
             "required": ["entity_id"],

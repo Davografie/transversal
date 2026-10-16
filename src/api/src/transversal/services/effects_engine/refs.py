@@ -331,6 +331,8 @@ def resolve_effect_spec_choices(
     source_id: str = "",
     source_sfx_id: str = "",
     bindings: dict | None = None,
+    source=None,
+    source_element: str = "",
 ) -> tuple[list[Effect], list[StructuredChoice]]:
     """Re-resolve an effect's spec/ref with partial ``choose`` answers.
 
@@ -339,14 +341,24 @@ def resolve_effect_spec_choices(
     next ``choose`` step(s) as structured choices when the path is not yet fully
     answered. Used by the resume mutation after the user answers a mid-path
     ``choose``.
+
+    ``source``/``source_element`` let a caller hand the source **object** directly,
+    for a source that is not a declared ``source_kind`` — a life-path step's source
+    is the roll table it wraps, and there is no `roll_table` kind because a rule is
+    never *attached* to a table bucket ([[B314]]). When they are omitted the source
+    is resolved from ``source_kind``/``source_id`` as before.
+
+    Note the resolution is allowed to **fail**: a ``source_kind`` whose instance has
+    been deleted resolves to nothing, and the context is then built with no source
+    rather than raising. That used to be a blind tuple unpack, so a deleted source
+    crashed the resume instead of degrading to "no source".
     """
     from transversal.services.target_resolver import TargetContext, resolve, resolve_source
 
-    source, source_element = (
-        resolve_source(source_kind, source_id, repo)
-        if source_kind and source_id and repo is not None
-        else (None, None)
-    )
+    if source is None and source_kind and source_id and repo is not None:
+        resolved = resolve_source(source_kind, source_id, repo)
+        if resolved is not None:
+            source, source_element = resolved
     ctx = TargetContext(subject=entity, repo=repo, source=source, source_element=source_element,
                         bindings=bindings if bindings is not None else {},
                         source_kind=source_kind or "", source_id=source_id or "")

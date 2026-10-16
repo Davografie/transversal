@@ -33,6 +33,9 @@ class GqlRepo:
     def get_entity(self, eid):
         return self.entities.get(eid)
 
+    def list_all_entities(self):
+        return list(self.entities.values())
+
     def update_entity(self, e):
         self.entities[e.id] = e
         return e
@@ -559,3 +562,113 @@ def test_start_term_needs_no_faction():
     assert pt["pathId"] == "lp-1"
     assert pt["currentTableId"] == "tbl-a"
     assert repo.entities["char-1"].pending_terms[""].faction_id == ""
+
+
+# ── An effects-only step, and its answerable `{choose}` ([[B314]]) ──────────────
+
+def _effects_only_build():
+    """A path whose first step wraps **no table**, and whose effect asks the player
+    to choose between two entities. `s2` wraps a table, so "did the step advance?"
+    is observable from the checkpoint rather than only from `done`."""
+    from transversal.domain import LifePathStep
+    from transversal.services.target_spec import TargetSpec
+
+    repo = GqlRepo()
+    repo.entities["char-1"] = Entity(
+        id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth",
+    )
+    repo.entities["loc-a"] = Entity(id="loc-a", type=EntityType.LOCATION, name="A",
+                                    current_universe="earth")
+    repo.entities["loc-b"] = Entity(id="loc-b", type=EntityType.LOCATION, name="B",
+                                    current_universe="earth")
+    choose = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        result="origin",
+        target_spec=TargetSpec.model_validate({"steps": [
+            {"kind": "select", "collection": "entities"},
+            {"kind": "choose", "count": 1},
+        ]}),
+    )
+    repo.lifepaths["lp-1"] = LifePath(
+        id="lp-1", name="Path", universe="earth", entry_step="s1",
+        steps=[
+            LifePathStep(id="s1", table_id="", label="Study", next="s2", effects=[choose]),
+            LifePathStep(id="s2", table_id="tbl-b"),
+        ],
+    )
+    repo.tables["tbl-b"] = RollTable(
+        id="tbl-b", name="B", universe="earth", scheme=RollTableScheme.INDEX,
+        entries=[_entry("end", [_next("")])],
+    )
+    return repo
+
+
+_RESOLVE_QUERY = """
+    mutation($eid: ID!, $resolutions: [EffectTargetResolutionInput!]) {
+        resolveStep(entityId: $eid, resolutions: $resolutions) {
+            done applied structuredChoices pendingTerm { currentStepId currentTableId }
+            error
+        }
+    }
+"""
+
+
+def _start_effects_only(repo):
+    """Begin the term — and prove the cursor lands on a step that has no table."""
+    data = _run(repo, """
+        mutation($eid: ID!, $pid: ID!) {
+            startTerm(entityId: $eid, pathId: $pid) {
+                pathId currentStepId currentTableId
+            }
+        }
+    """, {"eid": "char-1", "pid": "lp-1"})["startTerm"]
+    assert data["currentStepId"] == "s1"
+    assert data["currentTableId"] == "", "an effects-only step has no table to name"
+    return data
+
+
+def test_an_effects_only_step_resolves_through_the_schema():
+    """No table is not an error and not a missing table: the step's own effects run."""
+    repo = _effects_only_build()
+    _start_effects_only(repo)
+
+    data = _run(repo, """
+        mutation($eid: ID!) {
+            resolveStep(entityId: $eid) {
+                done applied tableId error pendingTerm { currentStepId currentTableId }
+            }
+        }
+    """, {"eid": "char-1"})
+
+    r = data["resolveStep"]
+    assert r["error"] is None
+    assert r["tableId"] == "", "an effects-only step reports no table"
+
+
+def test_a_step_choose_comes_back_as_a_question_and_is_answered():
+    """The full round trip the surface depends on: the question arrives with its
+    candidate pool, and answering it applies the effect and advances the step."""
+    repo = _effects_only_build()
+    _start_effects_only(repo)
+
+    first = _run(repo, _RESOLVE_QUERY, {"eid": "char-1"})["resolveStep"]
+    question = first["structuredChoices"]
+    assert len(question) == 1, "the step asked exactly one thing"
+    assert first["done"] is False, "and it is not finished until it is answered"
+    assert first["pendingTerm"]["currentStepId"] == "s1", "the term holds still"
+    candidate = question[0]["candidates"][0]["id"]
+
+    second = _run(repo, _RESOLVE_QUERY, {
+        "eid": "char-1",
+        "resolutions": [{
+            # Exactly what the picker echoes: the effect the question carried, its
+            # field, and the answer keyed by the targeting path's step index.
+            "effect": question[0]["effect"],
+            "field": question[0]["field"],
+            "answers": [{"stepIndex": question[0]["step_index"], "ids": [candidate]}],
+        }],
+    })["resolveStep"]
+
+    assert second["structuredChoices"] == []
+    assert second["applied"], "the answered effect applied"
+    assert second["pendingTerm"]["currentStepId"] == "s2", "and then the step advanced"

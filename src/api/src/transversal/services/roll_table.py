@@ -274,6 +274,11 @@ def table_bindings(table, entity, repo, *, entry=None, roll=None, tier=None,
                    index=None, path=None, step=None) -> dict:
     """The scope a roll-table entry's conditions and effects resolve against.
 
+    ``table`` may be **None** ([[B314]]): an effects-only life-path step has no
+    table, row or roll, and still declares names at the path and step layers. The
+    table's own layer, the entry's and the roll's are simply absent then — every
+    read of `table` below is a `getattr`, so nothing else changes.
+
     Two kinds of name, one scope:
 
     * **ambient** — what the engine already knows. ``path_faction`` is the faction

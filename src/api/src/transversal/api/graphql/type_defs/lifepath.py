@@ -47,13 +47,15 @@ class LifePathBinding:
 
 @strawberry.type
 class LifePathStep:
-    """One wrapped table at one position in the path.
+    """One position in the path — a wrapped table, or effects and nothing else.
 
     The `id` is the step's, not the table's, so a path may wrap the same table
-    twice and a step survives its table being re-pointed.
+    twice and a step survives its table being re-pointed. An empty `table_id` is
+    an **effects-only step** ([[B314]]): it applies its own effects and follows
+    its own `next`.
     """
     id: str
-    table_id: str
+    table_id: str = ""
     label: str = ""
     next: str = ""
     bindings: list[LifePathBinding] = strawberry.field(default_factory=list)
@@ -81,7 +83,8 @@ class LifePathStepInput:
     #: Empty generates one (`s1`, `s2`, …) — the editor should not have to invent
     #: identities, but it must be able to preserve the ones it was given.
     id: str = ""
-    table_id: str
+    #: Empty = no table: an **effects-only step** ([[B314]]).
+    table_id: str = ""
     label: str = ""
     next: str = ""
     bindings: list[LifePathBindingInput] = strawberry.field(default_factory=list)
@@ -136,3 +139,9 @@ class LifePathStepResult:
     error: Optional[str] = None
     table_id: Optional[str] = None
     entry_label: Optional[str] = None
+    #: The step's unanswered `{choose}` steps, with their candidates ([[B314]]).
+    #: `pending_choices` names the element, which is not enough to answer with —
+    #: these carry the effect, its field and the candidate pool, so the picker can
+    #: render the question and echo the answer back through `resolve_step`'s
+    #: `resolutions`.
+    structured_choices: strawberry.scalars.JSON = strawberry.field(default_factory=list)

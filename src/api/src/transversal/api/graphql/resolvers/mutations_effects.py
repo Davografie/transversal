@@ -278,16 +278,31 @@ class MutationsEffects:
                      projection_id: Optional[str] = None,
                      roll: Optional[int] = None,
                      tier: Optional[GqlOutcomeTier] = None,
-                     index: Optional[int] = None) -> LifePathStepResult:
-        """Resolve the current pending roll-table step in a life path term.
+                     index: Optional[int] = None,
+                     resolutions: Optional[list[EffectTargetResolutionInput]] = None,
+                     ) -> LifePathStepResult:
+        """Resolve the current pending step in a life path term.
 
         ``index`` is a manual/click selection (1-based); ``roll`` is a rolled
         number for range/index/weight tables; ``tier`` is an outcome tier for
         check tables. Immediate effects apply now; deferred-timing effects are
         queued into the shared scheduler.
+
+        A step that wraps **no table** is an effects-only step ([[B314]]): there
+        is nothing to roll, and its effects are the whole payload.
+
+        **A step may ask a question, and this is also how it is answered.** When an
+        effect's targeting path reaches a ``choose``, the step returns
+        ``structuredChoices`` with ``done: false`` and **stays put**. The caller
+        answers by calling again with ``resolutions`` — only the effects named
+        there are re-resolved, so nothing is applied twice, and the step advances
+        once nothing is left pending.
         """
         from transversal.domain import OutcomeTier as DomainOutcomeTier
-        from transversal.services.lifepath_executor import resolve_step as resolve_lp_step
+        from transversal.services.lifepath_executor import (
+            StepResolution,
+            resolve_step as resolve_lp_step,
+        )
 
         repo = _em(info).repo
         entity = repo.get_entity(str(entity_id))
@@ -295,10 +310,19 @@ class MutationsEffects:
             raise ValueError(f"Entity '{entity_id}' not found")
 
         domain_tier = DomainOutcomeTier(tier.value) if tier is not None else None
+        answers = [
+            StepResolution(
+                effect=_effect_input_to_domain(r.effect),
+                field=r.field or "target",
+                answers={a.step_index: list(a.ids) for a in (r.answers or [])},
+            )
+            for r in (resolutions or [])
+        ]
         summary = resolve_lp_step(
             entity, repo, projection_id=projection_id,
             roll=roll, tier=domain_tier, index=index,
             engine=info.context["effects_engine"],
+            resolutions=answers or None,
         )
 
         pt = summary.get("pending_term")
@@ -326,4 +350,6 @@ class MutationsEffects:
             error=summary.get("error"),
             table_id=summary.get("table_id"),
             entry_label=summary.get("entry_label"),
+            structured_choices=[_structured_choice_to_dict(c)
+                                for c in (summary.get("structured_choices") or [])],
         )

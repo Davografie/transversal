@@ -139,6 +139,21 @@ def test_a_life_path_effect_on_a_step_or_binding_is_reported():
     assert {(r["step"], r["where"]) for r in found} == {("s1", "step"), ("s1", "binding 'r'")}
 
 
+def test_an_effects_only_step_is_named_rather_than_looking_like_a_missing_table():
+    """A step with no table is a *supported* kind of step ([[B314]]) — but a count of
+    tables would show it as one nothing wraps, which is also what a broken step looks
+    like. So the audit says it out loud, with what the step actually carries."""
+    repo = FakeRepo(paths=[_path("lp-a", steps=[
+        _step("s1", "", effects=[_effect()], bindings=[]),
+    ])])
+    found = lifepath_drift(repo)["paths"]["effects_only_steps"]
+
+    assert [(r["path"], r["step"], r["effects"]) for r in found] == [("lp-a", "s1", 1)]
+    assert "effects-only steps (no table — B314): 1" in format_report(lifepath_drift(repo))
+    # It is NOT drift: the table-ownership section has nothing to say about it.
+    assert lifepath_drift(repo)["tables"]["legacy_life_path"] == []
+
+
 def test_the_deprecated_ownership_field_says_whether_a_step_replaces_it():
     repo = FakeRepo(
         paths=[_path("lp-a", steps=[_step("s1", "rt-a")])],

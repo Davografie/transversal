@@ -53,15 +53,35 @@ def validate_life_path(lp: "LifePath", repo) -> list[str]:
         problems.append(f"entry_step {lp.entry_step!r} is not one of its steps")
 
     for step in lp.steps:
-        table = repo.get_roll_table(step.table_id)
-        if table is None:
-            problems.append(f"step {step.id!r}: table {step.table_id!r} does not exist")
-            continue
-
+        # `next` is the step's own edge and is checked whatever the step wraps — a
+        # step with no table still has a graph to be wrong about.
         if step.next and step.next not in seen:
             problems.append(
                 f"step {step.id!r}: next {step.next!r} is not a step in this path"
             )
+
+        if not step.table_id:
+            # An **effects-only step** ([[B314]]) is legal: it applies its own
+            # effects and follows `next`. What it cannot have is a binding, because
+            # a binding names a row of the table it wraps — and there is none.
+            if step.bindings:
+                problems.append(
+                    f"step {step.id!r}: has no table, so it cannot bind rows "
+                    f"({len(step.bindings)} binding(s))"
+                )
+            if not (step.effects or step.next):
+                # Legal but inert: it would do nothing and go nowhere. Worth saying,
+                # because an author who meant to author something would not see it.
+                problems.append(
+                    f"step {step.id!r}: has no table, no effects and no next — "
+                    f"it does nothing"
+                )
+            continue
+
+        table = repo.get_roll_table(step.table_id)
+        if table is None:
+            problems.append(f"step {step.id!r}: table {step.table_id!r} does not exist")
+            continue
 
         keys = {row_key(e, i) for i, e in enumerate(table.entries)}
         bound: set[str] = set()

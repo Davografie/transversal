@@ -49,44 +49,60 @@
             <span class="wiz-chip">{{ isTraitDice ? 'trait dice' : currentTable?.die }}</span>
           </p>
 
-          <div v-if="isTraitDice" class="wiz-traits">
-            <label class="wiz-traits-label" for="wiz-trait-pick">Choose a trait to roll:</label>
-            <select
-              id="wiz-trait-pick"
-              v-model="selectedTraitId"
-              class="wiz-trait-select"
-              @change="onTraitSelect"
+          <!-- A step's effect reached a `{choose}` ([[B314]]): the question replaces
+               the table, because the step is not finished until it is answered — and
+               picking another row would re-resolve *this* step and apply it twice. -->
+          <EffectTargetWizard
+            v-if="pendingStructured.length"
+            :entity-id="entityId"
+            :pending-choices="pendingStructured"
+            embedded
+            title="Choose"
+            @resolve="answerChoices"
+            @cancel="pendingStructured = []"
+          />
+
+          <template v-else>
+            <div v-if="isTraitDice" class="wiz-traits">
+              <label class="wiz-traits-label" for="wiz-trait-pick">Choose a trait to roll:</label>
+              <select
+                id="wiz-trait-pick"
+                v-model="selectedTraitId"
+                class="wiz-trait-select"
+                @change="onTraitSelect"
+              >
+                <option value="" disabled>— select a trait —</option>
+                <optgroup v-for="(group, gName) in groupedTraits" :key="gName" :label="gName">
+                  <option v-for="t in group" :key="t.traitId" :value="t.traitId">{{ t.name }} ({{ traitDiceLabel(t) }})</option>
+                </optgroup>
+              </select>
+              <div v-if="!rollableTraits.length" class="wiz-empty">No rollable traits for this table.</div>
+            </div>
+
+            <!-- A roll *finds* a row and marks it; the click is what takes it. That
+                 is why the 🎲 is a separate control, why it exists only on a
+                 weighted table (every other scheme is rolled by the dice in the
+                 roller), and why the surface has no confirm button. -->
+            <ChoiceTable
+              :rows="entries"
+              :scheme="currentTable?.scheme"
+              :rolled-index="rolledEntryIndex"
+              :roll-token="rollToken"
+              :allow-random="isWeight"
+              :busy="resolving"
+              :show-cancel="false"
+              empty-text="This table has no entries."
+              @pick="continueStep"
+              @roll="(row, i) => markRolled(i)"
             >
-              <option value="" disabled>— select a trait —</option>
-              <optgroup v-for="(group, gName) in groupedTraits" :key="gName" :label="gName">
-                <option v-for="t in group" :key="t.traitId" :value="t.traitId">{{ t.name }} ({{ traitDiceLabel(t) }})</option>
-              </optgroup>
-            </select>
-            <div v-if="!rollableTraits.length" class="wiz-empty">No rollable traits for this table.</div>
-          </div>
+              <template #actions>
+                <Button variant="neutral" size="sm" :disabled="resolving" @click="backToChoose">↩ Paths</Button>
+              </template>
+            </ChoiceTable>
 
-          <!-- A roll *finds* a row and marks it; the click is what takes it. That
-               is why the 🎲 is a separate control, why it exists only on a
-               weighted table (every other scheme is rolled by the dice in the
-               roller), and why the surface has no confirm button. -->
-          <ChoiceTable
-            :rows="entries"
-            :scheme="currentTable?.scheme"
-            :rolled-index="rolledEntryIndex"
-            :roll-token="rollToken"
-            :allow-random="isWeight"
-            :busy="resolving"
-            :show-cancel="false"
-            empty-text="This table has no entries."
-            @pick="continueStep"
-            @roll="(row, i) => markRolled(i)"
-          >
-            <template #actions>
-              <Button variant="neutral" size="sm" :disabled="resolving" @click="backToChoose">↩ Paths</Button>
-            </template>
-          </ChoiceTable>
+            <div v-if="resolving" class="wiz-loading-inline">⏳ Resolving…</div>
+          </template>
 
-          <div v-if="resolving" class="wiz-loading-inline">⏳ Resolving…</div>
           <p v-if="error" class="wiz-error">{{ error }}</p>
 
           <div v-if="lastResult" class="wiz-result-block">
@@ -105,6 +121,46 @@
               <span v-if="item.applied?.length" class="wiz-log-applied">{{ item.applied.join(' · ') }}</span>
             </div>
           </details>
+        </template>
+
+        <!-- A step that wraps **no table** ([[B314]]): it runs its own effects.
+             There is nothing to roll, so the surface is the step and one button —
+             and the effects are not run until it is pressed, exactly as a row is
+             not taken until it is clicked. -->
+        <template v-else-if="step === 'effect'">
+          <p class="wiz-phase-label">
+            {{ currentStepLabel || 'Life Path Step' }}
+            <span class="wiz-chip">effects</span>
+          </p>
+
+          <EffectTargetWizard
+            v-if="pendingStructured.length"
+            :entity-id="entityId"
+            :pending-choices="pendingStructured"
+            embedded
+            title="Choose"
+            @resolve="answerChoices"
+            @cancel="pendingStructured = []"
+          />
+
+          <template v-else>
+            <p class="wiz-hint">This step runs its own effects — there is nothing to roll.</p>
+            <div class="wiz-done-actions">
+              <Button variant="secondary" block :disabled="resolving" @click="backToChoose">↩ Paths</Button>
+              <Button variant="success" solid block :disabled="resolving" @click="runEffectsStep">
+                {{ resolving ? 'Applying…' : 'Continue' }}
+              </Button>
+            </div>
+          </template>
+
+          <p v-if="error" class="wiz-error">{{ error }}</p>
+
+          <div v-if="lastResult && !pendingStructured.length" class="wiz-result-block">
+            <div v-if="lastResult.applied?.length" class="wiz-applied">
+              <div v-for="(a, ai) in lastResult.applied" :key="ai" class="wiz-applied-line">{{ a }}</div>
+            </div>
+            <div v-if="lastResult.scheduled" class="wiz-scheduled">{{ lastResult.scheduled }} deferred effect{{ lastResult.scheduled === 1 ? '' : 's' }} queued</div>
+          </div>
         </template>
 
         <!-- Term finished / mustered -->
@@ -134,6 +190,7 @@ import { useEffectActions } from '@/composables/useEffectActions.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import ChoiceTable from '@/components/ui/ChoiceTable.vue'
 import Button from '@/components/ui/Button.vue'
+import EffectTargetWizard from '@/components/gm/EffectTargetWizard.vue'
 
 // The life path: a *checkpointed flow* of roll tables, rendered one step at a
 // time on [[UI-UX Design#Choice table]].
@@ -171,7 +228,7 @@ const { graphql } = useApi()
 const { load: loadEffectActions } = useEffectActions()
 const bus = usePanelBus()
 
-const step = ref('choose') // 'choose' | 'term' | 'done'
+const step = ref('choose') // 'choose' | 'term' | 'effect' | 'done'
 // The one path the chooser is narrowed to, when the wizard was opened for a
 // named path ([[B303]]). Empty = the whole catalogue.
 const showingPathId = ref('')
@@ -188,6 +245,11 @@ const traits = ref([])          // entity traitSettings — the rollable pool
 const selectedTraitId = ref('')
 const rolledEntryIndex = ref(null)
 const rollToken = ref(0)
+// The step the term is standing on when it wraps no table, and the unanswered
+// `{choose}` questions it is holding ([[B314]]). A question is not a result: while
+// one is pending the step has *not* been taken, so the surface shows the picker.
+const currentStepLabel = ref('')
+const pendingStructured = ref([])
 
 const title = computed(() => {
   if (step.value === 'choose') return 'Life Path'
@@ -277,7 +339,8 @@ async function loadPaths() {
     // it true would offer every path to everyone, which is the bug this replaces.
     const data = await graphql(
       `query($u:String,$eid:ID){ lifePaths(universe:$u, entityId:$eid){
-         id name universe description entryTableId factionIds walkable unwalkableReasons } }`,
+         id name universe description entryTableId factionIds walkable unwalkableReasons
+         steps { id tableId label } } }`,
       { u: props.universe, eid: props.entityId },
     )
     paths.value = data?.lifePaths || []
@@ -308,10 +371,54 @@ async function loadTraits() {
 
 async function loadPendingTerm() {
   const data = await graphql(
-    `query($id:ID!){ entity(id:$id){ pendingTerm{ factionId pathId currentTableId continuation } } }`,
+    `query($id:ID!){ entity(id:$id){ pendingTerm{ factionId pathId currentStepId currentTableId continuation } } }`,
     { id: props.entityId },
   )
   return data?.entity?.pendingTerm || null
+}
+
+/** The step the term is standing on, found on the path the chooser already loaded.
+ *
+ *  Why look it up rather than infer from `currentTableId`: a step with **no table**
+ *  ([[B314]]) is a legal position, so "no table id" cannot mean "no step" — and the
+ *  surface needs the step's label either way. `currentStepId` is the checkpoint;
+ *  `currentTableId` is only a fallback for a pre-wrapper term, which names a table. */
+function stepFor(pt) {
+  const lp = paths.value.find(p => p.id === (pt?.pathId || ''))
+  const sid = pt?.currentStepId || pt?.currentTableId || ''
+  return (lp?.steps || []).find(s => s.id === sid) || null
+}
+
+/** Render wherever the term now stands — a wrapped table, or an effects-only step. */
+async function showPosition(pt) {
+  pendingTerm.value = pt || null
+  pendingStructured.value = []
+  const s = stepFor(pt)
+  if (s && !s.tableId) {
+    currentStepLabel.value = s.label || s.id
+    currentTable.value = null
+    rolledEntryIndex.value = null
+    step.value = 'effect'
+    return
+  }
+  currentStepLabel.value = ''
+  if (!pt?.currentTableId) { step.value = 'done'; return }
+  await loadTable(pt.currentTableId)
+  step.value = 'term'
+  await nextTick()
+  await loadTraits()
+  setupRoller()
+}
+
+/** Run an effects-only step: apply its effects, then move on. */
+function runEffectsStep() { resolveStep() }
+
+/** Answer the step's `{choose}`. The wizard echoes the effect and the answer, and
+ *  the server re-resolves **only** the effects that asked, so nothing applies twice;
+ *  the step advances once nothing is pending. */
+function answerChoices(resolutions) {
+  if (!resolutions?.length) return
+  resolveStep({ resolutions })
 }
 
 async function startPath(lp) {
@@ -330,29 +437,32 @@ async function startPath(lp) {
     )
     const pt = data?.startTerm
     if (!pt) { error.value = 'Could not start term.'; return }
-    pendingTerm.value = pt
     log.value = []
     lastResult.value = null
-    await loadTable(pt.currentTableId)
-    step.value = 'term'
-    await nextTick()
-    await loadTraits()
-    setupRoller()
+    await showPosition(pt)
     emit('updated')
   } finally {
     resolving.value = false
   }
 }
 
-async function resolveStep({ index = null, roll = null } = {}) {
+async function resolveStep({ index = null, roll = null, resolutions = null } = {}) {
   resolving.value = true
   error.value = ''
   try {
     const vars = { eid: props.entityId }
-    if (index != null) vars.index = index
+    if (resolutions) {
+      // The answer to a pending `{choose}`. The step's position is unchanged and the
+      // server re-resolves from it, so `index`/`roll` need not be replayed.
+      vars.resolutions = resolutions
+    } else if (index != null) vars.index = index
     else if (roll != null) vars.roll = roll
     const data = await graphql(
-      `mutation($eid:ID!,$roll:Int,$index:Int){ resolveStep(entityId:$eid, roll:$roll, index:$index){ done applied pendingChoices mustered mishapMuster pendingTerm{factionId pathId currentTableId continuation} scheduled error tableId entryLabel } }`,
+      `mutation($eid:ID!,$roll:Int,$index:Int,$resolutions:[EffectTargetResolutionInput!]){
+         resolveStep(entityId:$eid, roll:$roll, index:$index, resolutions:$resolutions){
+           done applied pendingChoices structuredChoices mustered mishapMuster
+           pendingTerm{factionId pathId currentStepId currentTableId continuation}
+           scheduled error tableId entryLabel } }`,
       vars,
     )
     const r = data?.resolveStep
@@ -360,6 +470,18 @@ async function resolveStep({ index = null, roll = null } = {}) {
     if (r.error) { console.warn('[LifePathWizard] resolveStep error', r.error); error.value = r.error; return }
     lastResult.value = r
     log.value.push({ entryLabel: r.entryLabel, applied: r.applied, scheduled: r.scheduled, pendingChoices: r.pendingChoices })
+
+    // The step asked something. It has **not** advanced — `done` is false and the
+    // pending term still points at it — so the question is shown in place and the
+    // step is finished only when it is answered.
+    const structured = (r.structuredChoices || []).map((c, i) => ({ ...c, index: i, entity_id: props.entityId }))
+    if (structured.length) {
+      pendingStructured.value = structured
+      emit('updated')
+      return
+    }
+    pendingStructured.value = []
+
     emit('updated')
     if (r.done || r.mustered) {
       pendingTerm.value = null
@@ -368,15 +490,7 @@ async function resolveStep({ index = null, roll = null } = {}) {
       bus.emit('roll-table:prepare', { dice: [] })
       return
     }
-    pendingTerm.value = r.pendingTerm
-    if (r.pendingTerm?.currentTableId) {
-      await loadTable(r.pendingTerm.currentTableId)
-      await nextTick()
-      await loadTraits()
-      setupRoller()
-    } else {
-      step.value = 'done'
-    }
+    await showPosition(r.pendingTerm)
   } finally {
     resolving.value = false
   }
@@ -453,7 +567,14 @@ function continueStep(row, i) {
   resolveStep({ index: i + 1 })
 }
 
-function backToChoose() { step.value = 'choose'; error.value = ''; bus.emit('roll-table:prepare', { dice: [] }) }
+function backToChoose() {
+  step.value = 'choose'
+  error.value = ''
+  // Leave the question unanswered rather than carry it into the chooser: the term
+  // still holds its position, so reopening the wizard asks it again.
+  pendingStructured.value = []
+  bus.emit('roll-table:prepare', { dice: [] })
+}
 function startOver() {
   selectedPath.value = null
   pendingTerm.value = null
@@ -462,6 +583,8 @@ function startOver() {
   log.value = []
   selectedTraitId.value = ''
   rolledEntryIndex.value = null
+  currentStepLabel.value = ''
+  pendingStructured.value = []
   step.value = 'choose'
   bus.emit('roll-table:prepare', { dice: [] })
 }
@@ -487,13 +610,9 @@ async function init() {
   showingPathId.value = ''
   await Promise.all([loadPaths(), loadEffectActions(), loadTraits()])
   const pt = await loadPendingTerm()
-  if (pt?.currentTableId) {
+  if (pt && (pt.currentStepId || pt.currentTableId)) {
     selectedPath.value = paths.value.find(p => p.id === pt.pathId) || null
-    pendingTerm.value = pt
-    await loadTable(pt.currentTableId)
-    step.value = 'term'
-    await nextTick()
-    setupRoller()
+    await showPosition(pt)
   } else {
     applyInitialPath()
     step.value = 'choose'

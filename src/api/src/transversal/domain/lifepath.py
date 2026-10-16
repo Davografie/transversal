@@ -57,14 +57,27 @@ class LifePathBinding(BaseModel):
     effects: list[Effect] = Field(default_factory=list)
 
 class LifePathStep(BaseModel):
-    """One wrapped table at one position in a path.
+    """One position in a path — a wrapped table, or effects and nothing else.
 
     ``id`` is the step's identity, not the table's — which is what lets a path
     wrap the same table twice (two steps, one table), and lets a step live on
     after its table being re-pointed.
+
+    **``table_id`` may be empty, and that is a different kind of step** ([[B314]]):
+    an **effects-only step**. Instead of rolling a table and hanging meaning on
+    its rows, the step applies its own ``effects`` once and follows its own
+    ``next``. That is what makes a step able to *trigger effects* — and the
+    player's choice, where there is one, comes from a ``choose`` step in an
+    effect's targeting path rather than from pre-authored rows.
+
+    It is empty rather than ``None`` because that is the convention the rest of
+    this model already uses for "absent" (``LifePath.entry_step``,
+    ``LifePathStep.next``, ``LifePathBinding.next``) — and a step with no table is
+    still a step: it has an ``id``, a ``next`` and a place in the graph.
     """
     id: str
-    table_id: str
+    #: The roll table this step wraps. ``""`` = no table: an effects-only step.
+    table_id: str = ""
     label: str = ""
     #: Where a row with no binding of its own goes. ``""`` = the term ends.
     next: str = ""

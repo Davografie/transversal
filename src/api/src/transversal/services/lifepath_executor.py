@@ -1,9 +1,17 @@
 """Life-path term executor — traverse a path's steps and apply effects.
 
-A term walks the **steps a life path declares**: each step wraps a roll table,
-and the path's binding for the row that resolved supplies the delta and the next
-step. The table itself stays pure content — it does not know it is in a path, and
-the same table may appear in several paths or in none.
+A term walks the **steps a life path declares**. A step usually wraps a roll
+table, and the path's binding for the row that resolved supplies the delta and
+the next step; the table itself stays pure content — it does not know it is in a
+path, and the same table may appear in several paths or in none.
+
+**A step may also wrap no table at all** ([[B314]]). An *effects-only* step has an
+empty ``table_id``: it applies its own effects once and follows its own ``next``,
+so a step can trigger effects directly instead of routing them through authored
+rows. Where such a step needs the player to decide something, the choice is a
+``choose`` step in an effect's targeting path — and it is **answered**, not
+reported and dropped: the step holds still with the question pending, and the
+answer re-resolves only the effects that asked.
 
 Two flows are therefore possible, and the difference matters:
 
@@ -63,6 +71,26 @@ log = logging.getLogger("transversal.lifepath")
 ENROLLING_FACTION_VARIABLE = "sect"
 
 
+class StepResolution:
+    """One answered choice, echoed back to the step that raised it ([[B314]]).
+
+    The step holds still while a ``choose`` is pending, so answering is *not* a
+    second resolve of the whole step: this names the one effect that asked, its
+    field and the answer — and the executor re-resolves only that effect, so an
+    effect that already applied is never applied twice.
+    """
+
+    __slots__ = ("effect", "field", "answers")
+
+    def __init__(self, effect: Effect, field: str = "target",
+                 answers: Optional[dict] = None) -> None:
+        self.effect = effect
+        self.field = field or "target"
+        #: ``{step index in the targeting path: [chosen ids]}``, the same shape the
+        #: targeting resolver resumes with.
+        self.answers = answers or {}
+
+
 def find_step(lp: Optional[LifePath], step_id: str) -> Optional[LifePathStep]:
     """The step ``step_id`` names — by step id, or by the table it wraps.
 
@@ -78,6 +106,10 @@ def find_step(lp: Optional[LifePath], step_id: str) -> Optional[LifePathStep]:
     A step id is checked first, so a table id can never shadow a step. A table
     wrapped twice is ambiguous by construction; the first step wins, which matches
     the migration that wraps each table once per path.
+
+    An **effects-only step** has no table, so it can only be found by its step id —
+    the table bridge skips it, or an empty table id would match every empty
+    ``step_id`` ([[B314]]).
     """
     if lp is None or not step_id:
         return None
@@ -85,7 +117,7 @@ def find_step(lp: Optional[LifePath], step_id: str) -> Optional[LifePathStep]:
         if step.id == step_id:
             return step
     for step in lp.steps:
-        if step.table_id == step_id:
+        if step.table_id and step.table_id == step_id:
             return step
     if not lp.steps:
         # A path with no steps at all: pre-wrapper content whose flow still lives
@@ -153,14 +185,26 @@ def resolve_step(
     tier: Optional[OutcomeTier] = None,
     index: Optional[int] = None,
     engine=None,
+    resolutions: Optional[list[StepResolution]] = None,
 ) -> dict:
-    """Resolve the current step, apply row + binding effects, and advance.
+    """Resolve the current step, apply its effects, and advance.
 
     Immediate mutation effects apply and persist in-place; non-immediate ones
     (``end_of_beat`` / ``end_of_scene`` / ``end_of_session`` / ``after_beats`` /
     ``on_condition``) are queued into ``engine``. Flow effects are always
     immediate. Returns a summary dict with ``done``, ``pending_term``, and any
     pending target choices.
+
+    **Two calls, one step, when the step asks a question.** A ``choose`` in an
+    effect's targeting path cannot be answered in the same breath as asking it, so
+    the first call applies whatever resolved fully and returns the question with
+    ``done: False`` — the term **stays on this step**. The caller then answers by
+    passing ``resolutions``, and *only the effects named there* are re-resolved, so
+    nothing applies twice. The step advances once nothing is pending.
+
+    An **effects-only step** (``table_id`` empty — [[B314]]) resolves the same way
+    with the table half absent: no row, no binding, and its own effects are the
+    whole payload.
     """
     pid = resolve_projection_id(entity, repo, projection_id)
     pt = pending_term_for(entity, pid)
@@ -196,59 +240,93 @@ def resolve_step(
         pt.current_step_id = step.id
         pt.current_table_id = step.table_id
 
-    table = repo.get_roll_table(step.table_id)
-    if table is None:
-        return {"done": True, "error": f"table '{step.table_id}' not found"}
-
-    # The entry the roll picked, or the previous one whose conditions hold, or
-    # nothing — see `resolve_applicable_entry` ([[B179]]). Note it may hand back a
-    # *different* row than the roll named, so the binding is looked up for the row
-    # that actually ran.
-    entry = resolve_applicable_entry(
-        table, entity, repo, roll=roll, tier=tier, index=index,
-        source=table, source_element="roll_table",
-        # The caller's declaration layers ([[B290]]): the row's *conditions* must see
-        # the same context its effect will, or a condition could test a name the path
-        # supplies and the effect after it read something else.
-        path=lp, step=step,
-    )
-    if entry is None:
-        return {"done": True, "error": "no applicable entry resolved"}
-
-    # The path's overlay on this row, if it has one. `wrapped` is what separates
-    # the two flow regimes: a path that declares steps owns its graph, and the
-    # entries' own flow effects (if any are left) are then ignored.
-    key = entry_key_for(table, entry)
-    binding = next((b for b in step.bindings if b.key == key), None)
+    # `wrapped` is what separates the two flow regimes: a path that declares steps
+    # owns its graph, and the entries' own flow effects (if any are left) are then
+    # ignored.
     wrapped = bool(lp is not None and lp.steps)
 
-    # Append the outcome to the entity's historical record (append-only event log).
-    repo.add_historical_record(
-        entity.id,
-        "roll_table",
-        {
-            "life_path_id": pt.path_id,
-            "life_path_name": lp.name if lp is not None else pt.path_id,
-            "step_id": step.id,
-            "step_label": step.label,
-            "table_id": table.id,
-            "table_name": table.name,
-            "scheme": table.scheme.value,
-            "roll_source": table.roll_source.value,
-            "entry_key": key,
-            "entry_label": entry.label,
-            "entry_tier": entry.tier.value if entry.tier else None,
-            "bound": binding is not None,
-            "index": index,
-        },
-        universe=entity.current_universe,
-    )
+    # ── The step's table, or its absence ──────────────────────────────────────
+    # A step with **no table** is an effects-only step ([[B314]]): the step *is*
+    # the content, so there is no row to resolve, no binding to find and nothing
+    # to split into row/delta effects. Everything downstream is written to work
+    # with that — `table`/`entry`/`binding` stay `None` and the effect list is
+    # just the step's own.
+    table = None
+    entry = None
+    key = ""
+    binding = None
+    row_mutations: list[Effect] = []
+    row_flow: list[Effect] = []
+    delta_mutations: list[Effect] = []
+    delta_flow: list[Effect] = []
 
-    row_mutations = [e for e in entry.effects if e.type != "life_path"]
-    row_flow = [e for e in entry.effects if e.type == "life_path"]
-    delta = list(binding.effects) if binding is not None else []
-    delta_mutations = [e for e in delta if e.type != "life_path"]
-    delta_flow = [e for e in delta if e.type == "life_path"]
+    if step.table_id:
+        table = repo.get_roll_table(step.table_id)
+        if table is None:
+            return {"done": True, "error": f"table '{step.table_id}' not found"}
+
+        # The entry the roll picked, or the previous one whose conditions hold, or
+        # nothing — see `resolve_applicable_entry` ([[B179]]). Note it may hand back a
+        # *different* row than the roll named, so the binding is looked up for the row
+        # that actually ran.
+        entry = resolve_applicable_entry(
+            table, entity, repo, roll=roll, tier=tier, index=index,
+            source=table, source_element="roll_table",
+            # The caller's declaration layers ([[B290]]): the row's *conditions* must see
+            # the same context its effect will, or a condition could test a name the path
+            # supplies and the effect after it read something else.
+            path=lp, step=step,
+        )
+        if entry is None:
+            return {"done": True, "error": "no applicable entry resolved"}
+
+        # The path's overlay on this row, if it has one.
+        key = entry_key_for(table, entry)
+        binding = next((b for b in step.bindings if b.key == key), None)
+
+        # Append the outcome to the entity's historical record (append-only event log).
+        repo.add_historical_record(
+            entity.id,
+            "roll_table",
+            {
+                "life_path_id": pt.path_id,
+                "life_path_name": lp.name if lp is not None else pt.path_id,
+                "step_id": step.id,
+                "step_label": step.label,
+                "table_id": table.id,
+                "table_name": table.name,
+                "scheme": table.scheme.value,
+                "roll_source": table.roll_source.value,
+                "entry_key": key,
+                "entry_label": entry.label,
+                "entry_tier": entry.tier.value if entry.tier else None,
+                "bound": binding is not None,
+                "index": index,
+            },
+            universe=entity.current_universe,
+        )
+
+        row_mutations = [e for e in entry.effects if e.type != "life_path"]
+        row_flow = [e for e in entry.effects if e.type == "life_path"]
+        delta = list(binding.effects) if binding is not None else []
+        delta_mutations = [e for e in delta if e.type != "life_path"]
+        delta_flow = [e for e in delta if e.type == "life_path"]
+    else:
+        # The step ran no table, and the record says so rather than naming an empty
+        # table — a reader that groups by `record_type` would otherwise see a roll
+        # table that does not exist.
+        repo.add_historical_record(
+            entity.id,
+            "life_path_step",
+            {
+                "life_path_id": pt.path_id,
+                "life_path_name": lp.name if lp is not None else pt.path_id,
+                "step_id": step.id,
+                "step_label": step.label,
+                "effects_only": True,
+            },
+            universe=entity.current_universe,
+        )
     # The **step's** own effects: authored once for the table rather than repeated
     # on every binding, and applied after both the row's and the binding's, so one
     # may read whatever they produced or exposed. Flow is deliberately not read
@@ -266,10 +344,11 @@ def resolve_step(
     old_razmerit = entity.razmerit
     scheduled = 0
 
-    # The names this entry's effects may use: the ambient facts (the term's
-    # faction, this table's *path* faction from the enrollment, the roll) plus
-    # whatever the table declares for itself. Sealed before the effects, so a
-    # condition or effect reads the same scope.
+    # The names these effects may use: the ambient facts (the term's faction, this
+    # table's *path* faction from the enrollment, the roll) plus whatever the table
+    # declares for itself — and, for an effects-only step, the **path's and the
+    # step's own** declarations, which is all it has. Sealed before the effects, so
+    # a condition or effect reads the same scope.
     from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
     from transversal.services.roll_table import table_bindings
 
@@ -277,21 +356,31 @@ def resolve_step(
         SOURCE_CONTEXT_KEY, SOURCE_ELEMENT_CONTEXT_KEY,
     )
 
+    # `table_bindings` takes the table as optional by construction (`getattr`
+    # throughout), so an effects-only step resolves exactly the same layers minus
+    # the table's and the row's.
+    bindings = table_bindings(table, entity, repo, entry=entry,
+                              roll=roll, tier=tier, index=index,
+                              # The caller's names ([[B290]]), so a
+                              # **shared** table reads the context
+                              # this path's step gives it rather than
+                              # hardcoding a faction.
+                              path=lp, step=step)
+
     effect_context = {
-        BINDINGS_CONTEXT_KEY: table_bindings(table, entity, repo, entry=entry,
-                                             roll=roll, tier=tier, index=index,
-                                             # The caller's names ([[B290]]), so a
-                                             # **shared** table reads the context
-                                             # this path's step gives it rather than
-                                             # hardcoding a faction.
-                                             path=lp, step=step),
+        BINDINGS_CONTEXT_KEY: bindings,
         # The entry's effect is applied *from* its table, so the table is the
         # source: `select source` is the table, and `navigate life_path` reaches
         # the paths that wrap it. The table is no longer owned by one path, so
         # `_source` stays the table and the *path* is named by the pending term.
+        # An effects-only step has no table to be, and says so by being empty
+        # rather than by pointing at something arbitrary — `select source` then
+        # resolves to nobody, which is the truth.
         SOURCE_CONTEXT_KEY: table,
-        SOURCE_ELEMENT_CONTEXT_KEY: "roll_table",
+        SOURCE_ELEMENT_CONTEXT_KEY: "roll_table" if table is not None else "",
     }
+    source_kind = "roll_table" if table is not None else ""
+    source_id = table.id if table is not None else ""
 
     # **Resolve each effect's named references before applying it.** `apply_effects`
     # resolves the *positional* specs (entity / result / owner / target), but a
@@ -300,36 +389,78 @@ def resolve_step(
     # (which is the authored form) silently resolved to nothing and applied as a
     # no-op. That is why a step's "create a relationship" did not create one.
     #
-    # A ref that stops at a `choose` is reported in `ref_choices` and the effect is
-    # skipped — the same one-way treatment a positional spec's `choose` already
-    # gets here. Answering a step-level choice is a separate piece of work.
+    # **A `choose` is no longer a dead end** ([[B314]]). A spec or ref that stops at
+    # one is collected as a *structured* choice — with its candidates, so the
+    # player can actually be asked — rather than reported as a bare kind and
+    # dropped. See the two-call contract in the docstring.
+    from transversal.services.effects_engine import resolve_effect_spec_choices
     from transversal.services.effects_engine.refs import resolve_refs
     from transversal.services.target_resolver import TargetContext
 
-    ref_choices: list = []
+    structured: list = []
     ref_ctx = TargetContext(
         subject=entity, repo=repo,
-        bindings=effect_context[BINDINGS_CONTEXT_KEY],
+        bindings=bindings,
         # The entry's effect is applied *from* its table, matching the source the
         # `effect_context` above declares, so `select source` means the same thing
         # in a reference as it does in a field.
-        source=table, source_element="roll_table",
+        source=table, source_element=source_kind,
     )
 
-    def _with_refs(effects: list) -> list:
-        out: list = []
+    def _with_refs(effects: list, out: list) -> list:
+        resolved: list = []
         for e in effects:
-            out.extend(resolve_refs(e, ref_ctx, ref_choices))
-        return out
+            resolved.extend(resolve_refs(e, ref_ctx, out))
+        return resolved
+
+    def _one_effect(effect: Effect, field: str, answers: dict) -> list:
+        """Resolve one effect's spec/ref, appending any pending choice to `structured`."""
+        applied, pending = resolve_effect_spec_choices(
+            effect, field, answers, entity, repo,
+            # The source is the **object**, not a `source_kind`: a step's source is
+            # the table it wraps, and there is no `roll_table` kind because nothing
+            # attaches a rule to a table bucket. An effects-only step has no source
+            # at all, and `select source` then resolves to nobody.
+            source=table, source_element=source_kind,
+            bindings=bindings,
+        )
+        structured.extend(pending)
+        return applied
+
+    if resolutions:
+        # Answering a choice this step raised: only the effects the caller echoed
+        # are re-resolved, so an effect that already applied is not run twice.
+        to_apply: list = []
+        for r in resolutions:
+            to_apply.extend(_one_effect(r.effect, r.field, r.answers))
+    else:
+        to_apply = []
+        for e in all_mutations:
+            # Which spec this effect carries decides how it resolves; the engine's
+            # helper walks the spec *and* the effect's named references in one go,
+            # so a spec-carrying effect must not go through `_with_refs` as well.
+            spec_field = ("target" if getattr(e, "target_spec", None) is not None
+                          else "entity" if getattr(e, "entity_spec", None) is not None
+                          else "")
+            if spec_field:
+                to_apply.extend(_one_effect(e, spec_field, {}))
+            else:
+                to_apply.extend(_with_refs([e], structured))
+
+    # A step with a question still pending **holds still**: applying the effects
+    # that resolved fully is right, but advancing would skip the answer, and
+    # re-asking on the next step would ask it out of its context.
+    pending_answer = bool(structured)
 
     if engine is not None:
-        immediate = [e for e in all_mutations if e.timing == EffectTiming.IMMEDIATE]
-        deferred = [e for e in all_mutations if e.timing != EffectTiming.IMMEDIATE]
+        immediate = [e for e in to_apply if e.timing == EffectTiming.IMMEDIATE]
+        deferred = [e for e in to_apply if e.timing != EffectTiming.IMMEDIATE]
 
-        result: EffectsResult = apply_effects(entity, _with_refs(immediate), repo, effect_context)
-        flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
-                             binding=binding, step=step, wrapped=wrapped,
-                             bindings=effect_context[BINDINGS_CONTEXT_KEY])
+        result: EffectsResult = apply_effects(entity, immediate, repo, effect_context)
+        flow = ({"done": False} if pending_answer else
+                _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
+                              binding=binding, step=step, wrapped=wrapped,
+                              bindings=bindings))
         _persist(entity, result, repo, old_razmerit)
 
         from transversal.services.scheduled_events import schedule_deferred
@@ -339,11 +470,11 @@ def resolve_step(
             scheduled += 1
     else:
         # No scheduler available (e.g. direct unit tests) — apply everything now.
-        result: EffectsResult = apply_effects(
-            entity, _with_refs(all_mutations), repo, effect_context)
-        flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
-                             binding=binding, step=step, wrapped=wrapped,
-                             bindings=effect_context[BINDINGS_CONTEXT_KEY])
+        result: EffectsResult = apply_effects(entity, to_apply, repo, effect_context)
+        flow = ({"done": False} if pending_answer else
+                _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
+                              binding=binding, step=step, wrapped=wrapped,
+                              bindings=bindings))
         _persist(entity, result, repo, old_razmerit)
 
     _name_cache: dict = {}
@@ -351,17 +482,21 @@ def resolve_step(
     return {
         "done": flow.get("done", False),
         "step_id": step.id,
-        "table_id": table.id,
+        "table_id": table.id if table is not None else "",
         "entry_key": key,
-        "entry_label": entry.label,
+        "entry_label": entry.label if entry is not None else "",
         "bound": binding is not None,
         # Named, not just ids ([[B303]]): a step's report is the one place a player
         # reads what their effects actually did, and `loc-6549049` says nothing.
         "applied": [named_summary(a.summary, repo, _name_cache) for a in result.applied],
         "scheduled": scheduled,
         "pending_choices": ([c.kind for c in result.pending_choices]
-                            + [c.element for c in ref_choices]
+                            + [c.element for c in structured]
                             + flow.get("pending_choices", [])),
+        # The question itself, with its candidates ([[B314]]) — a bare element name
+        # cannot be answered, and the caller serializes these to the picker's wire
+        # shape. The service returns domain objects; the GraphQL layer owns the wire.
+        "structured_choices": structured,
         "pending_term": pending_term_for(entity, pid),
         "mustered": flow.get("mustered", False),
         "mishap_muster": flow.get("mishap_muster", False),

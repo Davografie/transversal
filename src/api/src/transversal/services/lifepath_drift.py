@@ -198,6 +198,18 @@ def lifepath_drift(repo) -> dict:
     no_faction_source = [e for e in enrolling
                          if not e["offered_by"] and not e["declares_sect"]]
 
+    # Steps that wrap **no table** ([[B314]]). Not drift — a supported kind of step,
+    # which applies its own effects — but the audit has to name them, because
+    # otherwise "a step with no table" and "a step whose table is missing" look the
+    # same in a count of tables.
+    effects_only = [
+        {"path": lp.id, "step": s.id, "label": getattr(s, "label", ""),
+         "effects": len(getattr(s, "effects", None) or []),
+         "next": getattr(s, "next", "")}
+        for lp in paths for s in (getattr(lp, "steps", None) or [])
+        if not getattr(s, "table_id", "")
+    ]
+
     return {
         "paths": {
             "total": len(paths),
@@ -207,6 +219,7 @@ def lifepath_drift(repo) -> dict:
             "without_conditions": without_conditions,
             "with_discovery": with_discovery,
             "legacy_flow_effects": path_flow,
+            "effects_only_steps": effects_only,
         },
         "tables": {
             "total": len(tables),
@@ -255,6 +268,11 @@ def format_report(report: dict) -> str:
                  f"{len(p['legacy_flow_effects'])}")
     for row in p["legacy_flow_effects"]:
         lines.append(f"      {row['path']} step {row['step']} ({row['where']})")
+    lines.append(f"  effects-only steps (no table — B314): {len(p.get('effects_only_steps', []))}")
+    for row in p.get("effects_only_steps", []):
+        lines.append(f"      {row['path']:30} step {row['step']:6} "
+                     f"{row['effects']} effect(s), next {row['next'] or '(ends)'}  "
+                     f"{row['label']}")
 
     lines.append(f"TABLES ({t['total']})")
     lines.append(f"  RollTable.life_path still set: {len(t['legacy_life_path'])}  — "
