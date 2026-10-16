@@ -44,7 +44,7 @@ This is the front door to authoring. It gives you the words, the tools and the o
 
 **The tree is the spine.** Every place, person and asset is a row in it, under its universe. Filter to find a thing, then click it to open its editor. **The ＋ rows in the tree are the only create button**: a ＋ under a place adds an occupant, under a universe adds a place, and the create form's **Type** dropdown offers all six kinds — so a faction is created by asking for one there, not from the Factions tab.
 
-**Each editor is the editor for that kind of thing.** A place's carries its traits and images, its portals and their effects, its zones, and the rule that fires when someone walks in. A universe's adds **🎲 Roll Tables**. A trait opens the trait editor, which can also show every instance of that definition.
+**Each editor is the editor for that kind of thing.** A place's editor carries its traits and images, its portals and their effects, its zones, and the rule that fires when someone walks in. A universe's editor adds **🎲 Roll Tables**. A trait opens the trait editor, which can also show every instance of that definition.
 
 **Panels behave like windows.** A panel can open a child panel, and any child can be detached (⤢) into a floating window, docked back (⤓), collapsed (▾) or closed (×). Floating windows and their order are remembered **on this device**.
 
