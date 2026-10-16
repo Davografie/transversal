@@ -304,7 +304,9 @@ def _ensure_indexes(db) -> None:
 
 
 
-def _add_hash_index(db, collection: str, fields: list[str], unique: bool = False) -> None:
+def _add_hash_index(
+    db, collection: str, fields: list[str], unique: bool = False, sparse: bool = False
+) -> None:
     try:
         col = db.collection(collection)
         # Skip if already exists
@@ -315,7 +317,7 @@ def _add_hash_index(db, collection: str, fields: list[str], unique: bool = False
             "type": "hash",
             "fields": fields,
             "unique": unique,
-            "sparse": False,
+            "sparse": sparse,
         })
     except Exception:
         pass

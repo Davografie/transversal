@@ -80,7 +80,7 @@ class _Registry:
     def find_fork_by_database(self, database):
         return self.forks.get(database)
 
-    def create_fork(self, name, database, owner_account, *, kind="fork"):
+    def create_fork(self, name, database, owner_account, *, kind="fork", slug=""):
         self.created += 1
         fork = Fork(
             id=f"fork-{self.created}",
@@ -88,6 +88,7 @@ class _Registry:
             database=database,
             owner_account=owner_account,
             kind=kind,
+            slug=slug,
         )
         self.forks[database] = fork
         return fork

@@ -45,7 +45,8 @@ class Fork(BaseModel):
 
     ``database`` is the ArangoDB database name this fork routes to; it is the reason
     this row exists at all. ``kind`` leaves room for the playroom/global distinction
-    without a second collection.
+    without a second collection. ``slug`` is the DNS label it answers on
+    (``<slug>.<base-domain>``) — the way a request names its campaign.
     """
 
     id: str
@@ -54,3 +55,4 @@ class Fork(BaseModel):
     owner_account: str
     kind: str = "fork"  # "fork" | "global"
     created_at: str = ""
+    slug: str = ""

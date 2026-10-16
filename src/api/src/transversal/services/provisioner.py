@@ -77,6 +77,9 @@ PLAY_COLLECTIONS = frozenset(
 _UNSAFE = re.compile(r"[^a-z0-9]+")
 _MAX_DATABASE_NAME = 64
 
+#: A DNS label is at most 63 characters, and a hostname is case-insensitive.
+_MAX_SLUG = 63
+
 
 def fork_database_name(name: str, *, suffix: str | None = None) -> str:
     """A database name for a fork: ``tv2_fork_<slug>_<6 hex>``.
@@ -89,6 +92,17 @@ def fork_database_name(name: str, *, suffix: str | None = None) -> str:
     token = suffix or uuid.uuid4().hex[:6]
     room = _MAX_DATABASE_NAME - len("tv2_fork_") - len(token) - 1
     return f"tv2_fork_{slug[:room]}_{token}"
+
+
+def fork_slug(name: str) -> str:
+    """The DNS label a fork answers on: lowercase, hyphens, no leading/trailing one.
+
+    Deliberately **not** unique — the caller checks the registry and says so with a
+    409 — because silently suffixing a requested name is how two campaigns end up
+    answering on `daves-game-2` without anyone choosing that.
+    """
+    slug = _UNSAFE.sub("-", (name or "").strip().lower()).strip("-")
+    return (slug or "campaign")[:_MAX_SLUG].strip("-")
 
 
 def _verifiable(doc: dict) -> dict:
@@ -200,6 +214,7 @@ def provision_fork(
     name: str,
     owner_account: str,
     database: str | None = None,
+    slug: str = "",
     include_play: bool = False,
     config: ArangoConfig | None = None,
 ):
@@ -208,6 +223,8 @@ def provision_fork(
     ``registry`` is a :class:`transversal.db.registry_repository.RegistryRepository`.
     ``include_play`` is for the one-off first migration, which is a full duplicate
     by the owner's 2026-10-16 decision; an ordinary fork leaves play state behind.
+    ``slug`` is the DNS label the fork answers on; the caller is responsible for
+    having checked it is free (a 409, not a silent suffix).
     """
     target_name = database or fork_database_name(name)
 
@@ -266,4 +283,4 @@ def provision_fork(
     # here mirrors the source, whose own index also could not be built.
     _ensure_indexes(target_db)
 
-    return registry.create_fork(name, target_name, owner_account)
+    return registry.create_fork(name, target_name, owner_account, slug=slug)

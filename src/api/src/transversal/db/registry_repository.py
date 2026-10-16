@@ -72,6 +72,7 @@ def _to_fork(doc: dict | None) -> Fork | None:
         owner_account=doc.get("owner_account", ""),
         kind=doc.get("kind", "fork"),
         created_at=doc.get("created_at", ""),
+        slug=doc.get("slug", ""),
     )
 
 
@@ -139,6 +140,7 @@ class RegistryRepository:
         owner_account: str,
         *,
         kind: str = "fork",
+        slug: str = "",
     ) -> Fork:
         fork_id = f"fork-{uuid.uuid4().hex[:12]}"
         self._campaigns.insert(
@@ -149,6 +151,7 @@ class RegistryRepository:
                 "owner_account": owner_account,
                 "kind": kind,
                 "created_at": _now_iso(),
+                "slug": slug,
             }
         )
         return self.get_fork(fork_id)
@@ -158,6 +161,11 @@ class RegistryRepository:
 
     def find_fork_by_database(self, database: str) -> Fork | None:
         found = list(self._campaigns.find({"database": database}, limit=1))
+        return _to_fork(found[0]) if found else None
+
+    def find_fork_by_slug(self, slug: str) -> Fork | None:
+        """The routing lookup: which fork answers on this DNS label."""
+        found = list(self._campaigns.find({"slug": (slug or "").strip().lower()}, limit=1))
         return _to_fork(found[0]) if found else None
 
     def list_forks_for(self, account_id: str) -> list[Fork]:

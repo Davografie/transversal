@@ -109,6 +109,10 @@ def _ensure_registry_indexes(db) -> None:
     _add_hash_index(db, ACCOUNTS, ["email"], unique=True)
     # "my forks" — the switcher's query.
     _add_hash_index(db, CAMPAIGNS, ["owner_account"])
+    # The routing slug (`<slug>.<base-domain>`), sparse because rows an operator
+    # created by hand may have none, and a non-sparse unique index would then
+    # refuse the second NULL.
+    _add_hash_index(db, CAMPAIGNS, ["slug"], unique=True, sparse=True)
     # Resolving a link is always by account, then id.
     _add_hash_index(db, ACCOUNT_TOKENS, ["account_id"])
 
