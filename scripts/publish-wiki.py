@@ -11,7 +11,9 @@ Obsidian notes in `docs/Manual/` into GitHub wiki pages:
     the body un-quoted, so tables and lists inside them render normally.
   * `[[wikilinks]]` become wiki page links for the manuals, and links to the
     repository's rendered markdown for every other note they point at, so
-    nothing dangles.
+    nothing dangles. A note the repository does not publish (the coordination
+    layer was redacted when the repo went public) keeps its words as plain
+    text rather than becoming a link a reader cannot follow.
 
 Usage:
     python3 scripts/publish-wiki.py                 # generate into a temp dir
@@ -154,8 +156,28 @@ def strip_frontmatter(text: str) -> str:
     return re.sub(r"^---\n.*?\n---\n+", "", text, count=1, flags=re.S)
 
 
+def unpublished(paths: set[str]) -> set[str]:
+    """The paths git will not publish, asked of git rather than listed here.
+
+    The coordination layer (`docs/sessions/`, `docs/Process/`, and the rest) is
+    excluded from the public repository, so a link into it would 404. Reading
+    the exclusion from git keeps this correct when that list changes.
+    """
+    if not paths:
+        return set()
+    done = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "check-ignore", "--stdin"],
+        input="\n".join(sorted(paths)),
+        text=True,
+        capture_output=True,
+    )
+    return {line.strip() for line in done.stdout.splitlines() if line.strip()}
+
+
 def build(out_dir: Path) -> list[Path]:
     notes = note_index()
+    ignored = unpublished(set(notes.values()))
+    notes = {title: path for title, path in notes.items() if path not in ignored}
     pages = {path.stem: page_name(path.stem) for path in MANUAL_DIR.glob("*.md")}
     written: list[Path] = []
 
