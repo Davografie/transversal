@@ -201,13 +201,13 @@ That is a complete term loop: every entry either steps somewhere or ends the ter
 
 ## Not yet in the UI
 
-Honest list, so you do not hunt for fields that are not there — see [[life-path]] for the live status:
+Honest list, so you do not hunt for fields that are not there:
 
-- **Entry costs** — an entry's pay-on-pick cost effects cannot be edited in the panels yet. Menu tables (like the support-cast archetypes) are authored by migration until this lands.
+- **Entry costs** — an entry's pay-on-pick cost effects cannot be edited in the panels yet. Menu tables (like the support-cast archetypes) have to be set up by an agent until this lands.
 - **Discovery rules** — displayed but not editable; they go through the effects layer.
 - **Entry table** — a typed id, not a picker.
 - **Path universe** — typed by hand, while tables get a picker.
-- **Table check** — the legacy dice-pool check on a table is not editable.
+- **Table check** — the dice-pool check on a table is not editable in the panels.
 
 ---
 

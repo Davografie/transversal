@@ -21,22 +21,12 @@ status: draft
 
 The vocabulary you choose from when authoring an SFX: every trigger, condition, source, target-path step and effect action the editor offers, and what each one does. [[SFX Authoring]] teaches how to put them together — start there if this is your first rule. This page is the lookup you keep open beside it.
 
-**These tables are generated from the declarations, not transcribed by hand.** Everything below comes from `src/api/src/transversal/services/`:
-
-| Section | Declared in |
-|---|---|
-| Triggers | `menu_contexts.py` — `TRIGGERS` |
-| Conditions | `conditions.py` — `CONDITION_TYPES` |
-| Source kinds, seeds, edges, fields, aggregations | `target_catalog.py` — `SOURCE_KINDS`, `COLLECTIONS`, `EDGES`, `SCALAR_FIELDS`, `AGGREGATIONS` |
-| Step kinds and operators | `target_spec.py` — the `TargetStep` models |
-| Effect actions | `effects_registry/` — `EFFECT_ACTION_REGISTRY` |
-
-If a table here disagrees with the editor, **the code is right and this page is stale.** The editor reads these same declarations, which is why the two normally agree.
+**These tables are generated from the editor's own declarations**, so they cannot drift from what the picker offers in front of you. If a table here ever disagrees with the editor, **the editor is right and this page is stale.**
 
 Notes that apply to the whole page:
 
 - **`{name}` in a field is a variable** — a value the rule named, or one the trigger or source hands it. The "Variables it declares" column below lists what a trigger puts in scope.
-- **A backticked value is the stored key.** You never type it; it is here so a ticket, a card line or the API can be read back to the editor's word for the same thing.
+- **A backticked value is the stored key.** You never type it; it is here so a card line or a report can be read back to the editor's word for the same thing.
 
 ## Triggers
 
