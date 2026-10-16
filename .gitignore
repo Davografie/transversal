@@ -46,3 +46,28 @@ docs/.obsidian/
 # Playwright output (e2e/) — screenshots, traces, error contexts
 test-results/
 playwright-report/
+
+# ── Not for publication ───────────────────────────────────────────────────
+# Internal agent operations, campaign data, and private-network config. These
+# stay on disk but deliberately out of version control — the GitHub repo is
+# public, and history is published along with the tree.
+#
+# Agent operations manual: names players, describes the private repo and the
+# ARCHITECT_TOKEN entry path.
+AGENTS.md
+# ArangoDB dumps — contain player characters and campaign content.
+.backups/
+backups/
+*.data.json.gz
+# Agent internal state: pastes, subagent state, workflow runs.
+.deepseek/
+.codewhale/
+# Headscale deployment config for the private tailnet.
+deploy/headscale/
+# Internal coordination: session docs and the ticket system.
+docs/sessions/
+docs/Process/
+# The human's personal capture file.
+docs/to-do.md
+# The unfixed-vulnerability register.
+docs/Technical/Security Posture.md
