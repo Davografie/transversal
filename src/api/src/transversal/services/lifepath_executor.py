@@ -292,11 +292,40 @@ def resolve_step(
         SOURCE_ELEMENT_CONTEXT_KEY: "roll_table",
     }
 
+    # **Resolve each effect's named references before applying it.** `apply_effects`
+    # resolves the *positional* specs (entity / result / owner / target), but a
+    # named reference is `resolve_refs`' job — the engine calls it and this path
+    # never did, so every step effect whose target was authored as a reference
+    # (which is the authored form) silently resolved to nothing and applied as a
+    # no-op. That is why a step's "create a relationship" did not create one.
+    #
+    # A ref that stops at a `choose` is reported in `ref_choices` and the effect is
+    # skipped — the same one-way treatment a positional spec's `choose` already
+    # gets here. Answering a step-level choice is a separate piece of work.
+    from transversal.services.effects_engine.refs import resolve_refs
+    from transversal.services.target_resolver import TargetContext
+
+    ref_choices: list = []
+    ref_ctx = TargetContext(
+        subject=entity, repo=repo,
+        bindings=effect_context[BINDINGS_CONTEXT_KEY],
+        # The entry's effect is applied *from* its table, matching the source the
+        # `effect_context` above declares, so `select source` means the same thing
+        # in a reference as it does in a field.
+        source=table, source_element="roll_table",
+    )
+
+    def _with_refs(effects: list) -> list:
+        out: list = []
+        for e in effects:
+            out.extend(resolve_refs(e, ref_ctx, ref_choices))
+        return out
+
     if engine is not None:
         immediate = [e for e in all_mutations if e.timing == EffectTiming.IMMEDIATE]
         deferred = [e for e in all_mutations if e.timing != EffectTiming.IMMEDIATE]
 
-        result: EffectsResult = apply_effects(entity, immediate, repo, effect_context)
+        result: EffectsResult = apply_effects(entity, _with_refs(immediate), repo, effect_context)
         flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
                              binding=binding, step=step, wrapped=wrapped,
                              bindings=effect_context[BINDINGS_CONTEXT_KEY])
@@ -310,7 +339,7 @@ def resolve_step(
     else:
         # No scheduler available (e.g. direct unit tests) — apply everything now.
         result: EffectsResult = apply_effects(
-            entity, all_mutations, repo, effect_context)
+            entity, _with_refs(all_mutations), repo, effect_context)
         flow = _process_flow(entity, row_flow + delta_flow, repo, pt=pt,
                              binding=binding, step=step, wrapped=wrapped,
                              bindings=effect_context[BINDINGS_CONTEXT_KEY])
@@ -325,7 +354,9 @@ def resolve_step(
         "bound": binding is not None,
         "applied": [a.summary for a in result.applied],
         "scheduled": scheduled,
-        "pending_choices": [c.kind for c in result.pending_choices] + flow.get("pending_choices", []),
+        "pending_choices": ([c.kind for c in result.pending_choices]
+                            + [c.element for c in ref_choices]
+                            + flow.get("pending_choices", [])),
         "pending_term": pending_term_for(entity, pid),
         "mustered": flow.get("mustered", False),
         "mishap_muster": flow.get("mishap_muster", False),
@@ -608,4 +639,10 @@ def _persist(entity: Entity, result: EffectsResult, repo, old_razmerit: Optional
         publish("trait_updated", {"entity_id": ts.entity_id, "trait_id": ts.trait_id})
 
     for rel in result.new_relationships:
-        repo.create_relationship(rel["from"], rel["to"], rel["type"], rel.get("description", ""))
+        # The handler mints the edge (so `output` can name it); only an edge that
+        # somehow arrived without a key is created here.
+        if rel.get("created"):
+            continue
+        created = repo.create_relationship(rel["from"], rel["to"], rel["type"], rel.get("description", ""))
+        if isinstance(created, dict):
+            rel["key"] = created.get("_key", "")

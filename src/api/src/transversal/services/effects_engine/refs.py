@@ -268,9 +268,16 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
             _bind_ref_value(context, name, ids[0])
 
     names = list(refs_in.keys())
+    # **Anchor refs ride along untouched.** They are excluded from *resolution*
+    # above on purpose (an anchor is settled once, by `resolve_effect_owner`
+    # further down the apply path, not multiplied here) — but rebuilding the refs
+    # from the resolved names alone **dropped them**, so the anchor's spec was gone
+    # by the time its resolver looked for it and every "anchor what this makes to a
+    # relationship / another trait" silently fell back to the subject entity.
+    anchors = {n: r for n, r in (effect.refs or {}).items() if n in _anchors}
     out: list[Effect] = []
     for combo in product(*(resolved_values[n] for n in names)):
-        refs = {}
+        refs = dict(anchors)
         updates: dict = {}
         for name, value in zip(names, combo):
             ref = refs_in[name]

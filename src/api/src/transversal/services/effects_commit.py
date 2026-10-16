@@ -202,9 +202,13 @@ def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | 
 
     # Relationship edges produced by the applier.
     for rel in result.new_relationships:
-        created_edge = repo.create_relationship(
-            rel["from"], rel["to"], rel["type"], rel.get("description", ""),
-        )
+        # Already minted by the handler, so a later effect could name it by key.
+        if rel.get("created"):
+            created_edge = {"_key": rel.get("key", "")}
+        else:
+            created_edge = repo.create_relationship(
+                rel["from"], rel["to"], rel["type"], rel.get("description", ""),
+            )
         # The edge's own key, so an effect that names its result (`output`) binds the
         # tie rather than the person. `new_relationships` carried only from/to/type,
         # so nothing identified the edge an effect had just made.

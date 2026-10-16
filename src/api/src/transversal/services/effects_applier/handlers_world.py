@@ -148,12 +148,22 @@ def _apply_relationship_create(entity, effect, repo, result):
         return
     rel_type = effect.result or ""
     description = effect.context.get("description", "") if effect.context else ""
-    result.new_relationships.append({
-        "from": entity.id,
-        "to": target,
-        "type": rel_type,
-        "description": description,
-    })
+    rel = {"from": entity.id, "to": target, "type": rel_type, "description": description}
+    # **Mint the edge here**, not at commit. The key is the only handle on a tie,
+    # and `Effect.output` binds it so a later effect can anchor to the relationship
+    # ("gain a trait *on the tie*"). Created at commit time it did not exist while
+    # the rest of the batch was still resolving, so that reference could never
+    # resolve ([[B303]]). The commit paths skip an edge that already carries a key.
+    created = None
+    if hasattr(repo, "create_relationship"):
+        created = repo.create_relationship(rel["from"], rel["to"], rel["type"], rel["description"])
+        # Marked whether or not the repo handed the edge back: the flag is what
+        # stops the commit creating it a second time, and a repo that returns
+        # nothing (a fake, a future writer) must not turn into a duplicate tie.
+        rel["created"] = True
+    if isinstance(created, dict):
+        rel["key"] = created.get("_key", "")
+    result.new_relationships.append(rel)
     result.applied.append(AppliedEffect(effect, f"relationship {rel_type} → {target}"))
 
 def _next_projection_id(entity_id: str, universe: str, repo) -> str:

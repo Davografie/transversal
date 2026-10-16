@@ -238,8 +238,49 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
         if handler is None:
             result.passthrough.append(effect)
             continue
+        before = _result_counts(result)
         handler(entity, effect, repo, result)
+        _publish_output(effect, result, context, before)
     return result
+
+
+#: The result lists an ``Effect.output`` can be read from (see `_produced_id`).
+_OUTPUT_RESULT_FIELDS = (
+    "new_trait_settings", "updated_trait_settings", "found_trait_settings",
+    "new_projections", "updated_projections", "new_relationships",
+)
+
+
+def _publish_output(effect: Effect, result: EffectsResult, context, before: dict) -> None:
+    """Bind what *this* effect produced under the author's chosen name.
+
+    `publish_effect_output` belongs to the engine's path today; this entry point is
+    reached directly too — a life-path step, a roll-table row — and without it an
+    effect that names its result (`output`) never binds, so a later effect that
+    references it (`select variable origin_relation`) resolves to nothing. That is
+    how a step's "gain a trait *on the relationship I just made*" became a trait on
+    the character instead ([[B303]]).
+
+    Scoped to the effect's own production on purpose: `_produced_id` returns the
+    first item of the declared element, and a batch accumulates every effect's
+    products — so publishing against the whole result would let an effect that
+    produced nothing bind an *earlier* effect's output.
+    """
+    if not (getattr(effect, "output", "") or "").strip():
+        return
+    from transversal.services.effects_applier.datatypes import EffectsResult as _R
+    from transversal.services.effects_applier.registry import publish_effect_output
+
+    delta = _R()
+    for name in _OUTPUT_RESULT_FIELDS:
+        items = getattr(result, name, None)
+        if isinstance(items, list):
+            setattr(delta, name, items[before.get(name, 0):])
+    publish_effect_output(effect, delta, context)
+
+
+def _result_counts(result: EffectsResult) -> dict:
+    return {n: len(getattr(result, n, []) or []) for n in _OUTPUT_RESULT_FIELDS}
 
 
 def _is_branch(effect: Effect) -> bool:
@@ -473,7 +514,10 @@ def resolve_effect_owner(effect: Effect, entity_id: str, repo,
                       collections=seeds, source=source, source_element=source_element),
     )
     for value in resolution.values:
-        rid = value.get("id") if isinstance(value, dict) else getattr(value, "id", None)
+        # `_spec_value_id` rather than a bare `.id`: a path may land on an **edge**,
+        # whose handle is its `_key` — which is exactly the case for an anchor on a
+        # tie ("gain this trait *on the relationship* just created").
+        rid = _spec_value_id(value)
         if not rid:
             continue
         # The *kind* travels with the id: the path landed on a specific element —
@@ -501,7 +545,10 @@ def _spec_value_id(value) -> str:
     """The id a resolved spec value names, whichever shape it arrived in."""
     rid = getattr(value, "id", None)
     if rid is None and isinstance(value, dict):
-        rid = value.get("id") or value.get("ts_id")
+        # An Arango **edge** has no `id`: its own key is the handle a relationship
+        # is resolved *by* (see `_lookup_literal`), and it is what an anchor path
+        # landing on a tie names.
+        rid = value.get("id") or value.get("ts_id") or value.get("_key")
     return rid or ""
 
 
