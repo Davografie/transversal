@@ -256,7 +256,7 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
   // The overlay host.
   const block = readFileSync('src/components/app/LifePathBlock.vue', 'utf8')
   yes('the overlay renders the block only when there is an intro for it',
-    /<LifePathBlock\s+v-if="overlayLifePathIntro"/.test(app))
+    /<LifePathBlock\s+v-if="overlayLifePathIntro && !charSwitchLoading"/.test(app))
   yes('…and dismissing clears it for that character',
     /@dismiss="dismissLifePathIntro\(overlayLifePathIntro\.characterId\)"/.test(app))
   yes('the block embeds the real wizard, entity-addressed and narrowed to the path',
@@ -270,7 +270,7 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
     /:life-path-request="sheetLifePathRequest"/.test(app))
   yes('…and opens its life path view on it, for the character it is showing',
     /const focusedLifePathId = ref\(''\)/.test(sheet)
-      && /req\.entityId !== \(props\.overrideEntityId \|\| props\.entityId\)/.test(sheet)
+      && /function pendingSheetLifePathId\(\)/.test(sheet)
       && /activeSheetView\.value = 'lifepath'/.test(sheet))
   yes('…and leaves the path behind when the view is left, so the tab is not stuck on one offer',
     /if \(v !== 'lifepath'\) focusedLifePathId\.value = ''/.test(sheet))
@@ -285,6 +285,39 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
     /@pick="startPath"/.test(wizard) && !/init\(\)[\s\S]{0,900}?startPath\(/.test(wizard))
   yes('…with a way back to the rest of the catalogue',
     /function showAllPaths\(\) \{ showingPathId\.value = '' \}/.test(wizard) && /Show all paths/.test(wizard))
+}
+
+// ── 10. the panel is taken over, the path is remembered, the character is entered ──
+// All four are from the author's first look at it in the running app:
+// "instead of showing the life path that I specified … I see a 'choose life path'
+// dialog", "instead of only seeing the life path wizard I still see all other
+// input elements", and "it'd also make sense if the just-created character is
+// auto-activated".
+{
+  // The panel becomes the wizard rather than growing a section. `v-else-if` is the
+  // point: a hidden-but-rendered section would still be in the tab order.
+  yes('a shown life path takes the settings panel over',
+    /<LifePathBlock\s+v-if="overlayLifePathIntro && !charSwitchLoading"/.test(app)
+      && /<template v-else-if="!rosterPicking && !charSwitchLoading">/.test(app))
+
+  const wizard = readFileSync('src/components/LifePathWizard.vue', 'utf8')
+  yes('the wizard re-applies the offered path when it arrives after mount',
+    /function applyInitialPath\(\)/.test(wizard)
+      && /watch\(\(\) => props\.initialPathId, \(\) => \{ if \(props\.visible && step\.value === 'choose'\) applyInitialPath\(\) \}\)/.test(wizard))
+
+  const sheet = readFileSync('src/components/CharacterSheet.vue', 'utf8')
+  yes('the sheet reads a stored intro, not only the live request',
+    /lifePathIntroFor\(id, 'sheet'\)\?\.lifePathId/.test(sheet))
+  yes('…and consumes it once it has been put in front of the player',
+    /activeSheetView\.value = 'lifepath'[\s\S]{0,120}?dismissLifePathIntro\(id\)/.test(sheet))
+
+  // Auto-activation: creating a character used to leave you playing somebody else,
+  // with a rule that fired *for* the new one and nowhere to land.
+  const finder = readFileSync('src/composables/useCharacterFinder.js', 'utf8')
+  yes('a created character is entered, through the same switch the chips use',
+    /onChoose\(\{ id: eid, name: json\.data\?\.createEntity\?\.name \|\| '', type: 'CHARACTER' \}\)/.test(finder))
+  yes('…after `lastCreatedId` is set, so the intro is judged as created-here',
+    /lastCreatedId\.value = eid[\s\S]{0,900}?onChoose\(/.test(finder))
 }
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')

@@ -467,6 +467,20 @@ function startOver() {
 }
 function close() { emit('close') }
 
+/** Narrow the chooser to the offered path, or to the whole catalogue.
+ *
+ * Called after the paths load and again whenever `initialPathId` changes: reading
+ * it only at mount is not enough, because a host can hand it over late — and a
+ * host that does that would get the full chooser, which is exactly what the first
+ * cut did. An id nobody has falls back to the full list rather than to an empty
+ * screen.
+ */
+function applyInitialPath() {
+  showingPathId.value = (props.initialPathId && paths.value.some(p => p.id === props.initialPathId))
+    ? props.initialPathId
+    : ''
+}
+
 async function init() {
   if (!props.visible) return
   error.value = ''
@@ -481,12 +495,7 @@ async function init() {
     await nextTick()
     setupRoller()
   } else {
-    // Opened for one path ([[B303]]): carry that path rather than the whole
-    // catalogue, so a rule can put a specific path in front of the player. An
-    // id nobody has falls back to the full list rather than to an empty screen.
-    showingPathId.value = (props.initialPathId && paths.value.some(p => p.id === props.initialPathId))
-      ? props.initialPathId
-      : ''
+    applyInitialPath()
     step.value = 'choose'
   }
 }
@@ -499,6 +508,9 @@ onUnmounted(() => {
   bus.off('roll-table:rolled', onRolled)
 })
 watch(() => props.visible, (v) => { if (v) init() })
+// A host may hand the path over after the wizard has mounted (the settings panel
+// does: the intro can land a tick later). Re-apply rather than keep the chooser.
+watch(() => props.initialPathId, () => { if (props.visible && step.value === 'choose') applyInitialPath() })
 </script>
 
 <style scoped>

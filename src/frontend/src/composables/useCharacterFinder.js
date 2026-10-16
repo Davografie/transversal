@@ -119,11 +119,19 @@ export function useCharacterFinder({
       const eid = json.data?.createEntity?.id
       if (eid) {
         await fetch(`/api/v1/players/${playerId.value}/claim/${eid}`, { method: 'POST' })
+        // Set before the switch below, so an intro that lands during it is judged
+        // as "created here" rather than as a path for a character we merely play.
         lastCreatedId.value = eid
         newCharName.value = ''
         showNewChar.value = false
         allCharactersCache = null
         fetchPlayerEntities()
+        // **Auto-activate** (the author, 2026-10-16). Creating a character used to
+        // leave you as whoever you already were, looking at a new name in a list —
+        // and a rule that fired *for* that character had nowhere to land. Switching
+        // puts you in it, which is what makes the reveal mean anything, and it is
+        // the same path the character chips already take.
+        onChoose({ id: eid, name: json.data?.createEntity?.name || '', type: 'CHARACTER' })
       } else {
         createCharError.value = 'Failed to create character'
       }

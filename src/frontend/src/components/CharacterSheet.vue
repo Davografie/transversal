@@ -714,6 +714,7 @@ import LifePathWizard from './LifePathWizard.vue'
 import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import { useNaming } from '@/composables/useNaming.js'
+import { useLifePathIntro } from '@/composables/useLifePathIntro.js'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
 import GmPlayOverview from './gm/GmPlayOverview.vue'
@@ -1034,14 +1035,34 @@ watch(activeSheetView, (v) => emit('sheetViewChange', v))
 // entity-addressed and needs only the path to open on, so this is where the
 // "shown in that character's sheet" half of the routing lands: open the life
 // path view on the named path whenever this sheet is showing that character.
+//
+// Two sources, deliberately. The **request** is the live action, which opens it
+// at once. The **stored intro** is the same fact after a reload, and without it
+// the sheet route only ever worked in the seconds after the effect fired — a
+// player who came back later got the plain chooser, which is what the first cut
+// did. Only `sheet`-routed intros are read: an `overlay` one belongs to the
+// settings panel and must not make the sheet jump tabs.
 const focusedLifePathId = ref('')
+const { introFor: lifePathIntroFor, dismiss: dismissLifePathIntro } = useLifePathIntro()
+
+function pendingSheetLifePathId() {
+  const id = props.overrideEntityId || props.entityId
+  if (!id) return ''
+  const req = props.lifePathRequest
+  if (req?.lifePathId && req.entityId === id) return req.lifePathId
+  return lifePathIntroFor(id, 'sheet')?.lifePathId || ''
+}
+
 watch(
-  () => [props.lifePathRequest, props.overrideEntityId || props.entityId],
-  ([req]) => {
-    if (!req?.lifePathId || !req.entityId) return
-    if (req.entityId !== (props.overrideEntityId || props.entityId)) return
-    focusedLifePathId.value = req.lifePathId
+  () => [props.lifePathRequest, props.overrideEntityId || props.entityId, props.entityId],
+  () => {
+    const pathId = pendingSheetLifePathId()
+    if (!pathId) return
+    const id = props.overrideEntityId || props.entityId
+    focusedLifePathId.value = pathId
     activeSheetView.value = 'lifepath'
+    // It has been put in front of them, which is what the intro was for.
+    dismissLifePathIntro(id)
   },
   { immediate: true },
 )

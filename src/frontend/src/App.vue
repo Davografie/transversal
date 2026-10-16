@@ -58,8 +58,24 @@
         </button>
       </div>
 
-      <!-- Mode + Characters (hidden during switch) -->
-      <template v-if="!rosterPicking && !charSwitchLoading">
+      <!-- A life path a rule has shown to this player ([[B303]]). The author's
+           call after seeing the first version: this is **not** one more section
+           among the others — the panel becomes the wizard, and comes back when it
+           is dismissed. The rest of the settings are still one Dismiss away.
+           Not during a character switch, where "Harmonizing razmerit…" owns the
+           panel and the block would only flash. -->
+      <LifePathBlock
+        v-if="overlayLifePathIntro && !charSwitchLoading"
+        :character-id="overlayLifePathIntro.characterId"
+        :life-path-id="overlayLifePathIntro.lifePathId"
+        :name="entName(overlayLifePathIntro.characterId)"
+        :universe="overlayLifePathUniverse"
+        @dismiss="dismissLifePathIntro(overlayLifePathIntro.characterId)"
+      />
+
+      <!-- Mode + Characters (hidden during switch, and while a shown life path
+           has taken the panel over) -->
+      <template v-else-if="!rosterPicking && !charSwitchLoading">
         <ModeBlock v-model:gm-mode="gmMode" />
 
         <p v-if="needsCharacterPick" class="switch-error">Pick one of your characters to play.</p>
@@ -84,17 +100,6 @@
           @create="createCharacter"
         />
 
-        <!-- A life path a rule has shown to this player ([[B303]]). It sits with
-             "Your characters" because it belongs to the character just made, and
-             this overlay is the surface the router picked for it. -->
-        <LifePathBlock
-          v-if="overlayLifePathIntro"
-          :character-id="overlayLifePathIntro.characterId"
-          :life-path-id="overlayLifePathIntro.lifePathId"
-          :name="entName(overlayLifePathIntro.characterId)"
-          :universe="overlayLifePathUniverse"
-          @dismiss="dismissLifePathIntro(overlayLifePathIntro.characterId)"
-        />
         <SupportBlock
           :support-characters="mySupportCharacters"
           :other-mains="otherPlayersMains"
