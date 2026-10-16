@@ -37,6 +37,7 @@ from transversal.db.arango import (
     get_db,
 )
 from transversal.db.repository_mixins.attunement import RepositoryAttunement
+from transversal.db.repository_mixins.bundles import RepositoryBundles
 from transversal.db.repository_mixins.canvas import RepositoryCanvas
 from transversal.db.repository_mixins.common import (  # noqa: F401
     _STRUCTURAL_TYPES_AQL,
@@ -64,6 +65,7 @@ class EntityRepository(
     RepositoryEntities,
     RepositoryProjections,
     RepositoryAttunement,
+    RepositoryBundles,
     RepositoryTraits,
     RepositoryTraitSettings,
     RepositoryTraitsetSettings,

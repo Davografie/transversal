@@ -777,6 +777,43 @@ Drafts live in `plan_entities` / `plan_relationships` staging collections; `appl
 
 **`DELETE /api/v1/plans/{plan_id}`** — discard staging (staging only; live data untouched).
 
+### Content Bundles ([[B301]])
+
+A **bundle** is a portable JSON file of whole documents for a set of authored
+elements — the export half of *"share authored content between worlds"*. Two phases
+by design: `plan` is a **read** that reports what the selection would carry and what
+it would leave behind, `export` writes the file. Full model in [[Content Bundles]].
+
+Request body for both: `{ "selection": [{"kind": "...", "id": "..."}], "depth": 1 }`.
+`depth` = how many closure rounds to walk — `1` reports the frontier so the caller
+widens and asks again, `0` walks to a fixpoint. **Owner-gated**: a bundle reaches the
+whole authored surface of the campaign.
+
+**`GET /api/v1/bundles/kinds`** — the vocabulary: the selectable kinds
+(`traitset`, `trait`, `sfx`, `life_path`, `roll_table`, `entity`, `projection`) and
+the **anchored** kinds (`traitsetting`, `traitsetsetting`, `relationship`) that
+arrive with their owner rather than being asked for. Served so a picker cannot
+drift from the map the exporter walks.
+
+**`POST /api/v1/bundles/plan`** — the report, no documents:
+
+| field | is |
+|---|---|
+| `included`, `counts` | what the bundle would contain |
+| `required[]` | references that **leave** the selection, each with the exact document path that named it (`entries[].effects[].refs.trait.value`), its kind, and whether the target exists |
+| `invited[]` | relationships whose far endpoint is outside the bundle |
+| `incidental[]` | placement and play state that will not travel (`current_location`, `known_to`, attunements, in-progress terms) |
+| `expects` | `{universes, media}` — a world handle and an image filename are not documents, so they are *declarations* |
+| `unruled[]` | an id-shaped path with no rule in the map — a map gap, surfaced rather than dropped |
+
+**`POST /api/v1/bundles/export`** — the same walk, serialised, returned as
+`Content-Disposition: attachment`. The report is embedded (`unresolved`,
+`leftBehind`, `invited`, `unruled`) so an importer can refuse a bundle that expects
+something it does not carry instead of discovering it at the table.
+
+An **unknown kind is a 400** naming the vocabulary, not an empty bundle: a bundle
+that silently exports nothing is indistinguishable from a bundle of nothing.
+
 ### Image Generation
 
 Flux image generation and animation, queued and reported via SSE.
