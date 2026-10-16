@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 from transversal.db.arango import ENTITIES
 from transversal.db.arango import IMAGES
 from transversal.db.arango import MESSAGES
@@ -13,6 +11,7 @@ from transversal.db.arango import TRAITSETSETTINGS
 from transversal.db.arango import TRAITSETTINGS
 from transversal.domain import Entity
 from transversal.domain import EntityType
+from transversal.services.media_store import delete_owner_media
 from typing import Optional
 
 
@@ -235,19 +234,13 @@ class RepositoryEntities:
             f"FOR m IN {MESSAGES} FILTER m.sender_entity_id == @eid OR m.recipient_entity_id == @eid REMOVE m IN {MESSAGES}",
             bind_vars={"eid": entity_id},
         )
-        # Delete media files from disk
-        import glob
-        import shutil
-        media_root = "/app/media"
-        # Generated images directory
-        imagen_dir = f"{media_root}/imagen/{entity_id}"
-        shutil.rmtree(imagen_dir, ignore_errors=True)
-        # Uploaded background images (media/{entity_id}.*)
-        for path in glob.glob(f"{media_root}/{entity_id}.*"):
-            try:
-                os.remove(path)
-            except OSError:
-                pass
+        # Delete media files from disk — this campaign's own copy, plus the shared
+        # copy only when no other campaign's database still references the owner. A
+        # fork is a **verbatim clone**, so the same owner id exists in every campaign
+        # cloned from the same ancestor and these paths name no campaign: deleting
+        # them unconditionally is how a character deleted in the global multiverse
+        # unlinked that character's images in the playroom (2026-10-16).
+        delete_owner_media(entity_id, kinds=("imagen", "flat"))
 
     def list_entities_by_type(
         self, entity_type: EntityType, universe: Optional[str] = None
