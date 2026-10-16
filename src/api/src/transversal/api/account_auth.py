@@ -49,6 +49,14 @@ COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days, sliding-like lifetime
 #: Where a fork-entry link is redeemed. Shared with the forks API, which mints the
 #: link and so has to name the same path ([[B88]]).
 ENTER_PATH = "/api/v1/accounts/enter"
+#: Where a sign-in link is redeemed. Shared with the CLI, which can mint one when
+#: mail is not configured.
+SIGN_IN_PATH = "/api/v1/accounts/sign-in"
+#: Where the account flows land: the portal, not the game. On the apex those are
+#: different surfaces, and someone who just verified an address wants their
+#: campaigns, not a character sheet. (The *fork-entry* redirect stays at `/` — that
+#: one runs on a campaign host, where `/` is the game.)
+PORTAL_PATH = "/portal"
 
 router = APIRouter(prefix="/api/v1/accounts", tags=["accounts"])
 
@@ -206,7 +214,7 @@ async def verify(request: Request, t: str = "") -> JSONResponse:
     account = repo.mark_email_verified(record["account_id"])
     if not account:
         return JSONResponse({"detail": "that link is not valid"}, status_code=401)
-    response = RedirectResponse(url="/", status_code=302)
+    response = RedirectResponse(url=PORTAL_PATH, status_code=302)
     _set_account_cookie(response, request, account)
     logger.info("[accounts] email verified for %s", account.id)
     return response
@@ -250,7 +258,7 @@ async def confirm_sign_in(request: Request, t: str = "") -> JSONResponse:
     account = repo.get_account(record["account_id"])
     if not account or not account.verified_at:
         return JSONResponse({"detail": "that link is not valid"}, status_code=401)
-    response = RedirectResponse(url="/", status_code=302)
+    response = RedirectResponse(url=PORTAL_PATH, status_code=302)
     _set_account_cookie(response, request, account)
     logger.info("[accounts] signed in %s", account.id)
     return response

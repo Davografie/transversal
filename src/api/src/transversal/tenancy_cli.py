@@ -23,11 +23,12 @@ from __future__ import annotations
 import argparse
 import sys
 
-from transversal.api.account_auth import ENTER_PATH
+from transversal.api.account_auth import ENTER_PATH, SIGN_IN_PATH
 from transversal.api.tenancy import base_domain
 from transversal.db.arango import use_database
 from transversal.db.registry_repository import (
     PURPOSE_ENTER_FORK,
+    PURPOSE_SIGN_IN,
     RegistryRepository,
     normalize_email,
 )
@@ -149,6 +150,30 @@ def _drop_fork(args) -> int:
     return _fail(f"could not drop {args.fork_id!r}")
 
 
+def _sign_in_link(args) -> int:
+    """Print a single-use sign-in link for an account.
+
+    Mail is not configured by default, so this is how a person gets in without a
+    provider: the operator mints the link the portal would otherwise have emailed.
+    The same trust as `bootstrap-account` — it needs access to this machine, which
+    is exactly why it is a CLI and not a route.
+    """
+    registry = _registry()
+    account = registry.find_account_by_email(args.email)
+    if account is None:
+        return _fail(f"no account for {args.email!r} — create one in the portal first")
+    if not account.verified_at:
+        return _fail(f"{account.email!r} is not verified yet")
+
+    token = account_links.issue(registry, account.id, PURPOSE_SIGN_IN)
+    print(f"{SIGN_IN_PATH}?t={token}")
+    print(
+        f"# single use, expires in {account_links.LINK_TTL_SECONDS // 60} minutes",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def _enter_fork(args) -> int:
     """Print a single-use link that opens a fork as its architect.
 
@@ -227,6 +252,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bootstrap.add_argument("email")
     bootstrap.set_defaults(handler=_bootstrap_account)
+
+    signin = sub.add_parser(
+        "sign-in-link",
+        help="print a single-use sign-in link (mail is not configured)",
+    )
+    signin.add_argument("email")
+    signin.set_defaults(handler=_sign_in_link)
 
     create = sub.add_parser("create-fork", help="clone a database into a new fork")
     create.add_argument("name")

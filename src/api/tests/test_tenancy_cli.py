@@ -13,7 +13,11 @@ import pytest
 from transversal.api import access_tokens
 from transversal.db import registry
 from transversal.db.arango import current_database
-from transversal.db.registry_repository import PURPOSE_ENTER_FORK, RegistryRepository
+from transversal.db.registry_repository import (
+    PURPOSE_ENTER_FORK,
+    PURPOSE_SIGN_IN,
+    RegistryRepository,
+)
 from transversal.tenancy_cli import main
 
 
@@ -333,3 +337,30 @@ def test_provision_can_name_a_single_database(repo, provisioned):
     assert main(["provision", "--database", "tv2_fork_one"]) == 0
 
     assert provisioned == ["tv2_fork_one"]
+
+
+# ── sign-in-link ──────────────────────────────────────────────────────
+
+
+def test_sign_in_link_prints_a_link_for_a_verified_account(repo, capsys):
+    _verified(repo)
+
+    assert main(["sign-in-link", "dave@example.com"]) == 0
+
+    link = capsys.readouterr().out.strip()
+    assert link.startswith("/api/v1/accounts/sign-in?t=")
+    payload = access_tokens.verify(link.split("t=", 1)[1], access_tokens.AUD_ACCOUNT_LINK)
+    record = repo.get_account_token(payload["token"])
+    assert record["purpose"] == PURPOSE_SIGN_IN
+
+
+def test_sign_in_link_refuses_an_unverified_account(repo, capsys):
+    repo.create_account("dave@example.com")
+
+    assert main(["sign-in-link", "dave@example.com"]) == 1
+    assert "not verified" in capsys.readouterr().err
+
+
+def test_sign_in_link_refuses_an_unknown_account(repo, capsys):
+    assert main(["sign-in-link", "nobody@example.com"]) == 1
+    assert "no account" in capsys.readouterr().err

@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import App from './App.vue'
+import PortalView from './components/PortalView.vue'
 import './assets/styles.css'
 import './assets/gm-panel.css'
 import { installAuthGate } from './composables/useAuthGate.js'
@@ -9,8 +10,21 @@ import { installAuthGate } from './composables/useAuthGate.js'
 // Prod (vite build output): service worker registers and caches /media/.
 console.log(`[env] ${import.meta.env.DEV ? 'dev (no service worker / no media cache)' : 'prod (service worker / media cache)'}`)
 
-// Before mount, so the very first request is watched: a deployed build's requests
-// all pass the nginx perimeter, which 401s without a session cookie.
-installAuthGate()
-
-createApp(App).mount('#app')
+// Two surfaces, one bundle. `/portal` is the **apex** page — sign in, and your
+// campaigns — and it mounts instead of the game, for two reasons that matter:
+//
+// - it must render *without* a campaign session, which is exactly the state the
+//   auth gate treats as "the perimeter refused us"; and
+// - it calls the account tier, whose 401 is a legitimate answer ("not signed in"),
+//   not a sealed door.
+//
+// The path is the whole test, so dev (`/portal` on any host) and production (the
+// apex rewrites `/` here) behave identically. Campaign hosts keep the game.
+if (window.location.pathname.startsWith('/portal')) {
+  createApp(PortalView).mount('#app')
+} else {
+  // Before mount, so the very first request is watched: a deployed build's requests
+  // all pass the nginx perimeter, which 401s without a session cookie.
+  installAuthGate()
+  createApp(App).mount('#app')
+}
