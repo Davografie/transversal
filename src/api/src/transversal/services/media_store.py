@@ -53,25 +53,15 @@ def campaign_name() -> str:
 
 
 def campaign_root(name: str | None = None) -> Path:
-    """Where this campaign's own media goes."""
-    return MEDIA_ROOT / (name or campaign_name())
+    """Where this campaign's own media would go.
 
-
-def write_dir(*parts: str, campaign: str | None = None) -> Path:
-    """A directory for **new** media, under the campaign's own tree, created.
-
-    This is the write half of the rule: a campaign owns what it creates, so nothing
-    it generates can land on a path another campaign also writes. Components are
-    checked, because a request supplies some of them and ``rmtree`` is not the only
-    thing that should not be handed a ``..``.
+    Vestigial since the store went content-addressed ([[B88]]): nothing writes here any
+    more, because a campaign-namespaced tree would defeat the dedup that makes a fork
+    cheap. It stays because ``delete_owner_media`` still cleans the directories the
+    brief campaign-prefix iteration wrote, so nothing it left behind becomes
+    unreachable.
     """
-    name = campaign or campaign_name()
-    for part in (name, *parts):
-        if not part or part in (".", "..") or "/" in part or "\\" in part:
-            raise ValueError(f"unsafe media path component: {part!r}")
-    path = MEDIA_ROOT.joinpath(name, *parts)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return MEDIA_ROOT / (name or campaign_name())
 
 
 def paths_for(owner_id: str, kind: str, *, root: Path) -> list[Path]:

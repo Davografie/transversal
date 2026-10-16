@@ -11,6 +11,7 @@ from fastapi import HTTPException, UploadFile
 from PIL import Image
 
 from transversal.api.rest import media as media_mod
+from transversal.services import blobs
 from transversal.services import media_store
 
 #: The campaign an upload belongs to. Media is written under
@@ -90,14 +91,25 @@ def test_svg_is_not_an_allowed_upload_extension():
     assert ".svg" not in media_mod.ALLOWED_EXTENSIONS
 
 
-async def test_valid_upload_lands_inside_the_media_dir(tmp_path, monkeypatch):
-
+async def test_valid_upload_lands_in_the_blob_store(tmp_path, monkeypatch):
+    """The upload is content-addressed (B88): its URL names the bytes, not a campaign
+    and not the owner, which is what lets identical pictures be one file."""
     res = await media_mod.upload_media(_Tasks(), entity_id="", universe="", file=_upload())
 
-    written = tmp_path / CAMPAIGN / res["filename"]
-    assert written.exists()
-    assert written.parent == tmp_path / CAMPAIGN
-    assert res["path"] == f"/media/{res['filename']}"
+    assert res["path"].startswith("/media/blobs/")
+    digest = res["filename"].split(".")[0]
+    assert res["path"] == blobs.url_for(digest, ext="webp")
+    assert blobs.path_for(digest, ext="webp").exists()
+
+
+async def test_the_same_picture_uploaded_twice_is_one_file(tmp_path, monkeypatch):
+    """Dedup is the point of the store, and it is what makes a fork cheap."""
+    first = await media_mod.upload_media(_Tasks(), entity_id="", universe="", file=_upload())
+    second = await media_mod.upload_media(_Tasks(), entity_id="", universe="", file=_upload())
+
+    assert first["path"] == second["path"]
+    stored = [p for p in (tmp_path / "blobs").rglob("*") if p.is_file()]
+    assert len(stored) == 1, f"one picture, one file — got {stored}"
 
 
 async def test_bad_stored_universe_cannot_traverse(tmp_path, monkeypatch):
@@ -157,16 +169,21 @@ async def test_a_colon_bearing_variant_id_is_accepted(tmp_path, monkeypatch):
 
     assert res["image_id"], "the upload registered"
     assert repo.created[0].variant_id == setting, "the rung is the setting"
-    # The file names the owner, never the variant: the variant is metadata.
-    assert (tmp_path / CAMPAIGN / "imagen" / "trait-probe" / "earth").is_dir()
+    # The variant is **metadata, never a path**: the picture's files are addressed by
+    # their content, so a variant id cannot name a directory at all (B88).
+    assert repo.created[0].blobs, "the tiers were stored"
+    assert all(
+        blobs.path_for(digest, suffix=suffix, ext="webp").exists()
+        for suffix, digest in repo.created[0].blobs.items()
+    )
     # And the sole-image rule fires on that rung, so the first instance picture
     # overrides the definition for every role without a tagging step.
     assert repo.updated[res["image_id"]]["roles"] == ["background", "sheet", "navdot"]
 
 
 async def test_a_variant_id_cannot_reach_the_filesystem(tmp_path, monkeypatch):
-    """It is an id, not a path, so traversal in it is inert — the file lands under
-    the owner's directory whatever it says."""
+    """It is an id, not a path — and now not a path *anywhere*: the store is addressed
+    by content, so whatever the variant says, no filename is built from it."""
     monkeypatch.setattr(media_mod, "EntityRepository", lambda: _RecordingRepo())
 
     res = await media_mod.upload_media(_Tasks(), 
@@ -175,8 +192,9 @@ async def test_a_variant_id_cannot_reach_the_filesystem(tmp_path, monkeypatch):
     )
 
     assert res["image_id"]
-    written = [p for p in (tmp_path / CAMPAIGN / "imagen").rglob("*") if p.is_file()]
-    assert written and all("trait-probe" in str(p) for p in written)
+    written = [p for p in (tmp_path / "blobs").rglob("*") if p.is_file()]
+    assert written, "the picture was stored"
+    assert all(".." not in str(p) for p in written)
     assert not (tmp_path.parent / "evil").exists()
 
 

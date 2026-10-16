@@ -123,6 +123,12 @@ class MediaImage(BaseModel):
     #: field cannot name both. Empty on a row written before the tier migration, and
     #: then the loop shares ``extension``.
     animated_extension: str = ""
+    #: Content addresses of this picture's files, keyed by the filename suffix the
+    #: blob carries — ``_Large``, ``_Cutout_Large``, ``""`` for the loop. A record
+    #: that has them is served from the blob store ([[B88]]); one that does not is
+    #: served from the legacy path it was written to, which is what lets the move to
+    #: blobs happen without migrating everything at once.
+    blobs: dict[str, str] = Field(default_factory=dict)
     created_at: str = ""  # ISO 8601
 
     # ── Legacy ownership fields (transitional) ───────────────────────────

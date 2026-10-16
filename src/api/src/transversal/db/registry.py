@@ -39,10 +39,14 @@ if TYPE_CHECKING:
 ACCOUNTS = "accounts"
 CAMPAIGNS = "campaigns"
 ACCOUNT_TOKENS = "account_tokens"
+#: Content-addressed media, and how many records point at each blob (B88). It lives
+#: here rather than in a campaign because it **spans** campaigns: a fork shares its
+#: ancestor's blobs, and the count is the only thing that says when a file may go.
+BLOBS = "blobs"
 
 #: The whole registry schema. Kept as a tuple so a test can assert that the
 #: bootstrap creates *exactly* this and never a campaign collection.
-REGISTRY_COLLECTIONS = (ACCOUNTS, CAMPAIGNS, ACCOUNT_TOKENS)
+REGISTRY_COLLECTIONS = (ACCOUNTS, CAMPAIGNS, ACCOUNT_TOKENS, BLOBS)
 
 #: Beside the campaign database, never inside it: a fork is a copy of the campaign
 #: database, so anything stored there would be duplicated into every fork.

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 from transversal.db.registry import (
     ACCOUNT_TOKENS,
     ACCOUNTS,
+    BLOBS,
     CAMPAIGNS,
     get_registry_db,
 )
@@ -87,6 +88,58 @@ class RegistryRepository:
         self._accounts = self.db.collection(ACCOUNTS)
         self._campaigns = self.db.collection(CAMPAIGNS)
         self._tokens = self.db.collection(ACCOUNT_TOKENS)
+        self._blobs = self.db.collection(BLOBS)
+
+    # ── Media blobs (the refcount that spans campaigns) ───────────────
+
+    def retain_blob(self, digest: str, *, ext: str = "", size: int = 0) -> int:
+        """Register one more reference to a blob. Returns the new count.
+
+        The count is the **only** reason a blob file may be deleted (B88), and it is
+        here because it spans campaigns: a fork shares its ancestor's blobs, so
+        "nobody else is using this" is a question no single campaign can answer.
+        Derived state — rebuildable by walking the campaigns — so a lost update costs
+        a kept file, never a missing one.
+        """
+        doc = self._blobs.get(digest)
+        if doc is None:
+            self._blobs.insert(
+                {
+                    "_key": digest,
+                    "refs": 1,
+                    "ext": ext,
+                    "size": size,
+                    "created_at": _now_iso(),
+                }
+            )
+            return 1
+        doc["refs"] = int(doc.get("refs") or 0) + 1
+        self._blobs.update(doc)
+        return doc["refs"]
+
+    def release_blob(self, digest: str) -> int | None:
+        """Drop one reference. Returns what remains, or **None if it was never counted**.
+
+        That distinction is load-bearing: ``None`` means "this blob has no counter, so
+        this request is not entitled to delete its file" — the fail-safe direction,
+        because deleting a file another campaign still references is the incident this
+        whole mechanism exists to prevent.
+        """
+        doc = self._blobs.get(digest)
+        if doc is None:
+            return None
+        remaining = int(doc.get("refs") or 0) - 1
+        if remaining <= 0:
+            self._blobs.delete(digest)
+            return 0
+        doc["refs"] = remaining
+        self._blobs.update(doc)
+        return remaining
+
+    def blob_refs(self, digest: str) -> int | None:
+        """How many records point at this blob, or None when it is not counted."""
+        doc = self._blobs.get(digest)
+        return None if doc is None else int(doc.get("refs") or 0)
 
     # ── Accounts ──────────────────────────────────────────────────────
 

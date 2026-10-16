@@ -299,14 +299,15 @@ class CachedStaticFiles(StaticFiles):
     """
 
     def lookup_path(self, path: str):
-        """Campaign first, then the shared tree (B88).
+        """Campaign first, then the shared tree.
 
-        New media is written under the campaign's own directory
-        (``/app/media/<database>/…``) so a campaign owns what it creates, while every
-        file that predates that rule — a clone's, or anything written before it —
-        lives in the shared root. Resolving campaign-first here is what keeps
-        **every stored URL valid** across that change, so no file had to be moved and
-        no database path had to be rewritten.
+        Since the store went **content-addressed** ([[B88]]) most media is served by
+        neither branch: a blob URL names its bytes, so the shared tree resolves it. The
+        two branches are for what the move left behind — files written under a campaign
+        directory during the brief campaign-prefix iteration (kept, so nothing written
+        then became unreachable) and, below them, the shared tree every legacy file
+        still lives in. Resolving locally rather than rewriting stored paths is what let
+        the change happen without migrating 7,520 files first.
         """
         from transversal.services import media_store
 

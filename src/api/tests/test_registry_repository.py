@@ -46,6 +46,7 @@ class _FakeDB:
             registry.ACCOUNTS: _Collection(),
             registry.CAMPAIGNS: _Collection(),
             registry.ACCOUNT_TOKENS: _Collection(),
+            registry.BLOBS: _Collection(),
         }
         self.touched: list[str] = []
 

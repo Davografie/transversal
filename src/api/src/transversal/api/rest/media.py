@@ -7,6 +7,8 @@ gallery alongside generated images and can be animated.
 import io
 import logging
 import re
+import shutil
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +29,7 @@ except ImportError:
 
 from transversal.domain import IMAGE_FLAGS, ImageType, MediaImage
 from transversal.db.repository import EntityRepository
+from transversal.services import blobs
 from transversal.services import gpu_jobs
 from transversal.services import media_store
 from transversal.services.media_utils import (
@@ -39,7 +42,8 @@ router = APIRouter(prefix="/api/v1", tags=["media"])
 
 # Where media lives is `services/media_store`'s business now, not this module's: a
 # campaign owns what it creates, so the path depends on the request's database
-# (B88). Nothing here may name `/app/media` directly.
+# (B88). Nothing here may name `/app/media` directly. The write itself goes through
+# `services/blobs` — content-addressed, so the same picture is one file everywhere.
 # `.svg` is deliberately absent: it is passed through un-re-encoded, served
 # from the app's own origin, and can carry script — i.e. stored XSS (SEC-4).
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif"}
@@ -121,6 +125,32 @@ def _convert_to_webp(data: bytes, source_ext: str) -> bytes:
     return buf.getvalue()
 
 
+def _blobs_from_variants(image_data: bytes, base_name: str) -> dict[str, str]:
+    """Render the tier ladder into the blob store. Returns ``suffix -> digest``.
+
+    The tier renderer writes *files* and the store addresses *bytes*, so one of them
+    has to bridge the two: this writes the ladder to a scratch directory inside the
+    media root and moves each file into the store — a rename, not a copy, and the
+    scratch directory is gone either way.
+
+    The suffix is read back off each filename rather than assumed, because that is
+    where the ladder's own naming lives (``_Original``, ``_XLarge``, …) and a tier
+    added there should not need a second list here to be stored correctly.
+    """
+    media_store.MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".staging-", dir=str(media_store.MEDIA_ROOT)))
+    try:
+        stored: dict[str, str] = {}
+        for name in _save_image_variants(image_data, staging, base_name).values():
+            path = staging / name
+            suffix = path.stem[len(base_name):]
+            stored[suffix] = blobs.put_file(
+                path, suffix=suffix, ext=path.suffix.lstrip(".")
+            )
+        return stored
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
 
 @router.post("/media/upload")
 async def upload_media(
@@ -181,12 +211,13 @@ async def upload_media(
 
     converted = _convert_to_webp(contents, ext)
     out_ext = ext if ext == ".gif" else ".webp"
+    content_ext = out_ext.lstrip(".")
 
-    # Original flat-file path (backward compat)
-    prefix = f"{owner_id}_" if owner_id else ""
-    flat_filename = f"{prefix}{uuid.uuid4().hex[:12]}{out_ext}"
-    filepath = media_store.write_dir() / flat_filename
-    filepath.write_bytes(converted)
+    # The upload itself is a blob too — content-addressed, so re-uploading a picture
+    # that already exists anywhere in the store writes nothing (B88). This replaced a
+    # flat `/media/<name>` file and, briefly, a per-campaign directory: a
+    # campaign-namespaced store defeats exactly this sharing.
+    flat_digest = blobs.put(converted, ext=content_ext)
 
     # ── Register as MediaImage for gallery + animation ──
     image_id = None
@@ -221,12 +252,8 @@ async def upload_media(
                         universe or default_universe, "universe"
                     )
                     image_id = uuid.uuid4().hex[:8]
-                    output_dir = media_store.write_dir(
-                        "imagen", owner_id, resolved_universe
-                    )
                     base_name = f"upload_{image_id}"
-
-                    _save_image_variants(converted, output_dir, base_name)
+                    blob_map = _blobs_from_variants(converted, base_name)
 
                     img = Image.open(io.BytesIO(converted))
                     w, h = img.size
@@ -244,6 +271,7 @@ async def upload_media(
                         height=h,
                         filename=base_name,
                         extension="webp",
+                        blobs=blob_map,
                         created_at=datetime.now(timezone.utc).isoformat(),
                     )
                     repo.create_image(image)
@@ -278,8 +306,8 @@ async def upload_media(
             logger.exception("Image registration failed for %s (%s)", owner_kind, owner_id)
 
     return {
-        "filename": flat_filename,
-        "path": f"/media/{flat_filename}",
+        "filename": f"{flat_digest}.{content_ext}",
+        "path": blobs.url_for(flat_digest, ext=content_ext),
         "size": len(converted),
         "image_id": image_id,
     }

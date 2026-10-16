@@ -9,13 +9,17 @@ does not need the kind — see [[Trait Images Design Log]].
 
 from __future__ import annotations
 
+import logging
 from typing import Callable
 
 from transversal.db.arango import ENTITIES
 from transversal.db.arango import IMAGES
 from transversal.domain import MediaImage
 from transversal.domain import ImageType
+from transversal.services import blobs
 from transversal.services.media_utils import render_for
+
+logger = logging.getLogger("transversal.media")
 
 
 def pick_role_image(
@@ -98,6 +102,7 @@ class RepositoryImages:
         doc = image.model_dump()
         doc["_key"] = image.id
         self._images.insert(doc)
+        self._retain_image_blobs(image)
         return image
 
     def get_images(
@@ -191,6 +196,9 @@ class RepositoryImages:
         return self.update_image(image_id, {"roles": list(roles)})
 
     def delete_image(self, image_id: str) -> bool:
+        img = self.get_image(image_id)
+        if img is not None:
+            self._release_image_blobs(img)
         return self._images.delete(image_id)
 
     def get_images_for_owner(self, owner_id: str, variant_id: str | None = None) -> list[MediaImage]:
@@ -206,6 +214,51 @@ class RepositoryImages:
             if (img.variant_id or None) == variant_id
         ]
 
+    def _blob_ext(self, img: MediaImage, suffix: str) -> str:
+        """The container a blob uses: a matte is WebP whatever the still is, a loop
+        keeps its own, a tier is the still's."""
+        if suffix == "":
+            return img.animated_extension or img.extension
+        if suffix.startswith("_Cutout_"):
+            return "webp"
+        return img.extension
+
+    def _image_blobs(self, img: MediaImage) -> list[tuple[str, str, str]]:
+        """``(digest, suffix, ext)`` for every blob this record points at."""
+        return [
+            (digest, suffix, self._blob_ext(img, suffix))
+            for suffix, digest in (img.blobs or {}).items()
+            if digest
+        ]
+
+    def _retain_image_blobs(self, img: MediaImage) -> None:
+        """Count this record's claim on its blobs, in the registry.
+
+        Best-effort but **loud**: the count is derived state, so a lost increment keeps
+        a file past its last user, while the dangerous direction — deleting a file that
+        is still referenced — is prevented separately, by ``blobs.release`` refusing to
+        delete a blob that has no counter.
+        """
+        for digest, _suffix, ext in self._image_blobs(img):
+            try:
+                blobs.retain(digest, ext=ext)
+            except Exception:
+                logger.exception(
+                    "[media] could not count blob %s for image %s; its file will be "
+                    "kept rather than removed",
+                    digest,
+                    img.id,
+                )
+
+    def _release_image_blobs(self, img: MediaImage) -> None:
+        for digest, suffix, ext in self._image_blobs(img):
+            try:
+                blobs.release(digest, suffix=suffix, ext=ext)
+            except Exception:
+                logger.exception(
+                    "[media] could not release blob %s for image %s", digest, img.id
+                )
+
     def _image_url(self, img: MediaImage, render: str = "static", tier: str = "Large") -> str:
         """Public media URL for one render of a picture — the one place its shape lives.
 
@@ -213,9 +266,25 @@ class RepositoryImages:
         the matte) or ``animated`` (the loop). A matte is always WebP whatever the
         still's extension is; a loop keeps its own container, which a merged picture
         records separately because ``extension`` names the still.
+
+        **Content-addressed first, legacy path second** (B88): a record that carries a
+        digest is served from the blob store, which is what makes identical pictures
+        one file and lets a fork share its ancestor's media. A record with no digest —
+        everything written before the blob store, until it is migrated — is served
+        exactly as it always was, so adoption needs no migration and no downtime.
         """
         if render == "animated":
-            ext = img.animated_extension or img.extension
+            suffix, ext = "", (img.animated_extension or img.extension)
+        elif render == "cutout":
+            suffix, ext = f"_Cutout_{tier}", "webp"
+        else:
+            suffix, ext = f"_{tier}", img.extension
+
+        digest = (img.blobs or {}).get(suffix)
+        if digest:
+            return blobs.url_for(digest, suffix=suffix, ext=ext)
+
+        if render == "animated":
             return f"/media/animated/{img.owner_id}/{img.universe}/{img.filename}.{ext}"
         if render == "cutout":
             return f"/media/imagen/{img.owner_id}/{img.universe}/{img.filename}_Cutout_{tier}.webp"
