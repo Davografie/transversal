@@ -140,6 +140,19 @@ services:
     depends_on:
       - api
 
+  # The campaign-hostname hop (B88) — see deploy/host-router/nginx.conf for why a
+  # campaign's Host cannot survive `tailscale serve` on its own. Loopback + tailscale
+  # serve, like everything else here: the public path is Caddy → tailnet → this port.
+  host-router:
+    image: nginx:alpine
+    container_name: tv2_host_router
+    volumes:
+      - ./deploy/host-router/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:3010:80"
+    depends_on:
+      - frontend-prod
+
   imagen:
     build: ./src/imagen
     image: tv2_imagen
