@@ -1068,27 +1068,49 @@ const sessionId = ref('session-default')
 // broadcasts — so a refresh or another device converges on the same state.
 const inSession = ref(false)
 
+// Which table this device is at. Remembered so a reload rejoins the same one instead of
+// picking arbitrarily from a list ([[B305]]).
+const SESSION_KEY = 'tv2.sessionId'
+function rememberedSessionId() {
+  try { return localStorage.getItem(SESSION_KEY) || '' } catch { return '' }
+}
+function rememberSession(id) {
+  try { if (id) localStorage.setItem(SESSION_KEY, id) } catch { /* private mode */ }
+}
+
 async function initSession() {
   DIAG.mark('initSession-start')
   await listSessions()
   DIAG.mark('initSession-listed', { count: sessions.value.length, ids: sessions.value.map(s => s.id) })
-  if (sessions.value.length > 0) {
-    const s = sessions.value[0]
+
+  // The list is this campaign's — the server scopes it — so any choice stays in the
+  // right world (B305). Prefer, in order: the table this device was already at, the table
+  // that is actually playing, then anything the campaign has. Creating one is the last
+  // resort rather than the second step, because a stray empty table is what made the old
+  // list 463 long.
+  const remembered = rememberedSessionId()
+  const s =
+    sessions.value.find(x => x.id === remembered) ||
+    sessions.value.find(x => x.in_session) ||
+    sessions.value[0]
+
+  if (s) {
     sessionId.value = s.id
     const joined = await joinSession(s.id, entityId.value || playerId.value, playerId.value)
     inSession.value = !!joined?.in_session
     DIAG.mark('initSession-joined', { sessionId: sessionId.value, inSession: inSession.value })
   } else {
-    const s = await createSession('Default Session', 'earth')
-    if (s) {
-      sessionId.value = s.id
-      const joined = await joinSession(s.id, entityId.value || playerId.value, playerId.value)
+    const created = await createSession('Default Session', 'earth')
+    if (created) {
+      sessionId.value = created.id
+      const joined = await joinSession(created.id, entityId.value || playerId.value, playerId.value)
       inSession.value = !!joined?.in_session
       DIAG.mark('initSession-created', { sessionId: sessionId.value, inSession: inSession.value })
     } else {
       DIAG.mark('initSession-FAILED', { error: 'createSession returned null' })
     }
   }
+  rememberSession(sessionId.value)
 }
 DIAG.mark('initSession-called')
 const initSessionPromise = initSession()
