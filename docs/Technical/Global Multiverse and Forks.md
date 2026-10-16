@@ -55,9 +55,9 @@ handle remapped**"* — because `_id` handles are database-local. That remapping
 package design needed a transitive dependency closure, a per-type reference map, and dangling-
 reference validation.
 
-**A fork needs none of that.** Measured across all **19** collections:
+**A fork needs none of that.** Measured across all **20** collections (`_system` aside):
 
-- **20,443 documents** in total
+- **20,443 documents** in total *(measured 2026-10-15; **20,447** on 2026-10-16 — the content grows, and the figures below are the 10-15 set)*
 - **zero numeric `_key`s** — every key is a stable string (`loc-409859`, `ts-3`, `character-kael-drift-e555ccde`)
 - edges are `collection/key` strings: `{"from":"entities/faction-44351398","to":"traits/trait-description"}`
 
@@ -187,3 +187,9 @@ same playable result.
   avoid. The package design is **retained as a documented future direction** at the owner's explicit
   instruction, with the triggers that would bring it back recorded in §7. At the owner's direction the
   previous design is preserved rather than superseded-and-deleted.
+- 2026-10-16 — **correction, found by [[multi-tenancy]] at its onboarding.** §2 said *"all **19**
+  collections"* while §3's own table and the live database both enumerate **20** — an off-by-one in the
+  label only; the copy/skip arithmetic was right. Fixed here, and the measurement dates are now marked
+  because the counts move: 20,443 documents on 2026-10-15, **20,447** on 2026-10-16 (`historical_records`
+  alone grew by 4). Worth recording that a fresh session reading this document found the error in its
+  first hour — the numbers are only as good as the date beside them.
