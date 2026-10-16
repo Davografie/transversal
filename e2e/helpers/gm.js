@@ -54,11 +54,14 @@ export async function enterPrep(page) {
  * axis *perpendicular* to the slide, which is X for the default leftward chain
  * and Y for an up/down one — 70px on both covers either.
  *
- * The handle defaults to the **last visible** one, which is the deepest panel:
- * a child's node is rendered after its parent's, so this is the same panel the
- * old `[title="Detach…"]).last()` picked, at whatever depth.
+ * The handle defaults to the **last one inside the chain unit**, which is the
+ * deepest chain panel. Scoping to `[data-panel-unit="root"]` is the load-bearing
+ * part: once a window exists, its rail is also a `.panel-drag-handle` and it
+ * comes later in the DOM — but a window's handle *moves* the window, so picking
+ * it would silently do something else entirely. (The old
+ * `[title="Detach…"]).last()` could not hit that: windows render no ⤢ button.)
  */
-export async function detachByDrag(page, handleSelector = '.panel-drag-handle:visible') {
+export async function detachByDrag(page, handleSelector = '[data-panel-unit="root"] .panel-drag-handle:visible') {
   const handle = page.locator(handleSelector).last()
   const box = await handle.boundingBox()
   if (!box) throw new Error(`detachByDrag: no drag handle found by ${handleSelector}`)
