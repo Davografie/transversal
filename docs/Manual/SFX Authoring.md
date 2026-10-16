@@ -1,6 +1,6 @@
 ---
 title: SFX Authoring
-date: 2026-09-09
+date: 2026-10-16
 tags:
   - transversal
   - manual
@@ -16,945 +16,240 @@ status: draft
 
 # SFX Authoring
 
-A practical guide to writing **SFX** (Special Effects) in the GM/architect SFX editor. SFX are the rule exceptions that make abilities work: a medicine skill that heals, a technique that steps up a die, a faction perk that triggers when you win a contest.
+An **SFX** is a rule that bends the normal rules for one character, place or thing — a technique that steps a die up, a medicine skill that heals, a curse that binds whoever it is cast on. You write them in the GM panels; players then meet them as buttons and cards on their sheets.
 
-For the *rules* behind SFX, see [[SFX and Effects]] (technical reference) and the [[Transversal Hub#📖 Game Design|Game Design]] docs. This page is the "how to use the editor" guide.
+There are two levels to every rule:
+
+- The **rule itself** — its name, where it lives, what starts it, and how long it lasts.
+- Its **effects** — the things it actually does, one row per operation, run in order.
+
+This page walks through both, then builds one real rule end to end. [[SFX Reference]] is the lookup for every trigger, condition, source and action the editor offers; keep it open beside you.
 
 > [!note] Where it lives
-> SFX are authored in the GM panels: open the **SFX editor** from the GM panel tree. The editor has a shared form for the SFX itself, and each effect opens in its own child panel.
+> In the GM panel, press **Manage SFX**. That opens the rule library together with an **owner filter**: pick the thing a rule belongs to — a character, a place, a trait — to see what it carries and to attach more. **+ New SFX** starts a blank rule, and the **⧉** on a row makes a copy of one.
 
----
+## The four questions
 
-## The mental model
+Every rule answers four questions, in this order. The order matters, because each answer decides which of the later ones you are offered:
 
-An SFX answers seven questions. The editor is grouped by them, in this order —
-the earlier answers decide the later ones, so reading top to bottom is also the
-order in which the fields constrain each other. *(One exception, on the author's
-call: the acquire path — question 4 — renders at the **end** of the panel. It is
-optional, and it describes how the rule came to be attached rather than what it
-does, so it stays out of the way of the fields that answer behaviour.)*
+1. **Where does it live?** — the **Source**. A rule living on a trait can use that trait; a rule living on a place can reach the people standing in it.
+2. **What starts it?** — the **Trigger**. A button the player presses, or something that happens during play.
+3. **What does it do?** — the **Effects**. One row per operation, applied in order.
+4. **Who may have it?** — **Who it reaches**. Usually nobody: you attach the rule by hand. The paths here are for a rule that hands itself out.
 
-1. **Lives on** — *Source*: the kind of thing that may carry it, and the words
-   that choice puts in scope (`{trait_setting}`, `{location}`, …). On the panel
-   this is also a readout: opened from **Manage SFX** it names the actual owner
-   (*Lives on: Azure Dawn — location → reaches everyone inside it*), which is the
-   one fact the editor cannot know by itself.
-2. **What starts it** — *Trigger*: a game event, a card the owner presses
-   (`Manual`), or an option in the post-roll consequence menu (`Post-roll menu`).
-   One field, one answer — the menu used to be a separate *Placement* override
-   that could contradict the trigger, and it is a trigger again.
-3. **Who it's about** — *Listens to*: for a rule that stays armed, whose rolls it
-   is watching (self, everyone, or a path).
-4. **Where it may be learned** — *Acquire path* (optional): where the rule can be
-   *taken*, as opposed to where it works. It sits at the end of the panel (see
-   above).
-5. **When it applies** — *Conditions*: gates on using it.
-6. **What it does** — *Effects*: one row per step, each with its own target and
-   subject. This is the level where "what does it touch" is answered.
-7. **How long it's held** — the armed window, only when a step is delayed.
+The panel asks them in that order. Three more fields appear only when a rule needs them — **Listens to**, **Duration**, and **Bound variables** — and each is explained where it comes up below.
 
-Two of those live on other screens and are worth knowing about, because their
-absence here is what makes some rules feel invisible:
+## Writing the rule
 
-- **Where it is attached** is set in **Manage SFX** (owner filter → the thing →
-  *+ Add SFX*).
-- **Who may take it** is the trait definition's possible-SFX list, plus the
-  acquire gate above; the chip then appears on the instance whose gate holds.
+### Name and description
 
-Most authoring work is picking the right **source** + **trigger** + **effect
-action**, then scoping the effect with **targeting** and **conditions**.
+- **Name** — what the rule is called on the card and in the library. Its id is worked out from the name.
+- **Description** — the line shown on the card. Free text.
 
----
+Press **Create SFX** and the rule now exists; from that point every edit saves itself, and the panel becomes the rule's editor rather than closing.
 
-## The SFX form
+### Where it lives — Source
 
-### Name & Description
+Pick the kind of thing that may carry this rule. This is the panel's first field because everything below depends on it: it decides which surfaces the rule can be attached to, and it puts a **variable** in scope naming the thing it lives on.
 
-- **Name** — the display name (e.g. `Heal`).
-- **Description** — free text shown on the card/menu. The editor also renders a live plain-English summary at the top of the panel.
+| Source | The rule lives on | You get |
+|---|---|---|
+| *(none)* | nothing yet — an unattached rule | nothing |
+| **Trait setting** | one trait instance (a character's *Medicine*) | `{trait_setting}` |
+| **Trait set setting** | one trait-set instance | `{traitset_setting}` |
+| **Entity** | a character, GMC or asset | `{entity}` |
+| **Location** | a place — the rule reaches whoever is inside it | `{location}` |
+| **Faction** | an organisation — and so its members | `{faction}` |
+| **Projection** | one body | `{projection}` |
+| **Table** / **GM** | everyone, or the GM's own contexts | nothing |
 
-The SFX **id** is generated from the name (a slug like `sfx-heal`); it is not edited by hand.
+The available names are listed under the field as **Available variables**. `Table` and `GM` are *buckets* rather than a single thing, so they name nothing and offer no source variable.
 
-### Trigger
+**`Entity` and `Location` are not interchangeable.** A location is an entity, but a rule sourced on `Entity` resolves to whoever is *acting* — for a place-owned rule, the character who walked in — while `Location` resolves to the place itself. If the rule is about the ground, source it `Location`.
 
-The single activation axis. Choose from the trigger vocabulary (see [[#Trigger reference]]). Broadly:
+Set **Source** to match wherever you attach the rule. A trait-sourced rule belongs on a trait instance; attaching it to a character instead is refused rather than quietly resolving to the wrong thing later.
 
-- **`manual`** — a button the player clicks (the SFX shows on the owner's card/sheet).
-- **`menu`** — a button the player or GM picks from the **post-roll consequence
-  menu** instead of from a card. It is a trigger rather than a separate field
-  because a placement could disagree with the trigger (it could claim both
-  "fires when a trait is learned" and "a player picks it after a roll"). The
-  base moves — *Proceed the narrative*, *Apply a complication*, *Decrease the
-  doom pool* — are these.
-- **`on_*` dice-pool events** — `on_roll`, `on_result`, `on_contest_win`, `on_taken_out`, … fire automatically when that event happens.
-- **`on_beat` / `on_scene` / `on_session_start`** — fire on time/state boundaries.
+### What starts it — Trigger
 
-Some triggers expose **variables** (e.g. `on_contest_win` provides `{effect_die}`, `{taken_out}`, `{contest_entity_opponent}`). The editor lists them under "Available variables" so you can reference them in effect fields as `{variable}` — and, because a trigger variable is a *typed* value, a targeting path can also start from one: `select variable → {contest_entity_opponent} → navigate location`. Same for the source token: `{trait_setting}` is what `select variable` calls *the trait this rule is attached to*. Only the walkable ones appear there (a number or a flag is offered as a field value, not as a seed).
+The single thing that wakes the rule up. The picker groups them:
 
-### Placement — removed
+- **Manual** — a button the player presses on the rule's card.
+- **Dice pool** — something that happens around a roll: `On Roll`, `On Result`, `On Contest Win`, `On Added To Pool`, `On Pool Change`, and the rest. `On Added To Pool` is the odd one out: it needs a **Trait setting** source, because "this trait was added" has to know which trait *this* is. The picker greys it out and says so otherwise.
+- **Auto-fire** — something that happens in the fiction: arriving somewhere, a trait being learned, a session or scene boundary.
 
-There is no Placement field any more. It offered four values and only one did
-anything (`menu`), it overlapped with the trigger, and it could be authored into
-nonsense — *fires when a trait is learned* **and** *offered as a post-roll choice*.
-The menu is a trigger now (`Post-roll menu (player picks)`), which is what it
-always was under the surface: `derive_placement` reads `manual` as a card,
-`on_*` as event-driven, and everything else as the menu.
+A trigger often carries **variables** with it — `On Result` brings `{effect_die}` and `{total}`, `On Contest Win` brings the opponent and the stakes. They are listed under the field and can be used in any effect, and a targeting path may also start from one.
 
-If a rule still carries a stored `placement`, the editor says so under the
-Trigger field and leaves it untouched. The eleven rules that used the override
-were migrated to `trigger="menu"`.
+> [!tip] The roll-family triggers are gated by the source
+> A rule sourced on a trait instance only fires on a roll-family trigger when a die from **that instance** is in the pool. This is deliberate: a rule that says "when I roll my sword" should not fire when someone else rolls. Nothing extra to author — put the die in the pool and the rule is live.
 
-### Source (the panel's *Lives on*)
+### Who it's about — Listens to
 
-What kind of thing may carry it. This is the first question on the panel because
-it is the one the others depend on: it constrains what may be attached where,
-and it decides which `{variables}` the rest of the form can use (they appear
-underneath it as **Available variables**).
+This field appears only when part of the rule **waits for a roll** — that is, when it has an effect timed `On Roll`, `On Set`, `On Result`, `On Success`, `On Failure` or `On Contest …`. With nothing waiting there is nobody to listen to, so the panel leaves the field out.
 
-Opened from **Manage SFX**, the panel also prints the actual owner above the form
-(*Lives on: Azure Dawn — location → reaches everyone inside it*). That line only
-shows when the opener knows the owner; the editor alone never does, because
-attaching happens in Manage SFX.
+When it does appear, it says whose rolls feed that waiting part:
 
-What kind of thing *carries* the SFX — its activation origin. This determines what `select source` and `{source_*}` resolve to, and what a **Source rating** condition measures.
+- **From the trigger** — the default, shown already resolved: whoever activated the rule, except a session-start passive, which watches everyone.
+- **Self** / **Global** — the same two answers, stated outright.
+- **A targeting path** — the waiting part listens to *the entities that path names*, which is how a curse listens to whoever it is bound to rather than to whoever cast it. The path is resolved **once, when the rule arms**, so a relationship that changes afterwards does not re-target. If the path names nobody, the rule arms on nobody and simply does nothing.
 
-| Source | Meaning | `select source` resolves to |
-|--------|---------|------------------------------|
-| *(none)* | Not yet attached (orphan) | — |
-| **Trait setting** | A trait instance on the entity (e.g. Phaos' *Medicine*) | the trait instance |
-| **Trait set setting** | A trait-set instance | the set instance |
-| **Entity** | The character/entity itself | the entity |
-| **Projection** | The active projection | the projection |
-| **Table** | Available to every entity (the table bucket) | — (non-resolving) |
-| **GM** | GM-only contexts | — (non-resolving) |
+### How long it's held — Duration
 
-Set **Trait setting** when the SFX is granted by and scales with a trait (so `source_rating` conditions can gate on that trait's rating). **Table**/**GM** are *bucket* sources — they have no single instance, so `select source` / `source_rating` don't apply to them.
+Sits directly under *Listens to*, because it answers the same question one step later: *Listens to* says whose rolls feed the waiting part, **Duration** says how long it waits for them.
 
-### Listens to (arming scope)
+- **A number of rolls** — fire on the next N matching rolls, then stop.
+- **A boundary or an event** — scene, beat, session, a change of location, or a trait being updated: keep going until that happens, then stop.
+- **Empty** — no limit. The rule stays armed until something else drops it.
 
-**This field only appears when part of the rule waits for a roll** — an effect with
-`On roll`, `On set`, `On result` or an `On contest …` timing. With nothing waiting
-there is nobody to listen to, so the panel leaves it out (the same condition as
-the *How long it's held* window). That is why a purely immediate rule like
-*Sect Cultivation* has no answer here.
+> [!warning] Empty does not mean "once"
+> A rule with no duration stays armed **indefinitely**, so its waiting part keeps firing on every matching roll. To make it happen once, give it a **Rolls: 1** timer — or give the effect an **Immediate** timing, so it lands when the rule triggers instead of waiting for a roll.
 
-When it does appear: whose rolls feed that waiting part.
+**This is not an undo timer.** It controls *when the rule stops listening*. When a change it made is reversed is a separate question, answered by each effect's own duration — see below.
 
-- **From the trigger — self** (the default) — whoever activated it. *Crimson
-Scars* presses, arms its `On result` step, and then waits for **your** next roll.
-- **From the trigger — global** — everyone's rolls. A `on_session_start` rule
-reads this way by itself; *One-Trick* and *d4 Bonus* are passives that watch the
-whole table.
-- **Self** / **Global** / **A targeting path** — explicit overrides.
+### What it's about — Bound variables
 
-The empty option prints the resolved value rather than saying "auto", so you can
-see where it lands without translating.
-
-**`A targeting path` works now.** Pick it, author a path, and the armed part
-listens to *the entities that path names* — the curse case: *whoever is bound to
-this curse*, rather than whoever cast it. The path is resolved **once, when the
-rule arms** (`select self` is whoever activated it; `select source` is the rule's
-source), and the rule is armed on each entity it resolves to. Two consequences
-worth knowing:
-
-- A relationship that changes *during* the window does not re-target — the set is
-a snapshot, and the window is rolls/scene-sized.
-- A path that resolves to nobody arms nobody. That is a real state (no one is
-bound yet), so the rule simply does nothing rather than falling back on the
-activator.
-
-You only need this for cross-entity listening (a curse that binds two entities,
-say). Normal rules leave it on the trigger. See [[SFX Activation Model Plan]].
-
-### Bound variables (named before the conditions)
-
-A place to **name a value the rule is about**, before anything is checked. Each row
-is a name plus the same targeting path every other field uses, and the name is then
-readable everywhere below it: in a condition's path, in any effect's paths, and as a
-plain `{name}` in a field.
+Optional. A place to **name a value before anything is checked**, so the rest of the rule can refer to it by name. Each row is a name plus the same targeting path every other field uses:
 
 ```
 name: cultivation_tier
 path: select source → aggregate (tier of the rating)
 ```
 
-That single declaration is what makes this writable as one effect instead of five:
+From then on `{cultivation_tier}` is usable in a condition, in any effect's paths, and as a plain value in a field. That is what lets a rating-scaled rule be one effect instead of five.
 
-> **Worked example — *Cultivation Stage***
->
-> *Bound variable*: `cultivation_tier` = `select source → aggregate tier (rating)`.
->
-> *Effect*: **Increase Dice Limit**, limit `total`, Amount → **Variable** →
-> `{cultivation_tier}`.
->
-> The card reads: *"Whenever a roll happens, where the cultivation tier is the tier
-> of the rating: increase the total dice limit by the cultivation tier."* At d8 the
-> increase is **3** — the die's position on the ladder (d4 = 1 … d12 = 5), not its
-> side count.
+Rows resolve **in order**, and a later row may start from an earlier one. You cannot reuse a name the activation already binds (`{trait_setting}`, `{order}`) — the engine keeps the earlier one and the editor warns.
 
-Two things the section buys you over naming a step inside a path (the 💡, below):
+**Naming a value here is what makes it a variable.** A bare `{name}` in a field only works if something bound that name: a bound variable, a step's **Output name**, or the trigger or source. If nothing did, the effect is **skipped at fire time** and the outcome says so — it does not run against the literal text. When you are not sure a name exists, use `select variable` in a path instead; the picker lists what is really in scope.
 
-- **Conditions can read it.** The engine resolves these *before* the condition gate,
-  so a gate may be written in terms of them. A 💡 inside a path cannot be, because
-  it binds only once that path runs.
-- **The name is the reason the path exists**, so the card can say what it *is*
-  ("the cultivation tier is …") instead of leaving a bare noun.
+### Limits — Conditions
 
-Rows resolve **in order**, and a later row may start from an earlier one
-(`select variable`). A name the activation already binds (`{trait_setting}`,
-`{order}`) cannot be redeclared — the engine keeps the earlier one, and the editor
-warns. A path that matches nothing leaves the name unbound, so anything using it
-resolves to nobody; the editor says "this path resolves to nothing yet" and the
-validator names it.
+Conditions narrow **where a rule is allowed to run**. They are not a second trigger: the trigger decides *when* the rule fires, and every condition must then pass for it to go ahead.
 
-### Conditions
+The picker bands them by the question they answer — **Character state**, **The moment it fires**, **This rule**, **No gate** — and a type that cannot pass where you are authoring (a source-rating gate with no trait source, a moment-reading gate at a beat boundary) is greyed out with the reason.
 
-SFX-level conditions must **all** pass for the SFX to fire. They gate *when the SFX is allowed*, not what it does. See [[#Condition reference]].
+Conditions also decide **availability**, but only the ones that can be judged without the moment — character state and this-rule gates. A rule those exclude shows on the sheet as *conditions not met* rather than vanishing. Gates that need the moment are only checked when the rule actually fires.
 
-Two important subtleties:
+### Costs & Effects
 
-- **Static conditions** (entity type, source rating, in-universe, has-trait, …) also gate *availability* — the SFX shows as "conditions not met" on the sheet until they pass.
-- **Context conditions** (`phase`, `contest_outcome`, `roll_tier`, `test_outcome`, `user_role`, `hitch`) are only checked at fire time, when the event context exists.
+The ordered list of what the rule does. The rows run **top to bottom**, so the order is the execution order. Add, reorder and edit them here; each effect opens its own panel. The next section covers a single effect.
 
-### Effects
+### Who it reaches
 
-The list of operations the SFX performs, in order. Effects are executed **sequentially**: if an effect needs a runtime choice (`choose`), later effects wait for that choice to resolve. Add, reorder, and edit effects here; each effect's form opens in a child panel.
+Optional, and mostly for rules that hand themselves out. A row here is a **targeting path that names the owners** — the entities or instances the rule should be available to — with one of two relationships:
 
-### How long it's held (the armed window)
+- **Has it** (granted) — those owners simply have the rule. Nothing is written onto them; it is resolved from live data each time it is read, so an owner that stops matching stops having it.
+- **Offered** — those owners get a chip and may take the rule.
 
-How long the SFX stays **armed** (listening for the next roll/outcome event) after it triggers.
+The path must land on the kind of thing your **Source** is — the row tells you which, and warns when no source is set. Several rows combine: the reach is all of them together, and **Has it** wins where both apply.
 
-Two things matter:
+Two other things make a rule available, and they are separate from this:
 
-- **It only affects *delayed* effects** — those with an `On roll` / `On set` / `On result` / `On contest …` timing. `Immediate` effects fire once at trigger time and ignore this entirely.
-- **It is *not* an undo timer.** It controls *when the SFX stops listening*, not when a change reverts — that is each effect's own **effect duration** (see below).
+- A trait definition's own possible-rule list (the hand-picked offer), shown at the bottom of this section as **Declared by**.
+- Attaching it by hand in **Manage SFX**.
 
-Timers:
+## Writing an effect
 
-- `rolls: N` — fire on the next **N** matching roll events, then drop. The default is `rolls: 1` (fire once).
-- `beat` / `scene` / `session` / a state-change event — drop the armed SFX when that boundary fires; until then it keeps firing on every matching roll.
-- no timer — armed indefinitely.
+Each effect is one operation. Pick the **Action** first; the form then shows only the fields that action needs.
 
-### Taking it back (the flight window)
+- **Timing** — when this effect lands, relative to the rule's trigger. **Immediate** applies it the moment the rule fires. The roll and outcome timings (`On Roll`, `On Result`, `On Contest Win`, …) arm it now and fire it later, which is what makes the *Listens to* and *Duration* fields matter. The boundary timings (`End of beat/scene/session`) are persisted timers.
+- **Condition** — an optional gate on *this* effect alone. If it fails at apply time the effect is skipped and the rule's other effects still run. This is how five rating-gated effects can share one rule.
+- **Roll dice** — on a roll-timed effect, which dice it acts on: any, the **unchosen** ones, the dice kept for the **result**, or the **effect** die.
+- **The action's own inputs** — each action declares what it needs. A target, a die, an amount, a pool. Where a target is asked for you can usually pick something specific or write a **targeting path**; the path is the general answer and is worth learning.
+- **Anchored to** — where the thing this effect *creates* lives, when that is not simply the subject: a trait nested under another trait, or a trait hanging on a relationship. Only actions that make something ask this.
+- **Duration (undo timer)** — how long before this change is **reverted**. Step a die up with `beat` here and it steps back down at the end of the beat. A duration is offered only where reversing makes sense: a change to a die in a *pool* is gone at the next roll anyway, so it is not offered there.
+- **Negative** — for trait-granting actions, whether what is granted is a complication rather than a benefit.
+- **Output name** — names what this effect produced, so a later effect can reach it with `select variable`. Only offered on actions that produce something.
 
-A **manual** rule can be taken back until it *commits*. Press it again before
-then and everything it can undo is undone: the razmerit it earned goes back, the
-die it added to the pool comes out, the rating it stepped up steps down. What was
-still waiting on a roll — an armed `On result` part, a deferred end-of-scene —
-is dropped instead of firing.
+> [!tip] Two clocks, easy to confuse
+> The rule's own **Duration** is a *listening window*: how long the rule stays armed for its waiting part. An **effect's** Duration is an *undo timer*: when the change it made is reversed. They are independent — a rule can stop listening after one roll while the change it made lasts the scene.
 
-It **commits** at the first of two moments, and neither is negotiable:
+## Targeting paths
 
-1. **A delayed part of it fires.** Once the part it was waiting for happens, the
-   rule has done what it was for. (The revert it schedules then fires at its own
-   timer as usual.)
-2. **Your dice are rolled.** The roll is what consumes the pool — from the dice
-   landing, what the rule changed is *used*. This is the bit that matters for a
-   purely immediate rule like *Hinder*: it has no delayed part at all, so the
-   dice are the only thing that can close its window.
+A path is how you say *which* thing an effect acts on, when the answer is not a single named object. It is an ordered pipeline of steps that resolves to one value or a collection of them, and the builder only offers steps that are legal from where the path currently stands.
 
-The card/chip reads *active* while the rule is in flight, and that state comes
-from the server — a reload does not lose it.
-
-The **Active** rail down the left edge lists every rule currently on a character,
-wherever it is in its life: armed and waiting on a roll, in flight, or still
-inside an effect's duration. Each card names the rule and its countdown
-(*On Roll · 1 roll*), so the ⏳ line on the sheet — a bare *1 roll* — always has
-something that says where it came from. It reads the server's active set
-(`activeSfxIds`), not the take-back window, so an **automatic** rule's running
-duration shows there too. Both surfaces re-read when a timer can actually move —
-the dice landing, or a rule ending — and leave the display alone when nothing
-changed. A trait's own countdown reads the same way: the row shows the ⏳ time,
-and the trait detail names the rule (*re-enables: 1 beat* / *from: One Trick*).
-
-A **passive** rule armed at [Session] Start is announced (*SFX armed: One Trick*)
-and sits on every character's rail for the session. A passive applies to
-everyone — late joiners included — so nobody has to be told it is "theirs", and
-it is not a take-back the way a manual activation is.
-
-Expanding a rail card says what the activation is holding: its **Source** — the
-instance the rule was activated from, named (*Spiritual Power*) — and its
-**Bound** names, the variables its targeting paths could use
-(*{trait_setting} → Spiritual Power*, *{rolled_dice} → 2 dice*). Sources are part
-of the record and survive a reload; bound names are the activation's own scope,
-so they are shown while the rule is running in this process and are gone after a
-server restart.
-
-**What a take-back cannot do**, and how to tell: reversibility is a property of
-the **action**, not of your rule. The editor's validation says so — a rule that
-can be taken back warns you which of its effects would stay in place (*"Effect 3
-cannot be undone…"*). Some things are moments rather than state — a roll
-resolved, a table opened, someone travelled — and those cannot be un-happened;
-for them, gate the effect behind the moment it should commit to (that is what
-*On roll* timing is for) instead of expecting a refund.
-
-*Costs are ordinary effects*, so they come back like anything else — the only
-cost that cannot is `transfer` razmerit (moving it between two people has no
-faithful inverse). And **End Active Effect** is the authorable version of the same
-thing: point it at a pending effect and it ends it now, applying the undo instead
-of waiting for the timer.
-
-There is a second door to the same room: **removing the rule's die from your
-pool before you roll also takes it back.** A rule whose cost is a die in the pool
-— Hinder's d4, a technique's rating dice — is held by that die; take the die out
-and the rule ends with it (the razmerit returns, anything waiting is dropped),
-and the table sees an *SFX ended* note. That is not a punishment: dropping the die
-*is* how you change your mind about the Hinder. A rule that put nothing in a pool
-has no such door — use the chip.
-
----
-
-## The effect form
-
-Each effect is an operation. The fields depend on the chosen action (the editor only shows what that action needs).
-
-### Action
-
-Pick from the effect vocabulary (see [[#Effect action reference]]). The action fixes the operation (`type`/`action` behind the scenes), its target kind, and whether it shows a duration/polarity toggle.
-
-### Timing
-
-When this effect fires **relative to the SFX's trigger**:
-
-- **Immediate** — applies the moment the SFX triggers.
-- **On roll / On set / On result** — armed now, fired at the next matching roll event (roll-timed).
-- **On contest win / loss / success / failure** — armed now, fired when the roll/contest *resolves* with that outcome.
-- **End of beat / scene / session**, **After beats** — persisted timers that fire on the time boundary.
-
-> [!tip] Trigger vs timing
-> The SFX **trigger** says *when the SFX wakes up*; the effect **timing** says *when this effect lands*. A `manual` SFX usually has `immediate` effects. A passive rule like *One Trick* uses `on_session_start` trigger + an `on_roll` effect (armed at session start, fired on every later roll).
-
-> [!note] Session-start and session-end SFX have two halves
-> `on_session_start` fans out in two directions, decided per effect by its timing:
-> - **Timed effects** (`on_roll`, `on_set`, `on_result`, `on_contest_win`/`loss`, `on_success`/`failure`) arm **once, globally** for the session — a passive rule listening to every entity, including characters who join mid-session. These carry no per-entity stamp.
-> - **Non-timed effects** (`immediate`, `end_of_beat`/`scene`/`session`, `after_beats`) fire **per entity** when the session starts — "every character gains X".
->
-> `on_session_end` fires its effects **per entity** at the session's far boundary, after the session's armed passives are dropped.
-
-### Target
-
-What the effect points at. Three modes:
-
-1. **Pick specific** — a literal id (self, a named trait, a location).
-2. **Named exit** — `{return:name}` for shared roll tables (only when the action supports it).
-3. **Targeting path** — a structured `target_spec` pipeline (see [[#Targeting path]]).
-
-**A runtime pick is a `choose` step in the path.** "Choose at runtime" and "Random" are
-no longer modes of the field: add a `choose` step where the table should decide, or an
-`aggregate → random` step for a random one. That is what makes *what* is offered and
-*how it is narrowed* one thing to read — the path — instead of a token plus a scope
-kept beside it. A condition path offers no `choose` (nobody is there to answer).
-
-The **scope vocabulary** still exists for the *picker*: when you pick a literal with
-the search box, `targetScopes` (readable over GraphQL) declares each prefix —
-`traitset:…`, `universe:…`, `location:…`, `subtree:…`, `faction:…`,
-`actor_faction:…`, `life_path:…` — and which kinds it can offer. A pair that is not
-supported **says so** instead of coming back empty, so an empty picker means
-"nothing matched", never "wrong pair".
-
-### Entity (subject)
-
-Who the effect applies to. Default `self`. Either a literal id or a targeting path
-(`entity_spec`). For most trait effects this stays `self`.
-
-### Result & context fields
-
-Action-specific inputs — a die rating, an amount, a pool, `{variable}` tokens, and context fields like `steps`, `rating_type`, `statement`, `notes`, `relationship`. The editor renders the right controls per action.
-
-A **numeric** field (an *Amount*, a *Steps* count) offers **Number** or **Variable**.
-Pick Variable to use a bound name — `{cultivation_tier}` — instead of a literal.
-Only names that resolve to a number are offered there: a die would arrive as `d8`,
-which the amount cannot use. The value itself carries the mode, so nothing about it
-depends on the editor's state.
-
-### Polarity (negative toggle)
-
-For trait-granting effects, toggles whether the granted trait is a **complication** (negative) vs a benefit.
-
-### Effect duration — the *undo timer*
-
-Schedules the **inverse** of this effect to revert it later: `step_up` with a `beat` timer means "step up now, step back down at end of beat."
-
-This is a **different clock** from the SFX-level **listening window**. The SFX duration says *how long the SFX keeps listening*; the effect duration says *how long the resulting change lasts*. A single SFX can be "armed for 1 roll" (listening window) while one of its effects is "1 scene" (undo timer) — the change it makes is reverted at end of scene, but the SFX itself stopped listening after that one roll.
-
-### Effect conditions
-
-Per-effect gates. If an effect has conditions and they fail at apply time, **that effect is skipped** (the SFX still fires its other effects). Useful for rating-scaled SFX: five `modify_dice_limit` effects, each gated `source_rating == d4/d6/d8/d10/d12`, so only the matching one applies.
-
----
-
-## Targeting path
-
-The structured way to target. A **path** is an ordered pipeline of steps that resolves to a typed value (an entity, a list of trait instances, a die, a count, …). The editor's wizard is catalog-driven and type-checked — it only offers legal next steps and highlights whether the path matches the field's expected type.
-
-A path is the **bridge between the trigger and the effect**: the trigger says *when* the rule wakes and what it carries (`{trait_setting}`, `{contest_entity_opponent}`, the rolled dice), and the path turns that into the concrete things the effect lands on.
-
-### Step types
+The steps you will use:
 
 | Step | What it does |
-|------|--------------|
-| **Select** | Seed the working set from a collection (`self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`), the SFX `source`, or a bound `variable`. |
-| **Filter** | Keep items whose field matches a predicate (`polarity == negative`, `rating_type == static`, `traitset_id == …`). Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not in`, `contains`. Two take one value or several: `in` (*is one of them*) and `not in` (*is none of them*) — several arrive as a list. Values show as **names**; an id never appears in the editor. **A type test narrows the path**: `entity.type == location` means the rest of the path may use location-only steps (→ `occupants`). |
-| **Navigate** | Hop an edge to related elements (a trait instance → its entity, an entity → its current location, …). `dedup` collapses duplicates by identity. |
-| **Aggregate** | Pick a **field** first, then a function — the field's type decides which functions are offered, so a timestamp is never offered an average. **No field** (over the whole collection): `count`, or `random` (a sample — a count of 1 picks one element, more keeps a subset). **An orderable field** (a number, a die, or a timestamp): `min`/`max` give the **value**, while `top`/`bottom` give the **element** carrying the highest/lowest value, so the path keeps walking from the thing itself. **A numeric field** also offers `mean`, `avg_floor`, `avg_ceil`. **A die field** also offers **`tier`** — a *cast*, not a selection: it reads where that die sits on the ladder (d4 = 1 … d12 = 5), which is what makes a rating usable as an *amount*. It reads one value, so narrow a collection first (`top`/`bottom`); `min`/`max` would have already turned the die into its side count (d8 → 8, not 3). For a timestamp, top/bottom read as *the most recently used* / *least recently used* — this is how you ask for *the body you were last in*: `select self → navigate projections → aggregate (last used at) → Highest element`. |
-| **Literal** | Name one object by id directly. |
-| **Evaluate** | Terminal boolean test — `exists` (non-empty), or compare `count` / a scalar field against a value. Produces true/false (used by **Targeting path** conditions). |
-
-`min`/`max` and `top`/`bottom` are not duplicates: the first pair gives a **value** (a number or a date) that an `evaluate` can compare; the second gives the **element**, which is what a later step navigates or acts on.
-
-**`choose`** (interactive pick) collapses a many-cardinality collection to one — or a subset, with a count above 1. It is **not offered in a condition path**: a condition is *evaluated*, with nobody to answer the question, so a `choose` there could never pass. Its non-interactive counterpart, **`random`**, lives in *Aggregate* and is available everywhere, gates included.
-
-Conditions live at the SFX level and the effect level, and **an enum condition takes one value or several** — pick two and it means *either* (the card reads *you are a character or a gmc*).
-
-### Where rules live
-
-Rules are attached to whatever they are *about*. **Manage SFX** has an owner filter for
-that: *Table* (everyone), *GM*, *Entity*, *Location*, *Projection*, *Trait*, *Trait
-instance*, *Trait set*. Pick the kind, then the thing by name.
-
-Two conveniences as the catalogue grows:
-
-- **Entity rows say what they are** — *Kael — character*, *The Emberline — universe* —
-  because one list mixing characters, factions, assets, worlds and GMCs by name alone
-  is a guessing game. An extra dropdown narrows it by type when you filter by Entity.
-- **Locations are their own filter**, not part of Entity.
-
-Not every rule fits every owner. A rule whose **source** is a trait instance belongs on
-*Trait instance*, a place-sourced one on *Location*. The picker only offers the rules
-that fit where you're putting them, and lists the rest under **Can't go here** with the
-reason — *belongs on a trait instance* — rather than accepting the click and quietly
-doing nothing.
-
-The rule is one declaration: an SFX's **source** names the surface it calls home (see
-[[SFX Source Model]]), and anything that attaches, offers or validates a rule reads it.
-A rule with no source declared can live anywhere.
-
-### Learning a rule somewhere
-
-A rule can say **where it may be taken** — not where it works. That's its *acquire
-path*: a path seeded at the thing being unlocked, checked when someone tries to take
-it. Author it in the SFX editor, under **Acquire path** (optional). The author's case:
-
-```
-select source → navigate entity → filter current_location == Azure Dawn
-```
-
-Read as: *the trait instance I'm unlocking is held by someone standing at Azure Dawn.*
-A trait that offers the rule shows it as a chip only where that path resolves; step
-outside and the chip is simply not there. Once taken, the rule is theirs — it keeps
-working after they leave. The card itself says nothing about the gate: where a rule
-may be *taken* isn't part of what it *does*. The gate stays visible in the editor,
-and it is enforced where the grant happens.
-
-That last part is the whole reason it's a separate thing from a **condition**. A
-condition is evaluated when a rule *fires* as well as when it's offered, so gating with
-one would hand the rule over at the sect and then take it back the moment they walked
-out.
-
-The gate is enforced where the grant happens, not only in the panel, so the chip list
-is an honest preview of what would actually be accepted. A rule with no acquire path
-can be taken anywhere — the common case.
-
-**The gate is also how a rule recruits its carriers.** A path seeded at the
-instance can test the instance itself, not just where it is:
-
-```
-select source → filter rating_type == resource
-```
-
-*Any resource trait may take this* — one rule, no edits to any trait definition.
-That is the distributive case, and it is the one thing the trait definition's
-possible-SFX list cannot say: there, "all resource traits" means editing every
-resource trait definition by hand.
-
-Worth knowing which half each mechanism is: the **possible-SFX list is the
-offer** (who can ever show the chip) and the **acquire path is the gate** (who
-may take it right now). The path narrows the offer; it does not create it. Making
-the *offer* come from the path too is a design step not taken — it would mean
-evaluating a selector across every trait instance an entity holds, per candidate
-rule.
-
-### Rules on a place
-
-An SFX attached to a **location** applies to the entities *in* it — and in its
-sub-locations, however deep. Nothing is written onto them: the rule is simply in
-their list while they are there, so leaving ends it by itself.
-
-#### Granting a rule (the teacher case)
-
-**Grant SFX** hands a rule from the registry to the effect's subject — an entity,
-or a trait instance reached by a path. That is how a place *teaches*:
-
-```
-Azure Dawn owns "Sect Training" (manual, shows in the place strip)
-  effect: Grant SFX  →  SFX: [ wizard: select sfxs → filter name == sfx-sect-cultivation ]
-                       Grant to: [ wizard: select source → occupants → trait instances
-                                   → filter trait == spiritual power ]
-```
-
-Press it where you stand and the technique lands on the trait instance the
-training is for. The *which rule* picker is the ordinary targeting wizard, seeded
-from the registry (`select sfxs`) and filterable on its own columns — `name`,
-`trigger`, `source_kind` — so a rule can grant *any post-roll rule* rather than
-one named id.
-
-A grant goes through the same writer as a GM's attach, so it obeys both rules:
-the granted rule's declared **source** must permit that surface, and its own
-**acquire path** must hold. A grant is not a back door around either. There is no
-inverse yet — a granted rule does not expire or revert.
-
-Attach one in **Manage SFX** (owner filter → *Location* → pick the place). Set the
-**Source** to `Location` as well, and the rule knows what it is: the place is both
-where it lives *and* what it resolves to, so a targeting path can walk straight to
-its occupants (`select source → occupants → …`) and a source-aware condition reads
-the place, not the character.
-
-Two things it buys you:
-
-- **A place's rule, at a place.** *Everyone who walks into the Azure Dawn sect
-  gains access to its life path* is now the place's rule plus an arrival trigger,
-  rather than a global rule wearing an "at location" condition.
-- **Lair actions.** The rule shows up in the SFX list of whoever is standing
-  there, so a GM can activate it *because* they are in the lair.
-
-The player sees this as a strip under their own SFX cards, labelled **From
-<place>** — one heading per place that lends them something. It is deliberately
-the same list the activation path uses, so a card in the strip is always one
-that would actually be accepted.
-
-One thing is left out: a rule that fires **as you arrive** (`on_location_change`).
-By the time you are standing there it has already done its work — an instant,
-not a permanent — so there is nothing to keep track of. Sect Initiation still
-grants the life path; it just isn't held up as something the sect lends you.
-Everything else shows: an activated rule as a button, a rule that keeps firing
-while you are there (a roll, a scene) as an inert card that states what the place
-does. The distinction lives in the trigger catalogue (`TriggerDef.fires_on_arrival`),
-so it is declared once rather than guessed at in the UI.
-
-A place's rule is the ordinary kind — trigger, conditions, effects — and can carry
-a duration like any other. To make a granted trait last *only* while they are on
-the grounds, give it a duration whose timer is a **location change**: the trait is
-taken back when they next move.
-
-> [!example] A worked example is in the world
-> **Sect Initiation** (`sfx-azure-dawn-initiation`) sits on Azure Dawn: *when you
-> arrive somewhere, if you are a character: discover the Azure Dawn life path*.
-> Its **source** is the place too, so a path could walk straight to its occupants.
-> Four settings combine — the **owner** decides who it reaches (everyone inside
-> Azure Dawn and its sub-locations), the **trigger** decides when (arriving), the
-> **condition** decides who it applies to (characters, not the GMCs standing
-> beside them), and the **effect** decides what happens (it lands on the arriver).
-> Note there is no "at location" condition: the scope already says where, and such
-> a condition would wrongly exclude someone in the sect's cellar.
-> It was seeded by hand (`sfx_owner.ensure_place_rule_example`); delete the SFX
-> and it stays deleted — nothing recreates it at startup.
-
-### Filtering by tag
-
-A trait can carry free-form **tags** (authored in the trait editor — *violent*, *protective*, …), and a path can select by them: `select self_traitsettings` → `filter tags contains violent`. The value box is the **tags editor** — the same chips the trait editor uses, suggesting the tags that exist and letting you type a new one. Name several and it means *any of them* (the card reads *tagged violent or calm*); naming the tags is enough, no hop to the registry trait is needed.
-
-The suggestions come from the tags already in the registry — a tag you type but nobody has used still works, and instance-level tags are matched even though they are not yet suggested.
-
-The filter field is `tags` on a trait instance, and it reads **both halves**: tags set on the instance itself *and* the ones its registry trait carries — so tagging a trait marks every instance of it, and an instance can add context of its own (this instance is a *fire* technique). The same filter works on the registry trait directly, after `navigate trait` — that reads the inherited half only. Naming the step (`output: violent_traits`) both labels the card *and* makes the matched instances available to later effects as a bound variable.
-
-### Reading the other side of a contest
-
-A player's assembled pool is a moment a rule can watch (**Trigger: On Pool
-Change**). It is the only place the dice exist *before* they are rolled — each
-one still pointing at the trait that produced it — and when a contest has been
-declared, the other side's dice come with it.
-
-- `select rolled_dice → …` — **your** pool, as it now stands.
-- `select opposing_dice → …` — **theirs** (empty while nobody has challenged you).
-- `select variable {dice_pool} → navigate dice → …` — the pool itself, by name
-  (a handle; walking it is what `pool → dice` does).
-- `select added_dice → …` — **the dice that just arrived from this rule's own
-  trait**. The client sends the whole pool on every edit, so what *changed* is
-  knowable only at this moment — and each added die carries *where* it sits, so an
-  effect can act on exactly it. Read from the rule's point of view: a rule on a
-  fire technique sees the dice its technique put in, not everything the save
-  added — and a `2d8` technique brings *two* dice, so it is always a list. (A rule
-  whose source contributes no dice — an entity rule, a table rule — sees
-  everything the save added, because there is nothing to narrow by.) "Step down
-  the one I just added" therefore needs no filter at all.
-
-**A trigger can be about its own source.** `on_pool_add` fires only when the trait
-instance the rule lives on is what got added — the fact is decided structurally,
-before any condition is evaluated, so a rule that cares only about its own
-arrival isn't checked on every pool change. It needs a *Trait setting* source
-(there is no "this trait" otherwise); the editor greys the option out and
-`validateSfx` says why.
-
-So both halves of *"I add a fire technique while they have water"* are a path
-each — and the first needs no filter, because `added_dice` is already *this
-rule's* dice: `added_dice → traitsetting` (mine) beside
-`opposing_dice → traitsetting → filter tags contains water` (theirs).
-
-For *theirs* there are two routes and they suit different moments: the `opposing_dice` seed above is the other side's assembled pool **at the moment a pool is saved**, while `select variable {contest_entity_opponent} → navigate pool → navigate dice` reaches any entity's pool at any moment (the same hop works for your own, too).
-
-Both are ordinary dice paths, so two sides can be compared by giving each its own
-condition and letting *both* have to pass — no value-ever-compares-to-value step
-needed:
-
-| Condition | Path |
 |---|---|
-| ① mine is fire | `select rolled_dice → traitsetting → filter tags contains fire` |
-| ② theirs is metal | `select opposing_dice → traitsetting → filter tags contains metal` |
-
-Effect: *Step Down Die* on the technique you played, and the card reads **each
-trait instance they rolled tagged metal** rather than "you rolled" — the party
-comes from which seed the path started at.
-
-Two things worth knowing. The moment fires on **every save** of your pool, so a
-rule that only cares about one kind of die should filter for it (a technique die
-is `source_kind == trait`). And an opponent who has not assembled yet is an
-*empty list*, not an error — condition ② simply does not pass.
-
-### Useful seeds & edges
-
-- **Collections:** `self`, `rolled_dice`, `opposing_dice`, `added_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`, `sfxs`.
-- **Common edges:** trait instance → `trait` (registry trait) / `traitset` / `entity` / `projection` / `subtraits`; entity → `traitsettings` / `location` / `universe` / `projections` / `pool`; location → `occupants` / `difficulty_pool`; **pool → `dice`** (what is actually assembled in it — the hop that turns *whose pool* into *which dice*, and so into the trait behind one of them). The GM difficulty pool answers with nothing: it is a number, not a set of dice.
-- **Common fields:** trait instances expose `rating`, `rating_type`, `polarity`, `trait_id`, `traitset_id`; entities expose `type`, `current_location`, `current_universe`, `razmerit`; dice expose `result`, `rating`, `effect_die`, `tier`, `role`, `source_kind`, `ts_id`.
-
-### Output variables
-
-Any step can declare an `output` name, binding its resolved value into the activation scope so a later effect references it as `{name}` (scalar) or `select variable {name}` (a `many` collection). This is how one effect hands a result to the next.
-
-> The 💡 on a step and a **Bound variable** row do the same job from opposite ends.
-> A 💡 names something *while you are already there* — a side effect of a path you
-> were writing anyway — so nothing before it can use the name. A Bound variable
-> exists *because* you needed the name, so it is stated up front and the conditions
-> can read it too. Reach for the 💡 for "and remember this for the next step"; reach
-> for the section for "this rule is about this value".
+| **Select** | Start from a collection — `self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`, `sfxs` — or from the rule's `source`, or from a named variable. Only the first step selects. |
+| **Filter** | Keep the items whose field matches — `polarity == negative`, `rating_type == static`, `tags contains fire`. |
+| **Navigate** | Hop to something related: a trait instance to its owner, an entity to its location, a pool to its dice. |
+| **Aggregate** | Collapse the collection: `count`, a `random` sample, the highest or lowest **element**, or a `tier`. |
+| **Pick one thing** | Name one specific object directly. This is the only step that uses an id. |
+| **Choose** | Ask the player to pick. Not offered inside a condition — there is nobody to answer. |
+| **Evaluate** | End a condition path with a true/false test: does anything exist, or does a count compare. |
 
-**The activation's own names are in that scope too**, before anything runs: the source token and whatever the trigger declares. So a path can *start* from what the rule is about rather than only joining to a name an earlier step produced —
+Three habits make paths work:
 
-```
-select variable {trait_setting}          → navigate entity → …   (the trait this rule lives on)
-select variable {contest_entity_opponent} → navigate location → … (who you are facing, at a pool save)
-```
+- **No ids.** Everywhere else you name things by name. A `Filter` offers the field's real values, and only a *Pick one thing* step takes an id. An id you see on a card is a sign the effect points at something that no longer exists.
+- **Filter on the list field's own operator.** A field that *is* a list (`tags`, `universes`, `known_to`) is matched with `contains` / `not contains`, not `==` or `in` — the wrong one is silently always false. The picker only offers what the field can answer.
+- **A type test narrows the path.** `entity.type == location` proves the thing is a location, so location-only steps (`occupants`) become available after it. That is what lets you write *the owner of this trait, if the owner is a place, and then everyone inside it*.
 
-Those seeds are bound from the event that fired the rule, so a name the moment does not carry simply isn't bound (no contest → no opponent) and the path resolves to nobody rather than to a blank id. A deferred (roll-timed) effect keeps the seeds it armed with, since the moment that armed it has passed by the time it fires.
+### Naming a step
 
-**Conditions share that scope, and are traced first.** A **Targeting path** condition runs before any effect, so the names its steps output are offered in the effect editor's variable picker alongside the effects' own outputs. That lets a gate do the finding and the effect do the acting on it:
+Any producing step can take an **Output name**. The name then works in three places: a later step can start from it with `select variable`, a field can use it as `{name}`, and the card line uses the name instead of the whole pipeline — which is how a long path becomes a short sentence. Name steps for the reader: `d4_traits` reads better than `filtered_1`.
 
-> **Worked example — "When rolling a d4 trait, gain 1 razmerit"** (`sfx-d4-bonus`)
->
-> *Condition* (Targeting path): `select rolled_dice` → `navigate traitsetting (dedup)` → `filter rating == d4`, **output `d4_traits`** → `evaluate count >= 1`.
->
-> *Effect*: `earn razmerit 1`, entity targeting path `select variable d4_traits` → `navigate entity`.
->
-> The condition decides *whether* (and names what it matched); the effect walks those trait instances to their owning entities and credits one. Neither step is implicit: the entity the razmerit lands on comes from the path, not from a hidden default.
->
-> Two things to know: a roll-inspecting path only resolves on a roll-bearing trigger (`on_roll`/`on_result`), which is what puts the dice in context — and a condition seeded from `rolled_dice` is skipped when availability is computed for *listing*, so it still shows up as available and only gates at fire time.
-
----
-
-### Naming a step's result
-
-A step that **produces** something can be named, and the name is then a variable for
-everything after it — no re-finding by filter, no ids. Set **Output name** on the
-step (the field appears only on the actions that produce something: Gain Trait and
-its siblings, Copy/Move Trait, Disguise):
-
-```
-step 1   Gain Trait          trait: Beast        Output name: beast
-step 2   Add Die to Rating   target (path): select variable → beast → navigate trait
-```
-
-Why the `navigate → trait` hop in step 2: `{beast}` is bound to the trait
-*instance* you just made, while Add Die to Rating points at the *registry* trait —
-the hop is instance → its definition. A step whose field wants an instance takes
-the name directly (`select variable → beast`).
-
-The name joins the same scope the wizard already offers (`select variable`, and
-`{beast}` in fields that take a bound value), the picker lists it as soon as it is
-typed, and the engine binds it when the step actually runs — which is why a name
-only means anything on a step that produces something. Two rules keep it honest,
-and both are warnings in the panel rather than silent failures: a name may not
-shadow the rule's own token (`{trait_setting}`, `{location}` …), and two steps may
-not share one.
-
-## How your SFX reads
-
-The editor shows a **card line** under the name field — the SFX in plain language: *"Whenever a roll happens, if there is at least one d4 trait: gain 1 razmerit."* It is derived from what you authored (trigger → conditions → effects), not from the Description field, and it is recomputed as you edit.
-
-Read it as a sanity check. If the card line does not say what you meant, the SFX probably does not do what you meant.
-
-### What it says
-
-- **The trigger** first: *Whenever a roll happens* / *Activated* / *At the start of each session*.
-- **Then the gates**: *if you are not at a location yet and you are in Earth*.
-- **Then the effects**, in authored order, each with its timing: *whenever a roll is resolved, step down each static trait instance you rolled by one step*.
-- **Effect-level conditions gate that effect**: *if this trait is rated d6, increase the total dice limit by 2*. A narrative condition on an effect trails in parentheses instead (flavour, like the SFX-level one).
-- **A limit says which one**: *increase the **total** dice limit by 2* vs *the **effect** dice limit* — they are different limits, so the card names the one you chose (a card that cannot tell them apart is wrong half the time).
-- **A state reads as a state**: a path that lands on a contest renders as *if you are in a contest*, not as something you possess. The clause is only used where the path starts from *you* — from someone else's seed the card keeps the noun phrase, because the sentence would otherwise claim the wrong party.
-- **Effects scoped to a subset of dice say so**: an effect with a die-role filter reads *for each unchosen die, …* — the dice a player didn't assign. Inside such an effect the die being processed **is** the roll, so a path seeded from `rolled_dice` reads *that die* rather than *each die in your roll*. That is what makes "for each unchosen die, give its owner's location a hazard" land once per die.
-- **A step's value can be a name.** Where a filter wants a value, pick it from the autosuggest list — or press the small `{ }` button to compare against a **bound name** instead (`{universe}`), which is how one path joins to a choice made in another. Picking a universe stores its handle (`earth`), which is what a life records.
-- **Attune carries two paths, and path 2 starts from path 1 by name.** Give path 1's last step an `output` name (e.g. `attune_target`), then open path 2 and add a `select variable` step — that name is in the list. Name it for the reader, because the name is both how path 2 starts and what the card shows.
-- **An effect that lands somewhere other than its target says where**: *gain the environmental hazard trait **on the location of each owner of each trait instance you rolled*** — that clause comes from the effect's subject (`entity_spec`), so if you author a subject, expect to see it.
-- **Effects that share framing are grouped.** Consecutive effects with the same timing, die scope and duration read as one list with the framing stated once:
-
-  > *…if this trait is rated d4, increase the total dice limit by 1; if this trait is rated d6, increase the total dice limit by 2; … (each reverts at the next roll).*
-
-  So five rating-gated bumps revert *together*, and the card says so once rather than five times.
-- **A narrative condition trails in parentheses.** It is flavour the engine never checks, so it is kept visually apart from the rules text.
-- **A trait you name is named on the card.** A trait-granting effect with a `statement` in its config reads as yours — *create a Crimson Scar* — and falls back to the trait definition's name when you leave the statement empty.
-- **A filter against a bound value relates to it.** Comparing a field to a name decided elsewhere (`filter universe == {chosen_universe}`) reads as the thing — *in the chosen universe* — rather than restating the field and the value. A container field supplies the relation, so a literal reads *in earth*.
-- **Effect durations** read as *reverts at the end of the scene* — the **undo timer**. This is a different thing from the SFX's own listening window, and the two are phrased differently on purpose (see [[SFX and Effects]]).
-
-**A path that starts from a bound variable reads with the variable's own words.**
-`{trait_setting}` is *this trait* (the rule's own trait) and
-`{contest_entity_opponent}` is *the opposing entity* — the card types them from the
-same declaration the wizard offers and the engine binds, so what you read is what
-fires. A hop that would say nothing is dropped: instance → registry trait is
-*trait* either way, so filtering the tags reads *this trait tagged fire*, not
-*a trait of this trait*. (Long chains through a pool still read long — which is
-what naming a step is for, below.)
-
-### Naming a step is how you keep it readable
-
-Long paths make long sentences. The fix is naming: **any step with an `output` name contributes that name to the card line instead of the pipeline behind it.**
-
-| Step output | Reads as |
-|---|---|
-| `d4_traits` | *…at least one d4 trait* |
-| `gritty_dice` | *each gritty die* |
-
-So `d4_traits` is not just a variable for later effects — it is what the reader sees. Name steps for the person reading the card, not for the machine: `d4_traits` reads better than `filtered_1`, and either can be referenced by later effects.
-
-> **Rule of thumb:** if the card line has grown into a paragraph, name the step where the meaning becomes clear and the sentence will shorten itself.
-
-### What it does not say
-
-- It is a rendering of the *machine* reading, not a rules interpretation. A `NARRATIVE` condition appears as flavour because that is all it is.
-- **A die filter runs the effect once per matching die — including when the effect also has a target path or references.** Inside such an effect the die *is* the roll, so the target, the subject and every reference resolve against *that* die: "for each unchosen die, take the trait it came from" lands per die. The card says so (*"for each unchosen die, …"*), which is your check that the scope took effect.
-- Unresolved ids show raw (`trait-environmental-hazard-58be`). If you see one, the effect points at something that no longer exists — worth fixing.
-- It describes effects in authored order, even when they are grouped by timing on the card.
-- It does not currently read an effect's `context` (e.g. `limit: total` vs `limit: effect` on the dice-limit actions), so two effects that differ only there will read the same.
-
----
-
-## Trigger reference
-
-| Trigger | Fires when… | Group | Notable variables |
-|---------|-------------|-------|-------------------|
-| `manual` | The player activates it | manual | — |
-| `on_roll` | A roll happens | dicepool | — |
-| `on_result` | A roll result is produced | dicepool | `{effect_die}`, `{total}` |
-| `on_complication` | A hitch/complication occurs | dicepool | — |
-| `on_botch` | A botch occurs | dicepool | — |
-| `on_success` / `on_failure` | A roll succeeds / fails | dicepool | — |
-| `on_contest_win` / `on_contest_loss` | A contest resolves | dicepool | `{contest_entity_opponent}`, `{effect_die}`, `{high_stakes}`, `{taken_out}` |
-| `on_give_in` | A side gives in | dicepool | `{contest_entity_opponent}`, `{gave_in}` |
-| `on_push` | The pool is pushed | dicepool | `{pushed}` |
-| `on_taken_out` | A side is taken out | dicepool | `{contest_entity_opponent}`, `{taken_out}` |
-| `on_prevent_taken_out` | A take-out is prevented | dicepool | `{effect_die}`, `{prevented}` |
-| `on_set` | Dice are set | dicepool | `{effect_die}`, `{total}` |
-| `on_pool_change` | Your assembled dice pool is saved | dicepool | `{dice_pool}`, `{contest_entity_opponent}` |
-| `on_pool_add` | **This trait instance** is added to your pool | dicepool | `{dice_pool}`, `{contest_entity_opponent}` (and the `added_dice` seed) |
-| `on_location_change` | Entity changes location | — | `{from_location}`, `{to_location}`, `{universe}` |
-| `on_trait_change` | A trait changes | — | `{trait}`, `{traitset}`, `{trait_setting}` |
-| `on_trait_learn` / `on_trait_offered` | A trait is learned / offered | — | `{trait}`, `{trait_setting}`, `{owner}`, `{learner}` / `{opponent}` |
-| `on_relationship_create` | A relationship is created | — | `{target_entity}`, `{relationship_type}` |
-| `on_character_create` / `on_projection_create` | A character / projection is created | — | `{entity_created}` / `{projection_created}`, `{universe}` |
-| `on_beat` / `on_scene` | Beat / scene advances | auto | — |
-| `on_session_start` | A session starts | auto | — |
-| `on_session_end` | A session ends | auto | — |
-| `on_challenge_completed` | A challenge completes | — | `{entity_id}`, `{trait_setting_id}` |
-
----
-
-## Condition reference
-
-The picker bands these by the question they answer — **Character state** (what the
-subject is or holds), **The moment it fires** (what is true at the activation,
-including who is driving), **This rule** (its own source or path), **No gate**
-(*Always*, *Narrative*). The bands and their order are declared beside the types
-in the backend, so the editor renders the grouping rather than owning a taxonomy
-that could drift from it. A type that cannot pass where you are authoring — a
-source-rating gate with no trait source, a moment-reading gate at a beat
-boundary — is greyed out and says why.
-
-| Condition | Passes when… |
-|-----------|--------------|
-| **Always** | Always (no gate). |
-| **Narrative** | Never auto-blocks; free-text limit/description. |
-| **At location** | The subject is at the given location. |
-| **Has trait** | The subject owns the given trait. |
-| **Has effective trait** | The subject owns the trait *and* it is enabled. |
-| **Has trait in traitset** | The subject has any trait in the given trait set. |
-| **Has relationship** | The subject has the given relationship. |
-| **Trait rating** | A trait's rating compares to a die (`rating >= d8`). |
-| **Has razmerit** | The subject's razmerit compares to a number. |
-| **Entity type** | The subject is `character` / `gmc` / `asset` — or several at once (*character or gmc*). |
-| **User role** | The acting user is `player` / `architect`. |
-| **Unplaced (no location)** | The subject has no current location. |
-| **In universe** | The subject is in the given universe. |
-| **Phase** | The roll is in `adding` / `rolling` / `picking` / `resolved` (fire-time only). |
-| **Contest outcome** | The contest resolved `player` / `opponent` / `give_in` (fire-time only). |
-| **Hitch** | The current context is a hitch-buying menu (fire-time only). |
-| **High stakes** | The contest in play is high-stakes (`high`) or not (`low`); fire-time only. |
-| **Arrival kind** | *How* the subject got here — `transversal` (through a portal), `hierarchy` (up/down a sub-location), `move` (placed — GM drag), `effect` (an effect moved them). Carried on the location-change event. |
-| **Roll tier** | The roll's outcome tier compares to a tier (fire-time only). |
-| **Test outcome** | A test succeeded / failed (fire-time only). |
-| **Source rating** | The SFX's source trait rating compares to a die. |
-| **Targeting path** | The authored targeting path resolves non-empty (or its terminal `evaluate` is true). |
-
----
-
-## Effect action reference
-
-The editor shows these as labeled actions; each maps to a `type`/`action` pair behind the scenes. The sign hint (cost / benefit / either) is a UI aid, not a stored field.
-
-**Change a die**
-
-A die has two homes, and the same six actions work in either. The **path** picks
-the home — a die in the assembled pool, or a die of a trait instance's rating —
-and where it lands is what the change *means*.
-
-| Action | What it does | Sign |
-|--------|--------------|------|
-| Set Die | Set a die to a size (`d8` → `d12`) | either |
-| Step Up Die / Step Down Die | Move N steps along the ladder (default 1). Clamped at d12; a **d4 stepped down** leaves the rating | benefit / cost |
-| Double Die | Add N copies at the same size — `double 2` on a d8 makes 3d8 | benefit |
-| Split Die | Make N+1 dice one step smaller — `split 2` on a d8 makes 3d6 | benefit |
-| Remove Die | Take the die out. A rating with no dice left is still a trait | cost |
-| Reroll Die | Reroll a die — **pool only**, since a rating die has no result to reroll | benefit |
-| Reduce by Effect Die / Increase by Effect Die | Compare the **effect die** to the target die instead of to a number: if the effect die beats it, reduce **removes** it and increase **sets it to** the effect die; otherwise one step down / one step up | benefit |
-
-- **Which home changes how long it lasts.** A path ending in a *rating die*
-  changes the character: it persists, and the form offers a duration, whose undo
-  restores whatever the rating was before. A path ending in a *pool die* lasts
-  only the current roll — no duration is offered there, because the pool is
-  rebuilt at the next roll and a timer on it would mean nothing.
-- **Choosing among several dice.** `aggregate` over the `rating` field picks one:
-  *Highest element* is the biggest die of the rating, *Lowest element* the
-  smallest, *Random* a sample. (*Highest value* gives the number, not the die.)
-- **A path is the only target.** There is no keyword to type and no picker to
-  pick from: this field *is* the path builder. The two keyword cases have path
-  spellings, and a step's **output name** lets you reuse one (`select variable`):
-  - the highest die of your roll that came from a trait —
-    `select rolled dice → filter source kind == trait → aggregate Highest element`,
-    over `rating`;
-  - the die that hitched — the same, filtered to `tier == fail`.
-- Rerolling writes a new *result*, which belongs to the resolver rather than to
-  the applier, so **Reroll Die is declared but not yet applied**. `Reroll Highest`
-  is retired in its favour (`Reroll Die` over *Highest element* of the rating).
-
-**The pool itself**
-
-| Action | What it does | Sign |
-|--------|--------------|------|
-| Play as Rating | Use a trait at another size for this roll — nothing is mutated | cost |
-| Add Dice | Add explicit dice to a pool | benefit |
-| Add Trait Rating Dice | Add a trait's rating dice to a pool | either |
-| Roll Dice Pool / Resolve Dice Pool | Roll / auto-resolve a pool | either |
-| Increase / Decrease Dice Limit | Change the keep-2 total (or effect) dice limit | benefit / cost |
-| Step Up Effect | Improve the effect die — the pool die chosen as the effect die | benefit |
-| Step Up Outcome | Bump the outcome tier by one | benefit |
-
-**Traits**
-
-| Action | What it does | Sign |
-|--------|--------------|------|
-| Set Trait Rating | Set a trait to a fixed rating (the change-die family's *Set Die* on a rating die is the newer spelling) | either |
-| Add Die to Rating | Add a die to a rating — seeds the trait when it has none | benefit |
-| Disable Trait / Toggle Trait | Turn a trait off / flip it | cost / either |
-| Gain Trait | Acquire a trait. **Already "if not exists"**: it does nothing when the trait is present — which is why "Gain or Step Up" is a separate action | either |
-| Copy Trait | Give another entity a copy of a trait instance — its dice, statement, notes, polarity are carried over; the recipient's trait-set rules apply | either |
-| Move Trait | Take a trait instance from another entity (a steal): the instance changes hands with its grants and spent dice | cost |
-| Change Trait | Point a trait instance at a **different registry trait** — *your blade* becomes *a blade of fire*. The instance keeps its owner, dice, rating type, polarity, statement, notes and grants, and its trait set follows the new definition. The **Target Trait** path names the instance; the **Change To** path names the definition. **Timed:** the undo is the same action pointed back at the definition it had (and without a duration it is a cancellable hold, like Step Up Trait) | either |
-| Remove Trait | Remove a trait instance from its owner — the trait burns away, is lost or destroyed. (Was *Delete Trait*; *Negate Complication* is retired in its favour.) | cost |
-| Reveal Trait (Learn) | Reveal a trait to another entity | benefit |
-| Set Trait-set Limit | Change a trait set's size limit | either |
-
-> [!note] Retired actions
-> A handful of actions are gone from the editor because another one says the same
-> thing more precisely. Rules already using them keep working and keep reverting
-> — nothing is rewritten under you — but new authoring should use the replacement:
->
-> | Retired | Use instead |
-> |---------|-------------|
-> | Step Up Trait / Step Down Trait | **Step Up Die / Step Down Die** on a path to a rating die (`select … → navigate rating_dice → aggregate Lowest element`) |
-> | Remove Die from Rating | **Remove Die** on a rating die |
-> | Negate Complication | **Remove Trait**, which names the instance instead of implying one |
-> | Reroll Highest | **Reroll Die** over *Highest element* of the rating (pending its applier) |
->
-> Two more are covered in principle but left authorable for now: **Gain or Step Up
-> Trait** and **Cortex Gain Trait** compose as *Gain Trait* (already if-not-exists)
-> plus *Increase by Effect Die* on the resulting rating die — but the seeded
-> complication rules in a live contest use Cortex Gain directly, so retiring it is
-> a content migration rather than a rename.
-
-**Razmerit**
-
-| Action | What it does | Sign |
-|--------|--------------|------|
-| Earn Razmerit | Gain razmerit | benefit |
-| Spend Razmerit | Pay razmerit | cost |
-| Transfer Razmerit | Move razmerit between entities | either |
-
-**Entities, travel & relationships**
-
-| Action | What it does | Sign |
-|--------|--------------|------|
-| Create Asset | Create an asset/GMC | benefit |
-| Temporary Projection (Disguise) | Create a temporary projection | benefit |
-| Attune | Give the target temporary use of another universe's capabilities. Two paths: **Who It Applies To**, and **Attunes To (projection)** — which walks from each of them to their counterpart life, and takes the universe from it. A path resolving to many entities attunes each of them. | benefit |
-| Travel | Cross a universal boundary | benefit |
-| Set Location | Move to a location | either |
-| Create Relationship | Add a relationship edge | either |
-| Targeting Ban | Prevent re-targeting an opponent | cost |
-| End Active Effect | End a running temporary effect **now** — its change is reverted (a deferred part is dropped) instead of waiting for the timer | either |
-
-**Life paths & roll tables**
-
-| Action | What it does | Sign |
-|--------|--------------|------|
-| Discover Life Path | Open a life path for the entity | benefit |
-| Open Roll Table (Menu) | Open a roll table as a menu | either |
-| Next Step / Draft Into Life Path | Advance / draft into a life path | either |
-| Muster Out / Force Muster Out / Enroll In Life Path | Leave / force-leave / enroll a life path | either / cost / either |
-
----
-
-## Worked example — a rating-scaled passive
-
-Goal: *Qi Condensation* — while active, add dice to the pool limit based on the cultivation-stage rating (`d4 → +1`, `d6 → +2`, …, `d12 → +5`).
-
-1. **Name** `Qi Condensation`. **Trigger** `on_roll`. **Source** `Trait setting` (the cultivation-stage trait).
-2. Add five effects, each `Increase Dice Limit` with `timing: immediate` and a per-effect **condition** `Source rating == d4` (then d6, d8, d10, d12), result `1..5`, limit `total`.
-3. Only the effect whose `source_rating` matches the trait's current rating applies; the others are skipped.
-
-## Worked example — a heal that targets a complication
-
-Goal: *Heal* — pick an occupant, pick one of their complications, step it down by the effect die.
-
-1. **Trigger** `manual` (a button on Phaos' Medicine trait). **Source** `Trait setting`.
-2. Effect 1: `Add Trait Rating Dice` → the location's difficulty pool (so healing is a test).
-3. Effect 2: `Resolve Dice Pool` (auto-roll + set the difficulty).
-4. Effect 3: `Reduce by Effect Die`, target set to a **targeting path** naming the die: `select occupants → choose 1 → navigate traitsettings → filter traitset_id == <complications set> → choose 1 → navigate rating_dice → aggregate Lowest element`.
-
-Because effects run sequentially, the resolution effect waits for the dice-adding effect, and the final reduce effect waits for the trait choice.
-
----
+A name declared in **Bound variables** does the same job from the other end. Reach for an output name when you are already writing the path and want to remember a step; reach for a bound variable when the rule is *about* that value and a condition needs to read it too.
+
+## A worked example — Hinder
+
+**Hinder** (`sfx-hinder`) is a small real rule: *play a trait at d4, and gain 1 razmerit for the trouble.* Its card reads:
+
+> Activated: play the trait instance this SFX sits on as d4; gain 1 razmerit.
+
+Here it is, field by field.
+
+1. **Name** `Hinder`, **Description** `Play as d4, gain 1 razmerit.`
+2. **Source** → **Trait setting**. The rule lives on a trait instance, so `{trait_setting}` is in scope and the rule can only be attached to a trait instance.
+3. **Trigger** → **Manual**. It becomes a button on that trait's card.
+4. **Effects** → two rows, both `Immediate`:
+   - **Play as Rating**, target path `select source`, die `d4`. The path starts from the rule's own source, so the trait it plays is the trait it lives on — the rule needs no other input.
+   - **Earn Razmerit**, amount `1`, Entity `select self`. The razmerit goes to whoever pressed the button.
+
+That is the whole rule. Nothing listens for a roll, so the panel shows no *Listens to* and no *Duration*; nothing is worth naming, so there are no bound variables; and it is attached by hand, so *Who it reaches* stays empty.
+
+To put it in the world: open **Manage SFX**, filter by *Trait instance*, pick the trait it belongs to, and attach it. It now shows as a button on that trait's card.
+
+## Patterns worth knowing
+
+**A passive that watches every roll.** Trigger `On Session Start` with an effect timed `On Roll`. It arms once for the whole table — including characters who join later — and the *Listens to* field stays on its default, which for a session-start rule is everyone.
+
+**A rule that lives on a place.** Attach it to the location in **Manage SFX** and set **Source** to `Location`. It applies to the entities inside, and inside its sub-locations, however deep — nothing is written onto them, so walking out ends it by itself. A path can walk straight to the people there with `select source → occupants`.
+
+**Teaching — handing a rule to someone.** Use the **Grant SFX** action: the rule to grant is itself a targeting path seeded from the registry (`select sfxs`), and the recipient is whatever the grant should land on. This is how a place hands a technique to the person training for it.
+
+**Offering a rule to many owners at once.** Author a row under **Who it reaches** with the *Offered* relationship and a path naming the owners — for instance every trait in a set, reached by going from the definition to its instances. The owners get the chip; taking it attaches the rule to them.
+
+## How your rule reads
+
+The top of the panel shows a **card line**: your rule in plain language, recomputed as you edit. The d4 Bonus rule reads:
+
+> At the start of each session: whenever a roll happens, for each d4 trait instance you rolled, gain 1 razmerit.
+
+Read it as a sanity check. It is derived from what you actually authored — trigger, then conditions, then effects — not from the Description field. **If the card does not say what you meant, the rule probably does not do what you meant.** Two things it is especially good at catching:
+
+- A limit says *which* limit: *increase the **total** dice limit* is not the same as the effect dice limit.
+- An effect scoped to some of the dice says so: *for each unchosen die, …*.
+
+Naming a step shortens it. If the card has grown into a paragraph, name the step where the meaning becomes clear and the sentence will shorten itself.
 
 ## Gotchas
 
-- **Effect conditions need a source.** `source_rating` / `target_path` conditions on an *effect* only work when the SFX declares a matching **Source**. Without it, `source` is empty and the condition fails silently.
-- **Trigger ≠ timing.** `manual` SFX are `immediate`; passive rules pair an `on_session_start`/`on_*` trigger with a roll/outcome timing effect.
-- **A gate can only read what its moment supplies.** Each evaluation point brings a specific set of context: a roll-timed effect brings the roll (`tier`, `effect_die`, `total`, `rolls`, stakes), a manual activation brings `phase` and stakes, a consequence-menu move brings the outcome it was assembled for (contest win / give-in / test result / hitch), and a beat, scene or session fire brings **nothing at all**. The editor keeps a condition out of a point that supplies none of the keys it reads, and `validateSfx` names the missing key — *"it reads 'phase', and there is no context at this moment"* — so a gate that could never pass is visible while you author it, not after.
-- **Two that surprise people.** *User role* needs no context (it falls back to the entity's controlling player), so it works anywhere including boundaries. And a *targeting path* only needs the roll when it actually reads it — a path that seeds from `rolled dice` needs a moment that has dice (a roll trigger, a roll-timed effect), while a path over the entity's own traits works anywhere.
-- **SFX duration ≠ effect duration.** The SFX duration is a *listening window* (how long the SFX stays armed); the effect duration is an *undo timer* (when a change reverts). They don't influence each other.
-- **Sequential execution.** If an effect needs a `choose`, the effects after it pause until the choice resolves.
-- **Targets are targeting paths.** The old spelling was a `target`/`entity` string plus a picker kind; that is gone, along with the free-text *strategy keyword*. Every action's target is a **Targeting path** (`target_spec`), and an action's subject (`entity_spec`) is a path too. A trait's target can be a *definition* (`select traits → filter …`) or an *instance* (`select self traits → …`); a die is reached through `pool → dice` or `trait instance → rating dice`; a trait that lives on a relationship is reached through `entity → relationships → trait instances`. Use a step's **output name** to bind what a path found and `select variable` to reuse it (see [[Targeting Model]]).
-
----
+- **A `{name}` must be bound by something.** Bound variable, a step's output name, or what the trigger and source provide. Otherwise the effect is skipped and the outcome notes it — nothing runs against the literal text. When in doubt, use `select variable` and let the picker show you what is really in scope.
+- **Trigger is not Timing.** The trigger says when the rule wakes up; each effect's timing says when that effect lands. A `Manual` rule usually has `Immediate` effects. A passive pairs a boundary trigger with a roll-timed effect.
+- **Source must match where you attach it.** A rule that never fires is often a `Trait setting` rule attached to a character, or a `Location` rule attached to an entity.
+- **A roll-family trigger is gated by the source.** A trait-sourced rule fires only while a die from that instance is in the pool.
+- **Empty duration means indefinite**, not "once".
+- **Effect duration is an undo timer; rule duration is a listening window.** Different clocks.
+- **Effects run in order.** If one needs a choice, the effects after it wait for that choice.
+- **A gate can only read what its moment supplies.** A roll-timed effect brings the roll; a manual activation brings the phase and stakes; a beat, scene or session boundary brings nothing at all. The picker greys out conditions that could never pass where you are.
+- **A condition on availability is not a condition on firing.** Character-state gates also hide the rule on the sheet; moment gates are only checked when it fires.
 
 ## Related
 
-- [[SFX and Effects]] — the implementation reference (modules, model fields, identifiers).
-- [[Targeting Model]] — the structured targeting spec, catalog, and wizard.
-- [[Dice Mechanics]] — how pools, totals, and effect dice work.
-- [[User Manual]] — the player/GM how-to index.
+- [[SFX Reference]] — every trigger, condition, source, step and effect action
+- [[SFX and Effects]] — the design overview of rules and exceptions
+- [[Targeting Model]] — how a path is resolved and type-checked
+- [[SFX Source Model]] — what "Lives on" decides
+- [[Dynamic SFX Reach]] — how a rule becomes available to the owners it reaches
+- [[Roll Table and Life Path Authoring]] — the other authoring surfaces
+- [[User Manual]] — the player/GM how-to index

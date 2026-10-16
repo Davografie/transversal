@@ -22,7 +22,7 @@ How to play and run **Transversal**. This is the "how to use it" guide. For the 
 2. **Playing** — assemble a dice pool, roll, and read the outcome ([[Core Mechanics]], [[Dice Mechanics]])
 3. **The interface** — character sheet, dice roller, [[Location Viewer]], SFX buttons
 4. **Running the game (GM)** — [[GM Panel Development]], [[Relational Canvas]], locations and factions
-5. **Authoring content (GM)** — [[SFX Authoring]], [[Roll Table and Life Path Authoring]]
+5. **Authoring content (GM)** — [[SFX Authoring]] (and its lookup, [[SFX Reference]]), [[Roll Table and Life Path Authoring]]
 
 ## Quick reference
 
