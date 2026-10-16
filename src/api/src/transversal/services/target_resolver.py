@@ -842,7 +842,13 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                     values, current_type = [], None
                 elif binding.cardinality == "many":
                     many_values: list[Any] = []
-                    for rid in binding.values:
+                    # Each **id** once. A binding is a set of ids, and several
+                    # distinct values can share one: a rating's dice are bound by
+                    # the instance that holds them (`_candidate_id`), so a
+                    # four-die rating binds one id four times. Looking it up per
+                    # entry returned that instance's four dice four times over —
+                    # sixteen dice where four were named ([[B307]]).
+                    for rid in dict.fromkeys(binding.values):
                         many_values.extend(_lookup_literal(binding.element, rid, context))
                     values = many_values
                     current_type = ValueType(binding.element, "many")
@@ -1081,6 +1087,18 @@ def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:
         return _maybe(_pool_from_id(value, repo))
     if element == "die":
         return _maybe(_die_from_ref(value, repo))
+    # A die of a rating or a capacity is addressed by the **instance that holds
+    # it** — that is what `_candidate_id` binds for these elements, and what the
+    # upward edge reads — so looking one up yields that instance's dice, exactly as
+    # walking the `rating_dice` / `capacity_dice` edge does. Without this a
+    # `select variable` over a rating returned *nothing*: the name was bound, typed
+    # and usable in a filter, but unreadable as a collection ([[B307]]).
+    if element == "rating_die":
+        ts = repo.get_traitsetting(value)
+        return _traitsetting_rating_dice(ts, ctx) if ts is not None else []
+    if element == "capacity_die":
+        ts = repo.get_traitsetting(value)
+        return _traitsetting_capacity_dices(ts, ctx) if ts is not None else []
     return []
 
 

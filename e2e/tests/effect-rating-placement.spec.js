@@ -139,6 +139,15 @@ test('a gain verb\'s rating is one control, inside the trait instance editor', a
   await page.goto('/')
   await page.waitForLoadState('domcontentloaded')
 
+  // Wait for the app to have *loaded Vue* before importing the components. Without
+  // this the first engine to run can arrive before the module graph is up, the
+  // import throws, and the test **skips** — which reads as "not applicable" rather
+  // than "did not run".
+  await page.waitForFunction(
+    () => performance.getEntriesByType('resource').some((e) => /\/deps\/vue\.js/.test(e.name)),
+    null, { timeout: 15_000 },
+  ).catch(() => {})
+
   let m
   try {
     m = await page.evaluate(driveForm)

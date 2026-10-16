@@ -5,6 +5,7 @@ from __future__ import annotations
 from transversal.domain import Effect
 from transversal.domain import Entity
 from transversal.domain import TargetRef
+from transversal.services.effects_registry import declares_rating_row
 from transversal.services.conditions import evaluate_conditions
 from transversal.services.effects_applier.datatypes import (
     AppliedEffect,
@@ -217,6 +218,10 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
         # reason: this entry point is reached directly (a life-path entry) as well
         # as through the engine, and an unread die silently means "no die".
         effect = resolve_effect_result(effect, entity.id, repo, context)
+        # And a rating named by a **variable** — the same thing said the other way
+        # ([[B307]]). After `resolve_effect_result`, so a path wins if both are
+        # somehow present.
+        effect = resolve_effect_dice(effect, entity.id, repo, context)
         # And its *owner*, when the action anchors what it makes somewhere other
         # than the subject: a relationship edge, or another trait instance.
         effect = resolve_effect_owner(effect, entity.id, repo, context)
@@ -441,6 +446,72 @@ def resolve_effect_result(effect: Effect, entity_id: str, repo,
 
 #: The ladder's sizes, as the numbers a die-typed field reads back as.
 _DIE_SIZES = frozenset({4, 6, 8, 10, 12})
+
+
+def resolve_effect_dice(effect: Effect, entity_id: str, repo,
+                        context: dict | None = None,
+                        collections: dict | None = None) -> Effect:
+    """Expand a **named** rating into the dice it holds — ``result`` as a list.
+
+    ``resolve_effect_result`` reads a path; this reads a *name*. Both exist because
+    a rating is a row and there are two honest ways to say which row it is: walk to
+    it, or call it by the name the rule already declared. The name is the one the
+    author has — ``{formation_rating}``, a `many` binding — and a `many` binding is
+    deliberately never stringified into a ``{token}``, so it cannot be substituted;
+    it is *resolved* instead, through the same ``select variable`` step a path would
+    use and read with the same die reader. One implementation, two ways to author
+    ([[B307]]).
+
+    Only an action that declares a rating row is touched (``declares_rating_row``):
+    a list-valued name in the one field that can take a list. Anywhere else a
+    `many` name stays unexpanded and is refused as before.
+
+    A name that resolves to nothing **clears the row** rather than contributing
+    none of its dice: a rating of two dice where one name resolved to nothing would
+    otherwise be a shorter rating that looks like a right one.
+    """
+    if not declares_rating_row(effect):
+        return effect
+    name = _rating_name(effect.result)
+    if name is None:
+        return effect
+    entity = repo.get_entity(entity_id) if repo is not None else None
+    if entity is None:
+        return effect
+    from transversal.domain import TargetSpec
+    from transversal.services.effects_applier.datatypes import SOURCE_CONTEXT_KEY
+    from transversal.services.effects_applier.datatypes import SOURCE_ELEMENT_CONTEXT_KEY
+    from transversal.services.target_resolver import TargetContext, event_collections, resolve
+
+    bindings = (context or {}).get(BINDINGS_CONTEXT_KEY) or {}
+    source = (context or {}).get(SOURCE_CONTEXT_KEY)
+    source_element = (context or {}).get(SOURCE_ELEMENT_CONTEXT_KEY)
+    seeds = event_collections(context, getattr(source, "id", None), source_element)
+    seeds.update(collections or {})
+
+    spec = TargetSpec.model_validate({"steps": [
+        {"kind": "select", "collection": "variable", "variable": name},
+    ]})
+    resolution = resolve(
+        spec,
+        TargetContext(subject=entity, repo=repo, bindings=bindings,
+                      collections=seeds, source=source, source_element=source_element),
+    )
+    dice = [d for d in (_die_from_spec_value(v) for v in resolution.values) if d]
+    new_context = dict(effect.context or {})
+    if not dice:
+        new_context["dice"] = []
+        return effect.model_copy(update={"result": None, "context": new_context})
+    new_context["dice"] = dice
+    return effect.model_copy(update={"result": dice[0], "context": new_context})
+
+
+def _rating_name(value) -> str | None:
+    """The `{name}` a ``result`` states, or None when it states a literal."""
+    raw = str(value or "").strip()
+    if len(raw) > 2 and raw.startswith("{") and raw.endswith("}"):
+        return raw[1:-1]
+    return None
 
 
 def _die_from_spec_value(value) -> str | None:

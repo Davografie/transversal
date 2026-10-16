@@ -73,6 +73,26 @@ export function dieVariablesFor(entries, rollTiming = false) {
   return out
 }
 
+// What a **rating** may be named by. Wider than `DIE_ELEMENTS`, because an action
+// that creates a trait at a whole rating can read a name that *holds* one — the
+// engine resolves it into the row (`resolve_effect_dice`) — while an action taking
+// a single die can only read a name whose value **is** a die ([[B306]]). The
+// caller decides how much of this is usable: `EffectRatingControl` filters by
+// whether the action declares a row.
+export const RATING_ELEMENTS = new Set(['die', 'rating_die', 'capacity_die'])
+
+/** Rating-capable names with their cardinality, for `EffectRatingControl`. */
+export function ratingNamesFor(entries, rollTiming = false) {
+  const out = Object.entries(entries || {})
+    .filter(([, t]) => RATING_ELEMENTS.has(t.element))
+    .map(([name, t]) => ({ name, cardinality: t.cardinality || 'one' }))
+  const known = new Set(out.map((v) => v.name))
+  if (rollTiming) for (const name of ROLL_CONTEXT_VARIABLES) {
+    if (!known.has(name)) out.push({ name, cardinality: 'one' })
+  }
+  return out
+}
+
 /**
  * The chips the author reads: every name in scope, and what it holds. A `many`
  * name is **marked** rather than hidden — it is still readable, but in a *path*

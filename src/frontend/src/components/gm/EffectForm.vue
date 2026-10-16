@@ -272,7 +272,7 @@ import EffectRefField from './EffectRefField.vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import {
   chipVariablesFor,
-  dieVariablesFor,
+  ratingNamesFor,
   scopeEntries,
 } from '@/composables/effectScopeVariables.js'
 import { ratingFieldsFor, ratingRowFor } from '@/composables/effectRatingRow.js'
@@ -393,7 +393,7 @@ watch(
 // can be executed by a check; both readers used to read `props.variables` alone,
 // which is only the *activation's* names ([[B306]]).
 const inScope = computed(() => scopeEntries(props.variables, scopedVariables.value))
-const dieVariables = computed(() => dieVariablesFor(inScope.value, isRollTiming.value))
+const ratingNames = computed(() => ratingNamesFor(inScope.value, isRollTiming.value))
 
 // ── A numeric field may read a *named* value ──────────────────
 // The value carries its own mode (a bare `{name}` is a variable, digits are a
@@ -604,7 +604,7 @@ const ratingControl = computed(() => ({
   spec: newEffect.resultSpec,
   'onUpdate:spec': (v) => { newEffect.resultSpec = v },
   canRow: ratingIsRow.value,
-  variables: dieVariables.value,
+  variables: ratingNames.value,
   // `props.` is not decoration: inside `<script setup>` a prop is **not** a bare
   // binding. Reading `sourceElement` here threw a ReferenceError the moment the
   // slot rendered — the screen went blank and only the console said why.

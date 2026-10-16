@@ -21,6 +21,19 @@ def get_action_meta(action_id: str) -> EffectActionMeta | None:
 _BY_PAIR: dict[tuple[str, str], EffectActionMeta | None] = {}
 
 
+def declares_rating_row(effect) -> bool:
+    """Whether this effect's action creates a trait at a whole **rating**.
+
+    The declaration is the registry's — ``context_fields`` naming ``dice`` — which
+    is also what renders the row in the editor. One fact, several readers: the
+    editor offers the control, the engine expands a list-valued name into it, and
+    nothing else may ([[B307]]).
+    """
+    meta = get_action_meta_for(getattr(effect, "type", ""), getattr(effect, "action", ""))
+    return any(getattr(f, "name", "") == "dice"
+               for f in (meta.context_fields if meta else ()))
+
+
 def get_action_meta_for(effect_type: str, effect_action: str) -> EffectActionMeta | None:
     """Look up an action by the ``(type, action)`` an *effect* carries.
 

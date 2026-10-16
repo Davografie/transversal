@@ -301,6 +301,88 @@ def test_a_single_result_still_creates_a_one_die_rating():
     assert result.new_trait_settings[0].dice == [DieType.D10]
 
 
+def test_a_named_rating_expands_to_every_die_it_holds():
+    """`{formation_rating}` in the rating field means *that whole rating*.
+
+    The author's case: gain a trait at the rating the rule's own source already
+    has. The name is a `many` binding, and a `many` binding is never stringified
+    into a `{token}` — so it cannot be substituted; it is **resolved**, through the
+    same `select variable` step a path uses. Both routes now arrive at the same two
+    fields (`context['dice']` and `result` as its first die), so the handler reads
+    one shape ([[B307]]).
+    """
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
+    from transversal.services.effects_applier.entry import resolve_effect_dice
+
+    # The source rating lives on *another* entity, so the gain on char-1 creates a
+    # new instance rather than finding this one already present.
+    repo = FakeRepo(traits=[FakeTrait("formation", "ts-arts")],
+                    traitsettings=[_ts("formation", [DieType.D4, DieType.D4, DieType.D4],
+                                       entity_id="char-2")],
+                    entities=[_entity()])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                    target="formation", result="{formation_rating}")
+    # The binding repeats one id, because that is what `bind_named` produces: a
+    # rating's dice are identified by the instance that holds them, so three dice
+    # bind the same id three times. Looking it up once per entry returned the
+    # instance's three dice three times over — nine dice where three were named.
+    context = {BINDINGS_CONTEXT_KEY: {
+        "formation_rating": Binding(value="char-2:formation",
+                                    values=["char-2:formation"] * 3,
+                                    element="rating_die", cardinality="many"),
+    }}
+    out = resolve_effect_dice(effect, "char-1", repo, context)
+    assert out.context["dice"] == ["d4", "d4", "d4"]
+    assert out.result == "d4"
+
+    # And the handler creates the whole rating from it.
+    applied = apply_effects(_entity(), [out], repo)
+    assert applied.new_trait_settings[0].dice == [DieType.D4] * 3
+
+
+def test_a_named_rating_that_resolves_to_nothing_clears_the_row():
+    """A shorter rating that looks like a right one is the failure to avoid."""
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
+    from transversal.services.effects_applier.entry import resolve_effect_dice
+
+    repo = FakeRepo(traits=[FakeTrait("formation", "ts-arts")], traitsettings=[],
+                    entities=[_entity()])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                    target="formation", result="{formation_rating}")
+    context = {BINDINGS_CONTEXT_KEY: {
+        "formation_rating": Binding(value="gone", values=["gone"],
+                                    element="rating_die", cardinality="many"),
+    }}
+    out = resolve_effect_dice(effect, "char-1", repo, context)
+    assert out.result is None
+    assert out.context["dice"] == []
+
+
+def test_a_named_rating_is_left_alone_where_no_rating_is_declared():
+    """Only the action that declares a rating row may read a list-valued name.
+
+    Everywhere else a `many` name in `result` stays a name, which is what the
+    [[B282]] guard then refuses — a junk value in a non-rating action must not be
+    quietly turned into "the first die of something".
+    """
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
+    from transversal.services.effects_applier.entry import resolve_effect_dice
+
+    repo = FakeRepo(traits=[FakeTrait("formation", "ts-arts")],
+                    traitsettings=[_ts("formation", [DieType.D4, DieType.D4])],
+                    entities=[_entity()])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_dice_limit",
+                    action="increase", result="{formation_rating}")
+    context = {BINDINGS_CONTEXT_KEY: {
+        "formation_rating": Binding(value="char-1:formation",
+                                    values=["char-1:formation"],
+                                    element="rating_die", cardinality="many"),
+    }}
+    out = resolve_effect_dice(effect, "char-1", repo, context)
+    assert out is effect
+    assert out.context.get("dice") is None
+
+
 def test_change_trait_points_the_instance_at_another_definition():
     """The instance keeps everything that is its own — owner, dice, rating type,
     polarity, statement, notes, grants — and changes what it *is*. Its trait set

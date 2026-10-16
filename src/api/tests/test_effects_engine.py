@@ -381,6 +381,43 @@ def test_a_dice_row_is_substituted_element_by_element():
     assert _substitute_effect_context(mixed, {}).context == {"dice": ["d6", None]}
 
 
+def test_a_bound_list_valued_name_is_not_reported_unbound_in_the_rating():
+    """A `many` name in `result` is *bound* — it just cannot be a string.
+
+    [[B282]]'s guard skips an effect whose flat field names something nothing
+    bound, because applying it would point at the literal ``"{name}"``. A
+    list-valued binding is a different thing: it is bound, and for an action that
+    creates a trait at a whole **rating** it has a consumer (the row). Reporting it
+    as unbound is what made "gain this at the rating the source already has"
+    impossible to *name* ([[B307]]).
+    """
+    from transversal.services.effects_engine import _substitute_effect_context
+    from transversal.services.target_resolver import Binding
+
+    bindings = {"formation_rating": Binding(
+        value="ts-1", values=["ts-1"], element="rating_die", cardinality="many")}
+    row = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                 target="formation", result="{formation_rating}")
+
+    unresolved: list[str] = []
+    _substitute_effect_context(row, {}, bindings, unresolved)
+    assert unresolved == []
+
+    # The control: the same name on an action with no rating to put it in is still
+    # refused, so a junk value never reaches a handler as "the first of something".
+    unresolved = []
+    _substitute_effect_context(
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+               result="{formation_rating}"),
+        {}, bindings, unresolved)
+    assert unresolved == ["formation_rating"]
+
+    # And a name nothing bound is refused everywhere, the guard's whole point.
+    unresolved = []
+    _substitute_effect_context(row, {}, {}, unresolved)
+    assert unresolved == ["formation_rating"]
+
+
 def test_die_filter_substitution_keeps_a_null_predicate_null():
     """"Not chosen" is expressed as a `null`, so the substitution must pass
     non-strings through rather than stringifying them into a value no die has."""

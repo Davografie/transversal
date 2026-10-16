@@ -82,7 +82,10 @@ const props = defineProps({
   spec: { type: Object, default: () => ({ steps: [] }) },
   sourceElement: { type: String, default: '' },
   outputVariables: { type: Object, default: null },
-  /** Names the die field may read, unbraced. */
+  /**
+   * Rating-capable names in scope, as `{name, cardinality}`. The component filters
+   * them by `canRow` — see `variableChoices`.
+   */
   variables: { type: Array, default: () => [] },
 })
 
@@ -100,11 +103,21 @@ function pick(mode) {
   emit('update:mode', mode)
 }
 
-// The named dice this field may read, plus whatever is stored — an editor never
+// The named ratings this field may read, plus whatever is stored — an editor never
 // rewrites a value it cannot represent (the rule the placement and arming-scope
 // selects follow).
+//
+// How much of the list is usable depends on the action, and that is the whole
+// difference between the two hosts: an action that creates a trait at a whole
+// **rating** can read a name that *holds* one (`many`), because the engine resolves
+// it into the row; one that takes a single **die** can only read a name whose value
+// *is* a die. Offering a list to the second would offer something its handler
+// refuses ([[B306]], [[B307]]).
 const variableChoices = computed(() => {
-  const out = (props.variables || []).map((name) => `{${name}}`)
+  const out = (props.variables || [])
+    .map((v) => (typeof v === 'string' ? { name: v, cardinality: 'one' } : v))
+    .filter((v) => props.canRow || (v.cardinality || 'one') !== 'many')
+    .map((v) => `{${v.name}}`)
   const current = String(props.result || '')
   if (current.startsWith('{') && !out.includes(current)) out.push(current)
   return out

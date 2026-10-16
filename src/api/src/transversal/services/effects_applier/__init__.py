@@ -159,6 +159,7 @@ from transversal.services.effects_applier.entry import (  # noqa: F401
     resolve_branch_effects,
     branch_options,
     resolve_effect_owner,
+    resolve_effect_dice,
     resolve_effect_result,
     _resolve_entity_spec,
     _MUTATION_HANDLERS,

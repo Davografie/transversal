@@ -540,6 +540,12 @@ class EffectsEngine:
                 effect = _effects_applier.resolve_effect_result(
                     effect, event.entity_id, repo, effect_context,
                 )
+                # And its *die(s)* when it named them instead — `{formation_rating}`,
+                # a name that holds a whole rating. A named rating is the same fact
+                # as a path to one, so it takes the same shape ([[B307]]).
+                effect = _effects_applier.resolve_effect_dice(
+                    effect, event.entity_id, repo, effect_context,
+                )
                 # And its owner path, when the action has one — the edge a tie is
                 # anchored to, or the instance a facet hangs under.
                 effect = _effects_applier.resolve_effect_owner(

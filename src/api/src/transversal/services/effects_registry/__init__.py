@@ -27,6 +27,7 @@ from transversal.services.effects_registry.action_types import (  # noqa: F401
 )
 from transversal.services.effects_registry.cards import EFFECT_ACTION_CARDS  # noqa: F401
 from transversal.services.effects_registry.lookup import (  # noqa: F401
+    declares_rating_row,
     effect_card,
     get_action_meta,
     owner_elements_for,

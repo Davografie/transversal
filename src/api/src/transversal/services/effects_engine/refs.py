@@ -16,6 +16,7 @@ from transversal.services.effect_refs import (
 from transversal.services.effects_engine.events import (
     StructuredChoice,
 )
+from transversal.services.effects_registry import declares_rating_row
 
 
 # A ``{name}`` token — the flat form of a bound variable. Matched after
@@ -59,10 +60,22 @@ def _substitute_effect_context(
             for name, b in bindings.items()
             if getattr(b, "cardinality", "one") != "many"
         })
+    # A **list-valued** name may still be written in the one field that can take a
+    # list: the rating a trait-creating effect makes (`result` → the row, expanded
+    # by ``effects_applier.resolve_effect_dice``). Refusing it as "unbound" is what
+    # made "gain this at the rating the source already has" impossible to *name*
+    # ([[B282]]'s guard firing on a binding that is perfectly bound) — so for an
+    # action that declares a rating row, a bound name is not unresolved, whatever
+    # its cardinality. Everywhere else the guard is untouched: a junk id in
+    # `target` still looks like success, which is the whole reason it exists.
+    expandable = set()
+    if declares_rating_row(effect):
+        expandable = {n for n, b in (bindings or {}).items()
+                      if getattr(b, "cardinality", "") == "many"}
     if not source and unresolved is None:
         return effect
 
-    def _sub(s: Optional[str], check: bool = True) -> Optional[str]:
+    def _sub(s: Optional[str], check: bool = True, allow: set[str] | None = None) -> Optional[str]:
         if not s:
             return s
         out = s
@@ -73,14 +86,15 @@ def _substitute_effect_context(
         if check and unresolved is not None:
             for match in _TOKEN_RE.finditer(out):
                 name = match.group(1)
-                if name not in source and name not in unresolved:
-                    unresolved.append(name)
+                if name in source or name in unresolved or (allow and name in allow):
+                    continue
+                unresolved.append(name)
         return out
 
     updates: dict = {}
     for field in ("result", "target", "entity"):
         old = getattr(effect, field)
-        new = _sub(old)
+        new = _sub(old, allow=expandable if field == "result" else None)
         if new != old:
             updates[field] = new
 

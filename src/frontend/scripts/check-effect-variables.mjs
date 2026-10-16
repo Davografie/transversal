@@ -31,6 +31,7 @@ import { readFileSync } from 'node:fs'
 import {
   chipVariablesFor,
   dieVariablesFor,
+  ratingNamesFor,
   scopeEntries,
 } from '../src/composables/effectScopeVariables.js'
 
@@ -119,8 +120,29 @@ no('EffectForm imports the rule', form.includes("from '@/composables/effectScope
    'the import is gone — the screen no longer follows the checked rule')
 no('the chips are built by it', /chipVariables\s*=\s*computed\(\(\)\s*=>\s*chipVariablesFor\(/.test(form),
    'chipVariables no longer calls chipVariablesFor()')
-no('the die list is built by it', /dieVariables\s*=\s*computed\(\(\)\s*=>\s*dieVariablesFor\(/.test(form),
-   'dieVariables no longer calls dieVariablesFor()')
+no('the rating names are built by it', /ratingNames\s*=\s*computed\(\(\)\s*=>\s*ratingNamesFor\(/.test(form),
+   'the form no longer calls ratingNamesFor()')
+
+// ── What a *rating* may be named by, which is wider than a die ──
+// An action that creates a trait at a whole rating can read a name that **holds**
+// one — the engine resolves it into the row — so the list it is given must carry
+// those, and the control filters them by `canRow` ([[B307]]). Before this the
+// author's `formation_rating` could not be named at all: the list held only names
+// whose value *is* a die.
+const ratings = ratingNamesFor(entries, false)
+ok('a list-valued rating is offered to a rating action',
+   ratings, [{ name: 'formation_rating', cardinality: 'many' }])
+no('a trait instance is not a rating', !ratings.some(r => r.name === 'trait_setting'),
+   JSON.stringify(ratings))
+no('a number is not a rating', !ratings.some(r => r.name === 'order'), JSON.stringify(ratings))
+no('the roll context joins a roll-timed rating',
+   ratingNamesFor(withDie, true).some(r => r.name === 'effect_die'),
+   JSON.stringify(ratingNamesFor(withDie, true)))
+
+const control = readFileSync(new URL('../src/components/gm/EffectRatingControl.vue', import.meta.url), 'utf8')
+no('a list-valued name is only offered where a row exists',
+   /props\.canRow \|\| \(v\.cardinality \|\| 'one'\) !== 'many'/.test(control),
+   'the control no longer filters list-valued names by canRow')
 
 console.log(`\n${pass} pass / ${fail} fail\n`)
 process.exit(fail ? 1 : 0)
