@@ -61,6 +61,14 @@ function initialConditions(sfx) {
       type: c.type || 'ALWAYS',
       subject: c.subject || '',
       target: c.target || '',
+      // `targets` is the multi-value half `ConditionEditor.setTargets` writes, and
+      // it was the one field this mapping forgot: a condition holding several
+      // values (or a single one with `target` left empty) came back with nothing
+      // selected, and the next auto-save wrote that emptiness to storage. The
+      // quiet version of [[B273]] — a value the form cannot see is a value it
+      // discards — which nothing live has hit only because the one `targets` in
+      // the world (`sfx-hard-push`) mirrors its single value in `target`.
+      targets: c.targets || [],
       value: c.value || '',
       operator: c.operator || '>=',
       narrative: c.narrative || '',

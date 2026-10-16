@@ -59,6 +59,9 @@
       <template #item="{ item: s }">
         <span class="sfx-name">{{ s.name }}</span>
         <span class="sfx-trigger">{{ triggerLabel(s.trigger) }}</span>
+        <!-- Start a similar rule from this one ([[B298]]). The copy is made on the
+             server, named first, and left unattached. -->
+        <Button type="button" class="row-copy" variant="ghost" size="sm" :title="'Duplicate ' + (s.name || s.id)" @click.stop="duplicateSfx(s)">⧉</Button>
         <Button v-if="ownerRef" type="button" class="row-del" variant="danger-ghost" size="sm" title="Remove from owner" @click.stop="removeSfx(s.id)">✕</Button>
       </template>
     </GmList>
@@ -79,6 +82,7 @@ import GmList from '@/components/ui/GmList.vue'
 import Button from '@/components/ui/Button.vue'
 import GmSfxEditPanel from './GmSfxEditPanel.vue'
 import GmSfxPickerPanel from './GmSfxPickerPanel.vue'
+import GmSfxDuplicatePanel from './GmSfxDuplicatePanel.vue'
 
 const panel = usePanel()
 const { allSfxs, fetchTraitsConfig } = useTraitsConfig()
@@ -159,11 +163,12 @@ const filteredSfxs = computed(() => {
   return list
 })
 
-function openSfx(sfx) {
+function openSfx(sfx, owner = undefined) {
   // Hand the owner over when the filter knows one: "where it lives" is set on
   // this screen but shown on the editor's, so the editor can only display it
-  // when told.
-  const ref = ownerRef.value
+  // when told. A caller that knows better passes `null` — a fresh duplicate is
+  // on nobody, and saying otherwise would put a false "Lives on" line on it.
+  const ref = owner === undefined ? ownerRef.value : owner
   panel.open({
     component: GmSfxEditPanel,
     title: sfx.name || 'Edit SFX',
@@ -176,6 +181,24 @@ function openSfx(sfx) {
       owner: ref ? { ownerType: ref.ownerType, ownerId: ref.ownerId, label: ref.label } : null,
     },
     listeners: {},
+  })
+}
+
+function duplicateSfx(sfx) {
+  panel.open({
+    component: GmSfxDuplicatePanel,
+    title: 'Duplicate SFX',
+    badge: 'SFX',
+    props: { sfx },
+    listeners: {
+      duplicated: async (created) => {
+        panel.closeChild()             // the prompt has done its job
+        await fetchTraitsConfig()      // so the copy is in the list on the way back
+        // Opened with no owner on purpose: the copy is unattached whether or not
+        // an owner filter is active (the author's decision, B298).
+        if (created?.id) openSfx(created, null)
+      },
+    },
   })
 }
 
