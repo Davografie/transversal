@@ -1,5 +1,7 @@
 """Mutations sfx — split out of src/api/src/transversal/api/graphql/schema.py."""
 
+import re
+
 from transversal.services.sfx_owner import invalidate_sfx_cache
 import strawberry
 
@@ -134,6 +136,42 @@ class MutationsSfx:
         return _sfx_ref(updated, repo_name_resolver(_em(info).repo))
 
     @strawberry.mutation
+    def duplicate_sfx(self, info: strawberry.Info, id: strawberry.ID,
+                      name: str = "") -> SfxRef:
+        """Copy a rule, as the starting point for a similar one ([[B298]]).
+
+        The copy is made from the **stored** document rather than from what a
+        client has loaded, so it cannot inherit a gap in an editor's field
+        mapping — the hand-maintained subset whose misses produced [[B268]],
+        [[B272]] and [[B273]]. ``name`` is the author's choice (the id is derived
+        from it); an empty one falls back to ``"<name> (copy)"``.
+
+        The copy is deliberately **unattached**: one that silently arrived on the
+        same trait as its original would double the rule. A ``table``/``gm``
+        -sourced copy still gains its **bucket** membership, because that is
+        derived from the declaration rather than attached.
+        """
+        repo = _em(info).repo
+        source = repo.get_sfx(str(id))
+        if source is None:
+            raise ValueError(f"SFX '{id}' not found")
+        new_name = (name or "").strip() or f"{source.name} (copy)"
+        copy = source.model_copy(deep=True, update={
+            "id": _free_sfx_id(repo, new_name), "name": new_name,
+        })
+        created = repo.create_sfx(copy)
+        from transversal.services.sfx_owner import sync_bucket_membership
+        sync_bucket_membership(repo, created)
+        invalidate_sfx_cache()
+        # Also register with the in-memory engine, exactly as `create_sfx` does —
+        # a copy of a rule whose trigger is live must be live too.
+        engine = info.context.get("effects_engine")
+        if engine:
+            engine.register(created)
+        _maybe_rearm_passives(created.trigger)
+        return _sfx_ref(created, repo_name_resolver(repo))
+
+    @strawberry.mutation
     def delete_sfx(self, info: strawberry.Info, id: strawberry.ID) -> bool:
         repo = _em(info).repo
         existing = repo.get_sfx(str(id))
@@ -183,3 +221,20 @@ class MutationsSfx:
             if not remove_sfx_from_owner(repo, ref.owner_type.value, str(ref.owner_id), str(sfx_id)):
                 return False
         return True
+
+
+def _free_sfx_id(repo, name: str) -> str:
+    """A slug id for ``name`` that no stored rule holds ([[B298]]).
+
+    The same shape the editor's ``generateSfxId`` writes, so a rule reads the same
+    way whichever way it was authored — but minted here, where the whole registry
+    is visible, so two similarly-named rules cannot land on one id. The suffix is
+    only ever a collision breaker: ids are the Arango ``_key``.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
+    base = f"sfx-{slug}" if slug else "sfx-copy"
+    candidate, n = base, 2
+    while repo.get_sfx(candidate) is not None:
+        candidate = f"{base}-{n}"
+        n += 1
+    return candidate
