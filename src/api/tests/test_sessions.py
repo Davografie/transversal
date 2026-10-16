@@ -6,15 +6,20 @@ import asyncio
 def test_start_session_broadcasts_sse(monkeypatch):
     from transversal.api.rest.sessions import start_session
     from transversal.api.sse import bus as bus_mod
+    from transversal.services.campaign_scope import use_campaign
 
     published = []
     monkeypatch.setattr(bus_mod.event_bus, "publish", lambda evt: published.append(evt))
     monkeypatch.setattr("transversal.services.state_events.fire_session_start", lambda **k: None)
 
-    asyncio.run(start_session("session-x"))
+    # A session lives in a campaign ([[B305]]); the endpoint runs in request scope, so
+    # the test supplies one rather than leaving it to be guessed.
+    with use_campaign("fork-test"):
+        asyncio.run(start_session("session-x"))
 
     assert [(e.event, e.session_id) for e in published] == [("session_started", "session-x")]
     assert published[0].data["in_session"] is True
+    assert published[0].campaign == "fork-test"
 
 
 def test_emit_sfx_armed_broadcasts_to_active_sessions(monkeypatch):
@@ -80,15 +85,18 @@ def test_session_start_announces_only_when_asked(monkeypatch):
 def test_end_session_broadcasts_sse(monkeypatch):
     from transversal.api.rest.sessions import end_session
     from transversal.api.sse import bus as bus_mod
+    from transversal.services.campaign_scope import use_campaign
 
     published = []
     monkeypatch.setattr(bus_mod.event_bus, "publish", lambda evt: published.append(evt))
     monkeypatch.setattr("transversal.services.state_events.fire_session_end", lambda: None)
 
-    asyncio.run(end_session("session-x"))
+    with use_campaign("fork-test"):
+        asyncio.run(end_session("session-x"))
 
     assert [(e.event, e.session_id) for e in published] == [("session_ended", "session-x")]
     assert published[0].data["in_session"] is False
+    assert published[0].campaign == "fork-test"
 
 
 def test_session_serialization_includes_in_session():
@@ -101,16 +109,32 @@ def test_session_serialization_includes_in_session():
 
 
 def test_set_in_session_roundtrip():
+    from transversal.services.campaign_scope import use_campaign
     from transversal.services.session_manager import SessionManager
 
     mgr = SessionManager()
     mgr._redis = None  # force in-memory for isolation
-    s = mgr.create("Test")
-    assert s.in_session is False
-    mgr.set_in_session(s.id, True)
-    assert mgr.get(s.id).in_session is True
-    mgr.set_in_session(s.id, False)
-    assert mgr.get(s.id).in_session is False
+    with use_campaign("fork-test"):
+        s = mgr.create("Test")
+        assert s.in_session is False
+        assert s.campaign == "fork-test"
+        mgr.set_in_session(s.id, True)
+        assert mgr.get(s.id).in_session is True
+        mgr.set_in_session(s.id, False)
+        assert mgr.get(s.id).in_session is False
+
+
+def test_a_session_cannot_be_created_without_a_campaign():
+    """The refusal that replaced a silent default ([[B305]]): the old code had no
+    campaign anywhere, which is how one campaign's events reached another's."""
+    import pytest
+
+    from transversal.services.session_manager import SessionManager
+
+    mgr = SessionManager()
+    mgr._redis = None
+    with pytest.raises(ValueError, match="needs a campaign"):
+        mgr.create("Homeless")
 
 
 def test_session_dict_includes_in_session():

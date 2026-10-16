@@ -18,6 +18,11 @@ Three rules worth stating because each is a failure mode:
   database would serve the owner's own game to a stranger's typo.
 - **Only a first-level label counts**, matching the certificate coverage: the slug
   is the whole label, and ``a.b.transversal.app`` is not a fork host.
+- **A request with no label is still scoped** — to the default campaign (the playroom).
+  The *campaign* scope is what the live state is keyed by ([[B305]]), so leaving it
+  absent would make "no scope" ambiguous between *out of request* and *the apex*. The
+  database scope is unchanged: only a label host names a fork's database, and a
+  label-less host is scoped to the default one (so a request is never unscoped).
 
 A pure ASGI middleware rather than ``BaseHTTPMiddleware`` on purpose: the context
 variable has to be set in the same task that runs the endpoint, and
@@ -32,6 +37,7 @@ from starlette.responses import JSONResponse
 
 from transversal.db.arango import use_database
 from transversal.db.registry_repository import RegistryRepository
+from transversal.services.campaign_scope import default_database, use_campaign
 
 #: Registry-backed routes: they name no campaign because they *choose* one.
 TENANCY_PREFIXES = ("/api/v1/accounts", "/api/v1/forks")
@@ -79,17 +85,22 @@ class ForkScopeMiddleware:
 
         base = base_domain()
         path = scope.get("path", "")
-        if not base or path.startswith(TENANCY_PREFIXES):
-            return await self.app(scope, receive, send)
+        if base and not path.startswith(TENANCY_PREFIXES):
+            slug = slug_from_host(_header(scope, b"host"), base)
+            if slug:
+                fork = RegistryRepository().find_fork_by_slug(slug)
+                if fork is None:
+                    response = JSONResponse({"detail": "no such campaign"}, status_code=404)
+                    return await response(scope, receive, send)
 
-        slug = slug_from_host(_header(scope, b"host"), base)
-        if not slug:
-            return await self.app(scope, receive, send)
+                with use_database(fork.database), use_campaign(fork.id):
+                    return await self.app(scope, receive, send)
 
-        fork = RegistryRepository().find_fork_by_slug(slug)
-        if fork is None:
-            response = JSONResponse({"detail": "no such campaign"}, status_code=404)
-            return await response(scope, receive, send)
-
-        with use_database(fork.database):
+        # No campaign label — the apex, the tailnet entry, the tenancy tier, or host
+        # routing switched off — is still **a** campaign: the default one (the
+        # playroom). Scoping the *database* here (the campaign itself is resolved on
+        # demand, so nothing consults the registry unless live state is touched) is
+        # what lets the stores treat "no scope" as *out of request* instead of
+        # guessing ([[Campaign-Scoped Transient State Plan]] §4).
+        with use_database(default_database()):
             return await self.app(scope, receive, send)

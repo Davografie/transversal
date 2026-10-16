@@ -15,6 +15,7 @@ from transversal.api import tenancy
 from transversal.api.tenancy import ForkScopeMiddleware, slug_from_host
 from transversal.db.arango import current_database
 from transversal.domain.accounts import Fork
+from transversal.services.campaign_scope import current_campaign, default_database
 
 
 class _FakeRegistry:
@@ -108,6 +109,12 @@ def test_no_base_domain_means_no_labels():
 
 
 async def test_it_is_inert_without_a_base_domain(monkeypatch):
+    """Routing off means no fork resolution — and nothing consults the registry.
+
+    The request is still scoped, to the default campaign's database ([[B305]]): the
+    live stores need a scope, and "no scope" has to mean *out of request* rather than
+    *the apex*.
+    """
     def _explode(*args, **kwargs):  # pragma: no cover - must never run
         raise AssertionError("the registry must not be consulted when routing is off")
 
@@ -121,11 +128,12 @@ async def test_it_is_inert_without_a_base_domain(monkeypatch):
     messages, send = _collector()
     await ForkScopeMiddleware(app)(_scope("daves-game.transversal.app"), _receive, send)
 
-    assert seen["database"] is None
+    assert seen["database"] == default_database()
     assert messages[0]["status"] == 200
 
 
 async def test_the_apex_is_not_a_fork_host(monkeypatch):
+    """The apex serves the default campaign, never a fork's database."""
     monkeypatch.setenv("FORKS_BASE_DOMAIN", "transversal.app")
     seen = {}
 
@@ -135,7 +143,7 @@ async def test_the_apex_is_not_a_fork_host(monkeypatch):
 
     await ForkScopeMiddleware(app)(_scope("transversal.app"), _receive, _collector()[1])
 
-    assert seen["database"] is None
+    assert seen["database"] == default_database()
 
 
 async def test_a_known_subdomain_scopes_the_request(routed):
@@ -143,13 +151,18 @@ async def test_a_known_subdomain_scopes_the_request(routed):
 
     async def app(scope, receive, send):
         seen["database"] = current_database()
+        seen["campaign"] = current_campaign()
         await _ok(scope, receive, send)
 
     await ForkScopeMiddleware(app)(_scope("daves-game.transversal.app"), _receive, _collector()[1])
 
     assert seen["database"] == "tv2_fork_dave"
+    # The scope names the campaign too, so live state lands in it without a lookup
+    # ([[B305]]) — and the fork id, never the database name, is what gets stored.
+    assert seen["campaign"] == "fork-1"
     # and the scope does not leak out of the request
     assert current_database() is None
+    assert current_campaign() == ""
 
 
 async def test_an_unknown_subdomain_is_a_404_not_a_fallback(monkeypatch):
@@ -170,7 +183,11 @@ async def test_an_unknown_subdomain_is_a_404_not_a_fallback(monkeypatch):
 
 async def test_the_tenancy_tier_is_never_scoped(routed):
     """Signing in has to work on a campaign host, and the switcher lists forks it is
-    not inside — neither may be routed into a campaign database."""
+    not inside — neither may be routed into a **fork's** database.
+
+    They are scoped to the *default* campaign rather than left unscoped ([[B305]]):
+    the live stores require a scope and must never guess one.
+    """
     seen = {}
 
     async def app(scope, receive, send):
@@ -181,7 +198,7 @@ async def test_the_tenancy_tier_is_never_scoped(routed):
     for path in ("/api/v1/accounts/session", "/api/v1/forks"):
         seen.pop("database", None)
         await middleware(_scope("daves-game.transversal.app", path), _receive, _collector()[1])
-        assert seen["database"] is None, path
+        assert seen["database"] == default_database(), path
 
 
 async def test_a_non_http_scope_passes_through(monkeypatch):
