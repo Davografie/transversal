@@ -219,3 +219,21 @@ _NOTES_CONTEXT_FIELD = EffectFieldDef(
     field_type="text",
     required=False,
 )
+
+#: The **whole rating** a trait-creating effect makes, when it is more than one die.
+#: A rating is a row — a resource holds several dice and a challenge usually three
+#: ([[B307]]) — and ``result`` (the action's single "Die Rating" field) carries the
+#: row's **first** die, which is what every single-die reader already understands.
+#: Authoring is one control: the in-line trait editor renders this row and the
+#: editor does not render this field separately on a gain verb.
+_DICE_CONTEXT_FIELD = EffectFieldDef(
+    name="dice",
+    label="Rating dice",
+    field_type="dice_array",
+    required=False,
+    description=(
+        "Every die of the rating this effect creates. A path on the Die Rating "
+        "field fills this from the world (and takes the whole rating); 'Die "
+        "Rating' itself carries the first die of it."
+    ),
+)

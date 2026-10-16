@@ -69,7 +69,7 @@ def _apply_add_die(entity, effect, repo, result):
                 effect, f"no relationship to {owner[1]} — create it first"))
             return
         ts = _new_traitsetting(
-            owner, target, die, repo,
+            owner, target, [die], repo,
             negative=bool(effect.negative),
             rating_type=_rating_type(effect),
             statement=_ctx(effect, "statement"),

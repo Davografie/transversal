@@ -826,6 +826,22 @@ def test_a_die_named_by_a_path_satisfies_required_result():
     assert not any("missing required field 'result'" in w for w in validate_sfx(sfx))
 
 
+def test_a_dice_row_satisfies_required_result():
+    """A rating can be named as a row (`context['dice']`), so `result` may be empty.
+
+    `result` carries the row's first die when the form writes it, but a row is a
+    complete answer on its own — the same exception `result_spec` gets ([[B307]]).
+    """
+    sfx = _sfx(
+        trigger="manual",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+            target="trait-1", result=None, context={"dice": ["d6", "d6", "d6"]},
+        )],
+    )
+    assert not any("missing required field 'result'" in w for w in validate_sfx(sfx))
+
+
 def test_an_empty_result_still_reports_missing_without_a_path():
     """The control: the check above must not have removed the warning outright."""
     sfx = _sfx(

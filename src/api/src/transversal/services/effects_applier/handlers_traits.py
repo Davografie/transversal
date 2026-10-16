@@ -29,7 +29,8 @@ from transversal.services.effects_applier.targeting import (
 )
 from transversal.services.effects_applier.trait_helpers import (
     _ctx,
-    _die,
+    _dice_label,
+    _effect_dice,
     _find_conflicting_traitsetting,
     _find_traitsetting_by_target,
     _has_steps,
@@ -79,13 +80,18 @@ def _apply_gain(entity, effect, repo, result):
             return
         result.applied.append(AppliedEffect(effect, f"trait {target} already present"))
         return
-    die = _die(effect.result)
-    ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),
+    dice = _effect_dice(effect)
+    if not dice:
+        result.applied.append(AppliedEffect(
+            effect, f"no die rating to gain {target} at ({effect.result!r})"))
+        return
+    ts = _new_traitsetting(owner, target, dice, repo, negative=bool(effect.negative),
                            rating_type=_rating_type(effect), statement=statement,
                            notes=_ctx(effect, "notes"), parent=parent,
                            order=_opt_int(effect, "order"), enabled=_opt_bool(effect, "enabled"))
     result.new_trait_settings.append(ts)
-    result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
+    result.applied.append(AppliedEffect(
+        effect, f"gained {target} at {_dice_label(dice)}", ts.id))
     _queue_entity_revert(repo, subject, effect, target=target)
 
 def _replicate_traitsetting(src: TraitSetting, subject: Entity, repo, effect: Effect,
@@ -418,14 +424,18 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
             _queue_explicit(repo, existing, effect, "step_down", target)
             _maybe_complete_challenge(existing, subject)
         return
-    die = _die(effect.result)
-    ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),
+    dice = _effect_dice(effect)
+    if not dice:
+        result.applied.append(AppliedEffect(
+            effect, f"no die rating to gain {target} at ({effect.result!r})"))
+        return
+    ts = _new_traitsetting(owner, target, dice, repo, negative=bool(effect.negative),
                            rating_type=_rating_type(effect), statement=statement, notes=_ctx(effect, "notes"))
     if _has_steps(effect):
         _step_up_trait(subject, ts, target, effect, result, repo, steps=steps)
     result.new_trait_settings.append(ts)
-    final_die = ts.dice[0] if ts.dice else die
-    result.applied.append(AppliedEffect(effect, f"gained {target} at {final_die.value}", ts.id))
+    result.applied.append(AppliedEffect(
+        effect, f"gained {target} at {_dice_label(ts.dice or dice)}", ts.id))
     _queue_explicit(repo, subject, effect, "remove", target)
 
 def _apply_cortex_gain(entity, effect, repo, result):
@@ -448,7 +458,14 @@ def _apply_cortex_gain(entity, effect, repo, result):
         result.applied.append(AppliedEffect(
             effect, f"no relationship to {owner[1]} — create it first"))
         return
-    die = _die(effect.result)
+    dice = _effect_dice(effect)
+    if not dice:
+        result.applied.append(AppliedEffect(
+            effect, f"no die rating to gain {target} at ({effect.result!r})"))
+        return
+    # The *comparison* against an existing rating still reads one die (see the
+    # single-die note below); only a freshly created instance takes the whole row.
+    die = dice[0]
     negative = bool(effect.negative)
     statement = _ctx(effect, "statement")
     existing = _find_conflicting_traitsetting(subject, effect, repo, target, statement)
@@ -469,10 +486,11 @@ def _apply_cortex_gain(entity, effect, repo, result):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         return
-    ts = _new_traitsetting(owner, target, die, repo, negative=negative,
+    ts = _new_traitsetting(owner, target, dice, repo, negative=negative,
                            rating_type=_rating_type(effect), statement=statement, notes=_ctx(effect, "notes"))
     result.new_trait_settings.append(ts)
-    result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
+    result.applied.append(AppliedEffect(
+        effect, f"gained {target} at {_dice_label(dice)}", ts.id))
 
 def _apply_step_up(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)

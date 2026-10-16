@@ -101,6 +101,11 @@ def _missing_required(effect: Effect) -> list[str]:
         # same omission one field over from the target/entity case above.
         if f.name == "result" and getattr(effect.result_spec, "steps", None):
             continue
+        # A **rating** is a row of dice, and the row lives in `context['dice']`
+        # with `result` carrying its first die — so a rule that named its whole
+        # rating there is complete even with `result` empty ([[B307]]).
+        if f.name == "result" and (effect.context or {}).get("dice"):
+            continue
         if value in (None, ""):
             missing.append(f.name)
     return missing

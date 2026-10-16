@@ -360,6 +360,27 @@ def test_substitute_effect_context_covers_every_field_that_holds_a_token():
     assert out.die_filter == {"role": None, "ts_id": "ts-scar"}
 
 
+def test_a_dice_row_is_substituted_element_by_element():
+    """A rating row may name a die the way the single `result` field may.
+
+    `context['dice']` is the rating a trait-gain effect creates at ([[B307]]), and
+    `{effect_die}` is the die an author most needs there — "gain it at the effect
+    die". A list context value passed through untouched, so every element stayed
+    literal and the row failed to parse.
+    """
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                    target="trait-x", result="d6",
+                    context={"dice": ["d6", "{effect_die}"], "statement": "burnt"})
+    out = _substitute_effect_context(effect, {"effect_die": "d10"})
+    assert out.context == {"dice": ["d6", "d10"], "statement": "burnt"}
+    # Non-string entries pass through, like every other context value.
+    mixed = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                   target="trait-x", context={"dice": ["d6", None]})
+    assert _substitute_effect_context(mixed, {}).context == {"dice": ["d6", None]}
+
+
 def test_die_filter_substitution_keeps_a_null_predicate_null():
     """"Not chosen" is expressed as a `null`, so the substitution must pass
     non-strings through rather than stringifying them into a value no die has."""

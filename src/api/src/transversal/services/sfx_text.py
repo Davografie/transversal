@@ -943,7 +943,15 @@ def _result_field(effect: Effect):
 
 
 def _effect_result(effect: Effect) -> str:
-    """The magnitude/rating an effect states, falling back to its field default."""
+    """The magnitude/rating an effect states, falling back to its field default.
+
+    A trait-creating effect's rating is a **row** when it is more than one die
+    (`context['dice']`, [[B307]]) — ``result`` then carries only its first die, so
+    reading that alone would call a three-die challenge "at d6".
+    """
+    row = (effect.context or {}).get("dice")
+    if isinstance(row, list) and row:
+        return _dice_row_text([str(d) for d in row])
     if effect.result not in (None, ""):
         return str(effect.result)
     meta = _effect_meta(effect)
@@ -952,6 +960,15 @@ def _effect_result(effect: Effect) -> str:
             if fdef.name == "result" and fdef.default:
                 return str(fdef.default)
     return ""
+
+
+def _dice_row_text(dice: list[str]) -> str:
+    """A row as the author reads it: ``d6``, or ``d6 ×3`` when the dice repeat."""
+    if len(dice) == 1:
+        return dice[0]
+    if len(set(dice)) == 1:
+        return f"{dice[0]} ×{len(dice)}"
+    return ", ".join(dice)
 
 
 def _result_text(effect: Effect, ref_result: str,

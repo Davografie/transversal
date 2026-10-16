@@ -1181,3 +1181,20 @@ def test_the_anchor_of_a_gained_trait_reads_when_it_has_one():
     # rather than dangling ("gain the Fire trait on").
     unanchored = effect.model_copy(update={"owner_spec": None})
     assert effect_text(unanchored, resolve=resolve) == "gain the Fire trait (d4)"
+
+
+def test_a_rating_row_is_read_as_the_row_it_is():
+    """A rating is a row of dice, and the card must not call a challenge "d6".
+
+    `result` carries only the row's first die, so reading that alone would name a
+    three-die challenge by one of its dice ([[B307]]).
+    """
+    row = Effect(type="modify_trait", action="cortex_gain", target="trait-fire",
+                 result="d6", context={"dice": ["d6", "d6", "d6"]})
+    assert "at d6 ×3" in effect_text(row)
+    # A row of mixed dice is listed whole rather than counted.
+    mixed = row.model_copy(update={"context": {"dice": ["d6", "d8"]}})
+    assert "at d6, d8" in effect_text(mixed)
+    # A one-die row still reads as the die, exactly as before.
+    single = row.model_copy(update={"context": {"dice": ["d8"]}})
+    assert "at d8" in effect_text(single)

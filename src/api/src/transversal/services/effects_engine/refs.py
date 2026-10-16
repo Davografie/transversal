@@ -107,6 +107,17 @@ def _substitute_effect_context(
                 new_context[k] = nv
             else:
                 new_context[k] = v
+        elif isinstance(v, list):
+            # A **row** of dice (`context['dice']`, the rating a trait-gain effect
+            # creates at — [[B307]]) is substituted element by element, so a row
+            # may name a die the way the single `result` field may
+            # (`["{effect_die}"]`). Unchecked, like every other context value: a
+            # name that resolves to nothing leaves the token, and the die parser
+            # then refuses the row rather than inventing a rating.
+            nv = [_sub(x, check=False) if isinstance(x, str) else x for x in v]
+            if nv != v:
+                context_changed = True
+            new_context[k] = nv
         else:
             new_context[k] = v
     if context_changed:

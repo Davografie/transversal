@@ -388,21 +388,26 @@ def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | 
 def resolve_effect_result(effect: Effect, entity_id: str, repo,
                           context: dict | None = None,
                           collections: dict | None = None) -> Effect:
-    """Rewrite ``effect`` so its die is concrete, resolving ``result_spec``.
+    """Rewrite ``effect`` so its die (or whole rating) is concrete, from ``result_spec``.
 
     ``result`` is a literal (``d6``) or a ``{variable}`` token, which covers a die
     anyone can name while authoring. A die that is a *fact in the world* — the
-    capacity slot an agenda's next step fills — has no literal, so the author
-    names it by a path and this reads it. Mirrors :func:`resolve_effect_entity`,
-    including the event-scoped collections and the resolved activation source, so
-    a ``select source`` path works on an automatic trigger.
+    capacity slot an agenda's next step fills, or the rating the rule's own source
+    already has — has no literal, so the author names it by a path and this reads
+    it. Mirrors :func:`resolve_effect_entity`, including the event-scoped
+    collections and the resolved activation source, so a ``select source`` path
+    works on an automatic trigger.
 
-    The resolved value is a die: a ``capacity_die`` (or ``rating_die``) carries it
-    under ``rating``, and a raw die value is already the string. When the path
-    names nothing, ``result`` is **cleared** rather than left standing — an author
-    who named the die by a path left the literal as a placeholder, and applying it
-    would invent a die the world did not name. The handler then reports "no die
-    rating to add", which is the honest answer.
+    **Every** die the path resolves is taken, not just the first ([[B307]]): a
+    rating is a row, and ``select source → navigate rating dice`` names all of
+    them. They are written to ``context['dice']`` with ``result`` set to the first,
+    which is the same two fields a literal row uses, so a handler reads one shape
+    whichever way the author wrote it.
+
+    When the path names nothing, ``result`` is **cleared** rather than left
+    standing — an author who named the die by a path left the literal as a
+    placeholder, and applying it would invent a die the world did not name. The
+    handler then reports "no die rating to add", which is the honest answer.
     """
     if effect.result_spec is None or not effect.result_spec.steps:
         return effect
@@ -424,11 +429,14 @@ def resolve_effect_result(effect: Effect, entity_id: str, repo,
         TargetContext(subject=entity, repo=repo, bindings=bindings,
                       collections=seeds, source=source, source_element=source_element),
     )
-    for value in resolution.values:
-        die = _die_from_spec_value(value)
-        if die:
-            return effect.model_copy(update={"result": die, "result_spec": None})
-    return effect.model_copy(update={"result": None, "result_spec": None})
+    dice = [d for d in (_die_from_spec_value(v) for v in resolution.values) if d]
+    if not dice:
+        return effect.model_copy(update={"result": None, "result_spec": None})
+    context = dict(effect.context or {})
+    context["dice"] = dice
+    return effect.model_copy(update={
+        "result": dice[0], "result_spec": None, "context": context,
+    })
 
 
 #: The ladder's sizes, as the numbers a die-typed field reads back as.

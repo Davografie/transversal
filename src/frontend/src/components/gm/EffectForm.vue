@@ -65,24 +65,23 @@
           title="Anchored to"
         />
       </div>
-      <!-- The in-line trait editor (die/polarity/statement/notes) describes the
-           trait this effect *creates*, so for a gain verb it renders directly
-           under the trait picker. `orderedInputs` places it there; it used to
-           render after every field, which is what separated the two halves the
-           author reads as one control. -->
+      <!-- The in-line trait editor describes the trait this effect *creates* —
+           its rating type, polarity, statement and notes — so for a gain verb it
+           renders directly under the trait picker. `orderedInputs` places it
+           there; it used to render after every field, which is what separated the
+           two halves the author reads as one control. The **dice** are not here:
+           they are a rating, which is a row, so the Die Rating field answers them
+           in one control with a literal row, a named die, or a path ([[B307]]). -->
       <TraitInstanceEditor
         v-else-if="item.kind === 'gainEditor'"
         mode="single"
         variant="box"
-        allow-variable
         :show-capacity="false"
-        :die="newEffect.fields.result"
+        :show-dice="false"
         :polarity="newEffect.negative ? 'NEGATIVE' : 'POSITIVE'"
         :rating-type="(newEffect.context.rating_type || 'STATIC').toUpperCase()"
         :statement="newEffect.context.statement"
         :notes="newEffect.context.notes"
-        :variables="dieVariables"
-        @update:die="newEffect.fields.result = $event"
         @update:polarity="newEffect.negative = $event === 'NEGATIVE'"
         @update:rating-type="newEffect.context.rating_type = $event.toLowerCase()"
         @update:statement="newEffect.context.statement = $event"
@@ -157,16 +156,35 @@
         <template v-else>
           <template v-if="isResultDieField(item.f)">
             <div class="ee-result-mode">
-              <button type="button" :class="{ active: resultMode === 'die' }" @click="resultMode = 'die'">Die</button>
-              <button type="button" :class="{ active: resultMode === 'variable' }" @click="resultMode = 'variable'">Variable</button>
+              <button type="button" :class="{ active: resultMode === 'die' }" @click="setResultMode('die')">Dice</button>
+              <button type="button" :class="{ active: resultMode === 'variable' }" @click="setResultMode('variable')">Variable</button>
               <!-- A die can also be a *fact in the world* — a challenge's next
-                   capacity slot — which no literal names. Then it is a path. -->
-              <button type="button" :class="{ active: resultMode === 'spec' }" @click="resultMode = 'spec'">Path</button>
+                   capacity slot, or the rating the rule's own source already has
+                   — which no literal names. Then it is a path, and a path takes
+                   **every** die it resolves ([[B307]]). -->
+              <button type="button" :class="{ active: resultMode === 'spec' }" @click="setResultMode('spec')">Path</button>
             </div>
-            <select v-if="resultMode === 'die'" v-model="valueStore(item.f)[item.f.name]">
+            <!-- A rating is a row of dice, not one die: a resource holds several
+                 and a challenge usually three. `context.dice` is the row and
+                 `result` carries its first die, which is what every single-die
+                 reader already understands ([[B307]]). An action that takes one
+                 die keeps the plain dropdown. -->
+            <DiePicker
+              v-if="resultMode === 'die' && ratingIsRow"
+              multiple
+              :model-value="resultDice"
+              @update:model-value="setResultDice"
+            />
+            <select v-else-if="resultMode === 'die'" v-model="valueStore(item.f)[item.f.name]">
               <option v-for="(o, i) in (item.f.options || [])" :key="o" :value="o">{{ (item.f.optionLabels || [])[i] || o }}</option>
             </select>
-            <input v-else-if="resultMode === 'variable'" v-model="valueStore(item.f)[item.f.name]" type="text" placeholder="{effect_die}" />
+            <template v-else-if="resultMode === 'variable'">
+              <select :value="valueStore(item.f)[item.f.name] || ''"
+                      @change="valueStore(item.f)[item.f.name] = $event.target.value">
+                <option value="">— variable —</option>
+                <option v-for="v in dieVariableChoices" :key="v" :value="v">{{ v }}</option>
+              </select>
+            </template>
             <PathField
               v-else
               v-model="newEffect.resultSpec"
@@ -288,6 +306,7 @@ import {
   dieVariablesFor,
   scopeEntries,
 } from '@/composables/effectScopeVariables.js'
+import { ratingFieldsFor, ratingRowFor } from '@/composables/effectRatingRow.js'
 import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
@@ -570,6 +589,47 @@ const ownerHelp = computed(() => {
 // Both carry a die size, so both are offered, and nothing else is.
 const resultSpecDestination = { elements: ['capacity_die', 'rating_die'] }
 
+// Only an action that **declares** the row creates a whole rating from it — the
+// trait-gain family. `Add Die`, `Set Die`, `Play as Rating` and `Set Trait` take
+// one die, so offering them a row would collect dice their handler drops.
+const ratingIsRow = computed(() =>
+  !!(selectedAction.value?.contextFields || []).some((f) => f.name === 'dice'))
+
+// ── The die rating: a row of dice, one named die, or a path ──────
+// The row is the authoring truth for "Dice" mode (`context.dice`), and `result`
+// carries its first die so every single-die reader — this form's own Variable
+// mode, the handlers, validation — keeps working unchanged. A `{variable}` in
+// `result` means the whole rating is that one named die (five live rules take
+// `{effect_die}`), so the row is left empty in that mode ([[B307]]).
+const resultDice = computed(() => ratingRowFor(newEffect.context?.dice, newEffect.fields.result))
+
+function setResultDice(row) {
+  newEffect.context.dice = [...(row || [])]
+  newEffect.fields.result = (row || [])[0] || ''
+}
+
+// Switching mode must not leave the other mode's value behind, or the effect
+// would carry both and the row would win silently at fire time.
+function setResultMode(mode) {
+  resultMode.value = mode
+  if (!ratingIsRow.value) return
+  if (mode === 'die') {
+    if (!(newEffect.context.dice || []).length) setResultDice(resultDice.value)
+  } else {
+    newEffect.context.dice = []
+  }
+}
+
+// The named dice this field may read, plus whatever is stored — an editor never
+// rewrites a value it cannot represent (the rule the placement and arming-scope
+// selects follow).
+const dieVariableChoices = computed(() => {
+  const out = dieVariables.value.map((name) => `{${name}}`)
+  const current = strVal(newEffect.fields.result)
+  if (current.startsWith('{') && !out.includes(current)) out.push(current)
+  return out
+})
+
 // The element the target path currently resolves to, reported by the builder.
 // A change to a *rating* die is a fact about the character, so it can carry a
 // duration; a change to a die in the pool is gone at the next roll, so offering a
@@ -622,7 +682,11 @@ const visibleFields = computed(() => {
   return (selectedAction.value.fields || []).filter(f => {
     if (f.name === 'target' && selectedAction.value.implicitTarget) return false
     if (f.name === 'result' && selectedAction.value.implicitResult) return false
-    if (f.name === 'result' && isGainAction.value) return false
+    // `result` used to be hidden on a gain verb, with the in-line trait editor
+    // rendering the die in its place. It is the rating **control** now — a row of
+    // dice, a named die, or a path — so the in-line editor no longer shows a die
+    // at all and this one field is the single place the rating is answered
+    // ([[B307]]).
     // A field a reference supersedes is the fallback form: once the reference is
     // authored the field steps aside (its stored value is still kept). A ref may
     // be authored as a path *or* as a picker value, so both count ([[B261]]).
@@ -648,6 +712,10 @@ const visibleContextFields = computed(() => {
   return (selectedAction.value?.contextFields || []).filter(f => {
     if (f.name === 'projection' && (newEffect.context.transversal_type || 'inapposite') !== 'consciousness') return false
     if (isGainAction.value && (f.name === 'statement' || f.name === 'notes')) return false
+    // The rating row is answered on the **Die Rating** field, which renders every
+    // mode (row / named die / path) in one control. Rendering the declared `dice`
+    // field too would be a second input for one question ([[B307]]).
+    if (f.name === 'dice') return false
     return true
   })
 })
@@ -857,13 +925,24 @@ function buildEffect(meta) {
   if ((context.transversal_type || 'inapposite') !== 'consciousness') {
     context.projection = 'active'
   }
+  // The rating: a row of dice for "Dice" mode on an action that declares one, or
+  // the single die/named die the author typed. `result` is the row's first die so
+  // a single-die reader sees the same thing; an empty row is dropped rather than
+  // written as `[]` ([[B307]]).
+  const rating = ratingIsRow.value
+    ? ratingFieldsFor(resultMode.value, resultDice.value, newEffect.fields.result)
+    : null
+  if (rating) {
+    if (rating.dice) context.dice = rating.dice
+    else delete context.dice
+  }
   return {
     timing: newEffect.timing || 'IMMEDIATE',
     type: meta.effectType,
     action: meta.effectAction,
     target,
     entity,
-    result: meta.implicitResult || strVal(newEffect.fields.result),
+    result: meta.implicitResult || (rating ? rating.result : strVal(newEffect.fields.result)),
     dieFilter: newEffect.dieFilter || {},
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
     context,
@@ -962,6 +1041,12 @@ function populate(eff) {
   }
   newEffect.context = knownCtx
   newEffect.extraContext = extraCtx
+  // The rating row is the authoring truth and `result` its first die; content
+  // authored before the row existed carries only `result`, so the row is seeded
+  // from it — a value the form cannot see is a value it erases on the next save
+  // ([[B307]]). Set *after* `context` so it survives the known/extra split, and
+  // only on an action that actually creates a whole rating.
+  if (ratingIsRow.value) knownCtx.dice = ratingRowFor(ctx.dice, eff.result)
   newEffect.duration = eff.duration
     ? {
         timers: (eff.duration.timers || []).map(t => ({ event: t.event || 'scene', remaining: t.remaining ?? 0 })),

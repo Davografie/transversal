@@ -254,6 +254,53 @@ def test_gain_creates_traitsetting():
     assert result.applied[0].summary == "gained iron-will at d6"
 
 
+def test_gain_creates_a_whole_rating_not_just_one_die():
+    """A rating is a row of dice, so a gain creates at every die the author named.
+
+    Measured on live content: 774 trait instances carry more than one die —
+    resources up to 16, challenges usually 3 — and until [[B307]] every one of
+    them could only be *created* one die at a time, though `Add Die` could grow it
+    afterwards. `context['dice']` is the row; `result` stays its first die, which
+    is what every single-die reader already understands.
+    """
+    repo = FakeRepo(traits=[FakeTrait("iron-will", "ts-distinctions")])
+    entity = _entity()
+    effect = _effect("modify_trait", "gain", "iron-will", "d6")
+    effect.context = {"dice": ["d6", "d6", "d6"]}
+    result = apply_effects(entity, [effect], repo)
+    ts = result.new_trait_settings[0]
+    assert ts.dice == [DieType.D6, DieType.D6, DieType.D6]
+    assert result.applied[0].summary == "gained iron-will at d6 ×3"
+
+
+def test_a_row_with_an_unreadable_die_is_refused_whole():
+    """A partial row would be a wrong rating that looks like a right one."""
+    repo = FakeRepo(traits=[FakeTrait("iron-will", "ts-distinctions")])
+    entity = _entity()
+    effect = _effect("modify_trait", "gain", "iron-will", "d6")
+    effect.context = {"dice": ["d6", "{never_bound}", "d8"]}
+    result = apply_effects(entity, [effect], repo)
+    assert result.new_trait_settings == []
+    assert "no die rating to gain" in result.applied[0].summary
+
+
+def test_the_row_wins_over_the_single_result_it_came_from():
+    """`result` is the row's first die, so the two never disagree — but if content
+    carries both and they do, the row is the authoring truth."""
+    repo = FakeRepo(traits=[FakeTrait("iron-will", "ts-distinctions")])
+    effect = _effect("modify_trait", "gain", "iron-will", "d4")
+    effect.context = {"dice": ["d8", "d8"]}
+    result = apply_effects(_entity(), [effect], repo)
+    assert result.new_trait_settings[0].dice == [DieType.D8, DieType.D8]
+
+
+def test_a_single_result_still_creates_a_one_die_rating():
+    """The control: content authored before the row existed is untouched."""
+    repo = FakeRepo(traits=[FakeTrait("iron-will", "ts-distinctions")])
+    result = apply_effects(_entity(), [_effect("modify_trait", "gain", "iron-will", "d10")], repo)
+    assert result.new_trait_settings[0].dice == [DieType.D10]
+
+
 def test_change_trait_points_the_instance_at_another_definition():
     """The instance keeps everything that is its own — owner, dice, rating type,
     polarity, statement, notes, grants — and changes what it *is*. Its trait set
@@ -3671,6 +3718,41 @@ def test_a_spec_value_that_is_a_die_size_names_that_die():
     # Anything not on the ladder names no die, so a wrong path cannot invent one.
     assert _die_from_spec_value(3) is None
     assert _die_from_spec_value(None) is None
+
+
+def test_a_result_spec_takes_the_whole_rating_not_only_its_first_die():
+    """`select source → navigate rating dice` names a *row*, and all of it is taken.
+
+    The author's case: gain a trait at the rating the rule's own source already
+    has. The path resolved every die already; only the reader threw the rest away
+    ([[B307]]).
+    """
+    from transversal.services.effects_applier.datatypes import (
+        SOURCE_CONTEXT_KEY,
+        SOURCE_ELEMENT_CONTEXT_KEY,
+    )
+    from transversal.services.effects_applier.entry import resolve_effect_result
+
+    class Repo:
+        def get_entity(self, eid):
+            return _entity(id=eid)
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="trait-formation", result="d4",
+        result_spec=TargetSpec.model_validate({"steps": [
+            {"kind": "select", "collection": "source"},
+            {"kind": "navigate", "edge": "rating_dice"},
+        ]}),
+    )
+    context = {
+        SOURCE_CONTEXT_KEY: _ts("formation", [DieType.D6, DieType.D6, DieType.D6]),
+        SOURCE_ELEMENT_CONTEXT_KEY: "traitsetting",
+    }
+    out = resolve_effect_result(effect, "char-2", Repo(), context)
+    assert out.result == "d6"                       # the single-die readers
+    assert out.context["dice"] == ["d6", "d6", "d6"]  # the rating
+    assert out.result_spec is None
 
 
 def test_a_result_spec_reads_the_unchosen_source_dies_effect_die():

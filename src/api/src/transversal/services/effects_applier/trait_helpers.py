@@ -310,6 +310,49 @@ def _die_opt(result: Optional[str]) -> Optional[DieType]:
     except ValueError:
         return None
 
+def _effect_dice(effect: Effect) -> list[DieType]:
+    """The **rating** an effect creates a trait at — a row of dice, never empty.
+
+    A rating is a list: a resource holds several dice, a challenge usually three
+    (measured on live content: 774 instances carry more than one). So the author's
+    row lives in ``context['dice']``, and ``result`` stays the *first* die of it —
+    which is what every single-die reader in this module and elsewhere already
+    understands, and what all content authored before the row existed carries
+    ([[B307]]).
+
+    A path that names the dice (``result_spec``) writes the same two fields, so
+    "gain this at the rating the source already has" and a literal row arrive here
+    identically (``effects_applier.resolve_effect_result``).
+
+    Unreadable entries are refused **whole** rather than dropped: a row of three
+    where one fails to parse would otherwise create a two-die rating, which is a
+    wrong rating that looks like a right one. An empty return means "nothing to
+    apply", and every caller reports it instead of inventing a die — a substituted
+    roll variable is empty when the die's tier has no effect die (a fail), and a
+    token that never substituted is not a die either.
+    """
+    raw = (effect.context or {}).get("dice")
+    if isinstance(raw, list) and raw:
+        dice = [_die_opt(v) for v in raw]
+        return [] if any(d is None for d in dice) else dice  # type: ignore[return-value]
+    single = _die_opt(effect.result)
+    return [single] if single is not None else []
+
+
+def _dice_label(dice: list[DieType]) -> str:
+    """A rating as the author reads it: ``d6``, or ``d6 ×3`` when it is a row.
+
+    The report lines are prose the author reads in the activation summary, and a
+    challenge's three ``d6`` are one fact about it, not three.
+    """
+    values = [getattr(d, "value", str(d)) for d in dice]
+    if len(values) == 1:
+        return values[0]
+    if len(set(values)) == 1:
+        return f"{values[0]} ×{len(values)}"
+    return ", ".join(values)
+
+
 def _ctx(effect: Effect, key: str) -> str:
     """Read a string context value (empty when absent)."""
     return str((effect.context or {}).get(key) or "")
@@ -322,8 +365,12 @@ def _rating_type(effect: Effect) -> RatingType:
     except ValueError:
         return RatingType.STATIC
 
-def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo, *, negative: bool = False, statement: str = "", notes: str = "", rating_type: RatingType = RatingType.STATIC, parent=None, order=None, enabled=None) -> TraitSetting:
+def _new_traitsetting(owner: tuple[str, str], trait_id: str, dice: list[DieType], repo, *, negative: bool = False, statement: str = "", notes: str = "", rating_type: RatingType = RatingType.STATIC, parent=None, order=None, enabled=None) -> TraitSetting:
     """Build a new instance, on an owner or nested under ``parent``.
+
+    ``dice`` is the instance's whole rating — one die for a static trait, several
+    for a resource or a challenge — because that is what a rating *is*
+    ([[B307]]). Callers get it from :func:`_effect_dice`.
 
     ``parent`` is the facet case: the instance hangs under another *instance*
     (an agenda's step under its container) rather than off the entity, so it takes
@@ -367,7 +414,7 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
         **({"order": order} if order is not None else {}),
         **({"enabled": enabled} if enabled is not None else {}),
         projection_id=projection_id,
-        dice=[die],
+        dice=list(dice),
         rating_type=rating_type,
         polarity=polarity,
         statement=statement,
