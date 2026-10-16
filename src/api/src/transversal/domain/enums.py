@@ -239,6 +239,10 @@ class MessageKind(str, Enum):
 class HistoricalRecordType(str, Enum):
     """Kinds of append-only historical events."""
     ROLL_TABLE = "roll_table"
+    #: A life-path step that wrapped **no table** ([[B314]]) — its effects were the
+    #: whole payload, so it is not a roll and recording it as one would name a table
+    #: that does not exist.
+    LIFE_PATH_STEP = "life_path_step"
     CONTEST = "contest"
     TEST = "test"
     TRANSVERSAL = "transversal"

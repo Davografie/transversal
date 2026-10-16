@@ -185,3 +185,19 @@ def test_a_table_less_step_refuses_a_binding_and_reports_an_inert_one():
     problems = validate_life_path(path, repo)
     assert any("has no table, so it cannot bind rows" in p for p in problems)
     assert any("does nothing" in p for p in problems)
+
+
+def test_the_effects_only_record_type_is_a_declared_kind():
+    """The historical record goes through a model whose ``record_type`` is an
+    **enum**, and nothing in this service's own tests reaches that model — the live
+    walk did, and refused the write:
+
+        Input should be 'roll_table', 'contest', 'test' or 'transversal'
+
+    So the kind is asserted against the model here: a record type a fake repo happily
+    stores is not a record type at all."""
+    from transversal.domain.messaging import HistoricalRecord
+
+    record = HistoricalRecord(entity_id="char-1", record_type="life_path_step",
+                              universe="earth", data={"effects_only": True})
+    assert record.record_type.value == "life_path_step"
