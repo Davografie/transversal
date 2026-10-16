@@ -1,0 +1,41 @@
+name: Feature or change
+description: Something the app should do and does not.
+title: "[feature] "
+labels: ["triage", "feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the **want**, not the implementation — the role that picks it up will decide how.
+        The [[Overseer]] sweeps `triage` and routes it; see the
+        [GitHub Issue Loop](../../docs/Process/GitHub%20Issue%20Loop.md).
+  - type: textarea
+    id: want
+    attributes:
+      label: What you want
+      description: In your own words, as if describing it to another player.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What it is for
+      description: The situation where you reached for it. This is usually what makes the difference between the thing you asked for and the thing you needed.
+    validations:
+      required: false
+  - type: input
+    id: where
+    attributes:
+      label: Where it would live
+      description: A surface, panel, or entity — if you have a view.
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Before filing
+      options:
+        - label: I checked it is not already on the board (docs/Process/Tickets.md)
+          required: false
+        - label: This is a want, not a bug — bugs have their own template
+          required: false

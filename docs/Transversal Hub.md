@@ -60,6 +60,7 @@ status: canonical
 - [[Division of Labor]] — who owns what: role scope + ticket ownership + deferral
 - [[Release Plan]] — scope, decisions, and the 6-phase **build order** (start here for "what to build next")
 - [[Tickets]] — the ticket-level breakdown (per-ticket dependencies + context to load)
+- [[GitHub Issue Loop]] — how an issue on `Davografie/transversal` becomes owned work: intake (`triage`), routing (`role:*` + `ready`), and closing on merge
 - [[Pressure-Test Log]] — scenario-by-scenario gap analysis: what's built vs missing, per-feature findings
 - [[Effect System Convergence Plan]] — the SFX/effects build sequence
 - [[Performance and Resilience Plan]] — client caching, draft persistence, backend latency, multi-worker

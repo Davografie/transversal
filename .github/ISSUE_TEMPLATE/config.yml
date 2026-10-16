@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How issues are routed and closed
+    url: https://github.com/Davografie/transversal/blob/release-build/docs/Process/GitHub%20Issue%20Loop.md
+    about: The Overseer sweeps `triage`, routes to a role, and mirrors into a ticket note. Read this first if you want to know where your issue went.
+  - name: The ticket board
+    url: https://github.com/Davografie/transversal/blob/release-build/docs/Process/Tickets.md
+    about: What is already filed, in flight, and done. Check here before filing.

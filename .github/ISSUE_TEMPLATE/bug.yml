@@ -1,0 +1,52 @@
+name: Bug
+description: Something is broken, wrong, or crashes.
+title: "[bug] "
+labels: ["triage", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. The fastest useful bug report says **what you did**, **what happened**, and
+        **what you expected**. The [[Overseer]] sweeps `triage` and routes it to a role, which
+        mirrors it into a ticket note — see the [GitHub Issue Loop](../../docs/Process/GitHub%20Issue%20Loop.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include the exact symptom. If something crashed, paste the error.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce
+      description: Numbered steps, if you can. "It happened once" is still worth filing — say so.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: false
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How bad is it
+      options:
+        - Blocks play — I cannot carry on
+        - Wrong, but I can work around it
+        - Cosmetic
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: Which surface, screen, or entity — if you know.
+    validations:
+      required: false
