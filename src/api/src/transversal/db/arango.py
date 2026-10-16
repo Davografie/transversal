@@ -197,6 +197,17 @@ def forget_database(database: str) -> bool:
     return bool(keys)
 
 
+def _registry_database() -> str:
+    """The registry's database name, which nothing may bootstrap a campaign into.
+
+    Imported lazily on purpose: ``db.registry`` imports ``_add_hash_index`` from this
+    module, so a module-level import here would be circular.
+    """
+    from transversal.db.registry import RegistryConfig
+
+    return RegistryConfig.from_env().database
+
+
 def get_db(
     config: ArangoConfig | None = None, *, ensure_indexes: bool = True
 ) -> "StandardDatabase":
@@ -215,12 +226,28 @@ def get_db(
     documents before the unique indexes are built, or any source row that already
     violates one is silently dropped instead of copied ([[B88]]). The flag is a
     bootstrap-time decision — a database already in the cache is returned as-is.
+
+    The **registry database is refused** rather than bootstrapped: it has its own
+    schema (``db.registry.get_registry_db``), and pointing this function at it
+    creates all 19 campaign collections in the tenancy table. That is not
+    hypothetical — the live ``transversal_registry`` was found carrying 19 empty
+    campaign collections on 2026-10-16, with the full campaign indexes, which is
+    this loop's fingerprint. The design said *"must not go through get_db()"*; this
+    makes it impossible rather than a convention ([[B255]], [[B305]]).
     """
     if config is None:
         config = ArangoConfig.from_env()
         requested = _request_database.get()
         if requested and requested != config.database:
             config = replace(config, database=requested)
+
+    if config.database == _registry_database():
+        raise RuntimeError(
+            f"refusing to bootstrap the campaign schema into {config.database!r}: that "
+            "is the tenancy registry, which has its own schema — use "
+            "transversal.db.registry.get_registry_db(). A campaign is a different "
+            "database (see B255/B305)."
+        )
 
     cache_key = (config.url, config.username, config.password, config.database)
     cached = _db_cache.get(cache_key)

@@ -135,3 +135,53 @@ def test_an_empty_database_name_means_unset_not_a_database_called_blank(monkeypa
     monkeypatch.setenv("REGISTRY_DATABASE", "")
 
     assert registry.RegistryConfig.from_env().database == registry.DEFAULT_REGISTRY_DATABASE
+
+
+@pytest.fixture
+def _no_live_client(monkeypatch):
+    """Stops a *regressed* guard from creating a database on the real server.
+
+    ``get_db()`` imports ``ArangoClient`` lazily from the real ``arango`` package, so
+    that is where the patch has to go (the same trick ``test_db_cache.py`` uses). If
+    the guard ever stops firing, the test raises here instead of quietly creating a
+    database.
+    """
+    import arango as real_arango
+
+    def _forbidden(*args, **kwargs):
+        raise AssertionError("get_db() connected — the registry guard did not fire")
+
+    monkeypatch.setattr(real_arango, "ArangoClient", _forbidden)
+
+
+def test_get_db_refuses_the_registry_database(monkeypatch, _no_live_client):
+    """The real defence: the campaign bootstrap cannot be pointed at the registry.
+
+    The two tests above prove the *registry module* creates only its own schema.
+    They cannot see the other direction, and that is how the live
+    ``transversal_registry`` ended up carrying 19 empty campaign collections (found
+    2026-10-16, with the full campaign indexes — the fingerprint of
+    ``get_db()``'s collection loop). The guard fires before any connection is made.
+    """
+    from transversal.db import arango
+
+    monkeypatch.setenv("REGISTRY_DATABASE", "tv2_registry_guard")
+    config = arango.ArangoConfig(
+        url="http://arango:8529", username="root", password="x",
+        database="tv2_registry_guard",
+    )
+
+    with pytest.raises(RuntimeError, match="tenancy registry"):
+        arango.get_db(config)
+
+
+def test_a_request_scoped_registry_database_is_refused_too(monkeypatch, _no_live_client):
+    """The scope is the other way in: `use_database("<registry>")` is enough."""
+    from transversal.db import arango
+
+    monkeypatch.setenv("REGISTRY_DATABASE", "tv2_registry_guard")
+    monkeypatch.setenv("ARANGO_DATABASE", "transversal")
+
+    with pytest.raises(RuntimeError, match="tenancy registry"):
+        with arango.use_database("tv2_registry_guard"):
+            arango.get_db()
