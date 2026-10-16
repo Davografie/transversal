@@ -127,6 +127,9 @@ guidedDot         // reactive — the single dot that is the next hop toward the
                   //   destination ('zone-<id>'/'nav-<key>'), from nav.next_hop; '' when none
 occDragMoved      // pointer passed the 6px tap threshold
 occSuppressClick  // suppress the synthesized click after a real drag
+unplaceArmed      // reactive — an occupant/chip drag is running, so the top control is the ( x )
+unplaceHover      // reactive — the pointer is over it, so the drop would unplace
+railOpen          // reactive — the arrange-mode rail is showing (opened from the top control)
 ```
 
 ## Data flow
@@ -304,6 +307,34 @@ here because they are the viewer's:
   a chip has to *stay* open at rest; the pointer and a tap open it too, a tap on a
   closed chip opens it rather than playing it, and **arrange mode opens them all**. The
   auto-stack never collapses. See [[Location Trait Chips]] §resting and open.
+
+### The top control, and the rail
+
+One control sits centred at the top of the map, in **two states** (2026-09-26):
+
+| state | shows | does |
+| --- | --- | --- |
+| idle, arrange mode | `unplaced · N` | opens/closes the rail — tapping the map closes it too |
+| while an occupant or a chip is dragged | `( x )` | the drop target: dropping on it **unplaces** the dragged thing |
+
+It is the same gesture forwards and backwards: drag out of the rail to place, drag onto
+`( x )` to unplace. **GM-only**, and `pointer-events: none` in the drag state — the drag
+owns the pointer through `document` listeners and the hit test is done against the
+control's rect, so it must never intercept an event itself. `usePercentDrag` hands its
+callers the pointer's client px (`onMove`'s 3rd/4th args, `onEnd`'s argument) because a
+drop target that is not the map cannot be found from a percentage, which is relative to
+the scene. See [[Location Trait Chips]] § the top control.
+
+**The rail is opened, never always-on** — arrange mode only, closed by default, not
+remembered across leaving the mode. That is not a style choice: an open rail must take
+pointer events to scroll, and anything taking pointer events over the map **blocks what
+is behind it**, including a placed chip, which then cannot be dragged. Closed, nothing of
+the rail is over the map, so placed items stay interactive by construction rather than by
+a hit-test compromise. **Unplaced occupants** and unplaced traits both live in it, and an
+unplaced occupant is **not drawn on the map at all** (`placedOccupants`) — 332 of 467
+standing occupants had no stored position, and they used to be scattered onto a computed
+default near a zone, which said something about the room that was not true. Presence is
+not lost: the peer rail still names who is at the location.
 
 Zones and nav dots show the destination's background as their expanded image
 (the `navdot_image` role) — the "hole": an inner `<img>` sized as the
@@ -486,6 +517,11 @@ live and persists the whole `nav_positions` object on end via the
 
 On drop:
 
+- **Dropped on the `( x )` top control** → **unplace**, never place and never travel: the
+  target wins over anything the pointer happened to be passing near. An occupant loses its
+  `map_x`/`map_y` (`PATCH …/map-position` with nulls), a chip loses its entry in
+  `trait_positions` (the whole-map PUT, where the absent id *is* the unplacement), and
+  either way it returns to the arrange-mode rail. See §The top control.
 - **Self + near a zone** → find the matching child and `travelWithAnimation`.
 - **Self + near a nav dot** → `travelWithAnimation` to the parent/portal target.
 - **GM + a GMC/asset dropped on a zone or nav dot (B170)** → **send that occupant
