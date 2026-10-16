@@ -39,6 +39,7 @@ from transversal.db.arango import use_database
 from transversal.db.registry_repository import RegistryRepository
 from transversal.services import blobs
 from transversal.services.media_store import MEDIA_ROOT
+from transversal.services.media_utils import PICTURE_TIERS
 from transversal.services.provisioner import campaign_databases
 
 #: The images collection under both names it has had ([[B200]]'s split).
@@ -50,21 +51,36 @@ def variants_of(doc: dict) -> list[tuple[str, str, str]]:
 
     Mirrors ``RepositoryImages.image_url`` — the one place that knows a picture's
     shape — because a migration that disagreed with the reader would move files to
-    addresses the app never asks for.
+    addresses the app never asks for, and leave the files it did not think of on the
+    owner-named path where two campaigns share them.
+
+    The ladder comes from ``media_utils.PICTURE_TIERS`` rather than a list written
+    here, and the **matte keeps the whole ladder**, not one tier: this function used
+    to name `_Cutout_Large` alone, so `sheet` — `ROLE_RENDER`'s `cutout/Small` —
+    was never migrated and stayed shared between campaigns ([[B88]], 2026-10-16).
     """
     ext = doc.get("extension") or "webp"
-    found = [
-        ("imagen", "_Original", ext),
-        ("imagen", "_XLarge", ext),
-        ("imagen", "_Large", ext),
-        ("imagen", "_Small", ext),
-        ("imagen", "_Mini", ext),
-        ("imagen", "_PreUpscale", ext),
-        ("imagen", "_Cutout_Large", "webp"),
-    ]
+    found = [("imagen", f"_{tier}", ext) for tier in PICTURE_TIERS]
+    # The pre-upscale master is a backup, not part of the served ladder, but it is
+    # still a file in the tree this migration is retiring.
+    found.append(("imagen", "_PreUpscale", ext))
+    found += [("imagen", f"_Cutout_{tier}", "webp") for tier in PICTURE_TIERS]
     if "animated" in (doc.get("renders") or []):
         found.append(("animated", "", doc.get("animated_extension") or ext))
     return found
+
+
+def missing_variants(doc: dict) -> list[tuple[str, str, str]]:
+    """What this record still needs moved: everything it can have, minus what it
+    already records.
+
+    A record is **not skipped for carrying blobs** — it is topped up. Skipping any
+    row with blobs is what made the missing matte tiers unhealable: with it, adding
+    the tier to the model and re-running would have reported "already migrated" and
+    changed nothing at all.
+    """
+    known = doc.get("blobs") or {}
+    return [variant for variant in variants_of(doc) if variant[1] not in known]
 
 
 def legacy_path(doc: dict, kind: str, suffix: str, ext: str) -> Path:
@@ -112,11 +128,8 @@ def main(argv: list[str] | None = None) -> int:
             db = get_db()
             for collection in IMAGE_COLLECTIONS:
                 for doc in _images(db, collection):
-                    if doc.get("blobs"):
-                        skipped += 1
-                        continue
                     updates: dict[str, str] = {}
-                    for kind, suffix, ext in variants_of(doc):
+                    for kind, suffix, ext in missing_variants(doc):
                         path = legacy_path(doc, kind, suffix, ext)
                         if not path.exists():
                             continue
@@ -129,12 +142,23 @@ def main(argv: list[str] | None = None) -> int:
                         updates[suffix] = digest
                         claimed.add(path)
                     if not updates:
+                        # Nothing left on disk for this record: it is either complete
+                        # or never had the files its shape allows. Counted as skipped
+                        # so a re-run converges on "already migrated: <all records>"
+                        # rather than re-reporting every record as pending forever.
+                        skipped += 1
                         continue
                     records += 1
                     if args.dry_run:
                         continue
                     db.collection(collection).update(
-                        {"_key": doc["_key"], "blobs": updates}
+                        {
+                            "_key": doc["_key"],
+                            # Merged by hand rather than left to the server: a top-up
+                            # adds to the digests already recorded, and a shallow
+                            # update would replace the object with only the new ones.
+                            "blobs": {**(doc.get("blobs") or {}), **updates},
+                        }
                     )
                     for digest in updates.values():
                         blobs.retain(digest, ext="webp")

@@ -98,6 +98,15 @@ def trim_transparent_margins(data: bytes) -> tuple[bytes, bool]:
 #: background could ever be. See [[Media Pipeline]] § The variant ladder.
 VARIANT_LONG_SIDES = {"XLarge": 2048, "Large": 1024, "Small": 240, "Mini": 48}
 
+#: Every tier a still ladder carries, master first — the one list the writer
+#: (``save_image_variants``), the *reader's* fallback (``image_url``) and the blob
+#: migration ([[B88]]) all describe. A **matte keeps the same ladder** under a
+#: `_Cutout_` prefix, which is why it is derived here rather than written out: the
+#: migration's hand-written list named one matte tier, so `sheet` — which
+#: `ROLE_RENDER` sends to `cutout/Small` — kept serving the owner-named legacy path
+#: long after the store was supposed to have replaced it.
+PICTURE_TIERS: tuple[str, ...] = ("Original", *VARIANT_LONG_SIDES)
+
 #: Quality for every tier. 85 is the long-standing value; the cost curve measured
 #: on real backgrounds says bytes are not the constraint (8× the pixels ≈ 1.7× the
 #: bytes on this art), so this is left alone rather than traded for sharpness.
