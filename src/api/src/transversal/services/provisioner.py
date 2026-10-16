@@ -284,7 +284,39 @@ def provision_fork(
     # here mirrors the source, whose own index also could not be built.
     _ensure_indexes(target_db)
 
-    return registry.create_fork(name, target_name, owner_account, slug=slug, kind=kind)
+    fork = registry.create_fork(name, target_name, owner_account, slug=slug, kind=kind)
+    provision_new_fork(target_db, target_name)
+    return fork
+
+
+def provision_new_fork(db, database: str) -> None:
+    """Run the campaign provisioning pass on a brand-new fork.
+
+    The other half of [[B88]]'s provisioning note. A fork is a **verbatim clone**, so it
+    carries every rule that existed when it was made and nothing added since: each
+    ``ensure_*``/``backfill_*`` that lands afterwards reaches the default database at
+    startup, and every fork only when someone remembers `tenancy_cli provision`. Doing it
+    here means a fork **starts level** instead of waiting for that to be noticed.
+
+    Deliberately never fatal. The clone is intact and routable, the pass is idempotent,
+    and every helper in it is written to re-run — so a failure is a warning and a gap
+    someone can close with the CLI, not a campaign that cannot be opened.
+    """
+    from transversal.db.repository import EntityRepository
+    from transversal.services.campaign_provisioning import provision_campaign
+
+    try:
+        # The scope matters as well as the repo: helpers that reach for `get_db()`
+        # themselves must land on this fork, not on whatever the caller was serving.
+        with use_database(database):
+            provision_campaign(EntityRepository(db=db))
+    except Exception:
+        logger.exception(
+            "fork %s: the provisioning pass failed — the clone is intact and usable, "
+            "but run `tenancy_cli provision --database %s` when convenient",
+            database,
+            database,
+        )
 
 
 def _system_db(config: ArangoConfig):
