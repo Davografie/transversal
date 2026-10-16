@@ -958,7 +958,13 @@ function handleLifePathIntro(data) {
   const characterId = String(data.recipient_id || '')
   const lifePathId = String(data.life_path_id || '')
   if (!characterId || !lifePathId) return
-  const surface = characterId === lastCreatedId.value ? 'overlay' : 'sheet'
+  // The event reaches **every** session, so this is the gate that replaces the one
+  // it was let through: act only for the character this client just made, or the
+  // one it is playing. Without it a rule's life path would surface on a stranger's
+  // screen — the leak the shared `recipient_id` guard exists to prevent.
+  const justCreated = characterId === lastCreatedId.value
+  if (!justCreated && characterId !== entityId.value) return
+  const surface = justCreated ? 'overlay' : 'sheet'
   introduceLifePath(characterId, lifePathId, surface)
   if (surface === 'sheet') {
     sheetLifePathRequest.value = { entityId: characterId, lifePathId, nonce: Date.now() }

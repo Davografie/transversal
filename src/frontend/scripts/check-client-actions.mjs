@@ -194,10 +194,16 @@ const fn = (name) => (app.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\
   yes('the router exists and reads the two fields the contract carries',
     intro.length > 0 && /data\.recipient_id/.test(intro) && /data\.life_path_id/.test(intro))
   yes('the surface comes from what *this client* created, never from the payload',
-    /characterId === lastCreatedId\.value \? 'overlay' : 'sheet'/.test(intro)
+    /const surface = justCreated \? 'overlay' : 'sheet'/.test(intro)
       && !/data\.surface/.test(app))
   yes('an intro with no character or no path is dropped rather than half-shown',
     /if \(!characterId \|\| !lifePathId\) return/.test(intro))
+  // It is published to every session, so being let through the shared guard must
+  // not mean every screen reacts: only this client's own character, or the one it
+  // is playing, is ours to act on.
+  yes('a stranger\'s character is ignored — the gate the shared guard would have been',
+    /const justCreated = characterId === lastCreatedId\.value/.test(intro)
+      && /if \(!justCreated && characterId !== entityId\.value\) return/.test(intro))
   yes('the overlay route records it for the overlay; the sheet route also asks the sheet',
     /introduceLifePath\(characterId, lifePathId, surface\)/.test(intro)
       && /surface === 'sheet'[\s\S]{0,140}?sheetLifePathRequest\.value = \{ entityId: characterId, lifePathId, nonce: Date\.now\(\) \}/.test(intro))
