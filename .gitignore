@@ -62,8 +62,8 @@ backups/
 # Headscale deployment config for the private tailnet.
 deploy/headscale/
 # Internal coordination: session docs and the ticket system.
-docs/sessions/
-docs/Process/
+docs/sessions
+docs/Process
 # The human's personal capture file.
 docs/to-do.md
 # The unfixed-vulnerability register.

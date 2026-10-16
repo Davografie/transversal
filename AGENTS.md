@@ -37,26 +37,52 @@ running `git push` publishes to `github.com/Davografie/transversal` (**public** 
   the [[Overseer]]'s to publish, and only when the tree is verified.
 - Issues are the one thing worth *reading* from GitHub: see [[GitHub Issue Loop]].
 
-### ⚠ The coordination layer is NOT tracked — your doc and ticket edits are local-only
+### The coordination layer: one shared copy, outside the worktrees
 
-When the repo went public on 2026-10-16, the internal material was **gitignored** rather than
-published. Verified: the public history contains **zero** commits touching these paths, so the
-redaction covers history as well as the tree.
+The session docs, the ticket system, the owner's capture file and the security register are
+**gitignored**, so they never reach the public repo. That is deliberate and correct. But git was also
+the only thing that **carried** a session doc from a role's worktree to the main checkout — so
+ignoring the paths left **20 private copies drifting apart**, and the drift ran *both* ways, because
+agent tools resolve **relative** paths against the main checkout (so a session wrote to its own
+worktree or to the main checkout depending on how it named the path).
+
+**Measured on 2026-10-16, before the fix: 11 of 18 role docs differed, and 11 `[[Overseer]]` asks sat
+in worktrees the main checkout could not see.** Mentions were being missed, not ignored.
+
+There is now **one copy**, and every worktree is **symlinked** to it:
+
+```
+/home/dave/dev/transversal2-internal/          ← the only copy; its own git repo, NO remote
+  sessions/  Process/  to-do.md  Technical/Security Posture.md
+      ↑ symlinked from every worktree at:
+  docs/sessions   docs/Process   docs/to-do.md   docs/Technical/Security Posture.md
+```
 
 | ignored path | is |
 |---|---|
-| `docs/sessions/` | the session docs — **including yours** |
-| `docs/Process/` | tickets, the generated board, [[Division of Labor]] |
+| `docs/sessions` | the session docs — **including yours** |
+| `docs/Process` | tickets, the generated board, [[Division of Labor]] |
 | `docs/to-do.md` | the human's capture file |
 | `docs/Technical/Security Posture.md` | the unfixed-vulnerability register |
 | `deploy/headscale/`, `.backups/`, `backups/`, `*.data.json.gz` | the private tailnet config and DB dumps containing player characters |
-| `.deepseek/`, `.codewhale/` | agent internal state |
+| `.deepseek/`, `.codewhale/` | agent internal state (moved to `transversal2-internal/purged/`) |
 
-**What this means in practice, and it will surprise you if nobody says it:** `git status` will not
-show your session-doc or ticket edits, `git add` refuses them, and **committing them does nothing**.
-The whole coordination layer now lives **on this machine only — no history, no backup**. So do not
-treat a commit as a save for those files; if you care about a change surviving, it has to be
-somewhere else too.
+**What this means for you:**
+
+- **Use either path style — both resolve to the same file now.** The relative-path trap no longer
+  matters for these four paths, which is the point.
+- **`git status` will not show your session-doc or ticket edits, and committing them does nothing.**
+  They are not in the public repo, by design.
+- **They *are* versioned** — in `transversal2-internal`'s own git repo, which has **no remote**, so
+  nothing can push it. If you want a save point, commit there.
+- **A new worktree must be linked, or it gets its own copy and the drift starts again:**
+  `bash scripts/link-coordination.sh` (in that worktree), or `--all` from the main checkout. It
+  **moves** a real path into `transversal2-internal/.archive/migrated/` rather than deleting it.
+- **Reconciliation is still owed.** The migration found **60 files with genuinely divergent copies**
+  and kept every losing copy under `transversal2-internal/.divergence/`, with a report at
+  `.divergence/README.md` listing the winner and the alternates per file. The winner was chosen
+  provisionally; **an owner should confirm their own files**, because a wrong pick is recoverable but
+  not obvious.
 
 `AGENTS.md` **is** tracked, and was generalised for publication before it was published — so **do not
 put personal names, player handles, or internal detail in it.** That is the file the public sees.
