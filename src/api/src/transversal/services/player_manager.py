@@ -49,7 +49,21 @@ class PlayerManager:
     """ArangoDB-backed player store."""
 
     def __init__(self, repo: EntityRepository | None = None):
-        self._repo = repo or EntityRepository()
+        # An injected repository (tests) wins. Otherwise **every call** builds one for
+        # the current database: the database is request-scoped ([[B88]]), so a repo
+        # captured at import would pin players and `agency` edges — a campaign's
+        # identity — to whichever campaign happened to be constructed first.
+        self._injected_repo = repo
+
+    @property
+    def _repo(self) -> EntityRepository:
+        return self._injected_repo or EntityRepository()
+
+    @_repo.setter
+    def _repo(self, repo: EntityRepository | None) -> None:
+        # Kept assignable: injecting a repository by attribute (or forcing the real
+        # one with `None`) is how the existing tests drive this class.
+        self._injected_repo = repo
 
     def create(self, name: str = "") -> Player:
         pid = f"player-{uuid.uuid4().hex[:6]}"

@@ -163,34 +163,38 @@ def _log_profile(request: Request, elapsed_ms: float, stats) -> None:
 
 # ── Dependency injection (lazy — swapped in tests) ───
 
+#: Test seam: when set, every service built here uses this repository instead of one
+#: for the request's database. `None` in production.
 _repo: EntityRepository | None = None
-_entity_manager: EntityManager | None = None
-_razmerit_service: RazmeritService | None = None
 _effects_engine: EffectsEngine | None = None
 
 
 def _get_repo() -> EntityRepository:
-    global _repo
-    if _repo is None:
-        _repo = EntityRepository()
-    return _repo
+    """A repository for the **current** database, or the seam's, when one is set.
+
+    Deliberately not cached when the seam is unset. The database is request-scoped
+    ([[B88]]), so a cached repository pins the process to whichever campaign was
+    built first — that is a cross-campaign leak, not a saving. The expensive part,
+    the connection, is what ``get_db``'s LRU holds.
+    """
+    return _repo or EntityRepository()
 
 
 def _get_em() -> EntityManager:
-    global _entity_manager
-    if _entity_manager is None:
-        _entity_manager = EntityManager(repository=_get_repo())
-    return _entity_manager
+    return EntityManager(repository=_get_repo())
 
 
 def _get_raz() -> RazmeritService:
-    global _razmerit_service
-    if _razmerit_service is None:
-        _razmerit_service = RazmeritService(repository=_get_repo())
-    return _razmerit_service
+    return RazmeritService(repository=_get_repo())
 
 
-def _get_engine():
+def _get_engine() -> EffectsEngine:
+    """The in-memory SFX registry. Cached on purpose — it accumulates registrations.
+
+    That caching is also why it is **campaign-agnostic**: ``_startup`` loads it from
+    the default database and every fork then shares it. Scoping it is an open B88
+    item; rebuilding it per request would simply empty it.
+    """
     global _effects_engine
     if _effects_engine is None:
         _effects_engine = EffectsEngine()
