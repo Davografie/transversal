@@ -33,6 +33,14 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Routes the **server** owns must never be answered by the app shell.
+        // Workbox's navigation fallback (`createHandlerBoundToURL('index.html')`)
+        // otherwise swallows any full-page navigation in scope — including a
+        // browser opening an emailed link: it loaded the SPA *at* the API URL, the
+        // API call never happened, and the game's own requests 401'd behind it
+        // ("unauthorized", account still unverified). `/enter` is the architect and
+        // passage entry; `/api/` and `/media/` are proxied by nginx.
+        navigateFallbackDenylist: [/^\/api\//, /^\/media\//, /^\/enter/],
         runtimeCaching: [
           {
             // Static image variants — cache-first, generous cap.
