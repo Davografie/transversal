@@ -642,6 +642,17 @@ def _broadcast_pending_choices(entity_id: str, universe: str, pending: list, edg
                 sfx_name="", sfx_description="",
                 effect=c.effect, continuation=[],
             ))
+    from transversal.services.session_manager import session_manager
+    from transversal.services.campaign_scope import current_campaign
+
+    # Say it out loud: this path is invisible otherwise, and "no picker appeared" has
+    # exactly two server-side explanations — the question was never raised, or it was
+    # raised into no session.
+    logger.info(
+        "[portal choice] entity=%s structured=%d plain=%d campaign=%r sessions=%d",
+        entity_id, len(structured), len(plain), current_campaign(),
+        len(session_manager.list_active()),
+    )
     _emit_pending_choices(entity_id, universe or "", plain, structured, origin="auto")
 
 
@@ -741,6 +752,11 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
 
     applied = [a.summary for a in result.applied] if result else []
     pending = list(result.pending_choices) if result else []
+    logger.info(
+        "[fire_portal] %s -> %s entity=%s effects=%d applied=%d pending=%d",
+        from_id, to_id, body.entity_id,
+        len(effects), len(applied), len(pending),
+    )
     _broadcast_pending_choices(body.entity_id, entity.current_universe, pending, edge)
     if pending:
         status = "pending"
