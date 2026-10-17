@@ -485,10 +485,23 @@ In that doc's own vocabulary:
 > [!warning] The four `essence` settings are NOT duplicates — I claimed this twice and was wrong both times
 > They are keyed **one per universe**: `:aelor-citar:`, `:three_realms:`, `:intergalactic-planetary:`, `:earth:`. That is a **universe-scoped distinction**, not a write bug. Only `three_realms` is filled, which is correct — his dao is a Three Realms fact.
 
-> [!question] OPEN — these two edges are `elevated`, and `gmc_web` reports a false zero
-> Both edges were created **entity-anchored** (`elevated: true`) so the claim on the Valley and the family tie outlive any body. Consequence: **`gmc_web` returns `relations: []` for 朱星** while `relationship(fromEntityId:…)` returns both edges correctly with the title trait attached. Measured against a control: **Lian Xi → 3 relations**, 朱星 → 0, and hers are projection-anchored.
+> **What I first wrote here was wrong twice, and the correction matters more than the note did.**
 >
-> **The trade-off is real and unresolved:** elevated survives a body change but is invisible to the standard read; un-elevated is readable everywhere but dies with the projection it was made on. Either re-create them un-elevated, or fix the read (`gmc_web`, and `character_build`'s "0 others linked" on a faction) to include entity-anchored ties. **Second read-gap of this shape this session.**
+> I claimed the Zhu Xing edges were *"entity-anchored (`elevated: true`)"*, and that Lian Xi's were *"projection-anchored"*. Reading the raw edge documents refutes both:
+>
+> ```
+> 118871777  projections/gmc-207982847:three_realms → entities/loc-40642106
+> 118871794  projections/gmc-207982847:three_realms → projections/gmc-207814498:three_realms
+> 120875394  projections/gmc-196831402:three_realms → projections/gmc-144232144:three_realms   (the foxes)
+> ```
+>
+> **`elevated` was silently ignored.** `_resolve_relationship_endpoint` (`converters.py:88`) elevates only when **`repo.is_transversal(entity)`** — *"more than one NATIVE projection in distinct universes"*. Neither Zhu Xing nor either fox qualifies, so every `relation` edge they get is **projection-anchored**, whatever `elevated` says. The one entity-anchored end above is the **Valley**, and only because a `LOCATION` has no projection to anchor to.
+>
+> **So the real defect is in the read, not the write:** `canvas_gmc_web` matches `r._from == entities/{gmc_id} OR r._to == entities/{gmc_id}`, and a projection-anchored edge starts `projections/…`. **Every `relation` edge created through the API for a single-universe GMC is invisible to it** — and **`useCanvas.js` fetches exactly that endpoint** to draw a GMC's relational web. The relation exists, reads back correctly through `relationship(fromEntityId:…)`, and the GM canvas shows nothing.
+>
+> **`elevated: true` is not a workaround**, because it is a public API argument whose effect depends on multiversality — it silently does nothing for the common case. That is worth raising rather than routing around.
+>
+> **Fix belongs with whoever owns the read** ([[backend-platform]]): match an edge whose endpoints are *either* the entity *or* one of its projections. File beside the other false zero of the same family — `character_build` reporting *"0 others linked"* on a faction.
 
 ### Cultivation progression — the shape being designed
 
