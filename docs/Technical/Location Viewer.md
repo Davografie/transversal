@@ -248,6 +248,33 @@ child's *current* name (`zoneLabel`), so renaming a child can never leave a pin
 stale. Nothing about the zone's name is stored on the zone itself. A zone is always
 a link — there are no decorative pins.
 
+#### Destination captions (arrange mode)
+
+Every travel dot (zone, `nav.parent`, `nav.portal`) already carries its destination's
+name as `label`, passed straight through as the dot's `title`. But `MapDot` draws
+`label` only where there is **no picture** — and in arrange mode every travel dot is a
+240px bubble *filled* by its destination preview. So the name could never appear
+exactly when the GM was positioning unnamed destinations (human, 2026-10-17).
+
+`:show-label="editZones"` opts the dot into a **caption plate** instead: a pill drawn
+over the preview, at `bottom: 22%` with `left/right: 10%`.
+
+- **The geometry is load-bearing.** The dot keeps `overflow: hidden` +
+  `border-radius: 50%` because that clip *is* the hole illusion (the oversized
+  `.dot-hole` image is masked by it), so a caption overhanging the rim would be sliced
+  by it. Both insets are percentages, so the relation is **scale-invariant** and holds
+  at any bubble size; at `bottom: 20%` the plate's bottom corners land *exactly* on the
+  rim, which is why it is 22%. Pinned by the corner-vs-circle assertion in
+  `e2e/tests/navdot-destination-labels.spec.js`.
+- **`pointer-events: none`.** A click on an expanded travel dot reaches either the
+  overlay image (which stops it) or the dot itself; a plate that took pointer events
+  would silently take that over for the strip it covers.
+- **Arrange mode only** — furniture for placing things, not a tooltip. Outside arrange
+  mode the dot is its preview and nothing else.
+- **The text is the `label`, unchanged**, so a portal reads `Name · transversal_type`
+  exactly as its tooltip does. That keeps a dot's wording identical whether or not it
+  has a picture to draw; a long label is **ellipsised** rather than overflowing.
+
 ### Guided route — the next hop
 
 An SFX can hand a character **directions** in the fiction (the effects system's
