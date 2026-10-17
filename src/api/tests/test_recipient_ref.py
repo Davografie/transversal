@@ -24,7 +24,7 @@ def test_copy_and_move_declare_the_recipient_ref_over_the_entity_field():
     for action in RECIPIENT_ACTIONS:
         meta = get_action_meta_for("modify_trait", action)
         ref = next(d for d in meta.refs if d.name == "recipient")
-        assert ref.elements == ("entity",)
+        assert "entity" in ref.elements, meta.action_id
         assert ref.role == "entity", "the stored strings must keep resolving"
         field = next(f for f in meta.fields if f.name == "entity")
         assert field.hidden_when_ref == "recipient", (
@@ -38,6 +38,15 @@ def test_every_action_with_a_recipient_field_declares_the_ref():
     The ref is derived from the field's `hidden_when_ref` marker, so this can only
     fail by someone marking a field without the registry pass running — or by a
     new action adding an `entity` field that never opts in.
+
+    **`elements` is a floor, not an equality.** It used to assert exactly
+    ``("entity",)``, which was true while every recipient was a character or a
+    thing like one. `Grant SFX` accepts the other owner surfaces too — a place, a
+    body, a trait definition, a trait or trait-set instance ([[B326]]) — and the
+    invariant that matters is the one this test is named for: the fallback field
+    is still something the reference can name. Asserting equality would have
+    forced either a second reference for the same question or a recipient that
+    lies about what it takes.
     """
     from transversal.services.effects_registry.registry import EFFECT_ACTION_REGISTRY
 
@@ -52,7 +61,7 @@ def test_every_action_with_a_recipient_field_declares_the_ref():
             continue
         seen += 1
         ref = next(r for r in meta.refs if r.name == "recipient")
-        assert ref.elements == ("entity",)
+        assert "entity" in ref.elements, meta.action_id
         assert ref.role == "entity"
         field = next(f for f in meta.fields if f.name == "entity")
         assert ref.label == field.label, (

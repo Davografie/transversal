@@ -88,7 +88,14 @@ _DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool
     "gain_or_step_up_trait": [("trait", "Trait", ('trait',), 'target', False), ("recipient", "Entity", ('entity',), 'entity', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
     "gain_subtrait": [("trait", "Trait", ('trait',), 'target', False), ("owner", "Anchored to", ('traitsetting',), 'owner', True)],
     "gain_trait": [("trait", "Trait", ('trait',), 'target', False), ("recipient", "Entity", ('entity',), 'entity', False), ("owner", "Anchored to", ('entity', 'projection', 'relationship', 'traitsetting'), 'owner', True)],
-    "grant_sfx": [("recipient", "Entity", ('entity',), 'entity', False)],
+    # Every surface `sfx_ids` lives on, not only entities: a rule can be granted to
+    # a trait **definition** (its `defaultSfxIds` — propagated to holders), a trait
+    # **instance**, a trait **set instance**, a body, or a place. The handler
+    # recovers which one a resolved id is by asking the repository, so the
+    # declaration is what decides whether an author can *reach* them ([[B326]]).
+    "grant_sfx": [("recipient", "Owner",
+                   ('entity', 'location', 'projection', 'traitsetting',
+                    'traitsetsetting', 'trait'), 'entity', False)],
     "increase_by_effect_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
     "invert_polarity": [("trait", "Target", ('traitsetting',), 'target', False)],
     "learn_entities": [("entity", "Which Entity", ('entity',), 'target', False)],

@@ -518,7 +518,7 @@ _Count: 84._
 
 | Action | What it does | Sign | Retired |
 |---|---|---|---|
-| **Grant SFX** <br>`grant_sfx` | Grant a rule from the registry to a target owner — an entity, or a trait instance reached by a path. The teacher case: a place's rule hands a technique to whoever it applies to. <br>Refs: `sfx`, `recipient` | benefit | — |
+| **Grant SFX** <br>`grant_sfx` | Grant a rule from the registry to a target owner: an entity, a place, a body, a trait definition (its default rules), or a trait / trait-set instance. The teacher case: a place's rule hands a technique to whoever it applies to. <br>Refs: `sfx`, `recipient` (`entity`, `location`, `projection`, `traitsetting`, `traitsetsetting`, `trait`) | benefit | — |
 
 **Client**
 

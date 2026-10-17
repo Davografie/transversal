@@ -44,6 +44,13 @@ this is dynamic.
   trait definition* — `defaultSfxIds` is the grant, `possibleSfxIds` is the offer.
   The hand-picked lists **stay** and keep those fixed meanings; the paths are their
   dynamic form, and availability reads both.
+- **Both lists can be written at fire time.** The `Grant SFX` action names an
+  **owner surface** rather than a recipient entity: a character or place, a body, a
+  trait instance, a trait-set instance, or a **trait definition** — the last of
+  which writes `defaultSfxIds` and, through `propagate_trait_default_sfx`, puts the
+  rule on every existing holder as well ([[B326]]). The `possibleSfxIds` half is
+  written from the trait's own editor ([[B324]]), which is the authoring surface for
+  the offer.
 - **The rule-level `implicit` flag retires.** Flavour lives on each path. A trait's
   two fields are separate fields, so each already carries its flavour.
 - **There is no separate gate.** The old per-candidate reading of the acquire path

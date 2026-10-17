@@ -220,7 +220,14 @@ To put it in the world: open **Manage SFX**, filter by *Trait instance*, pick th
 
 **Spawning a mob from a template.** Use **Spawn Entity**: it makes a *copy* of an entity — its traits, its edges and its set settings — and leaves the original alone, so you can throw eight bandits at the table without touching the bandit you authored. Give the effect a **Template** (a path, or a **Choose** step so the table picks), and optionally a **Spawn At** place; with neither, the copy stands wherever the rule is activated — which for a rule on the GM bucket is the place you are looking at. Name it if you want to; otherwise it keeps the template's name. The copy is nobody's unless you fill in **Owner**, so a spawned mob is neutral by default.
 
-**Teaching — handing a rule to someone.** Use the **Grant SFX** action: the rule to grant is itself a targeting path seeded from the registry (`select sfxs`), and the recipient is whatever the grant should land on. This is how a place hands a technique to the person training for it.
+**Teaching — handing a rule to someone.** Use the **Grant SFX** action: the rule to grant is itself a targeting path seeded from the registry (`select sfxs`), and the **Owner** is whatever the grant should land on. It is a *path*, so it reaches more than a character:
+
+- **a character or place** — `select source → occupants → choose` hands the rule to whoever is there;
+- **a trait instance** — the sect-training case: a technique lands on the trait it is studied on, so it travels with that trait and not with the person holding it;
+- **a trait set instance** — the whole set as a unit;
+- **a trait definition** — the rule becomes one of that trait's **default** rules: every future holder is offered it, and everyone who already holds it gains it now. This is the widest form: write the rule once, on the trait, and it follows the trait everywhere.
+
+Granting obeys the same gate as attaching in **Manage SFX**: a rule that declares a source can only land on a matching surface, and a rule with an acquire condition still has to satisfy it. So a `Location`-sourced rule granted to a character is refused — by name, not silently.
 
 **An airport with a departure board.** A portal normally asks *where to?* — its effect has a **Choose** step, and the picker opens when someone steps through. If you would rather it just go somewhere, **Set Portal Destination** points the portal at a place and the next step through takes it, without asking. Author the pointing as its own rule: trigger **On Location Change**, source **Location** (the airport), one effect whose **Portal** is the edge you want to point and whose **Destination** is where that flight goes.
 

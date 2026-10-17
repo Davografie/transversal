@@ -6,6 +6,7 @@ from transversal.domain import Effect
 from transversal.domain import Entity
 from transversal.domain import EntityType
 from transversal.domain import Projection
+from transversal.domain import Trait
 from transversal.domain import TraitSetting
 from transversal.domain import TraitSetSetting
 from transversal.services.effects_applier.datatypes import (
@@ -28,6 +29,10 @@ def owner_surface_for(owner) -> tuple[str | None, str]:
     """
     if isinstance(owner, TraitSetting):
         return "trait_instance", owner.id
+    if isinstance(owner, Trait):
+        # A trait *definition* owns `defaultSfxIds` — the rules every holder of it
+        # is offered, and the ones a new instance starts with ([[B326]]).
+        return "trait", owner.id
     if isinstance(owner, TraitSetSetting):
         return "trait_set", owner.id
     if isinstance(owner, Projection):
@@ -51,8 +56,13 @@ def _owner_for_subject(repo, subject) -> tuple[str | None, str]:
         return surface, owner_id
     if not isinstance(subject, str):
         return None, ""
+    # **Order matters, and a new surface must be added here or it is silent.** A
+    # bare id arrives from a path, so the only way to learn what it is, is to ask
+    # each surface in turn. A trait id is not any of the three before it and is not
+    # an entity, so `get_trait` has to come before `get_entity` — and before the
+    # fallthrough, which answers "no owner to grant to" ([[B326]]).
     for getter_name in ("get_traitsetting", "get_traitsetsetting",
-                        "get_projection", "get_entity"):
+                        "get_projection", "get_trait", "get_entity"):
         getter = getattr(repo, getter_name, None)
         if not callable(getter):
             continue
