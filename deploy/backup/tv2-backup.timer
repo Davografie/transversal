@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Transversal backup
+
+[Timer]
+# Nightly, when nothing is being written. `Persistent` catches up after the desktop has
+# been off — the machine this runs on is a desktop, and it is allowed to sleep.
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

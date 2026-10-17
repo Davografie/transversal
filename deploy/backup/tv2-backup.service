@@ -1,0 +1,13 @@
+[Unit]
+Description=Transversal — back up every database, the media mirror and Redis
+Documentation=file:///home/dave/dev/transversal2/deploy/backup/README.md
+
+[Service]
+Type=oneshot
+# The script asks the server which databases exist, so a new campaign needs no edit here.
+WorkingDirectory=/home/dave/dev/transversal2
+ExecStart=/usr/bin/env bash /home/dave/dev/transversal2/scripts/backup-databases.sh --keep 7
+# A backup that half-runs is still worth keeping; a failure is visible in the journal.
+# `systemctl --user status tv2-backup.service` after the fact.
+Nice=10
+IOSchedulingClass=idle
