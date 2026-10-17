@@ -238,8 +238,18 @@ _Count: 16._
 | `life_path` | `roll_tables` | roll_table | many | Roll tables |
 | `roll_table` | `life_path` | life_path | one | Life path |
 | `entity` | `scheduled_events` | scheduled_event | many | Pending timers |
+| `traitsetting` | `sfxs` | sfx | many | Rules |
+| `traitsetsetting` | `sfxs` | sfx | many | Rules |
+| `entity` | `sfxs` | sfx | many | Rules |
+| `location` | `sfxs` | sfx | many | Rules |
+| `projection` | `sfxs` | sfx | many | Rules |
+| `trait` | `possible_sfxs` | sfx | many | Rules it offers |
+| `trait` | `default_sfxs` | sfx | many | Rules it grants |
 
-_Count: 53._
+_Count: 60._
+
+> [!note] Rules are now reachable, not only searchable ([[B327]])
+> `select sfxs` seeds the whole registry, so a path could always **search** every rule. What it could not do was **walk to one** — no edge ended on `sfx`. Now "the rule this trait carries" (`instance → sfxs`), "the rules this trait offers / grants" (`trait → possible_sfxs` / `default_sfxs`), and "this entity's, place's or body's rules" are all hops.
 
 ### Fields a `filter` may compare
 

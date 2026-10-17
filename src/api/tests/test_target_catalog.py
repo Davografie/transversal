@@ -26,8 +26,12 @@ def test_die_edges():
 
 def test_traitsetting_edges():
     names = [e.name for e in tc.edges_from("traitsetting")]
+    # `sfxs` last: the hop to the rules the instance carries ([[B327]]). Before it
+    # the catalog had no edge ending on an `sfx` at all, so a path could search the
+    # registry but could not walk to the rule a thing holds.
     assert names == ["rating_dice", "capacity_dice", "trait", "traitset", "entity",
-                     "projection", "traitsetsetting", "parent", "subtraits", "relationship"]
+                     "projection", "traitsetsetting", "parent", "subtraits", "relationship",
+                     "sfxs"]
 
 
 def test_the_set_setting_pair_is_reachable_from_both_ends_and_from_an_instance():

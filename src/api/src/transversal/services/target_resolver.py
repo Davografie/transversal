@@ -1777,6 +1777,30 @@ def _traitset_traitsetsettings(ts, ctx) -> list[Any]:
     return list(ctx.repo.get_traitsetsettings_for_traitset(ts.id))
 
 
+def _ids_to_sfx(repo, ids) -> list[Any]:
+    """The registry rules an id list names, skipping any that no longer exist.
+
+    A dangling id is a **skip**, not a failure: the owner's list is content and a
+    deleted rule leaves one behind, so refusing the whole hop would make every
+    other rule on that trait unreachable ([[B327]]).
+    """
+    getter = getattr(repo, "get_sfx", None)
+    if not callable(getter):
+        return []
+    return [found for found in (getter(i) for i in (ids or [])) if found is not None]
+
+
+def _owner_sfx(owner, ctx) -> list[Any]:
+    """The rules attached to **one** owner surface — `sfxIds`, in every case.
+
+    A place and a character, a trait instance, a trait-set instance and a body all
+    keep their rules in a field of the same name, because that is what
+    `sfx_owner` writes; the catalog gives them one hop each so a path can say
+    *which* surface it walked, not because the read differs ([[B327]]).
+    """
+    return _ids_to_sfx(ctx.repo, getattr(owner, "sfx_ids", None))
+
+
 def register_default_edges() -> None:
     # A contest is reached from the two things that know about one: a *pool* (the
     # dice being assembled — the shortest route, and the one that speaks the
@@ -1923,6 +1947,21 @@ def register_default_edges() -> None:
     register_edge("life_path", "roll_tables", _life_path_roll_tables)
     register_edge("roll_table", "life_path", _roll_table_life_path)
     register_edge("entity", "scheduled_events", _entity_scheduled_events)
+
+    # ── A rule, as a destination ([[B327]]) ─────────────────────────────
+    # The owner surfaces, each reading the one list it keeps. `select sfxs` was
+    # the only way to name a rule, so a path could search the registry but never
+    # walk to the rule a thing **carries** — which is what an effect that grants
+    # "the rule on this trait" needs to say.
+    for _owner_element in ("traitsetting", "traitsetsetting", "entity",
+                           "location", "projection"):
+        register_edge(_owner_element, "sfxs", _owner_sfx)
+    # A definition keeps two lists with different meanings — offered vs granted —
+    # so it gets a hop each rather than one that would have to lie about which.
+    register_edge("trait", "possible_sfxs",
+                  lambda t, ctx: _ids_to_sfx(ctx.repo, t.possible_sfx_ids))
+    register_edge("trait", "default_sfxs",
+                  lambda t, ctx: _ids_to_sfx(ctx.repo, t.default_sfx_ids))
 
 
 register_default_edges()

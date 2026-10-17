@@ -725,6 +725,24 @@ EDGES: tuple[Edge, ...] = (
     # was scheduled on the entity or on one of its trait instances).
     Edge("scheduled_events", "entity", ("scheduled_event",), "many", "Pending timers",
          noun="pending timer", plural="pending timers"),
+
+    # ── A rule, as something a path can reach ([[B327]]) ────────────────
+    # `select sfxs` seeds the whole registry, but **no edge ended on an `sfx`**, so
+    # a path could search every rule in the game and could not walk to one: "the
+    # rule this trait carries" was unexpressible, and the author's `navigate` step
+    # stayed empty. One hop per owner surface, because a rule is attached to
+    # exactly one of them and the hop is how the path says which.
+    Edge("sfxs", "traitsetting", ("sfx",), "many", "Rules", noun="rule"),
+    Edge("sfxs", "traitsetsetting", ("sfx",), "many", "Rules", noun="rule"),
+    Edge("sfxs", "entity", ("sfx",), "many", "Rules", noun="rule"),
+    Edge("sfxs", "location", ("sfx",), "many", "Rules", noun="rule"),
+    Edge("sfxs", "projection", ("sfx",), "many", "Rules", noun="rule"),
+    # A trait *definition* keeps two lists that mean different things: what it
+    # **offers** (a holder may acquire it) and what it **grants by default**
+    # (every holder starts with it). Two hops, because one would have to lie about
+    # which list it read — the same distinction [[B131]] draws on the trait itself.
+    Edge("possible_sfxs", "trait", ("sfx",), "many", "Rules it offers", noun="rule"),
+    Edge("default_sfxs", "trait", ("sfx",), "many", "Rules it grants", noun="rule"),
 )
 
 
