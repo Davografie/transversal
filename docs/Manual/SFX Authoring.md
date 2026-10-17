@@ -222,6 +222,13 @@ To put it in the world: open **Manage SFX**, filter by *Trait instance*, pick th
 
 **Teaching — handing a rule to someone.** Use the **Grant SFX** action: the rule to grant is itself a targeting path seeded from the registry (`select sfxs`), and the recipient is whatever the grant should land on. This is how a place hands a technique to the person training for it.
 
+**An airport with a departure board.** A portal normally asks *where to?* — its effect has a **Choose** step, and the picker opens when someone steps through. If you would rather it just go somewhere, **Set Portal Destination** points the portal at a place and the next step through takes it, without asking. Author the pointing as its own rule: trigger **On Location Change**, source **Location** (the airport), one effect whose **Portal** is the edge you want to point and whose **Destination** is where that flight goes.
+
+- The board belongs to **that portal**, not to the airport: two doors out of one hall are two boards.
+- It is **session state** — nothing is written to the portal itself, so a restart forgets the board and your content is never rewritten by play. Everyone at the table sees the same board, because it lives on the server.
+- With no board set, a portal goes where it points, exactly as before. You can mix: some portals on a board, others still asking.
+- To *rotate* the board, have the arrival rule set it again each time — that is all "rotating" is. Set it once and it stays set until something sets it again.
+
 **Offering a rule to many owners at once.** Author a row under **Who it reaches** with the *Offered* relationship and a path naming the owners — for instance every trait in a set, reached by going from the definition to its instances. The owners get the chip; taking it attaches the rule to them.
 
 ## How your rule reads

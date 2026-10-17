@@ -365,7 +365,7 @@ _Count: 10._
 
 **Reading the sign column.** *cost* / *benefit* / *either* is the editor's hint — it groups the picker and colours the row, and stores nothing. A rule is free to use a cost verb for a benefit. *Refs* names the inputs the action declares; the editor labels each one, and a target is normally written as a targeting path.
 
-_Count: 83._
+_Count: 84._
 
 
 **Change a Die**
@@ -479,6 +479,7 @@ _Count: 83._
 | **Travel** <br>`travel` | Move an entity across a universal boundary (inapposite relocates the body; consciousness transfers the mind) <br>Refs: `recipient`, `location`, `projection` | benefit | — |
 | **Set Location** <br>`set_location` | Place the entity at a specific or random location (its active body relocates in sync) <br>Refs: `recipient`, `location` | either | — |
 | **Set Destination** <br>`set_destination` | Grant directions: name the place they are trying to reach, and the map lights the next hop <br>Refs: `recipient`, `location` | benefit | — |
+| **Set Portal Destination** <br>`set_portal_destination` | Point a portal somewhere for now: the next time it is fired it goes there, without asking. Session state — a restart forgets it <br>Refs: `portal`, `owner` | benefit | — |
 | **Clear Destination** <br>`clear_destination` | End an entity's directions. The engine writes this when guidance expires, restoring whatever the guidance replaced; authored directly, name that destination or leave it blank to clear outright | either | — |
 
 **Life Path**
