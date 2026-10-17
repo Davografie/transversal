@@ -161,7 +161,9 @@ This is what the corpus already obeyed before any correction, and it is why the 
 >
 > **Same die, different names.** The die is what mechanics read — so a beast at `d10` is a peer of a nascent soul cultivator *by die and not by nature*. That is how xianxia treats it: 妖气 (yao qi) is the term, a beast condenses a core rather than forming a golden one, and the core a cultivator harvests **is** the beast's condensed cultivation. Human names on a beast's sheet would be a lie; separate numbers would be a second vocabulary. This gives the numbers one meaning and the names two.
 >
-> **Living in `distinctions` is deliberate** — that set is `allowDuplicates: False`, so a creature holds *either* a cultivation stage *or* a beast stage, never both. The one exception the data insists on: **a beast can also be a cultivator** (`Charhide Bogtreader` is a literal `spirit beast` carrying "6th stage qi condensation"). Those keep their **cultivation stage** — a beast with a realm is on the human ladder, and its realm is the more specific fact.
+> **Living in `distinctions` was the choice, but it does NOT enforce one-path-only.** I first wrote here that `allowDuplicates: False` makes a creature hold *either* a cultivation stage *or* a beast stage — **that is wrong**: the flag is per **trait**, not per set, so two *different* traits from one set are always allowed together. Proof: `Charhide Bogtreader` (a literal `spirit beast`) and `Elder Gui` both carried **both** traits while I was migrating. **The convention is what keeps them apart, and the convention is the human's judgement, not a guard.** *The current data holds 0 on both scales, but nothing in the model prevents one.*
+>
+> **The standing convention:** a creature whose stage names a **realm** keeps its **cultivation stage** — a beast with a realm is on the human ladder, and the realm is the more specific fact. Only creatures with no realm move to the beast path.
 
 **Seeded from the labels the corpus already used** (`Hatchling`, `Juvenile`, `adolescent`, `Awakened`, `deity`), which is why they read as familiar rather than invented.
 
