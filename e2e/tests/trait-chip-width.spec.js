@@ -12,6 +12,11 @@
 //
 // Checked at a phone viewport as well as a desktop one, because that is where the
 // reported symptom was.
+//
+// ⚠ The stack is **open-on-demand**: since the rail became conditional (2026-10-16) it
+// does not appear with arrange mode, it appears when the GM opens it from the top
+// control. This spec was written against the auto-open behaviour and silently kept
+// running red after that change — the click below is what it was missing.
 
 import { test, expect } from '@playwright/test'
 import { gql } from '../helpers/sheet.js'
@@ -81,6 +86,9 @@ async function open(page, size) {
   await page.goto('/')
   await expect(page.locator('.name-entry')).toHaveCount(0)
   await enterArrangeMode(page)
+  // Arrange mode alone no longer reveals the stack — the top control does
+  // (`unplaced · N`; it is the rail's handle while nothing is being dragged).
+  await page.locator('.top-control').click()
 
   await expect(page.locator('.loc-traits .trait-chip')).toHaveCount(2)
   await expect(page.locator(`.scene-chip[data-trait-id="${PLACED}"]`)).toHaveClass(/expanded/)
