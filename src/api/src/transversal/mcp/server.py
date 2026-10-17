@@ -349,7 +349,7 @@ query { traitsets { id name } }
 """
 
 _QUERY_TRAITSETS_FULL = """
-query { traitsets { id name explanation universes entityTypes order limit sheetTab } }
+query { traitsets { id name explanation universes entityTypes order limit sheetTab allowDuplicates } }
 """
 
 _QUERY_TRAITS = """
@@ -366,13 +366,13 @@ _MUT_UPDATE_TRAITSET = """
 mutation(
   $id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!],
   $description: String, $explanation: String, $order: Int, $limit: Int,
-  $sheetTab: SheetTab
+  $sheetTab: SheetTab, $allowDuplicates: Boolean
 ) {
   updateTraitset(
     id: $id, name: $name, universes: $universes, entityTypes: $entityTypes,
     description: $description, explanation: $explanation, order: $order, limit: $limit,
-    sheetTab: $sheetTab
-  ) { id name universes entityTypes order limit sheetTab explanation }
+    sheetTab: $sheetTab, allowDuplicates: $allowDuplicates
+  ) { id name universes entityTypes order limit sheetTab explanation allowDuplicates }
 }
 """
 
@@ -2517,6 +2517,8 @@ def update_traitset(args: dict) -> dict:
     for key in ("name", "universes", "description", "explanation", "order", "limit"):
         if args.get(key) is not None:
             variables[key] = args[key]
+    if args.get("allow_duplicates") is not None:
+        variables["allowDuplicates"] = args["allow_duplicates"]
     if args.get("entity_types") is not None:
         variables["entityTypes"] = args["entity_types"]
     if args.get("sheet_tab") is not None:

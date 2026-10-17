@@ -47,6 +47,14 @@ from . import server as S
 # Anything not listed here fails the read-back gate, so this file is the single
 # place where "we accept not being able to read that back" is recorded.
 BASELINE_GAPS: dict[str, dict[str, str]] = {
+    "resolveStep": {
+        "*": "the input IS echoed, inside `structuredChoices`, which is a JSON "
+        "scalar (`strawberry.scalars.JSON`) — no sub-selection can be made on it, "
+        "so the coverage diff cannot see the fields. Read them from the returned "
+        "JSON. ([[B316]] moved this: the echo carries effect/field/sourceKind/"
+        "continuation so a pending `choose` is answered by sending the same "
+        "document back.)",
+    },
     "updateEntity": {
         "suitableLifePathIds": "write-only: `Entity` does not expose it; read from "
         "the other side via list_life_paths(factionIds)",
