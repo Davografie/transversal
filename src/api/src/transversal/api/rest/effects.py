@@ -24,6 +24,13 @@ class ApplyRequest(BaseModel):
     #: The `EffectInput` shape the effect form edits — camelCase, specs included.
     effect: dict = {}
     context: dict = {}
+    #: The roll table row this effect was opened from, when it is one. An entry's
+    #: **bound variables** are part of what its effects mean: a destination that
+    #: starts `select variable beast_kings` has nothing to walk from without them,
+    #: so a run that omits this can only report "nothing applied" — true, and
+    #: useless ([[B330]]).
+    table_id: str | None = None
+    entry_index: int | None = None
 
 
 class EndRequest(BaseModel):
@@ -79,6 +86,7 @@ async def apply_effect(req: ApplyRequest, request: Request):
     from fastapi import HTTPException
 
     from transversal.main import _get_em, _get_repo
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
     from transversal.services.effects_commit import commit_effects
     from transversal.services.effects_engine.wire import effect_from_wire_dict
 
@@ -93,7 +101,24 @@ async def apply_effect(req: ApplyRequest, request: Request):
         raise HTTPException(status_code=422, detail=f"not an effect: {e}") from e
 
     repo = _get_repo()
-    result = commit_effects(entity, [effect], repo, req.context or None)
+    context = dict(req.context or {})
+    # The run's scope, rebuilt the way the engine builds it when the row is
+    # actually rolled: the same `table_bindings` walk, against the same subject.
+    # It is computed here rather than sent by the client because the client has
+    # the *declarations*, not the values.
+    if req.table_id:
+        from transversal.services.roll_table import table_bindings
+
+        getter = getattr(repo, "get_roll_table", None)
+        table = getter(req.table_id) if callable(getter) else None
+        if table is not None:
+            entries = list(getattr(table, "entries", None) or [])
+            index = req.entry_index
+            entry = entries[index] if index is not None and 0 <= index < len(entries) else None
+            context[BINDINGS_CONTEXT_KEY] = table_bindings(
+                table, entity, repo, entry=entry, index=index)
+
+    result = commit_effects(entity, [effect], repo, context or None)
     fresh = repo.get_entity(req.entity_id) or entity
 
     return {
@@ -101,6 +126,10 @@ async def apply_effect(req: ApplyRequest, request: Request):
         # point, and an empty list is an answer, not a failure.
         "applied": [a.summary for a in result.applied],
         "pending": len(result.pending_choices),
+        # The names the run had, so "nothing applied" can be read against what it
+        # had to walk from rather than guessed at.
+        "bound": sorted((context.get(BINDINGS_CONTEXT_KEY) or {}).keys())
+        if context else [],
         "effect": {"type": effect.type, "action": effect.action},
         # Read back rather than echoed: the effect may have moved the entity, and
         # "where they are now" is the thing an author checks.

@@ -321,6 +321,10 @@ const props = defineProps({
   trigger: { type: String, default: '' },     // the SFX's trigger: an immediate effect reads its context
   placement: { type: String, default: '' },   // "menu" gates on the menu's outcome keys instead
   outputVariables: { type: Object, default: null }, // { name: {element, cardinality} } for `select variable`
+  // What a test run needs to reproduce this effect's scope — the roll table row
+  // it belongs to, so the server can compute the entry's bound variables. Null
+  // means "run it bare", which is right for an effect that names none ([B330]).
+  runContext: { type: Object, default: null },
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
   portalDestination: { type: String, default: '' },
   portalTargetType: { type: String, default: '' },
@@ -926,6 +930,11 @@ function describeRun(body) {
   if (body.pending) parts.push(`${body.pending} question${body.pending === 1 ? '' : 's'} it would ask`)
   const at = body.entity?.location_id
   if (at) parts.push(`now at ${at}`)
+  // What the run had to work with. An effect that names a variable and reports
+  // nothing is indistinguishable from one that names none — so the names it had
+  // are part of the answer.
+  const bound = body.bound || []
+  if (bound.length) parts.push(`in scope: ${bound.join(', ')}`)
   return parts.join(' — ')
 }
 
@@ -936,7 +945,7 @@ async function runEffect() {
   running.value = true
   report.value = null
   try {
-    const body = await applyEffect(entityId, buildEffect(meta))
+    const body = await applyEffect(entityId, buildEffect(meta), {}, props.runContext)
     report.value = body
       ? { error: false, text: describeRun(body) }
       : { error: true, text: 'the run failed — see the console' }

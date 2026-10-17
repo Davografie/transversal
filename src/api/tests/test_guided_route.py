@@ -127,6 +127,19 @@ def test_directions_are_written_on_the_subject():
     assert "kael" in repo.updated
 
 
+def test_guidance_with_no_destination_says_so():
+    """A `Set Destination` whose destination path named nobody used to return
+    silently: the effect looked applied and did nothing. Measured on a test run of
+    `rt-7923babf`'s row, whose destination starts at a bound variable it did not
+    have — the answer was "nothing applied" with no reason ([[B330]])."""
+    kael = _entity()
+    repo = Repo([kael])
+    result = commit_effects(kael, [_directions(target="")], repo)
+    assert kael.destination_location is None
+    assert [a.summary for a in result.applied] == [
+        "no destination — the path named nobody"]
+
+
 def test_directions_can_be_granted_to_someone_else():
     """The party-wide brief is one effect over several subjects, so the subject is
     not necessarily the entity that applied it."""

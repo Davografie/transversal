@@ -40,6 +40,7 @@ def wired(monkeypatch):
 
     def fake_commit(e, effects, repo, context=None, **kw):
         seen["effects"] = effects
+        seen["context"] = context
         # Do what a travel would: move them, so the reply has something to read back.
         e.current_location = "loc-b"
         return SimpleNamespace(
@@ -47,6 +48,11 @@ def wired(monkeypatch):
             pending_choices=seen.get("pending_choices", []),
         )
 
+    # What `table_bindings` would have computed, without walking a real table.
+    bindings = {"beast_kings": SimpleNamespace(element="entity", cardinality="many", values=["gmc-1"])}
+
+    monkeypatch.setattr("transversal.services.roll_table.table_bindings",
+                        lambda *a, **k: dict(bindings))
     monkeypatch.setattr("transversal.main._get_em",
                         lambda: SimpleNamespace(get=lambda eid: entity if eid == "char-1" else None))
     monkeypatch.setattr("transversal.main._get_repo", lambda: _Repo(entity))
@@ -140,3 +146,56 @@ def test_a_body_that_is_not_an_effect_is_refused(wired):
     })
     assert r.status_code == 422
     assert "not an effect" in r.json()["detail"]
+
+
+# ── The run's scope ([[B330]]) ───────────────────────
+# An entry's bound variables are part of what its effects mean. A destination that
+# starts `select variable beast_kings` (rt-7923babf's) has nothing to walk from
+# without them, so the run rebuilt them — the same walk the engine does when the
+# row is actually rolled.
+
+class _TableRepo(_Repo):
+    def __init__(self, entity, table):
+        super().__init__(entity)
+        self.table = table
+
+    def get_roll_table(self, table_id):
+        return self.table if table_id == self.table.id else None
+
+
+def test_a_row_run_carries_the_entrys_bound_variables(wired, monkeypatch):
+    client, entity, seen = wired
+    table = SimpleNamespace(id="rt-x", entries=[SimpleNamespace(bound_variables=[])])
+    monkeypatch.setattr("transversal.main._get_repo", lambda: _TableRepo(entity, table))
+
+    r = client.post("/api/v1/effects/apply", json={
+        "entity_id": "char-1", "effect": _travel(),
+        "table_id": "rt-x", "entry_index": 0,
+    })
+    assert r.status_code == 200, r.text
+    # The names are reported, so "nothing applied" can be read against what the
+    # run actually had.
+    assert r.json()["bound"] == ["beast_kings"]
+    # …and they reached the commit, which is the half that makes them usable.
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY
+    assert "beast_kings" in seen["context"][BINDINGS_CONTEXT_KEY]
+
+
+def test_a_run_without_a_row_has_no_scope(wired):
+    client, _, _ = wired
+    r = client.post("/api/v1/effects/apply", json={
+        "entity_id": "char-1", "effect": _travel(),
+    })
+    assert r.json()["bound"] == []
+
+
+def test_an_unknown_row_still_runs_bare(wired):
+    """A table that has gone away is not a reason to refuse the run — the effect
+    still runs, it just has nothing named to walk from, and `bound` says so."""
+    client, _, _ = wired
+    r = client.post("/api/v1/effects/apply", json={
+        "entity_id": "char-1", "effect": _travel(),
+        "table_id": "rt-gone", "entry_index": 0,
+    })
+    assert r.status_code == 200
+    assert r.json()["bound"] == []

@@ -459,7 +459,9 @@ def _apply_set_location(entity, effect, repo, result):
 
     location_id = _resolve_target(subject, effect, result, repo)
     if location_id is None:
-        return  # pending choice recorded
+        result.applied.append(AppliedEffect(
+            effect, "no place named — the path resolved to nobody"))
+        return
 
     loc = repo.get_entity(location_id)
     dest_universe = loc.current_universe if loc is not None and loc.current_universe else subject.current_universe
@@ -575,7 +577,9 @@ def _apply_travel(entity, effect, repo, result):
     if travel_type != "consciousness":
         location_id = _resolve_target(subject, effect, result, repo)
         if location_id is None:
-            return  # pending choice recorded
+            result.applied.append(AppliedEffect(
+                effect, "no destination — the path named nobody"))
+            return
         dest_universe = _dest_universe()
         proj = repo.get_projection(subject.current_projection) if subject.current_projection else None
         if proj is None:
@@ -745,7 +749,16 @@ def _apply_set_destination(entity, effect, repo, result):
 
     location_id = _resolve_target(subject, effect, result, repo)
     if location_id is None:
-        return  # pending choice recorded
+        # **Say so.** `_resolve_target` cannot raise a question — a `choose` is
+        # answered upstream, in `apply_effects`, before a handler runs — so a
+        # `None` here means the path named nobody: unfiltered, or its variable
+        # was not bound. Returning silently made a run look like a success with
+        # nothing to report, which is how a test run of a roll-table row's
+        # `Set Destination` answered "nothing applied" and said nothing about
+        # why ([B330]).
+        result.applied.append(AppliedEffect(
+            effect, "no destination — the path named nobody"))
+        return
 
     prior = getattr(subject, "destination_location", None) or ""
     subject.destination_location = location_id

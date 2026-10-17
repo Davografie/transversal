@@ -10,6 +10,7 @@
       :portal-target-type="portalTargetType"
       :portal-universe="portalUniverse"
       :portal-root-id="portalRootId"
+      :run-context="runContext"
       @save="onSave"
     />
   </div>
@@ -49,7 +50,17 @@ const props = defineProps({
   portalTargetType: { type: String, default: '' },
   portalUniverse: { type: String, default: '' },
   portalRootId: { type: String, default: '' },
+  // The roll table row this effect belongs to, when it is one: the run needs the
+  // entry's bound variables, and only the row knows where it lives ([B330]).
+  tableId: { type: String, default: '' },
+  entryIndex: { type: Number, default: null },
 })
+
+// What a test run needs to reproduce the row's scope. Null for a consumer that
+// has no row (a portal's effects), which is exactly "run it bare".
+const runContext = computed(() => (
+  props.tableId ? { tableId: props.tableId, entryIndex: props.entryIndex } : null
+))
 
 // A panel cannot `provide` to its own child panels (they are rendered by
 // `Panel.vue`, as siblings of the slot outlet), so the row draft arrives through

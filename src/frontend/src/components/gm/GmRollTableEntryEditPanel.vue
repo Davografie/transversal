@@ -285,6 +285,12 @@ function openEffectEditor(index) {
       index,
       universe: universe.value,
       lifePath: lifePath.value,
+      // Whose row this is, so the test run can compute the entry's bound
+      // variables. Without them a `select variable` path resolves to nobody and
+      // the run can only fail — measured on `rt-7923babf`, whose destination
+      // starts at `beast_kings` ([B330]).
+      tableId: props.tableId,
+      entryIndex: props.index,
     },
     // The row draft, as a live reference, through the spec's `context` — a panel
     // cannot `provide` to its own child panels. The child writes effects back

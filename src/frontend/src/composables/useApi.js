@@ -109,14 +109,23 @@ export function useApi() {
    * reports, so an effect can be tried before it is saved, without the rest of the
    * rule happening around it.
    */
-  async function applyEffect(entityId, effect, context = {}) {
+  async function applyEffect(entityId, effect, context = {}, runContext = null) {
     loading.value = true
     error.value = null
     try {
       const r = await fetch(`${API_BASE}/effects/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity_id: entityId, effect, context }),
+        body: JSON.stringify({
+          entity_id: entityId,
+          effect,
+          context,
+          // The row this effect was opened from, so the server can compute the
+          // entry's bound variables — the difference between testing a row's
+          // effect and testing it stripped of everything it names.
+          table_id: runContext?.tableId || null,
+          entry_index: runContext?.entryIndex ?? null,
+        }),
       })
       const body = await r.json().catch(() => ({}))
       if (!r.ok) {
