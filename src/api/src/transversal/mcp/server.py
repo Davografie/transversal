@@ -389,7 +389,7 @@ _EFFECT_FIELDS = (
     "timing type action target entity result dieFilter negative context "
     "duration { timers { event remaining } combine } "
     "targetSpec entitySpec ownerSpec resultSpec refs output "
-    "conditions { type subject target value operator narrative spec }"
+    "conditions { type subject target value operator mode count narrative spec }"
 )
 
 # A path **wraps** tables: `entryStep` is the step a term begins at and `steps` is
@@ -542,7 +542,7 @@ mutation(
 
 _ROLL_ENTRY_FIELDS = (
     "key label description minValue maxValue weight tier "
-    "conditions { type subject target value operator narrative spec } "
+    "conditions { type subject target value operator mode count narrative spec } "
     "costEffects { %s } effects { %s } "
     "boundVariables { name spec element cardinality }"
 ) % (_EFFECT_FIELDS, _EFFECT_FIELDS)
@@ -579,7 +579,7 @@ mutation(
 _SFX_WRITE_FIELDS = (
     "id name description trigger limit sourceKind placement armingScope "
     "listenerSpec reach "
-    "boundVariables { name spec } conditions { type subject target value operator narrative spec } "
+    "boundVariables { name spec } conditions { type subject target value operator mode count narrative spec } "
     "duration { timers { event remaining } combine } "
     "effects { %s }"
 ) % _EFFECT_FIELDS
