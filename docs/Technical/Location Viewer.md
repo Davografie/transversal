@@ -363,6 +363,24 @@ standing occupants had no stored position, and they used to be scattered onto a 
 default near a zone, which said something about the room that was not true. Presence is
 not lost: the peer rail still names who is at the location.
 
+**A child location with no hotspot is the third kind of unplaced thing** (2026-10-17).
+It is the same absence — a child of this place that belongs on its map and has nowhere to
+be drawn — so it sits in the drawer beside the other two, tinted with the zone dot's green,
+and dragging its row out **creates** the zone at the drop point rather than moving one.
+`unplacedZones` is `children − zones`, and the subtraction is **per parent**: a child can
+sit under several (Asia has five), so pinning it here must not remove it from another
+parent's drawer.
+
+It exists because of a writer gap: `_ensure_child_zone` runs from the repository's
+`create_relationship`, but the REST `create_edge` the GM tree uses inserts the edge
+document directly — so a reparent leaves the child linked and **invisible on the parent's
+map**. Measured 2026-10-17: **43** such children in the global content. The drawer is the
+escape hatch until that writer is fixed, and deliberately **not** a blanket backfill —
+most of those 43 are geographic containers where a pin may be pointless, so placing is
+per-parent judgement. `( x )` is **not** armed for this drag: that target means "take this
+off the map" and an unplaced child is already off it, so a hotspot is removed by dropping
+its `zones` entry rather than by unplacing a position.
+
 Zones and nav dots show the destination's background as their expanded image
 (the `navdot_image` role) — the "hole": an inner `<img>` sized as the
 **destination's own scene layer** (cover + `PAN_OVERSCAN` + the teaser zoom) and

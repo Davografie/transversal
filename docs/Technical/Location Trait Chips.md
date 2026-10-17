@@ -137,6 +137,20 @@ must not be thirty labels. The words arrive when it opens.
   Pinned by two tests in `e2e/tests/chip-proximity.spec.js` — one asserting the row is
   listed **and** that no dot for it is drawn, with a *placed* occupant in the same
   payload proving the filter is "unplaced" and not "everybody".
+- **Unplaced CHILD LOCATIONS join them** (the human, 2026-10-17), and by the same
+  definition: a child of this place with no `zones` entry has no hotspot and cannot be
+  clicked, so it gets a row (the child's `navdot_image`/`background_image`, else initials,
+  then the name) tinted with the zone dot's green. Dragging a row out **creates** the zone
+  at the drop point — the one rail item that creates rather than moves — so it is the
+  viewer's first hand-creation path for a hotspot, and the first way to give a hotspot to
+  a child that the GM tree linked without one (`create_edge` never calls
+  `_ensure_child_zone`; 43 such children measured in the global content). The subtraction
+  is **per parent**: a child can sit under several, so pinning it on one map must not
+  remove it from another's drawer. `unplacedCount` is the sum of all three kinds, and
+  `( x )` is deliberately **not** armed for this drag — the thing being dragged is already
+  off the map. Pinned by `e2e/tests/rail-unplaced-children.spec.js`, including the whole
+  `PUT /zones` body: the list is *replaced*, so a new row that fails to echo the existing
+  entries strips their `location_id`.
 - **Arrange mode opens every chip.** The GM is placing these, and you cannot place what
   you cannot read — otherwise dragging means chasing an unlabelled marker around the
   map. The zone and nav dots already follow this rule (`:expanded="editZones || …"`).
@@ -144,7 +158,8 @@ must not be thirty labels. The words arrive when it opens.
   centred at the top of the map, in two states — the placement affordances are the same
   gesture forwards and backwards, so they share a home:
   - **Idle, in arrange mode**, it is the rail's **handle**: `unplaced · N`, where N counts
-    traits *and* occupants. Tap to open the rail, tap again (or tap the map) to close it.
+    traits, occupants *and* zoneless children. Tap to open the rail, tap again (or tap the
+    map) to close it.
     It reads as pressed (`.open`) while the rail is showing. It takes pointer events here
     because it is a button.
   - **While an occupant or a trait chip is dragged**, it becomes the **unplace target**:
