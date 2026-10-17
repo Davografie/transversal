@@ -1228,7 +1228,18 @@ function travelToTarget(t) {
       ? nav.value.parent?.name
       : (nav.value.transversal || []).find(x => x._key === nd.target.id)?.name
     const fakeZone = { x: nd.x, y: nd.y }
-    const fakeChild = { _key: nd.target.id, name: destName, current_universe: nd.target.universe, transversal_type: nd.type === 'portal' ? nd.transversal_type : null }
+    // **The portal's effects travel with it.** `travelWithAnimation` hands
+    // `child.effects` to `relocate`, which fires `/portal/{to}/fire` only when that
+    // list is non-empty — so omitting it here meant a portal navdot *moved* the
+    // traveller and never fired the portal. That is why dropping **your own**
+    // character on a portal did nothing while a GM dropping *someone else* on the
+    // same dot worked: the self path comes through here, the other path through
+    // `travelDescriptor`, which does carry `effects` (2026-10-17).
+    const fakeChild = {
+      _key: nd.target.id, name: destName, current_universe: nd.target.universe,
+      transversal_type: nd.type === 'portal' ? nd.transversal_type : null,
+      effects: nd.target.effects,
+    }
     travelWithAnimation(fakeZone, fakeChild, nd.image)
     return true
   }
