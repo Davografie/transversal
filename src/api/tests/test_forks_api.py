@@ -243,3 +243,21 @@ async def test_the_cap_is_two_and_a_bad_setting_cannot_remove_it(monkeypatch):
     for raw in ("", "  ", "nonsense", "0", "-3"):
         monkeypatch.setenv("FORKS_MAX_PER_ACCOUNT", raw)
         assert forks_mod.max_forks_per_account() == 2, raw
+
+
+async def test_the_global_and_playroom_do_not_use_up_the_cap(repo, open_creation, monkeypatch):
+    """An operator owns the global and the playroom as infrastructure — those must not
+    spend a normal account's campaign allowance (measured 2026-10-17: the owner owns both)."""
+    monkeypatch.setenv("FORKS_MAX_PER_ACCOUNT", "1")
+
+    def _stub(registry_repo, *, name, owner_account, slug="", **_):
+        return registry_repo.create_fork(name, "tv2_fork_new", owner_account, slug=slug)
+
+    monkeypatch.setattr(forks_mod, "provision_fork", _stub)
+    account = repo.create_account("dave@example.com")
+    repo.create_fork("Global", "transversal_global", account.id, slug="global", kind="global")
+    repo.create_fork("Playroom", "transversal", account.id, slug="playroom", kind="playroom")
+
+    created = await forks_mod.create_fork(_as(account), {"name": "My game"})
+
+    assert created["slug"] == "my-game"

@@ -115,8 +115,13 @@ async def create_fork(request: Request, body: dict | None = None) -> dict:
 
     # The cap, checked before any cloning: a fork is a whole database, so the limit has to
     # bound that rather than apologise after it.
+    #
+    # Counted as **campaigns**, not instances: the global multiverse and the playroom are
+    # deployment infrastructure (kinds `global` and `playroom`), so an operator who owns them
+    # must not thereby be unable to create a campaign of their own. Only `kind == "fork"` is
+    # what this limit exists to bound.
     cap = max_forks_per_account()
-    owned = repo.list_forks_for(account.id)
+    owned = [f for f in repo.list_forks_for(account.id) if f.kind == "fork"]
     if len(owned) >= cap:
         plural = "" if len(owned) == 1 else "s"
         raise HTTPException(

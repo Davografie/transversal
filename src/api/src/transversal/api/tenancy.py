@@ -39,8 +39,10 @@ from transversal.db.arango import use_database
 from transversal.db.registry_repository import RegistryRepository
 from transversal.services.campaign_scope import default_database, use_campaign
 
-#: Registry-backed routes: they name no campaign because they *choose* one.
-TENANCY_PREFIXES = ("/api/v1/accounts", "/api/v1/forks")
+#: Registry-backed routes: they name no campaign because they *choose* one. `/api/v1/tenancy`
+#: is the certificate gate — the edge asks it about a campaign before any request for that
+#: campaign exists, so it must not be resolved into one (B331).
+TENANCY_PREFIXES = ("/api/v1/accounts", "/api/v1/forks", "/api/v1/tenancy")
 
 
 def base_domain() -> str:

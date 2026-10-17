@@ -37,6 +37,7 @@ from transversal.api.sse.stream import router as sse_router
 from transversal.api.auth import router as auth_router
 from transversal.api.account_auth import router as account_auth_router
 from transversal.api.forks import router as forks_router
+from transversal.api.tls_ask import router as tls_ask_router
 from transversal.db.arango import current_database
 from transversal.db.repository import EntityRepository
 from transversal.services.campaign_provisioning import provision_campaign
@@ -286,6 +287,7 @@ app.include_router(auth_router)
 app.include_router(access_router)
 app.include_router(account_auth_router)
 app.include_router(forks_router)
+app.include_router(tls_ask_router)
 
 # Serve uploaded media files
 
