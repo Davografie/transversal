@@ -65,6 +65,87 @@ That is a set-piece, not a coincidence. It also re-reads what already sits in th
 
 **Lian Xi's sheet is already this character.** Azure Dawn's `sect leader`, golden core, standing at the door, carrying three flaws that make leaving impossible: `overly compassionate` (*"hesitates to deliver killing blows"*), `ritual purity bound` (*"reluctant to use forbidden techniques"*), and `sect loyalties` (*"prioritizes the sect's interests above her own, even to her detriment"*). **A leader at the exit, bound by purity, unwilling to kill, serving the institution she would have to abandon.** That is a heart-devil already written on the sheet, not one that needs authoring.
 
+### The cultivation rules, as established 2026-10-17
+
+> [!important] Two traits, two jobs — and the dependency runs one way
+> **`cultivation stage`** (`distinctions`, `STATIC`, **no duplicates**) is **where you are**. Single die inside the Valley.
+> **`qi`** (`resources`, **`RESOURCE`**) is **how much you carry**. Its capacity follows the stage.
+>
+> **The dependency is stage → qi, and it is a convention, not a mechanism.** `capacity` is a **stored list on the trait setting**; nothing derives it from the stage. `resource_pool.py` keeps `dice + spent_dice` intact and `handlers_dice.py` only refuses a gain when `len(dice) >= len(capacity)` — so capacity is a **ceiling on growth**, never a computed value. *Anything that "corrects realms against qi" must therefore reconstruct the rule; the data will not tell you.*
+
+#### Inside the Valley — the scale
+
+**Single dice, one per realm.** The human, 2026-10-17:
+
+| die | realm |
+|---|---|
+| **d4** | qi condensation |
+| **d6** | foundation establishment |
+| **d8** | golden core |
+| **d10** | nascent soul |
+| **d12** | **divine transformation** *(renamed from "celestial")* |
+
+**No ascendants inside the Valley** — the array suppresses cultivation, and d12 is the top of what it permits.
+
+#### Outside the Valley — the draft ladder (not implemented)
+
+When cultivators leave and align with the outside world, the ladder becomes **multi-die bands**, as written in the `qi` trait's own explanation:
+
+```
+mortal - qi condensation (10-13/d4) - foundation (9/d6) - golden core (5/d8)
+       - nascent soul (4/2d8) - soul transformation (3/d10) - celestial (2/d12)
+       - ascendant (1/2d12)
+```
+
+> [!warning] The ladder and the in-Valley scale disagree at nascent soul, deliberately unresolved
+> The ladder gives nascent soul **`2d8`** (a d8 realm marker); the in-Valley mapping gives it **`d10`**. **The migration followed the mapping**, because it is the later statement and the ladder is explicitly out-of-Valley. If the ladder is ever implemented, this is the line to reconcile first.
+
+#### Qi from cultivation stage — the derivation rule
+
+**Realm = the highest die in the qi pool. Sub-stage = the count of that die.**
+
+This is what the corpus already obeyed before any correction, and it is why the correction was safe: **36 of 41 pools agreed with their stated stage on the first pass.** Worked examples from live data:
+
+| qi pool | reads as |
+|---|---|
+| `1d4 … 10d4` | qi condensation, stage = the count |
+| `3d4 + 8d6` | foundation establishment **stage 8** — and `Su Hui` *is* "8th stage foundation building" |
+| `7d4 + 6d6` | foundation establishment **stage 6** — and `Tang Ba` *is* "6th stage" |
+| `1d4 + 4d6 + 3d8` | golden core **stage 3** — `Zhu Xing` |
+
+**Dice a stage holds** (the human's draft, applied):
+
+| realm | stage N holds |
+|---|---|
+| qi condensation | `N d4` (max 13) |
+| foundation establishment | `N d6` (max 9) + `N d4` (floor 4, max 12) |
+| golden core | `N d8` (max 5) + `N d6` (max 9) + `N d4` (floor 4, max 12) |
+| nascent soul | `N d10` (max 4) + `N d8` (max 5) + `N d6` (max 9) + `N d4` (floor 4, max 12) |
+
+**Capacity = the realm's full band, NOT the current pool.** Capping at the current pool would freeze every character where they stand, which is the opposite of a capacity. Bands: QC `13d4` · FE `9d6 + 12d4` · GC `5d8 + 9d6 + 12d4` · NS `4d10 + 5d8 + 9d6 + 12d4`.
+
+#### What the correction did, and what it left
+
+| group | count | result |
+|---|---|---|
+| had qi + stage | **41** | stage die and statement rewritten from the qi pool |
+| had stage, no qi | **25** | qi pool **created** (dice + capacity), stage confirmed |
+| **stage die now matches its stated realm** | **85** | — |
+| **mismatches** | **0** | — |
+| no qi, no stage | 92 | untouched — nothing to derive |
+| beasts and `mortal` rows | ~12 | untouched — a mortal has no realm to have a capacity for |
+| qi as sub-pools only (`Archer`, `Lan Qing`, `pure Yin girl`) | 3 | no top-level dice to cap |
+| qi settings with no dice at all | 62 | nothing to cap |
+
+**Six mismatches were found only after the first pass** and fixed by hand: `Jingzhen` (FE-7, was d8), `Fang Bu'ai` (QC-2, d8), `Wei Hongqing` (QC-8, d8), and **`Baili`, `Ji`, `Qingyun`** — all three nascent soul, all sitting at **d8 and moved to d10**. The last three are the Seven-Kill Hall cultivators, so under the corrected scale they were two realms below their own statement.
+
+> [!question] OPEN — the growth mechanics are not authored
+> **Six rungs are designed but not written:** one SFX per realm, gated on `TRAIT_RATING` with **`mode=count`** (B317), so `mode=count, value=d8, operator="==", count=3` means *"holds exactly three d8s"* — GC-3 — which the old per-die test could not distinguish from GC-1. Each rung adds or steps a `qi` die.
+>
+> **Two things block them:** the rung count depends on whether the in-Valley scale is `d4/d6/d8/d10/d12` (five realms ⇒ five rungs) or the shifted `d6/d8/d10/d12` variant the human floated (four); and the **manual** — the `assets`/`manual` trait that grants a foundational technique, which in turn gates the rung — is **deferred**.
+>
+> **And `spirit beast` qi is the same convention**: xianxia beasts cultivate on a parallel track (妖气, yao qi) and their core *is* their condensed cultivation. Treated as identical for now; the flavour is a property of the beast, not a second pool.
+
 ### Heart-devils, and where they come from
 
 **Not authored as standalone traits.** In the fiction a heart-devil is not an external monster — it is the shadow of one's own path, so it should be **derived from a cultivator's own distinctions**, which is exactly what Lian Xi's three flaws already are. Authoring them as an independent list produces a bolt-on that says nothing about the person.
