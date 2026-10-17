@@ -28,7 +28,7 @@
       @click.stop="onOverlayClick"
     />
     <span
-      v-else-if="overlayVisible && label"
+      v-else-if="overlayVisible && label && !showLabel"
       class="dot-label"
       @click.stop="onOverlayClick"
     >{{ label }}</span>
@@ -36,6 +36,15 @@
       v-else-if="overlayVisible"
       class="dot-initials"
     >{{ initials }}</span>
+    <!-- Arrange-mode destination caption. The ordinary `.dot-label` is a
+         `v-else-if`, so it can only render when the dot has no picture — and in
+         arrange mode every travel dot is a bubble *filled* by its destination
+         preview, which left the GM dragging unnamed destinations. This renders
+         over the preview instead, and is off unless the caller opts in. -->
+    <span
+      v-if="showLabel && label && overlayVisible"
+      class="dot-caption"
+    >{{ label }}</span>
   </button>
 </template>
 
@@ -49,6 +58,7 @@ const props = defineProps({
   image: { type: String, default: null },
   imageTransparent: { type: Boolean, default: false },  // cutout image — no bubble/crop
   label: { type: String, default: '' },
+  showLabel: { type: Boolean, default: false },  // draw `label` as a caption over the preview
   initials: { type: String, default: '' },
   x: { type: Number, required: true },
   y: { type: Number, required: true },
@@ -230,6 +240,29 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 .map-dot.expanded .dot-label, .map-dot.expanded .dot-initials { opacity: 1; }
 .dot-label { font-size: 11px; font-weight: 600; color: var(--map-text); text-align: center; padding: 4px; line-height: 1.2; }
 .dot-initials { font-size: 18px; font-weight: 800; color: #fff; }
+
+/* Arrange-mode destination caption, drawn over the destination preview. Geometry
+   is not free: the dot keeps `overflow: hidden` + `border-radius: 50%` because
+   that clip *is* the hole illusion (an oversized `.dot-hole` img is masked by it),
+   so the plate has to fit inside the circle rather than hang below it. Both insets
+   are percentages, so the relation is scale-invariant and holds whatever size the
+   bubble is: at `bottom: 22%` the circle's chord is ~199px of a 240px arrange
+   bubble and the `left/right: 10%` plate is 192px, so its bottom corners land
+   ~3px inside the rim (at `bottom: 20%` they land exactly ON it — don't). */
+.dot-caption {
+  position: absolute;
+  left: 10%; right: 10%; bottom: 22%;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(10,10,20,0.8);
+  color: var(--map-text);
+  font-size: 11px; font-weight: 600; line-height: 1.25;
+  text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* The bubble's own click must reach exactly what it reached before the plate
+     existed — the overlay image (which stops the event) or the dot itself. */
+  pointer-events: none;
+}
 .map-dot.draggable { cursor: grab; border: 2px dashed var(--map-accent); animation: dot-pulse 2s ease-in-out infinite; }
 .zone-dot.draggable { width: 240px !important; height: 240px !important; margin-left: -120px; margin-top: -120px; background: rgba(10,10,20,0.85); z-index: 10; overflow: hidden; }
 .nav-dot.draggable { width: 240px !important; height: 240px !important; margin-left: -120px; margin-top: -120px; background: rgba(10,10,20,0.85); z-index: 10; overflow: hidden; }
