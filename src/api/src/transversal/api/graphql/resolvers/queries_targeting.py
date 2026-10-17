@@ -273,7 +273,8 @@ class QueriesTargeting:
             aggregations=[
                 TargetCatalogAggregation(name=a.name, label=a.label, output=a.output,
                                          needs_field=a.needs_field, needs_count=a.needs_count,
-                                         accepts=list(a.accepts))
+                                         accepts=list(a.accepts),
+                                         accepts_elements=list(a.accepts_elements))
                 for a in tc.AGGREGATIONS
             ],
             collections=[

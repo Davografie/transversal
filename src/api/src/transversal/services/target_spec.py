@@ -320,7 +320,8 @@ def trace(spec: TargetSpec, source_element: str | None = None,
                 continue
             agg = tc.aggregation(step.fn)
             field = tc.field(current.element, step.field) if step.field else None
-            allowed = tc.aggregations_for(field.type if field else None)
+            allowed = tc.aggregations_for(field.type if field else None,
+                                          current.element)
             if agg is None:
                 errors.append(TraceError(i, f"unknown aggregation {step.fn!r}"))
                 current = None

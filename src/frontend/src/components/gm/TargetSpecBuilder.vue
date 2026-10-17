@@ -588,13 +588,21 @@ function stepIsValid(i) {
 }
 
 // The functions the chosen field supports. No field → the collection-level ones
-// (`count`, `random`); a field → the functions whose declared types accept it, so
-// a `datetime` field never offers an average.
+// (`count`, `random`, and `closest` where the collection holds places); a field →
+// the functions whose declared types accept it, so a `datetime` field never
+// offers an average.
+//
+// A no-field function can still be about *what* is in the collection: `closest`
+// ranks places by distance and means nothing over a set of dice, so it declares
+// `acceptsElements` and is filtered by the collection's element here — the same
+// declaration the server's type-check reads, so what is offered is what resolves.
 function aggregationsForField(i) {
   const t = aggFieldType(i)
+  const element = priorElement(i)
   return aggregations().filter((a) => (t
     ? a.needsField && (!(a.accepts || []).length || a.accepts.includes(t))
-    : !a.needsField))
+    : !a.needsField
+      && (!(a.acceptsElements || []).length || a.acceptsElements.includes(element))))
 }
 
 function aggFieldType(i) {

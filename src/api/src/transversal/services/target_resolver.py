@@ -525,6 +525,50 @@ def _match(element: Any, step: FilterStep, field_type: str | None = None,
     return False
 
 
+def _origin_location(context) -> str:
+    """Where "here" is for a distance question: the acting subject's place.
+
+    A GM-bucket press acts **on** a place, so its subject *is* the location — the
+    same distinction `_spawn_location` makes, for the same reason. Everything else
+    stands somewhere, and an unplaced body stands nowhere, which yields nothing
+    rather than guessing.
+    """
+    subject = getattr(context, "subject", None)
+    if subject is None:
+        return ""
+    kind = str(getattr(getattr(subject, "type", ""), "value", "")
+               or getattr(subject, "type", "") or "").lower()
+    if kind == "location":
+        return str(getattr(subject, "id", "") or "")
+    return str(getattr(subject, "current_location", "") or "")
+
+
+def _closest(values: list[Any], context) -> Any | None:
+    """The value nearest the acting subject, or ``None`` when nothing is reachable.
+
+    Distance comes from ``repo.get_location_distances_from`` — Dijkstra over the
+    ``super``/``transversal`` graph, a portal crossing costing more than a step —
+    and **unreachable targets are absent from it**, so a candidate it does not name
+    is not "far", it is unreachable, and it is skipped rather than ranked. Ties
+    break on id, so the same collection always answers the same place.
+    """
+    origin = _origin_location(context)
+    repo = getattr(context, "repo", None)
+    getter = getattr(repo, "get_location_distances_from", None) if repo is not None else None
+    if not origin or not callable(getter):
+        return None
+    by_id: dict[str, Any] = {}
+    for value in values:
+        ident = _identity(value)
+        if ident:
+            by_id[str(ident)] = value
+    distances = getter(origin, set(by_id))
+    if not distances:
+        return None
+    nearest = min(distances, key=lambda loc: (distances[loc], loc))
+    return by_id.get(nearest)
+
+
 def _aggregate(values: list[Any], fn: str, field_name: str | None) -> list[Any]:
     if fn == "count":
         return [len(values)]
@@ -929,7 +973,8 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
             else:
                 agg = tc.aggregation(step.fn)
                 field = tc.field(current_type.element, step.field) if step.field else None
-                allowed = tc.aggregations_for(field.type if field else None)
+                allowed = tc.aggregations_for(field.type if field else None,
+                                              current_type.element)
                 if agg is None:
                     errors.append(TraceError(i, f"unknown aggregation {step.fn!r}"))
                     values, current_type = [], None
@@ -955,6 +1000,20 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                         values = _sample(values, step.count)
                         current_type = ValueType(
                             current_type.element, "one" if step.count == 1 else "many")
+                elif agg.name == "closest":
+                    # Nearest of a set of **places**, by weighted distance along the
+                    # location graph — the same measure the canvas and the
+                    # nearest-faction list rank by, so "closest" means one thing in
+                    # the app ([B328]). It reads no field: the origin is the acting
+                    # entity's place, which is context, not a column.
+                    if current_type.cardinality != "many":
+                        errors.append(TraceError(
+                            i, f"{step.fn} requires a many-cardinality collection"))
+                        values, current_type = [], None
+                    else:
+                        chosen = _closest(values, context)
+                        values = [chosen] if chosen is not None else []
+                        current_type = ValueType(current_type.element, "one")
                 elif agg.output == "element":
                     # top/bottom: keep the element carrying the extreme value, so
                     # a later step can walk from the thing itself (the old `top`).

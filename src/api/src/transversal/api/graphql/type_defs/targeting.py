@@ -119,6 +119,10 @@ class TargetCatalogAggregation:
     #: Field types this function runs on ([] with needs_field = any). The editor
     #: filters its function list by the chosen field's type with this.
     accepts: list[str] = strawberry.field(default_factory=list)
+    #: Element types this function runs on, for a no-field function whose answer
+    #: is only meaningful for one kind of thing (`closest` is about places). The
+    #: editor filters by the collection's element with this; [] = unconstrained.
+    accepts_elements: list[str] = strawberry.field(default_factory=list)
 
 @strawberry.type
 class TargetCatalogCollection:

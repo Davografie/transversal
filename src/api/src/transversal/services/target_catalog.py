@@ -770,6 +770,12 @@ class Aggregation:
     #: (`tier`: which die's tier?). Refused rather than silently casting the first
     #: element — a wrong number that looks like a right one.
     needs_single: bool = False
+    #: Element types the function can run on, when that is narrower than "any
+    #: collection" (``()`` = no constraint). `accepts` is about the *field*; this is
+    #: about the things, which is the only way to offer a function that reads no
+    #: field at all and still means something specific — `closest` is about places
+    #: ([B328]).
+    accepts_elements: tuple[str, ...] = ()
 
 
 #: Ordering needs a comparable field; averaging needs a numeric one.
@@ -790,6 +796,13 @@ AGGREGATIONS: tuple[Aggregation, ...] = (
     Aggregation("count", "Count", "int", False, card="the number of {src}"),
     Aggregation("random", "Random", "element", False, needs_count=True,
                 card="a random {src}"),
+    # The nearest of a set of **places**, by weighted distance along the location
+    # graph — the same measure the canvas and the nearest-faction list rank by
+    # (`repo.get_location_distances_from`), so "closest" means one thing in the app
+    # rather than a second opinion here. It reads no field: the origin is *who is
+    # acting*, which is context, not a column — hence `accepts_elements` ([B328]).
+    Aggregation("closest", "Closest", "element", False,
+                accepts_elements=("location",), card="the closest {src}"),
     # A **cast**, not a collapse: it reads one die-typed field off the element(s)
     # and returns where that die sits on the ladder (d4 → 1 … d12 → 5), so a
     # rating can be used as a *number* ("increase the limit by the tier of this
@@ -818,15 +831,27 @@ AGGREGATIONS: tuple[Aggregation, ...] = (
 )
 
 
-def aggregations_for(field_type: str | None) -> tuple[Aggregation, ...]:
+def aggregations_for(field_type: str | None,
+                     element: str | None = None) -> tuple[Aggregation, ...]:
     """The functions a field of ``field_type`` can run (``None`` = no field).
 
     One declaration, two readers: the editor filters its function list with this,
     and the type-checker refuses a function the field cannot support — so what is
     offered is what resolves.
+
+    ``element`` narrows a no-field function to the things that have an answer for
+    it: `closest` is about places, and offering it over a set of dice would be a
+    function that cannot mean anything ([B328]). Omitted, only the field-side
+    constraint is applied — which is what a caller that has not resolved a type yet
+    wants.
     """
     if field_type is None:
-        return tuple(a for a in AGGREGATIONS if not a.needs_field)
+        return tuple(
+            a for a in AGGREGATIONS
+            if not a.needs_field
+            and (not a.accepts_elements or element is None
+                 or element in a.accepts_elements)
+        )
     return tuple(
         a for a in AGGREGATIONS
         if a.needs_field and (not a.accepts or field_type in a.accepts)

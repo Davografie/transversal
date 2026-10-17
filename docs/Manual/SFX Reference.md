@@ -366,8 +366,18 @@ _Count: 92 fields across 17 elements._
 | `mean` | Mean | number |
 | `avg_floor` | Average (floor) | number |
 | `avg_ceil` | Average (ceil) | number |
+| `closest` | Closest | element (places only) |
 
-_Count: 10._
+_Count: 11._
+
+> [!note] `closest` is the one aggregate that reads no field
+> It ranks a collection of **places** by weighted distance along the location
+> graph — the same measure the canvas and the nearest-faction list use, so
+> "closest" means one thing in the app. The origin is **the acting entity's own
+> place**, which is context rather than a column, so it is offered only where the
+> collection holds locations. A place it cannot route to is **unreachable, not
+> far**: it is skipped, and if none can be reached the step resolves to nobody
+> rather than picking the least-unreachable ([B328]).
 
 
 
