@@ -215,7 +215,11 @@ def _bind_ref_value(context, name: str, value: str) -> None:
         return
     handle = value
     repo = getattr(context, "repo", None)
-    entity = repo.get_entity(value) if repo is not None else None
+    # The read is an *enrichment* — a universe id becomes its handle — so a repo
+    # that cannot answer one leaves the value alone rather than raising. A caller
+    # whose repo is a fake (or a read-only walk) must not fail here.
+    get_entity = getattr(repo, "get_entity", None)
+    entity = get_entity(value) if get_entity is not None else None
     if entity is not None and getattr(entity, "type", "") == "universe":
         handle = getattr(entity, "current_universe", "") or value
     bindings[name] = Binding(value=handle, element="", cardinality="one")

@@ -64,6 +64,19 @@ class PendingChoice:
     effect: Effect
     kind: str
     scope: Optional[str] = None
+    #: **The pool.** The option records the resolver already built — ``id`` /
+    #: ``name`` / ``subtitle`` / ``rating`` / ``element`` — so the caller can
+    #: present the question. Without them a choice is unanswerable: the portal fire
+    #: raised one for the airport's self-portal and the four candidate cities went
+    #: nowhere, so nothing could be picked and nothing happened (2026-10-17). The
+    #: engine's own paths have always carried them (`StructuredChoice.candidates`);
+    #: this entry point dropped them on the floor.
+    #:
+    #: Declared **above** ``field`` on purpose: the attribute below is *named*
+    #: `field`, which shadows `dataclasses.field` for the rest of the class body.
+    candidates: list = field(default_factory=list)
+    #: How many to pick: ``1`` is *choose one*, ``None`` is *as many as you like*.
+    count: Optional[int] = None
     field: str = "target"
 
 @dataclass

@@ -11,6 +11,7 @@ from transversal.services.effects_applier.datatypes import (
     AppliedEffect,
     PendingChoice,
     PendingBranch,
+    ACTIVATION_CONTEXT_KEY,
     BINDINGS_CONTEXT_KEY,
     EffectsResult,
 )
@@ -228,27 +229,72 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
         # And its *owner*, when the action anchors what it makes somewhere other
         # than the subject: a relationship edge, or another trait instance.
         effect = resolve_effect_owner(effect, entity.id, repo, context)
-        if effect.target_spec is not None and effect.target_spec.steps:
-            _apply_spec_effect(effect, entity, repo, result, bindings)
-            continue
-        # A **choice node** is asked, never applied: it reports its options and the
-        # work stops there for this effect (the caller presents them and resumes
-        # with `resolve_branch_effects`). An authored branch with no options is a
-        # defect, and says so rather than passing silently.
-        if _is_branch(effect):
-            options = branch_options(effect)
-            if options:
-                result.pending_branches.append(PendingBranch(effect=effect, options=options))
-            else:
-                result.applied.append(AppliedEffect(effect, "a choice with no options"))
-            continue
-        handler = _MUTATION_HANDLERS.get((effect.type, effect.action))
-        if handler is None:
-            result.passthrough.append(effect)
-            continue
-        before = _result_counts(result)
-        handler(entity, effect, repo, result)
-        _publish_output(effect, result, context, before)
+        # **Named references are resolved here too** ([[B261]]). They are the form
+        # the editor writes, and this entry point — reached directly by a portal
+        # edge, a roll-table row, a life-path consequence — resolved a `target_spec`
+        # but never a ref. So an effect that carried its destination in
+        # `refs.location.spec` rather than in `target` did **nothing at all**: no
+        # apply, no question, no note. That is exactly how the airport's self-portal
+        # "still didn't trigger" (2026-10-17) — and why the sibling portal, whose
+        # destination sits in `targetSpec`, *did* raise a question.
+        concretes = [effect]
+        if effect.refs:
+            from transversal.services.effects_engine.refs import resolve_refs
+            from transversal.services.target_resolver import TargetContext, event_collections
+
+            structured: list = []
+            activation = (context or {}).get(ACTIVATION_CONTEXT_KEY) if isinstance(context, dict) else None
+            concretes = resolve_refs(
+                effect,
+                TargetContext(
+                    subject=entity, repo=repo, bindings=bindings,
+                    collections=event_collections(
+                        context, getattr(source, "id", None), source_element),
+                    source=source, source_element=source_element,
+                ),
+                structured,
+                source_sfx_id=(activation or {}).get("sfx_id", ""),
+            )
+            if structured:
+                # A ref whose spec stops at a `choose`: the question **travels with
+                # its pool**, or there is nothing to answer with.
+                for choice in structured:
+                    result.pending_choices.append(PendingChoice(
+                        effect=effect, kind=choice.element, field=choice.field,
+                        candidates=list(choice.candidates or []), count=choice.count,
+                    ))
+                continue
+            if not concretes:
+                # Every ref resolved to **nobody**. Fail closed, but not silently:
+                # the handler is what says *why* ("no learner matched the path"),
+                # and without this the effect simply vanished — the failure mode
+                # this whole entry point keeps having to be taught about.
+                concretes = [effect]
+        # Resolve this effect — or each concrete effect a multi-valued ref fanned it
+        # out into — through the same tail. Rebinding `effect` keeps the dispatcher
+        # below identical for the common case, where `concretes` is `[effect]`.
+        for effect in concretes:
+            if effect.target_spec is not None and effect.target_spec.steps:
+                _apply_spec_effect(effect, entity, repo, result, bindings)
+                continue
+            # A **choice node** is asked, never applied: it reports its options and the
+            # work stops there for this effect (the caller presents them and resumes
+            # with `resolve_branch_effects`). An authored branch with no options is a
+            # defect, and says so rather than passing silently.
+            if _is_branch(effect):
+                options = branch_options(effect)
+                if options:
+                    result.pending_branches.append(PendingBranch(effect=effect, options=options))
+                else:
+                    result.applied.append(AppliedEffect(effect, "a choice with no options"))
+                continue
+            handler = _MUTATION_HANDLERS.get((effect.type, effect.action))
+            if handler is None:
+                result.passthrough.append(effect)
+                continue
+            before = _result_counts(result)
+            handler(entity, effect, repo, result)
+            _publish_output(effect, result, context, before)
     return result
 
 
@@ -340,7 +386,9 @@ def _apply_spec_effect(effect: Effect, entity: Entity, repo, result: EffectsResu
         # a structured choice, which this low-level entry point cannot.
         for choice in pending:
             result.pending_choices.append(
-                PendingChoice(effect=effect, kind=choice.element, field="target"))
+                PendingChoice(effect=effect, kind=choice.element, field="target",
+                              candidates=list(choice.candidates or []),
+                              count=choice.count))
         return
     for concrete in resolved:
         handler = _MUTATION_HANDLERS.get((concrete.type, concrete.action))

@@ -662,7 +662,11 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
         "status": status,
         "applied": applied,
         "pendingChoices": [
+            # The pool travels with the question — the viewer's picker (the splash
+            # panel's `EffectTargetWizard`) cannot offer what the response omits.
             {"index": i, "kind": c.kind, "scope": c.scope, "field": c.field,
+             "candidates": list(getattr(c, "candidates", []) or []),
+             "count": getattr(c, "count", None),
              "effect": c.effect.model_dump()}
             for i, c in enumerate(pending)
         ],

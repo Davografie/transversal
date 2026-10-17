@@ -460,6 +460,16 @@ def _body_pool(effect, subject, dest_universe: str, repo) -> list:
     if ref is not None and ref.spec is not None and ref.spec.steps:
         resolution = resolve(ref.spec, TargetContext(subject=subject, repo=repo))
         return [rid for value in resolution.values if (rid := resolved_id(value))]
+    # A ref a resolver has **already settled** is still a scope: `resolve_refs`
+    # clears the spec and writes the value, so reading only the spec lost the
+    # author's narrowing and quietly fell back to "any body in the destination
+    # universe" — reusing the most recent body *outside* the scope asked for. The
+    # value is taken only when the repository knows it as a body, so a literal like
+    # `self` still falls through to the universe pool ([[B261]]).
+    if ref is not None and ref.value:
+        get_projection = getattr(repo, "get_projection", None)
+        if get_projection is not None and get_projection(ref.value) is not None:
+            return [ref.value]
     scope = f"universe:{dest_universe}" if dest_universe else None
     return [c.id for c in resolve_candidates("projection", scope, subject, repo)]
 
