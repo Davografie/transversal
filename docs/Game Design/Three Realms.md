@@ -144,7 +144,44 @@ This is what the corpus already obeyed before any correction, and it is why the 
 >
 > **Two things block them:** the rung count depends on whether the in-Valley scale is `d4/d6/d8/d10/d12` (five realms ⇒ five rungs) or the shifted `d6/d8/d10/d12` variant the human floated (four); and the **manual** — the `assets`/`manual` trait that grants a foundational technique, which in turn gates the rung — is **deferred**.
 >
-> **And `spirit beast` qi is the same convention**: xianxia beasts cultivate on a parallel track (妖气, yao qi) and their core *is* their condensed cultivation. Treated as identical for now; the flavour is a property of the beast, not a second pool.
+> **And `spirit beast` qi is the same convention**: xianxia beasts cultivate on a parallel track (妖气, yao qi) and their core *is* their condensed cultivation. The **pool** is the same; the **path names** are not — see below.
+
+### Spirit beasts have their own ladder
+
+> [!important] `spirit beast stage` — a second trait with its own names
+> **The human, 2026-10-17:** *"spirit beasts need an actually different trait from cultivation stage so the dynamic names reflect stages in a spirit beast's path."* Created: **`trait-spirit-beast-stage`**, in `distinctions`, `STATIC`, `D4` default, with **`displayNames`** — the same mechanism `cultivation stage` already used.
+>
+> | die | spirit beast | cultivator (same die) |
+> |---|---|---|
+> | d4 | **hatchling** | qi condensation |
+> | d6 | **juvenile** | foundation establishment |
+> | d8 | **adolescent** | golden core |
+> | d10 | **awakened** | nascent soul |
+> | d12 | **divine beast** | divine transformation |
+>
+> **Same die, different names.** The die is what mechanics read — so a beast at `d10` is a peer of a nascent soul cultivator *by die and not by nature*. That is how xianxia treats it: 妖气 (yao qi) is the term, a beast condenses a core rather than forming a golden one, and the core a cultivator harvests **is** the beast's condensed cultivation. Human names on a beast's sheet would be a lie; separate numbers would be a second vocabulary. This gives the numbers one meaning and the names two.
+>
+> **Living in `distinctions` is deliberate** — that set is `allowDuplicates: False`, so a creature holds *either* a cultivation stage *or* a beast stage, never both. The one exception the data insists on: **a beast can also be a cultivator** (`Charhide Bogtreader` is a literal `spirit beast` carrying "6th stage qi condensation"). Those keep their **cultivation stage** — a beast with a realm is on the human ladder, and its realm is the more specific fact.
+
+**Seeded from the labels the corpus already used** (`Hatchling`, `Juvenile`, `adolescent`, `Awakened`, `deity`), which is why they read as familiar rather than invented.
+
+**Migrated 9 creatures onto it** (2026-10-17), each keeping the die it had:
+
+| creature | stage |
+|---|---|
+| `Vermillion Wurm` | hatchling d4 |
+| `Azure-Feathered Crane`, `Eaerrhne Zaearedctfu`, `Qianling` | juvenile d6 |
+| `Dragon Mountain Wanderer`, `Muck-Dweller` | adolescent d8 |
+| `Vermillion Ink Crane`, `White Tiger` | awakened d10 |
+| `Ten Thousand Empyreal King` | **divine beast d12** |
+
+> [!warning] The data this replaced was incoherent, and that is the argument for the trait
+> Before the split, beast stages were stored on the *human* ladder and contradicted themselves: **`Hatchling` at d8**, `Ashwalker: chaotic` at d6, `Jiě Shān: mortal` at d8, `adolescent` at d6 *and* d8 on different creatures. There was no order worth preserving — the beast path had been shoehorned into a scale that ranked it against humans.
+
+> [!question] OPEN — the beast path needs more than five rungs
+> Five rungs is the *human* count. A beast path usually runs longer (hatchling → juvenile → adolescent → adult → awakened → demon beast → divine), and **`adult` and `demon beast` have no rung** on the current scale. Extending it is a decision, not a fill-in: **a sixth rung needs a sixth die**, and the die scale is what keeps beasts and cultivators comparable.
+>
+> **Also unmodelled:** a beast's **yao qi pool** does not yet follow the beast scale the way `qi` follows `cultivation stage`. The derivation rule (`realm = highest die, sub-stage = its count`) would carry over unchanged if wanted.
 
 ### Heart-devils, and where they come from
 
