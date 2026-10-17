@@ -355,6 +355,48 @@ In that doc's own vocabulary:
 > [!warning] Something put him on the wrong path — and it is unwritten on purpose
 > The human: *"it's a well-kept record. But something put him on the wrong path."* That is a deliberate blank and should stay one until chosen, because the candidates pull in different directions: the **Aegis** (an artifact that binds others to him), the **cult** itself (see § *Nobody designed the cult* — the local equivalent of an idea that propagates without an author), or **the Valley** (a sealed place that turns its strongest inward). Note what the record gives him: **a complete list of everyone who ever held the seat and what each of them did with it** — including the one who left. A man with that document and his own disappointment is already a motive.
 
+#### 朱星, authored — what is now in the data
+
+**Done 2026-10-17, at the human's direction.**
+
+- **`essence` → `Star-Reckoner`** (on the `three_realms` setting, `gmc-207982847:three_realms:trait-321839`). *"Reads fate off the stars — a numerologist of celestial law. Not a fortune-teller: he computes what the heavens have already decided."* This is the dao named in the slot it belongs in, and it matches what his sheet already was: `astrology` d10, Divine Consciousness d10.
+- **`relation` → the Valley** (`118871777`): *"Valley Lord — held the seat, then left it to pursue a higher dao."* Carries a **`title` = `Valley Lord`** d6 edge trait (`118871777:trait-338957761`).
+- **`relation` → 朱焰** (`118871794`): *"My successor in the seat. He holds the Valley; I let it go."*
+- **`Seal of the Valley Lord`** (`asset-seal-of-the-valley-l-8069af17`) — the **token that proves his position**. `jewelry` d8, **owned by 朱星**, at the Star-Gazer's Spire. Its note is the design intent: *"Proof, not power — it authenticates a command; it does not enforce one."* **That distinction is the whole power/authority split**, held in one object.
+
+> [!warning] The four `essence` settings are NOT duplicates — I claimed this twice and was wrong both times
+> They are keyed **one per universe**: `:aelor-citar:`, `:three_realms:`, `:intergalactic-planetary:`, `:earth:`. That is a **universe-scoped distinction**, not a write bug. Only `three_realms` is filled, which is correct — his dao is a Three Realms fact.
+
+> [!question] OPEN — these two edges are `elevated`, and `gmc_web` reports a false zero
+> Both edges were created **entity-anchored** (`elevated: true`) so the claim on the Valley and the family tie outlive any body. Consequence: **`gmc_web` returns `relations: []` for 朱星** while `relationship(fromEntityId:…)` returns both edges correctly with the title trait attached. Measured against a control: **Lian Xi → 3 relations**, 朱星 → 0, and hers are projection-anchored.
+>
+> **The trade-off is real and unresolved:** elevated survives a body change but is invisible to the standard read; un-elevated is readable everywhere but dies with the projection it was made on. Either re-create them un-elevated, or fix the read (`gmc_web`, and `character_build`'s "0 others linked" on a faction) to include entity-anchored ties. **Second read-gap of this shape this session.**
+
+### Cultivation progression — the shape being designed
+
+**The human, 2026-10-17:** *"Cultivation stages still need proper ways of progression. I'm thinking manuals. But they also need to track current minor realm, which is expressed in the Qi resource."*
+
+**So the two axes of progress are split across two existing things, and they must not be conflated:**
+
+| axis | carried by | what it holds |
+|---|---|---|
+| **major realm** | `cultivation stage` (distinctions) | qi condensation · foundation building · golden core · nascent soul — and the **die** is what the `Cultivation Stage` SFX reads |
+| **minor realm** | **the `qi` resource** | which stage *within* the realm — the ladder says qi refining **13 stages** and foundation building **9** |
+
+**Manuals are the proposed vehicle for progression.** 朱星 already carries two `manual` settings — *"The Unbreaking Path"* (an **artifact**, per the human's correction) and the *"basic knowledge of cultivation"* notes that hold the authoritative stage counts. **Open questions, not yet decided:** whether a manual advances the major realm or a minor one (or both), whether a manual is consumed or kept, and whether gaining one is a **life-path term** — which would make it the Earth-side growth mechanic applied to cultivation, and consistent with `Character Growth.md`'s *"One growth system, not two."*
+
+> [!important] The demonic inversion of all this
+> The human: *"I was thinking of making the Valley Lord a cripple. Actually… more demonic cultivators effectively crippled. Crippled in the way of something that hampers their cultivation. Like not having a spirit root (no spiritual power), or having their dantian cracked. That's why they engage in demonic cultivation: their foundational techniques are demonic techniques that promise power to those that can't cultivate properly."*
+>
+> **The roster already supports it.** Every member of the cult with a `Spiritual Power` rating sits at **d4 or d6 and none higher**; two have none recorded at all; 朱焰 has no such trait. So the deficiency is already the pattern, not an imposition.
+>
+> **And the mechanism is the demonic path's whole bargain:** the orthodox gain *permanently* (a stage die that never goes down). The demonic **spike** — a `foundation` technique's SFX granting `modify_dice_limit`/increase, `modify_outcome`/step_up_effect, or a temporary `modify_trait`/step_up, given a **`duration`** so the engine schedules the inverse and it lapses on its own. **They can beat someone above their realm for one scene, and then they are exactly as crippled as they started.** `Qi Blood Addiction` (on all eight) is the cost clock.
+>
+> **Open:** whether the crippling is **one named condition with degrees** or **distinct afflictions** — "no spirit root" is a wall, "cracked dantian" is an injury that might heal, and the choice decides whether a demonic cultivator can ever be redeemed.
+
+> [!warning] `Essence Leeching` is bad authoring — the human's ruling
+> It appears as the `foundation` on three members (Beggar Douchi, Kestrel Xu, Zhang), which reads as one shared technique standing in for a design. **Each seat should have its own technique** — seven emotions, six desires. The D8 inner-circle techniques already point this way and are the better model: **`Grief Harvesting`** (Mist-Weaver Shen), **`Inhale the Final Sorrow`** (Liao Yulian), **`Throat-Severing Resonance`** (Jin Mu).
+
 ### Seat fit, read off the live sheets
 
 Where the **seven** land against the thirteen — Si Youyou is out, see below. **Some are already written; one does not fit at all.**
