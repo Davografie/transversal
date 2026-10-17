@@ -210,3 +210,36 @@ async def test_creating_clones_from_the_configured_global(repo, open_creation, m
     await forks_mod.create_fork(_as(account), {"name": "Dave's game"})
 
     assert seen["source"] == "transversal_global"
+
+
+async def test_creating_is_capped_per_account(repo, open_creation, monkeypatch):
+    """A public invitation must not let one account clone the world without limit."""
+    monkeypatch.setenv("FORKS_MAX_PER_ACCOUNT", "2")
+    counter = {"n": 0}
+
+    def _stub(registry_repo, *, name, owner_account, slug="", **_):
+        counter["n"] += 1
+        return registry_repo.create_fork(
+            name, f"tv2_fork_{counter['n']}", owner_account, slug=slug
+        )
+
+    monkeypatch.setattr(forks_mod, "provision_fork", _stub)
+    account = repo.create_account("dave@example.com")
+
+    for i in range(2):
+        await forks_mod.create_fork(_as(account), {"name": f"Game {i}"})
+
+    with pytest.raises(HTTPException) as exc:
+        await forks_mod.create_fork(_as(account), {"name": "One too many"})
+
+    assert exc.value.status_code == 409
+    assert "limit is 2" in exc.value.detail
+    assert len(repo.list_forks_for(account.id)) == 2, "the refusal must not have created one"
+
+
+async def test_the_cap_is_two_and_a_bad_setting_cannot_remove_it(monkeypatch):
+    monkeypatch.delenv("FORKS_MAX_PER_ACCOUNT", raising=False)
+    assert forks_mod.max_forks_per_account() == 2
+    for raw in ("", "  ", "nonsense", "0", "-3"):
+        monkeypatch.setenv("FORKS_MAX_PER_ACCOUNT", raw)
+        assert forks_mod.max_forks_per_account() == 2, raw

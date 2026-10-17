@@ -43,6 +43,30 @@ def _repo() -> RegistryRepository:
     return RegistryRepository()
 
 
+#: How many campaigns one account may own unless told otherwise. A fork is cheap — the
+#: database is ~13k documents and media is shared content-addressed blobs — but it is not
+#: nothing, and a public invitation should not let one account clone the world without
+#: limit. ``FORKS_MAX_PER_ACCOUNT`` overrides it ([[B331]]).
+DEFAULT_MAX_FORKS_PER_ACCOUNT = 2
+
+
+def max_forks_per_account() -> int:
+    """The cap, from ``FORKS_MAX_PER_ACCOUNT``.
+
+    A malformed or non-positive value falls back to the default rather than removing the
+    limit — the rule `DB_CACHE_MAX` already follows: an unreadable setting must not become
+    a silent "unlimited".
+    """
+    raw = (os.getenv("FORKS_MAX_PER_ACCOUNT", "") or "").strip()
+    if not raw:
+        return DEFAULT_MAX_FORKS_PER_ACCOUNT
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_MAX_FORKS_PER_ACCOUNT
+    return value if value > 0 else DEFAULT_MAX_FORKS_PER_ACCOUNT
+
+
 def creation_is_open() -> bool:
     """Whether self-service fork creation is switched on. Off unless said."""
     raw = (os.getenv("FORKS_ALLOW_CREATE", "") or "").strip().lower()
@@ -88,6 +112,21 @@ async def create_fork(request: Request, body: dict | None = None) -> dict:
         raise HTTPException(status_code=400, detail="a name is required")
 
     repo = _repo()
+
+    # The cap, checked before any cloning: a fork is a whole database, so the limit has to
+    # bound that rather than apologise after it.
+    cap = max_forks_per_account()
+    owned = repo.list_forks_for(account.id)
+    if len(owned) >= cap:
+        plural = "" if len(owned) == 1 else "s"
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"this account already has {len(owned)} campaign{plural}; "
+                f"the limit is {cap}"
+            ),
+        )
+
     slug = fork_slug((body or {}).get("slug") or name)
     if repo.find_fork_by_slug(slug):
         # Say so rather than silently suffixing: `daves-game-2` chosen by a

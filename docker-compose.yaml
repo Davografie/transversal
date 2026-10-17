@@ -60,6 +60,8 @@ services:
       # Self-service fork creation — who may create a campaign is the owner's call,
       # so this is off unless it is truthy.
       FORKS_ALLOW_CREATE: "${FORKS_ALLOW_CREATE:-}"
+      # How many campaigns one account may own (B331). Empty = the code default, 2.
+      FORKS_MAX_PER_ACCOUNT: "${FORKS_MAX_PER_ACCOUNT:-}"
       # Account links: `console` logs them (dev); `smtp` uses the block below; any
       # other value fails loudly rather than dropping the only credential.
       # The portal's public origin, for links that leave the app (email). Set it
