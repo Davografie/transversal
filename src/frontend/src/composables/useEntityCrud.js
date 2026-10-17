@@ -35,6 +35,7 @@ export function createEntityCrud() {
     entity(id: $id) {
       id type name razmerit currentUniverse currentLocation currentProjection
       hidden unpublished supportEligible starterLocation loraConfig promptSteering namingTheme
+      sfxIds
       agency { playerId playerName main }
       carriedLocations { id name currentUniverse }
       carrier { id name type }

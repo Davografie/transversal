@@ -256,9 +256,44 @@
           type="button"
           class="arrival-rule"
           :title="sid"
-          @click="openArrivalRule(sid)"
+          @click="openSfxRule(sid)"
         >{{ sfxName(sid) }}</button>
       </div>
+    </div>
+
+    <!-- The rules this entity owns: what its sheet shows in the strip, and what an
+         arrival rule spends the moment its audience walks in. The **declaration**
+         above is a subset (a place's own arrival rules *plus* its ancestors'), so
+         this list is the honest whole and, unlike that one, it is editable ([[B324]]).
+
+         Attaching is a real write onto the owner's `sfxIds`, not a form field —
+         `UpdateEntityInput` has no `sfxIds`, so the form's auto-save cannot race
+         it — which is why the picker writes as you tick rather than on close. -->
+    <div class="sfx-section">
+      <div class="gallery-header">
+        <h4>SFX</h4>
+      </div>
+      <div v-if="!ownSfxIds.length" class="gallery-empty">
+        No rules on this yet — add or author one below.
+      </div>
+      <div v-else class="own-sfx-list">
+        <div v-for="sid in ownSfxIds" :key="sid" class="own-sfx-row">
+          <button type="button" class="own-sfx" :title="sid" @click="openSfxRule(sid)">
+            <span class="own-sfx-name">{{ sfxName(sid) }}</span>
+            <span class="own-sfx-trigger">{{ sfxTrigger(sid) }}</span>
+          </button>
+          <Button
+            class="row-del-btn"
+            title="Remove from this entity"
+            variant="danger-ghost"
+            size="sm"
+            @click.stop="detachSfx(sid)"
+          >✕</Button>
+        </div>
+      </div>
+      <p v-if="sfxOwnerError" class="sfx-error">{{ sfxOwnerError }}</p>
+      <Button class="sfx-add" @click="openSfxPickerForEntity" variant="secondary" block>+ Add SFX</Button>
+      <Button class="sfx-add" @click="openNewSfxForEntity" variant="secondary" block>+ New SFX</Button>
     </div>
     <div v-if="form.type === 'FACTION'" class="members-section">
       <div class="gallery-header">
@@ -379,6 +414,7 @@ import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import { useDragDrop } from '@/composables/useDragDrop.js'
 import { useImageGallery } from '@/composables/useImageGallery.js'
+import { useSfxOwners } from '@/composables/useSfxOwners.js'
 import ImageGallery from '@/components/image/ImageGallery.vue'
 import ImageUpload from '@/components/image/ImageUpload.vue'
 import Button from '@/components/ui/Button.vue'
@@ -388,6 +424,7 @@ import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmPalettePanel from '@/components/gm/GmPalettePanel.vue'
 import GmRollTablesPanel from '@/components/gm/GmRollTablesPanel.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
+import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
 import GmPortalConfigPanel from '@/components/gm/GmPortalConfigPanel.vue'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
@@ -822,7 +859,104 @@ function sfxName(id) {
   return allSfxs.value.find((s) => s.id === id)?.name || id
 }
 
-function openArrivalRule(sfxId) {
+function sfxTrigger(id) {
+  return allSfxs.value.find((s) => s.id === id)?.trigger || ''
+}
+
+// ── This entity's own SFX ───────────────────────────
+// One list for every entity type, because the storage is one list: `entity.sfxIds`
+// is what a place and a character both own. The *owner kind* still differs, because
+// the backend gates attach on it — a rule that declares a location source may not
+// land on a character (`can_attach`), and the picker greys it out for the same
+// reason. Getting the kind wrong would refuse the attach and look like a dead
+// button, so it is derived from the entity's type once, here.
+const ownerKind = computed(() => (form.value?.type === 'LOCATION' ? 'location' : 'entity'))
+
+const ownSfxIds = computed(() => selected.value?.sfxIds || [])
+
+// The composable's own `error` is shared module state (Manage SFX writes it too),
+// so a failure is reported locally instead of rendering another panel's message.
+const { addOwnerSfx, removeOwnerSfx } = useSfxOwners()
+const sfxOwnerError = ref('')
+
+// The entity is the source of truth for this list and it is not part of the form,
+// so a write patches `selected` instead of re-reading the entity — a re-read would
+// flush and rebuild the whole form.
+//
+// **In place, never a new array.** The picker is handed this very array as a panel
+// prop, and `panel.open` keeps the props object by reference — so a replacement
+// would leave the picker reading the list it opened with, and a tick would appear
+// to do nothing while the attach went through. Mutating it is what makes the
+// picker's own ticks render.
+function patchOwnSfx(id, add) {
+  if (!selected.value) return
+  if (!Array.isArray(selected.value.sfxIds)) selected.value.sfxIds = []
+  const list = selected.value.sfxIds
+  const at = list.indexOf(id)
+  if (add && at < 0) list.push(id)
+  else if (!add && at >= 0) list.splice(at, 1)
+}
+
+// The backend refuses an attach whose declared surface is not this one
+// (`can_attach`), and it says so by returning false — which would look like a dead
+// button, so the refusal is named here.
+const SFX_REFUSED = 'That rule declares a different surface, so it cannot live here.'
+
+async function attachSfx(id) {
+  const ok = await addOwnerSfx(
+    [{ ownerType: ownerKind.value, ownerId: props.entityId }], id)
+  sfxOwnerError.value = ok ? '' : SFX_REFUSED
+  if (ok) patchOwnSfx(id, true)
+  return ok
+}
+
+async function detachSfx(id) {
+  const ok = await removeOwnerSfx(
+    [{ ownerType: ownerKind.value, ownerId: props.entityId }], id)
+  sfxOwnerError.value = ok ? '' : 'That rule could not be removed.'
+  if (ok) patchOwnSfx(id, false)
+  return ok
+}
+
+function openSfxPickerForEntity() {
+  panel.open({
+    component: GmSfxPickerPanel,
+    title: 'Add SFX',
+    props: {
+      // The live array, not a copy — see `patchOwnSfx`.
+      selectedIds: ownSfxIds.value,
+      ownerType: ownerKind.value,
+    },
+    // Immediate, not on close: the picker toggles a set that is already stored on
+    // the owner, and it is the same write Manage SFX's owner filter makes.
+    listeners: { 'add-sfx': attachSfx, 'remove-sfx': detachSfx },
+  })
+}
+
+function openNewSfxForEntity() {
+  panel.open({
+    component: GmSfxEditPanel,
+    title: 'New SFX',
+    badge: 'SFX',
+    props: {
+      sfx: null,
+      // Where it will live. Truthful here in a way the trait panel's is not: the
+      // attach below lands on this entity, so the line does not promise anything
+      // the write does not do.
+      owner: { ownerType: ownerKind.value, ownerId: props.entityId, label: form.value?.name || '' },
+    },
+    listeners: {
+      'sfx-created': async (created) => {
+        if (!created?.id) return
+        await attachSfx(created.id)
+        // The row renders from the SFX registry, so an id alone draws nothing.
+        await fetchTraitsConfig()
+      },
+    },
+  })
+}
+
+function openSfxRule(sfxId) {
   const sfx = allSfxs.value.find((s) => s.id === sfxId) || null
   panel.open({
     component: GmSfxEditPanel,
@@ -831,8 +965,8 @@ function openArrivalRule(sfxId) {
     badge: 'SFX',
     props: {
       sfx,
-      // The place is the owner, so the editor shows where the rule lives.
-      owner: { ownerType: 'LOCATION', ownerId: props.entityId, label: form.value?.name || '' },
+      // The entity is the owner, so the editor shows where the rule lives.
+      owner: { ownerType: ownerKind.value, ownerId: props.entityId, label: form.value?.name || '' },
     },
     listeners: {},
   })
@@ -1410,6 +1544,17 @@ defineExpose({ refresh: loadImages })
 .arrival-from { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .arrival-rule { font-size: 11px; padding: 3px 8px; border: 1px solid var(--overlay-10); border-radius: 4px; background: var(--overlay-2); color: var(--text); cursor: pointer; text-align: left; }
 .arrival-rule:hover { background: var(--overlay-4); border-color: var(--accent); }
+.sfx-section { margin-top: 12px; }
+.own-sfx-list { display: flex; flex-direction: column; gap: 4px; }
+.own-sfx-row { display: flex; align-items: center; gap: 6px; }
+.own-sfx { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; font-size: 11px; padding: 5px 8px; border: 1px solid var(--overlay-10); border-radius: 4px; background: var(--overlay-2); color: var(--text); cursor: pointer; text-align: left; }
+.own-sfx:hover { background: var(--overlay-4); border-color: var(--accent); }
+.own-sfx-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.own-sfx-trigger { font-size: 10px; color: var(--text-dim); }
+/* Two writes in a row: the picker and the author are separate actions, so they
+   get separate buttons rather than one with a hidden second path. */
+.sfx-add { margin-top: 4px; }
+.sfx-error { font-size: 10px; color: var(--danger, #d67); margin: 4px 0 0; }
 .members-section { margin-top: 12px; }
 .members-list { display: flex; flex-direction: column; gap: 4px; }
 .member-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--overlay-2); cursor: pointer; }

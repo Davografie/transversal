@@ -668,7 +668,7 @@ function createOpenSfxPicker() {
     component: GmSfxPickerPanel,
     title: 'Add SFX to Trait',
     props: {
-      selectedIds: [...createForm.possibleSfxIds],
+      selectedIds: createForm.possibleSfxIds,
       ownerType: 'trait',
     },
     listeners: {
@@ -676,7 +676,8 @@ function createOpenSfxPicker() {
         if (!createForm.possibleSfxIds.includes(id)) createForm.possibleSfxIds.push(id)
       },
       'remove-sfx': (id) => {
-        createForm.possibleSfxIds = createForm.possibleSfxIds.filter((sid) => sid !== id)
+        const at = createForm.possibleSfxIds.indexOf(id)
+        if (at >= 0) createForm.possibleSfxIds.splice(at, 1)
       },
     },
   })
@@ -793,22 +794,26 @@ function toggleDefaultSfx(id) {
   }
 }
 
+// The picker is handed the **live array**, and these listeners edit it in place.
+// `panel.open` keeps the props object by reference, so a copy would freeze the
+// picker's idea of what is selected: a tick would look like nothing happened while
+// the attach went through, and the author would tick again. `splice`, not
+// `filter` — replacing the array detaches it from the prop just as thoroughly.
 function openSfxPicker() {
   panel.open({
     component: GmSfxPickerPanel,
     title: 'Add SFX to Trait',
     props: {
-      selectedIds: [...form.possibleSfxIds],
+      selectedIds: form.possibleSfxIds,
       ownerType: 'trait',
     },
     listeners: {
       'add-sfx': (id) => {
-        if (!form.possibleSfxIds.includes(id)) {
-          form.possibleSfxIds.push(id)
-        }
+        if (!form.possibleSfxIds.includes(id)) form.possibleSfxIds.push(id)
       },
       'remove-sfx': (id) => {
-        form.possibleSfxIds = form.possibleSfxIds.filter(sid => sid !== id)
+        const at = form.possibleSfxIds.indexOf(id)
+        if (at >= 0) form.possibleSfxIds.splice(at, 1)
       },
     },
   })

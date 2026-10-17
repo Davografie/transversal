@@ -233,6 +233,8 @@ To put it in the world: open **Manage SFX**, filter by *Trait instance*, pick th
 
 **Writing the rule from the trait that grants it.** A trait's **Possible SFXs** list (in **Manage Traits**) is the *static* half of reach: the rules a holder of that trait can buy. That list authors as well as picks — **+ New SFX** opens the rule editor on top of the trait and attaches the result to it as you create it, so a technique is written from the trait it belongs to instead of being found again later in Manage SFX. Tick **✓** on the row if every holder should get it automatically; leave it ✗ and the rule is offered, not granted.
 
+**Writing the rule from the thing that owns it.** Any entity's editor — a place, a faction, a GMC, an asset, a universe — carries an **SFX** section listing the rules attached to *it*, with **+ Add SFX** to attach an existing one and **+ New SFX** to write one there and then. This is the list the sheet shows for a character and the list a place spends when someone walks in. A place also has **Fires on arrival** above it: that is the narrower view — its arrival rules *plus* those it inherits from the places around it — so a rule attached here appears there too once its trigger fires on arrival, and a rule inherited from a parent appears only there.
+
 ## How your rule reads
 
 The top of the panel shows a **card line**: your rule in plain language, recomputed as you edit. The d4 Bonus rule reads:
