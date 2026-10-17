@@ -11,9 +11,12 @@
 # * **Every database, discovered not listed.** The registry and each campaign are separate
 #   databases, and a new fork appears by itself — a hand-written list is the "one forgotten
 #   database is a silent divergence" trap. `_system` is skipped (it holds no app data).
-# * **Media is snapshotted by hardlink**, not copied. The store is content-addressed and
-#   ~645 MB; `rsync --link-dest` against the previous snapshot costs almost nothing and
-#   still gives a self-consistent directory to restore from.
+# * **Media is a rolling mirror, not a copy per snapshot.** The store is content-addressed
+#   (a file is named by the digest of its bytes), so a blob is never rewritten — only added
+#   or, once nothing references it, removed. Copying 645 MB per run buys almost nothing: a
+#   hardlink snapshot still cost 0.6 GB measured, because linking needs identical mtime and
+#   attributes. One mirror holds every blob any snapshot can reference; the trade-off (a blob
+#   deleted after a snapshot is not in the mirror) is stated in the media section below.
 # * **Redis is dumped**, because sessions are live state that a restore wants back.
 # * **A manifest of per-collection counts** is written beside the dump, so a restore can be
 #   checked without opening a database and "did we get everything" is answerable.
@@ -79,16 +82,21 @@ for db in $DATABASES; do
   docker exec "$ARANGO" rm -rf /tmp/tv2dump
 done
 
-# ── Media, as a hardlink snapshot ────────────────────────────────────────────
-PREV="$(ls -1d "$ROOT"/.backups/*/media 2>/dev/null | sort | tail -1 || true)"
-if [ -n "$PREV" ] && [ -d "$ROOT/media" ]; then
-  say "  media → hardlink snapshot against $(basename "$(dirname "$PREV")")"
-  run mkdir -p "$DEST/media"
-  run rsync -a --delete --link-dest="$PREV" "$ROOT/media/" "$DEST/media/"
-elif [ -d "$ROOT/media" ]; then
-  say "  media → first snapshot (a full copy)"
-  run mkdir -p "$DEST/media"
-  run rsync -a "$ROOT/media/" "$DEST/media/"
+# ── Media: one rolling mirror, not a copy per snapshot ───────────────────────
+# The store is content-addressed — a file is named by the digest of its bytes — so a blob is
+# never rewritten, only added, or removed once no record references it any more. A copy of
+# 645 MB per snapshot therefore buys almost nothing (measured: a hardlink snapshot still cost
+# 0.6 GB, because linking needs identical mtime and attributes and most files differ). One
+# mirror holds every blob any snapshot can reference.
+#
+# The trade-off, stated rather than hidden: a blob deleted *after* a snapshot is gone from the
+# mirror, so restoring that dump could miss an image whose record it still holds. Deletion is
+# refcounted and rare; the alternative is a full copy per run.
+MIRROR="$ROOT/.backups/media-mirror"
+if [ -d "$ROOT/media" ]; then
+  say "  media → rolling mirror at .backups/media-mirror"
+  run mkdir -p "$MIRROR"
+  run rsync -a --delete "$ROOT/media/" "$MIRROR/"
 fi
 
 # ── Redis ────────────────────────────────────────────────────────────────────
