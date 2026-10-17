@@ -17,7 +17,7 @@
 // can place it anywhere in the field order (`EffectActionMeta.field_order`) rather
 // than only before or after the field block. The path itself is edited in a child
 // panel (`PathField`), so a reference contributes one line to the form.
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import PathField from './PathField.vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 
@@ -32,13 +32,15 @@ const emit = defineEmits(['update:modelValue'])
 // The elements a reference accepts, in the author's words. Raw catalog names read
 // as jargon once a reference accepts more than one — "traitsetsetting" is not a
 // thing anyone says — and this line is the only place the form says what the
-// reference will take ([[B326]]). The catalog is a shared singleton: `load` is
-// idempotent and already been called wherever a path is edited.
-const { load, elementLabel } = useTargetCatalog()
-// Swallowed: this is a label. A catalog that cannot load leaves the names raw,
-// which is what it showed before this existed — it must never become a render
-// error on a form that has nothing to do with targeting.
-onMounted(() => { load().catch(() => {}) })
+// reference will take ([[B326]]).
+//
+// **It does not load the catalog.** Every host of `EffectForm` already does
+// (`GmSfxEditPanel`, `GmEffectEditPanel`, `EffectEditor`, `GmDraftEffectPanel`), and
+// a field that fetches on mount fetches once per field per mount — which is the
+// wrong thing to add to a form that can appear many times in one panel, and it
+// made every remount of the GM panel issue its own catalog read. Until the shared
+// catalog arrives the names are raw, which is what they were before this line.
+const { elementLabel } = useTargetCatalog()
 
 const elementNames = computed(() =>
   (props.refDef.elements || []).map(elementLabel).join(' / '))
