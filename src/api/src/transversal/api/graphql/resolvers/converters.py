@@ -230,51 +230,6 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
         conditions=[_condition_to_gql(c) for c in e.conditions],
     )
 
-def _camel_case(name: str) -> str:
-    head, *rest = name.split("_")
-    return head + "".join(part[:1].upper() + part[1:] for part in rest)
-
-
-def effect_to_input_dict(e: DomainEffect) -> dict:
-    """The domain effect as an **``EffectInput``-shaped wire dict** (camelCase).
-
-    The REST fire path used to echo ``effect.model_dump()`` — the *domain* shape,
-    snake_case — while the GraphQL input is camelCase, so a client could not hand a
-    question back to ``resolveEffectTargets``: five names differ (``dieFilter``,
-    ``targetSpec``, ``entitySpec``, ``ownerSpec``, ``resultSpec``), and GraphQL
-    input is strict, so the echo was rejected outright — or, tolerated, would have
-    arrived with every spec empty, which is [[B316]]'s bug one layer out
-    ([[navigation]]'s ask, 2026-10-17: *"serialise the pending effect through the
-    same converter the GraphQL path uses"*).
-
-    So this runs the **same mapper** the GraphQL path runs (``_effect_to_gql``) and
-    only renames its fields. It cannot drift from ``EffectInput`` the way a fourth
-    hand-rolled copy would, because the fields it emits are that mapper's.
-    """
-    import dataclasses
-
-    from transversal.domain import Effect as _DomainEffect  # noqa: F401
-
-    gql = _effect_to_gql(e)
-    out = {_camel_case(f.name): getattr(gql, f.name) for f in dataclasses.fields(gql)}
-    # Two fields the *output* type does not carry but the input does.
-    out["branches"] = [b.model_dump() for b in (e.branches or [])] or None
-    out["conditions"] = [
-        {
-            "type": c.type.value if hasattr(c.type, "value") else c.type,
-            "subject": c.subject, "target": c.target,
-            "targets": list(getattr(c, "targets", []) or []),
-            "value": c.value, "operator": c.operator,
-            "mode": getattr(c, "mode", "any") or "any",
-            "count": getattr(c, "count", None),
-            "narrative": c.narrative,
-            "spec": c.spec.model_dump() if c.spec else None,
-        }
-        for c in (e.conditions or [])
-    ]
-    return out
-
-
 def _condition_to_gql(c: DomainCondition) -> Condition:
     return Condition(
         type=c.type, subject=c.subject, target=c.target,

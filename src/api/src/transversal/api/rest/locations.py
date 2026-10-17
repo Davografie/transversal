@@ -594,6 +594,57 @@ class PortalFireRequest(BaseModel):
     entity_id: str
 
 
+def _broadcast_pending_choices(entity_id: str, universe: str, pending: list, edge: dict) -> None:
+    """Put a portal's question on the **auto-choice** channel, so the splash renders it.
+
+    A portal is an automatic trigger — the traveller stepped through, nobody pressed a
+    card — and the client already knows where an automatic question goes: the splash
+    panel embeds the picker for ``origin="auto"`` (`SplashPanel.vue`, via the
+    ``sfx_choice_required`` SSE event that `App.vue` turns into `sfxChoiceRequest`).
+    Emitting it here means the portal needs **no viewport-side wiring at all**: it
+    behaves like every other automatic question, which is the author's rule for this
+    surface (2026-10-17).
+
+    The choices are handed over in the vocabulary `_emit_pending_choices` already
+    speaks, so the payload is byte-for-byte what the engine's own paths send —
+    including the effect, which `effect_to_wire_dict` shapes for `EffectInput` so the
+    answer can come home through `resolveEffectTargets` ([[B319]]).
+    """
+    if not pending:
+        return
+    from types import SimpleNamespace
+
+    from transversal.services.roll_orchestrator import _emit_pending_choices
+
+    edge_key = (edge or {}).get("_key", "")
+    structured, plain = [], []
+    for c in pending:
+        if getattr(c, "structured", False):
+            structured.append(SimpleNamespace(
+                element=getattr(c, "kind", ""),
+                candidates=list(getattr(c, "candidates", []) or []),
+                count=getattr(c, "count", None),
+                field=getattr(c, "field", "target"),
+                step_index=getattr(c, "step_index", 0),
+                # A portal question comes from the portal; keep that true here too,
+                # so a follow-up knows where the first answer came from.
+                source_kind=getattr(c, "source_kind", "") or "relationship",
+                source_id=getattr(c, "source_id", "") or edge_key,
+                source_sfx_id="",
+                answers_so_far=list(getattr(c, "answers_so_far", []) or []),
+                sfx_name="", sfx_description="",
+                effect=c.effect, continuation=[],
+            ))
+        else:
+            plain.append(SimpleNamespace(
+                kind=getattr(c, "kind", ""),
+                field_name=getattr(c, "field", "target"),
+                sfx_name="", sfx_description="",
+                effect=c.effect, continuation=[],
+            ))
+    _emit_pending_choices(entity_id, universe or "", plain, structured, origin="auto")
+
+
 def _pending_choice_payload(index: int, c, edge: dict) -> dict:
     """One pending choice, shaped so the client can **hand it back**.
 
@@ -613,7 +664,7 @@ def _pending_choice_payload(index: int, c, edge: dict) -> dict:
     the portal, and a follow-up needs to know that. It is the honest description
     until a portal earns its own source kind.
     """
-    from transversal.api.graphql.resolvers.converters import effect_to_input_dict
+    from transversal.services.effects_engine.wire import effect_to_wire_dict
 
     return {
         "index": index,
@@ -629,7 +680,7 @@ def _pending_choice_payload(index: int, c, edge: dict) -> dict:
         "sourceId": (getattr(c, "source_id", "") or (edge or {}).get("_key", "")),
         "sourceSfxId": "",
         "entity_id": None,
-        "effect": effect_to_input_dict(c.effect),
+        "effect": effect_to_wire_dict(c.effect),
     }
 
 
@@ -690,6 +741,7 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
 
     applied = [a.summary for a in result.applied] if result else []
     pending = list(result.pending_choices) if result else []
+    _broadcast_pending_choices(body.entity_id, entity.current_universe, pending, edge)
     if pending:
         status = "pending"
     elif applied:

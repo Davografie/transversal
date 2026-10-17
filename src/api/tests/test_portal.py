@@ -329,7 +329,7 @@ def test_the_fire_response_can_be_handed_back_to_resolve_effect_targets(monkeypa
     `entitySpec`, `ownerSpec`, `resultSpec`), so the echo would have been rejected as
     an input, or accepted with every spec silently empty.
     """
-    from transversal.api.graphql.resolvers.converters import effect_to_input_dict
+    from transversal.services.effects_engine.wire import effect_to_wire_dict
     from transversal.domain import Effect, TargetRef
     from transversal.services.effects_applier.datatypes import PendingChoice
     from transversal.services.target_spec import SelectStep, TargetSpec
@@ -340,7 +340,7 @@ def test_the_fire_response_can_be_handed_back_to_resolve_effect_targets(monkeypa
         die_filter={"role": None},
         refs={"location": TargetRef(spec=TargetSpec(steps=[SelectStep(collection="locations")]))},
     )
-    wire = effect_to_input_dict(domain_effect)
+    wire = effect_to_wire_dict(domain_effect)
     assert "dieFilter" in wire and "die_filter" not in wire
     assert wire["dieFilter"] == {"role": None}
 
@@ -389,3 +389,54 @@ def test_the_fire_response_can_be_handed_back_to_resolve_effect_targets(monkeypa
     # …and the effect is an input, not a domain dump.
     assert "dieFilter" in choice["effect"] and "die_filter" not in choice["effect"]
     assert "targetSpec" in choice["effect"]
+
+
+def test_a_portal_question_is_broadcast_as_an_auto_choice(monkeypatch):
+    """A portal is an **automatic** trigger, so its question goes to the splash.
+
+    Nobody pressed a card — the traveller stepped through — and the client already
+    decides where an automatic question lands (`origin="auto"` → the splash panel's
+    picker). Emitting it means the portal needs no viewport-side wiring at all
+    (the author's rule for this surface, 2026-10-17).
+    """
+    from transversal.api.rest.locations import _broadcast_pending_choices
+    from transversal.domain import Effect
+    from transversal.services.effects_applier.datatypes import PendingChoice
+
+    captured = {}
+
+    def fake_emit(entity_id, universe, effects, structured=None, loops=None, origin="roll"):
+        captured.update(dict(entity=entity_id, universe=universe, effects=effects,
+                             structured=structured or [], loops=loops or [],
+                             origin=origin))
+
+    monkeypatch.setattr("transversal.services.roll_orchestrator._emit_pending_choices", fake_emit)
+
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="travel", action="move")
+    pending = [PendingChoice(
+        effect=effect, kind="location", field="refs.location",
+        candidates=[{"id": "loc-1", "name": "Zurich Airport"}],
+        count=1, structured=True, step_index=2)]
+    _broadcast_pending_choices("char-1", "earth", pending,
+                               {"_key": "edge:loc-a:loc-a:transversal"})
+
+    assert captured["origin"] == "auto", "a portal question is not a roll question"
+    assert captured["entity"] == "char-1"
+    choice = captured["structured"][0]
+    assert choice.element == "location"
+    assert [c["id"] for c in choice.candidates] == ["loc-1"]
+    assert choice.count == 1 and choice.step_index == 2
+    # The source is the portal, so a follow-up knows where it came from.
+    assert (choice.source_kind, choice.source_id) == (
+        "relationship", "edge:loc-a:loc-a:transversal")
+
+
+def test_a_portal_with_nothing_pending_broadcasts_nothing(monkeypatch):
+    """No question, no event — an empty `sfx_choice_required` would open a blank picker."""
+    from transversal.api.rest.locations import _broadcast_pending_choices
+
+    called = []
+    monkeypatch.setattr("transversal.services.roll_orchestrator._emit_pending_choices",
+                        lambda *a, **k: called.append(a))
+    _broadcast_pending_choices("char-1", "earth", [], {"_key": "edge"})
+    assert called == []
