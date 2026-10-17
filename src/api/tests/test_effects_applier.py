@@ -4391,3 +4391,26 @@ def test_choose_multiple_over_one_candidate_is_still_taken():
 
     assert pending == []
     assert out is not None and out.entity == "e2" and out.entity_spec is None
+
+
+def test_travel_reuse_never_arrives_in_an_unplaced_body():
+    """A body that is **nowhere** is not a place to land.
+
+    Measured live on Kael Drift: travelling to Iron Roots with `{last_projection}`
+    (and with that body's literal id) ended with `current_location = None` while the
+    response still reported a destination — he left Earth and arrived nowhere. A
+    *placed* body is still where a reuse policy takes you; an unplaced one falls
+    back to a fresh body at the destination (mcp-architect, 2026-09-24).
+    """
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity, _loc("krasnoyarsk", "earth")],
+        projections=[_proj("char-1:earth", "char-1", "earth")],  # no location
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="krasnoyarsk",
+        context={"transversal_type": "consciousness", "projection": "{last_projection}"},
+    )
+    apply_effects(entity, [effect], repo)
+    assert entity.current_location == "krasnoyarsk"

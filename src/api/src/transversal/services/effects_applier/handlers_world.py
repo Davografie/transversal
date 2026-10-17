@@ -571,6 +571,29 @@ def _apply_travel(entity, effect, repo, result):
             return
         _spawn_body(dest_universe, location_id, TransversalType.CONSCIOUSNESS)
 
+    def _place_body(proj, location_id: str) -> None:
+        """Move a body to the destination and relabel its crossing.
+
+        ``_arrive_in_body`` sets the entity's location from the **body's**, so a body
+        that is not moved first lands the traveller wherever that body already sat —
+        and an unplaced body lands them **nowhere** (``current_location = None``,
+        while the response still reports a location name). ``{closest_projection}``
+        always did this; the reuse and literal policies did not, which is why a
+        consciousness transversal arrived nobody (mcp-architect, 2026-09-24).
+
+        ``NATIVE`` means *home*: it is what ``is_transversal`` counts, and what makes
+        a universe live for the entity. A body back in its origin universe is native
+        again; one standing in a foreign universe is there by consciousness, exactly
+        as the inapposite branch labels its own crossing.
+        """
+        proj.current_location = location_id
+        proj.universe = dest_universe
+        proj.transversal_type = (
+            TransversalType.NATIVE
+            if dest_universe == proj.origin_universe
+            else TransversalType.CONSCIOUSNESS
+        )
+
     def _closest_body():
         """The subject's body nearest the destination, by the location-graph metric.
 
@@ -607,23 +630,18 @@ def _apply_travel(entity, effect, repo, result):
         # wherever that body sits — so the body is placed first, and the mind then
         # lands on the spot that was asked for rather than wherever the nearest
         # body happened to be.
-        proj.current_location = location_id
-        proj.universe = dest_universe
-        # ``NATIVE`` means *home*: it is what ``is_transversal`` counts, and what
-        # makes a universe live for the entity. A body back in its origin universe
-        # is native again; one standing in a foreign universe is there by
-        # consciousness, exactly as the inapposite branch labels its own crossing.
-        proj.transversal_type = (
-            TransversalType.NATIVE
-            if dest_universe == proj.origin_universe
-            else TransversalType.CONSCIOUSNESS
-        )
+        _place_body(proj, location_id)
         return proj
 
     # A literal projection id is a resolved ``{choose_projection}``.
     if projection_policy not in ("{last_projection}", "{new_projection}", "{random_projection}", "{choose_projection}", "{closest_projection}"):
         proj = repo.get_projection(projection_policy)
-        if proj is not None:
+        # **An unplaced body is not a place.** Arriving in one leaves the entity with
+        # no location at all while the response still names a destination, so a body
+        # that is nowhere falls through to a fresh one — the same fallback
+        # `_closest_body` takes when it cannot rank a body (mcp-architect,
+        # 2026-09-24).
+        if proj is not None and proj.current_location:
             _arrive_in_body(proj)
             return
         projection_policy = "{new_projection}"
@@ -653,10 +671,17 @@ def _apply_travel(entity, effect, repo, result):
                 proj = projs[0] if projs else None
             else:
                 proj = repo.get_projection(random.choice(body_ids))
-            if proj is not None:
+            if proj is not None and proj.current_location:
+                # A **placed** body is where you land: a reuse policy means "go where
+                # your body already is", and the destination has only chosen the
+                # universe — the contract the suite pins. What it must not do is
+                # arrive in a body that is **nowhere**: that left the entity with
+                # `current_location = None` while the response still reported a
+                # destination (mcp-architect, 2026-09-24), so an unplaced body falls
+                # through to a fresh one below.
                 _arrive_in_body(proj)
                 return
-        projection_policy = "{new_projection}"  # no existing body → spawn a fresh one
+        projection_policy = "{new_projection}"  # no usable body → spawn at the destination
 
     _spawn_new()
 
