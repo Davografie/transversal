@@ -93,6 +93,7 @@ from transversal.services.effects_applier.handlers_world import (
     _apply_restore_projection,
     _apply_set_destination,
     _apply_set_location,
+    _apply_set_portal_destination,
     _apply_travel,
 )
 _MUTATION_HANDLERS = {
@@ -131,6 +132,10 @@ _MUTATION_HANDLERS = {
     # Directions: set them, and the inverse that ends them ([[Guided Route]]).
     ("set_destination", "set"): _apply_set_destination,
     ("set_destination", "clear"): _apply_clear_destination,
+    # Where a portal currently sends you — the departure board ([[B323]]). No
+    # entity write: the value is session state on the edge, so `fire_portal`
+    # reads it on the way out.
+    ("portal", "set_destination"): _apply_set_portal_destination,
     ("modify_dice_limit", "increase"): _apply_dice_limit,
     ("modify_dice_limit", "decrease"): _apply_dice_limit,
     # How the pool *reads* rather than what it holds: which faces hitch ([[B231]]).

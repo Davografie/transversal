@@ -253,6 +253,35 @@ ACTIONS: list[EffectActionMeta] = [
         ],
     ),
 
+    # ── Set Portal Destination (the departure board) ───
+    # A portal asks *where to?* when it is fired. This action says not to ask:
+    # point the portal somewhere now, and the next time it is fired it goes there
+    # ([[B323]]). It is how a hub works — the board is set when you arrive, and
+    # stepping through just goes.
+    #
+    # The value is **session state on the portal**, not content: nothing is
+    # written to the edge, so a restart forgets the board (the human's decision,
+    # 2026-10-17). `services/portal_board.py` holds it, and `fire_portal` reads it.
+    EffectActionMeta(
+        action_id="set_portal_destination",
+        label="Set Portal Destination",
+        description="Point a portal somewhere for now: the next time it is fired it goes there, without asking. Session state — a restart forgets it",
+        category="benefit",
+        effect_type="portal",
+        effect_action="set_destination",
+        valid_timings=["IMMEDIATE"],
+        # The thing acted on is the *edge*, so a path to it is a path to a
+        # `relationship` — there is no portal picker kind.
+        path_element=("relationship",),
+        # The destination is an anchor path (`Effect.owner_spec`), settled once:
+        # a destination path that matched three cities must not set three boards.
+        owner_elements=("location",),
+        fields=[
+            EffectFieldDef(name="target", label="Portal", field_type="text",
+                          required=True, default="", hidden_when_ref="portal"),
+        ],
+    ),
+
     # ── Set Destination (the guided route) ─────────────
     # An SFX grants **directions in the fiction** — a mayor asks the party to
     # clear the goblin cave, and the map lights the next hop. Only the

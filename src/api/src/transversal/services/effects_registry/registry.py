@@ -104,6 +104,18 @@ _DECLARED_REFS: dict[str, list[tuple[str, str, tuple[str, ...], str | None, bool
     "set_die": [("die", "Target", ('die', 'rating_die'), 'target', False)],
     "set_hitch_threshold": [("recipient", "Entity", ('entity',), 'entity', False)],
     "set_location": [("recipient", "Entity", ('entity',), 'entity', False), ("location", "Destination Location", ('location',), 'target', False)],
+    # The departure board ([[B323]]). The **portal** is what the effect acts on,
+    # so it is the ordinary reference; the **destination** is an *anchor* —
+    # settled once, like every owner path — because a board is one place, and a
+    # destination path that matched three cities must not set it three times.
+    #
+    # The anchor's ref name is `owner` because that is the name
+    # `resolve_effect_owner` reads (it is also what `duplicate_entity`'s "Spawn
+    # At" is called). The *label* is what an author sees, and it reads
+    # "Destination"; there is no cleaner role — `role` names the positional field
+    # a reference supersedes, and `owner` is the only anchored one.
+    "set_portal_destination": [("portal", "Portal", ('relationship',), 'target', False),
+                               ("owner", "Destination", ('location',), 'owner', True)],
     "set_polarity": [("trait", "Target", ('traitsetting',), 'target', False)],
     "set_trait": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
     "set_trait_rating_type": [("trait", "Target Trait", ('traitsetting',), 'target', False)],
@@ -190,6 +202,7 @@ _ACTION_GROUPS: dict[str, str] = {
     # `set_destination` is how a rule grants travel directions.
     "attune": "Attunement", "suppress": "Attunement",
     "travel": "Travel", "set_location": "Travel", "set_destination": "Travel",
+    "set_portal_destination": "Travel",
     "discover_life_path": "Life Path", "next_step": "Life Path",
     "open_roll_table": "Roll Table",
     "draft_life_path": "Life Path", "force_muster": "Life Path",

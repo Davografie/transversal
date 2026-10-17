@@ -88,6 +88,11 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     # being what the effect lands on ("each occupant here travels to X").
     ("travel", "move"): "{subject} travels to {target}",
     ("set_destination", "set"): "grant directions to {target}",
+    # The board: `{owner}` is the anchor — the place the portal is being pointed
+    # at — and `{target}` is the portal. It has to be on the card (the guard test
+    # requires it): *which* portal this points somewhere is the half an author
+    # cannot infer. An edge has no display name yet, so it shows as its handle.
+    ("portal", "set_destination"): "set {target} to {owner}",
     ("life_path", "discover"): "discover the {target} life path",
     ("roll_table", "menu"): "roll on {target}",
     # The granted rule reads as its own name (resolved from the registry), and

@@ -395,6 +395,49 @@ def _copy_entity_edges(repo, source_entity_id: str, new_entity_id: str) -> int:
     return copied
 
 
+def _apply_set_portal_destination(entity, effect, repo, result):
+    """Point a portal somewhere: the departure board ([[B323]]).
+
+    The *board*, not the edge — nothing is written to content, so the value is
+    session state that a restart forgets and a reload keeps (it lives on the
+    server, so every client in the campaign shares it).
+
+    Both inputs are read the way they were declared. The portal is an ordinary
+    reference, so `target_value` gives the edge's key; the destination is an
+    **anchor**, settled once by `resolve_effect_owner`, so it arrives already
+    resolved in `refs.owner` rather than multiplying this effect.
+
+    Every refusal is reported. An effect that looks applied and set no board is
+    the failure mode this whole session kept finding, so "no portal", "no
+    destination" and "no campaign" each say so on the card.
+    """
+    from transversal.services.portal_board import set_portal_destination
+
+    portal_key = (target_value(effect) or "").strip()
+    if not portal_key:
+        result.applied.append(AppliedEffect(
+            effect, "no portal named — nothing to point anywhere"))
+        return
+
+    ref = (getattr(effect, "refs", None) or {}).get("owner")
+    destination = (getattr(ref, "value", "") or "").strip()
+    if not destination or destination == "self":
+        result.applied.append(AppliedEffect(
+            effect, "no destination — say where the portal should go"))
+        return
+
+    if not set_portal_destination(portal_key, destination):
+        # No campaign. Refused rather than written to a bucket nothing reads.
+        result.applied.append(AppliedEffect(
+            effect, "no campaign scope — the departure board was not set"))
+        return
+
+    place = repo.get_entity(destination) if repo is not None else None
+    where = getattr(place, "name", "") or destination
+    result.applied.append(AppliedEffect(
+        effect, f"portal {portal_key} now goes to {where}"))
+
+
 def _apply_set_location(entity, effect, repo, result):
     """Place an entity at a location without crossing a universal boundary.
 

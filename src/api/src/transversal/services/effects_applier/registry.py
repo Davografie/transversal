@@ -217,6 +217,10 @@ def _register_core_handlers(em, raz):
     effect_registry.register("modify_traitset", "set_limit", _commit)
     effect_registry.register("set_destination", "set", _commit)
     effect_registry.register("set_destination", "clear", _commit)
+    # The departure board ([[B323]]): nothing in the world changes, but it goes
+    # through the shared applier so one dispatch serves both paths — a rule fires
+    # it, and a portal edge's own effects would too.
+    effect_registry.register("portal", "set_destination", _commit)
     effect_registry.register("modify_dice_limit", "increase", _commit)
     effect_registry.register("modify_dice_limit", "decrease", _commit)
     effect_registry.register("modify_pool", "add_dice", _commit)

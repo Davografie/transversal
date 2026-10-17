@@ -668,7 +668,7 @@ def _pending_choice_payload(index: int, c, edge: dict) -> dict:
     **The effect is serialised for the GraphQL input, not the domain.** It used to be
     `effect.model_dump()` (snake_case) while `EffectInput` is camelCase, so the echo
     was rejected — five names differ — or would have arrived with every spec empty.
-    `effect_to_input_dict` runs the same mapper the GraphQL path runs, so the REST
+    `effect_to_wire_dict` is that same mapper the GraphQL path runs, so the REST
     side cannot drift from the input again ([[navigation]]'s ask, 2026-10-17).
 
     `source_kind`/`source_id` fall back to the **edge**: a portal question comes from
@@ -723,6 +723,26 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
     if entity is None:
         raise HTTPException(status_code=404, detail=f"Entity '{body.entity_id}' not found")
 
+    # ── The departure board ([[B323]]) ────────────────
+    # A portal can be *pointed* somewhere by an effect — the rule that runs when
+    # you arrive at the airport — so stepping through need not ask where to. The
+    # board is keyed by the edge, so it belongs to this portal and not to the
+    # place, and it is session state: a restart forgets it (the human's design,
+    # 2026-10-17). The edge's own effects still run either way ([[B312]]).
+    from transversal.services.portal_board import get_portal_destination
+
+    edge_to = to_id
+    board = get_portal_destination(edge["_key"])
+    if board and board != to_id:
+        if repo.get_entity(board) is None:
+            # A stale board — the place was deleted mid-session — is not a wall.
+            logger.warning(
+                "[fire_portal] board points %s at %s, which no longer exists — "
+                "going where the edge points (%s)", edge["_key"], board, to_id,
+            )
+        else:
+            to_id = board
+
     effects = [_effect_from_wire(e) for e in (edge.get("effects") or [])]
     before_location = entity.current_location
 
@@ -753,8 +773,9 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
     applied = [a.summary for a in result.applied] if result else []
     pending = list(result.pending_choices) if result else []
     logger.info(
-        "[fire_portal] %s -> %s entity=%s effects=%d applied=%d pending=%d",
-        from_id, to_id, body.entity_id,
+        "[fire_portal] %s -> %s (edge -> %s, board %r) entity=%s effects=%d "
+        "applied=%d pending=%d",
+        from_id, to_id, edge_to, board, body.entity_id,
         len(effects), len(applied), len(pending),
     )
     _broadcast_pending_choices(body.entity_id, entity.current_universe, pending, edge)

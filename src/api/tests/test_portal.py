@@ -440,3 +440,118 @@ def test_a_portal_with_nothing_pending_broadcasts_nothing(monkeypatch):
                         lambda *a, **k: called.append(a))
     _broadcast_pending_choices("char-1", "earth", [], {"_key": "edge"})
     assert called == []
+
+
+# ── fire_portal reads the departure board ([[B323]]) ──
+
+_CAMPAIGN = "camp-portal-test"
+
+
+class _CampaignScope:
+    """Sets the campaign for the request, the way the app's middleware does.
+
+    The board is campaign-scoped, so a bare `FastAPI()` test app would read it in
+    no scope at all and see nothing — which would be testing the guard, not the
+    override.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        from transversal.services.campaign_scope import use_campaign
+
+        with use_campaign(_CAMPAIGN):
+            await self.app(scope, receive, send)
+
+
+def _board_client():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from transversal.api.rest.locations import router
+
+    app = FastAPI()
+    app.include_router(router)
+    return TestClient(_CampaignScope(app))
+
+
+@pytest.fixture
+def board():
+    """A campaign's board, cleared either side of the test."""
+    from transversal.services.portal_board import (
+        clear_portal_destinations, set_portal_destination,
+    )
+
+    clear_portal_destinations(_CAMPAIGN)
+    yield set_portal_destination
+    clear_portal_destinations(_CAMPAIGN)
+
+
+def _board_fire(monkeypatch, edge_effects=(), extra_entities=()):
+    """Fire loc-a → loc-b; return what travelled and the response body."""
+    entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael",
+                    current_universe="earth", current_location="loc-a")
+    edge = {
+        "_key": "edge:loc-a:loc-b:transversal",
+        "_from": "entities/loc-a", "_to": "entities/loc-b", "type": "transversal",
+        "effects": list(edge_effects),
+    }
+    repo = _FakeRepo(entity, edge, extra_entities=extra_entities)
+    monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+    travelled = []
+
+    class _FakeEm:
+        def travel(self, entity_id, to_id, transversal_type=None, projection_policy=None):
+            travelled.append(to_id)
+            return entity.model_copy(update={"current_location": to_id})
+
+    monkeypatch.setattr(locations_module, "_em", lambda: _FakeEm())
+    r = _board_client().post("/api/v1/locations/loc-a/portal/loc-b/fire",
+                             json={"entity_id": "char-1"})
+    assert r.status_code == 200, r.text
+    return travelled, r.json()
+
+
+_ZURICH = Entity(id="loc-c", type=EntityType.LOCATION, name="Zurich",
+                 current_universe="earth")
+
+
+def test_the_departure_board_decides_where_the_portal_goes(monkeypatch, board):
+    """The design, end to end: the board is consulted, and the edge's own `_to`
+    is not where you land. This is how a hub works without asking."""
+    board("edge:loc-a:loc-b:transversal", "loc-c", _CAMPAIGN)
+    travelled, body = _board_fire(monkeypatch, extra_entities=[_ZURICH])
+    assert travelled == ["loc-c"]
+    assert body["location_id"] == "loc-c"
+
+
+def test_an_effect_that_moves_the_traveller_wins_over_the_board(monkeypatch, board):
+    """The board says where the *link* goes; an effect that travels still wins,
+    so a portal cannot drag a traveller out of the place an effect put them."""
+    board("edge:loc-a:loc-b:transversal", "loc-c", _CAMPAIGN)
+
+    def fake_commit_effects(e, effects, r, **kwargs):
+        e.current_location = "loc-d"
+        class _R:
+            applied = [SimpleNamespace(summary="travelled to loc-d")]
+            pending_choices = []
+        return _R()
+
+    monkeypatch.setattr("transversal.services.effects_commit.commit_effects",
+                        fake_commit_effects)
+    travelled, body = _board_fire(
+        monkeypatch,
+        edge_effects=[{"timing": "IMMEDIATE", "type": "travel", "action": "move"}],
+        extra_entities=[_ZURICH],
+    )
+    assert travelled == [], "the effect already moved them"
+    assert body["location_id"] == "loc-d"
+
+
+def test_a_board_pointing_at_a_missing_place_falls_back_to_the_edge(monkeypatch, board):
+    """A stale board is not a wall: the place was deleted mid-session, so the
+    portal goes where it points instead of failing the fire."""
+    board("edge:loc-a:loc-b:transversal", "loc-gone", _CAMPAIGN)
+    travelled, _ = _board_fire(monkeypatch)
+    assert travelled == ["loc-b"]
+
