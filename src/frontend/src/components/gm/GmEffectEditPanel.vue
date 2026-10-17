@@ -9,32 +9,11 @@
       :output-variables="outputVariables"
       @save="onSave"
     />
-
-    <!-- A **test run**, for the author: apply this one effect to the entity the GM
-         is acting as and say what it did. Firing the rule would run its
-         neighbours too and answer a different question; `POST /effects/apply`
-         applies the single effect and reports, broadcasting nothing. -->
-    <div class="geep-test">
-      <Button
-        variant="secondary"
-        size="sm"
-        :loading="running"
-        :disabled="running || !actingEntityId || !testEffect"
-        :title="actingEntityId
-          ? 'Run this effect now, on the entity you are acting as'
-          : 'Open a character or a place first — there is nothing to run it on'"
-        @click="runEffect"
-      >Activate effect</Button>
-      <span v-if="report" class="geep-report" :class="{ 'is-error': report.error }">{{ report.text }}</span>
-      <span v-else-if="!actingEntityId" class="geep-hint">No current entity to run it on.</span>
-    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, inject, ref, watch } from 'vue'
-import Button from '@/components/ui/Button.vue'
-import { useApi } from '@/composables/useApi.js'
 import EffectForm from './EffectForm.vue'
 import { createSfxEdit } from '@/composables/useSfxEdit.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
@@ -50,13 +29,6 @@ const props = defineProps({
 // its parent panel. A standalone open (none today) falls back to a private
 // instance rather than a shared global.
 const { draft, scopeVariables } = inject('sfxEdit', null) || createSfxEdit()
-
-// Whom a test run acts on. The GM panel provides the **live perspective** — the
-// entity the GM is looking at the world as — which is exactly "the current entity"
-// and needs no picker of its own. Absent (a panel opened outside the GM surface),
-// the button says so rather than guessing.
-const actingEntityId = inject('actingEntityId', null) || computed(() => '')
-const { applyEffect } = useApi()
 const { load: loadCatalog, sourceKinds, collectVariables } = useTargetCatalog()
 loadCatalog()
 
@@ -101,52 +73,16 @@ watch(
 // (useSfxEdit), which is the commit point now that the form has no button. That
 // also removes the old failure mode where closing before the write settled let the
 // parent re-read the list and discard the effect just added.
-// A ref, not a plain local: the test-run button reads the effect this panel is
-// about, and an added effect only exists in the draft *after* the first emit.
-const workingIndex = ref(props.index)
-
-const testEffect = computed(() => {
-  const i = workingIndex.value
-  return i === null ? null : (draft.effects[i] || null)
-})
+let workingIndex = props.index
 
 function onSave(eff) {
-  if (workingIndex.value === null) {
+  if (workingIndex === null) {
     draft.effects = [...draft.effects, eff]
-    workingIndex.value = draft.effects.length - 1
+    workingIndex = draft.effects.length - 1
   } else {
     const next = [...draft.effects]
-    next[workingIndex.value] = eff
+    next[workingIndex] = eff
     draft.effects = next
-  }
-}
-
-// ── The test run ─────────────────────────────────────
-const running = ref(false)
-const report = ref(null)
-
-function describe(body) {
-  const did = (body.applied || []).filter(Boolean)
-  const parts = [did.length ? did.join(' · ') : 'nothing applied']
-  if (body.pending) parts.push(`${body.pending} question${body.pending === 1 ? '' : 's'} it would ask`)
-  const at = body.entity?.location_id
-  if (at) parts.push(`now at ${at}`)
-  return parts.join(' — ')
-}
-
-async function runEffect() {
-  const effect = testEffect.value
-  const entityId = String(actingEntityId.value || '')
-  if (!effect || !entityId) return
-  running.value = true
-  report.value = null
-  try {
-    const body = await applyEffect(entityId, effect)
-    report.value = body
-      ? { error: false, text: describe(body) }
-      : { error: true, text: 'the run failed — see the console' }
-  } finally {
-    running.value = false
   }
 }
 </script>
@@ -157,21 +93,4 @@ async function runEffect() {
   flex-direction: column;
   gap: 8px;
 }
-/* The test run sits under the form, out of the way of authoring. */
-.geep-test {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding-top: 6px;
-  border-top: 1px dashed var(--overlay-10);
-}
-.geep-report {
-  font-size: 10px;
-  color: var(--text-dim);
-  flex: 1;
-  min-width: 0;
-}
-.geep-report.is-error { color: var(--danger, #d67); }
-.geep-hint { font-size: 10px; color: var(--text-dim); }
 </style>

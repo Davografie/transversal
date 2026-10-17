@@ -259,13 +259,37 @@
           Names this step's result — a later step can target it with <b>select variable</b>.
         </p>
       </div>
+
+      <!-- A **test run**: apply this one effect, exactly as edited, to the entity
+           the GM is acting as. Deliberately here and not in one host panel —
+           every effect editor is somebody's "where I edit an effect", and the
+           author who asked for it first asked from the wrong one ([B329]).
+
+           It runs one effect: the rule's neighbours do not fire, nothing is
+           broadcast, and the reply says what changed. -->
+      <div class="ee-test">
+        <Button
+          variant="secondary"
+          size="sm"
+          :loading="running"
+          :disabled="running || !actingEntityId"
+          :title="actingEntityId
+            ? 'Run this effect now, on the entity you are acting as'
+            : 'Open a character or a place first — there is nothing to run it on'"
+          @click="runEffect"
+        >Activate effect</Button>
+        <span v-if="report" class="ee-test-report" :class="{ 'is-error': report.error }">{{ report.text }}</span>
+        <span v-else-if="!actingEntityId" class="ee-test-hint">No current entity to run it on.</span>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, onMounted } from 'vue'
+import { ref, computed, reactive, watch, onMounted, inject } from 'vue'
 import { useClipboard } from '@vueuse/core'
+import Button from '@/components/ui/Button.vue'
+import { useApi } from '@/composables/useApi.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
@@ -887,6 +911,40 @@ function buildRefs() {
   return out
 }
 
+// ── The test run ─────────────────────────────────────
+// "The current entity" is the GM panel's **live perspective** — the entity the GM
+// is looking at the world as — so no panel owns a picker for it. Absent (a form
+// rendered outside the app shell), the control says so rather than guessing.
+const actingEntityId = inject('actingEntityId', null) || computed(() => '')
+const { applyEffect } = useApi()
+const running = ref(false)
+const report = ref(null)
+
+function describeRun(body) {
+  const did = (body.applied || []).filter(Boolean)
+  const parts = [did.length ? did.join(' · ') : 'nothing applied']
+  if (body.pending) parts.push(`${body.pending} question${body.pending === 1 ? '' : 's'} it would ask`)
+  const at = body.entity?.location_id
+  if (at) parts.push(`now at ${at}`)
+  return parts.join(' — ')
+}
+
+async function runEffect() {
+  const meta = selectedAction.value
+  const entityId = String(actingEntityId.value || '')
+  if (!meta || !entityId) return
+  running.value = true
+  report.value = null
+  try {
+    const body = await applyEffect(entityId, buildEffect(meta))
+    report.value = body
+      ? { error: false, text: describeRun(body) }
+      : { error: true, text: 'the run failed — see the console' }
+  } finally {
+    running.value = false
+  }
+}
+
 function buildEffect(meta) {
   const kind = meta.targetKind
   // A path is offered wherever the action says what a path *resolves to* — which
@@ -1159,4 +1217,18 @@ async function copyVariable(v) {
 .ee-check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text); text-transform: none; letter-spacing: 0; cursor: pointer; }
 .ee-check input { width: auto; }
 .ee-preview { font-size: 10px; color: var(--accent); font-style: italic; margin-top: 2px; }
+
+/* The test run sits under the form, out of the way of authoring. */
+.ee-test {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--overlay-10);
+}
+.ee-test-report { font-size: 10px; color: var(--text-dim); flex: 1; min-width: 0; }
+.ee-test-report.is-error { color: var(--danger, #d67); }
+.ee-test-hint { font-size: 10px; color: var(--text-dim); }
 </style>
