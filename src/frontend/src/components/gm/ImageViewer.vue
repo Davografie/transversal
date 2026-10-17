@@ -7,11 +7,13 @@
          for either owner, so they sit outside it. -->
     <div v-if="isEntity" class="animate-section">
       <div class="motion-hint-row">
-        <input v-if="!statusInfo.cancelling" v-model="motionHint" type="text" placeholder="Motion hint (optional) — e.g. 'hair blowing in wind'" />
+        <input v-if="!statusInfo.cancelling" v-model="motionHint" type="text" placeholder="Motion hint (optional) — e.g. 'hair blowing in wind'" :disabled="!gpuJobs" />
         <Button
           class="animate-btn"
           :class="{ cancelling: statusInfo.cancelling }"
           :loading="animating"
+          :disabled="!gpuJobs && !statusInfo.cancelling"
+          :title="gpuJobs ? '' : gpuOffReason"
           @click="onAnimateClick"
           variant="secondary"
         >
@@ -21,12 +23,15 @@
       </div>
     </div>
 
+    <p v-if="!gpuJobs" class="gpu-off-note" :title="gpuOffReason">{{ GPU_OFF_NOTE }}</p>
+
     <div v-if="record && !hasRender('animated')" class="action-rows">
       <Button
         v-if="canUpscale(record) || jobFor('upscale')"
         class="bg-btn"
         :loading="busy === 'upscale'"
-        :disabled="busy === 'upscale' || !!jobFor('upscale')"
+        :disabled="busy === 'upscale' || !!jobFor('upscale') || !gpuJobs"
+        :title="gpuJobs ? '' : gpuOffReason"
         @click="onUpscale"
         variant="neutral"
       >
@@ -36,7 +41,8 @@
         v-if="canCutOut(record)"
         class="bg-btn"
         :loading="busy === 'cutout'"
-        :disabled="busy === 'cutout' || !!jobFor('remove_bg')"
+        :disabled="busy === 'cutout' || !!jobFor('remove_bg') || !gpuJobs"
+        :title="gpuJobs ? '' : gpuOffReason"
         @click="onCutOut"
         variant="neutral"
       >
@@ -122,6 +128,7 @@ import Button from '@/components/ui/Button.vue'
 import ImageCreditsEditor from '@/components/ImageCreditsEditor.vue'
 import MediaImage from '@/components/MediaImage.vue'
 import { useImageGallery } from '@/composables/useImageGallery.js'
+import { GPU_OFF_NOTE, useCapabilities } from '@/composables/useCapabilities.js'
 import {
   AUTO_FLAG_LABELS, ROLE_TAGS, autoFlags, canCutOut, canUpscale,
   detailSrc, hasFlag as hasFlagOn,
@@ -142,6 +149,11 @@ const {
   images, error, job, busy, load, toggleRole: setRole, toggleFlag: setFlag,
   assignTo, cutOut, upscale, remove, jobFor,
 } = useImageGallery(() => ({ kind: props.ownerKind, id: props.ownerId }))
+
+//: The owner's GPU switch, read once for the app: when it is off these buttons are
+//: disabled rather than offered and then refused with a 503 ([[B88]]).
+const { gpuJobs, reason: gpuOffReason, load: loadCapabilities } = useCapabilities()
+loadCapabilities()
 
 const record = computed(() => images.value.find(i => i.id === props.imageId) || props.image || null)
 const isEntity = computed(() => props.ownerKind === 'entity')
@@ -316,6 +328,9 @@ async function onDelete() {
 .action-rows { display: flex; gap: 6px; justify-content: center; margin-top: 6px; flex-wrap: wrap; }
 .action-rows .bg-btn { padding: 0; overflow: hidden; white-space: nowrap; }
 .bg-btn .btn-label { padding: 4px 8px; }
+/* Why the buttons above are grey: the deployment's GPU switch, said once rather
+   than left to be discovered by pressing one (B88). */
+.gpu-off-note { margin: 6px 0 0; font-size: 11px; line-height: 1.35; opacity: 0.7; text-align: center; }
 
 .role-assign { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
 .role-check { font-size: 10px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 2px; }

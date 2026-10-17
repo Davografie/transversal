@@ -64,3 +64,26 @@ def test_a_read_is_not_refused_when_jobs_are_off(monkeypatch):
     response = TestClient(app).get("/api/v1/imagen/jobs")
 
     assert response.status_code != 503
+
+
+def test_capabilities_tell_the_client_to_grey_the_buttons(monkeypatch):
+    """The client disables what this says is refused, so the two must agree — and
+    the reason travels with it, because a greyed button has to be able to explain
+    itself without the caller knowing what `GPU_JOBS` is."""
+    monkeypatch.setenv(gpu_jobs.ENV, "off")
+    from transversal.main import app
+
+    body = TestClient(app).get("/api/v1/capabilities").json()
+
+    assert body["gpu_jobs"] is False
+    assert body["reason"] == gpu_jobs.REFUSAL
+
+
+def test_capabilities_leave_the_buttons_on_when_jobs_are_on(monkeypatch):
+    monkeypatch.delenv(gpu_jobs.ENV, raising=False)
+    from transversal.main import app
+
+    body = TestClient(app).get("/api/v1/capabilities").json()
+
+    assert body["gpu_jobs"] is True
+    assert body["reason"] == ""

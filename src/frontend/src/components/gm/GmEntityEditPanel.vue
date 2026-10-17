@@ -67,10 +67,17 @@
             :owner-id="props.entityId"
             @uploaded="loadImages"
           />
-          <button class="imagen-btn" :class="{ cancelling: imagenStatus.cancelling }" @click="onImagenClick()">
+          <button
+            class="imagen-btn"
+            :class="{ cancelling: imagenStatus.cancelling }"
+            :disabled="!gpuJobs && !imagenStatus.cancelling"
+            :title="gpuJobs ? '' : gpuOffReason"
+            @click="onImagenClick()"
+          >
             <span class="btn-label">{{ imagenStatus.label }}</span>
             <span v-if="imagenStatus.status" class="btn-status">{{ imagenStatus.status }}</span>
           </button>
+          <span v-if="!gpuJobs" class="gpu-off-note" :title="gpuOffReason">GPU off</span>
           <label
             v-if="supportsSurroundings"
             class="ancestors-toggle"
@@ -128,7 +135,7 @@
             <span class="proj-name">{{ p.name || form?.name }}</span>
             <span class="proj-universe">{{ universeName(p.originUniverse) }}<template v-if="p.universe !== p.originUniverse"> → {{ universeName(p.universe) }}</template></span>
             <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
-            <Button class="proj-imagen" variant="ghost" size="sm" :class="{ cancelling: projectionGenBusy(p) }" :title="projectionGenBusy(p) ? 'Cancel generation' : 'Generate image for this body'" @click.stop="onImagenClick(p.id)">{{ projectionGenBusy(p) ? '✕' : '🖼' }}</Button>
+            <Button class="proj-imagen" variant="ghost" size="sm" :class="{ cancelling: projectionGenBusy(p) }" :disabled="!gpuJobs && !projectionGenBusy(p)" :title="projectionGenBusy(p) ? 'Cancel generation' : (!gpuJobs ? gpuOffReason : 'Generate image for this body')" @click.stop="onImagenClick(p.id)">{{ projectionGenBusy(p) ? '✕' : '🖼' }}</Button>
             <Button class="proj-remove" variant="danger-ghost" size="sm" @click.stop="removeProjection(p.id)" title="Remove projection">✕</Button>
           </div>
           <ImageGallery
@@ -430,6 +437,7 @@ import GmPortalConfigPanel from '@/components/gm/GmPortalConfigPanel.vue'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import DangerButton from '@/components/ui/DangerButton.vue'
 import MediaImage from '@/components/MediaImage.vue'
+import { useCapabilities } from '@/composables/useCapabilities.js'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -448,6 +456,12 @@ const { traitNameMap, traitsets, allSfxs, fetchTraitsConfig } = useTraitsConfig(
 const { fetchLifePaths } = useLifePaths()
 const { name: universeName, options: universeOptions, load: loadUniverseNames } = useUniverseNames()
 loadUniverseNames()
+
+//: The deployment's GPU switch, read once for the app ([[B88]]). Off means the
+//: generate button is refused with a 503, so it is disabled and says why instead of
+//: letting someone press it and read an error.
+const { gpuJobs, reason: gpuOffReason, load: loadCapabilities } = useCapabilities()
+loadCapabilities()
 
 // ── Who holds agency over this entity ────────────────
 // Straight from the agency edge (Entity.agency), so it answers for a main whose
@@ -1459,6 +1473,10 @@ defineExpose({ refresh: loadImages })
 <style scoped>
 .imagen-btn { background: var(--violet); color: var(--text-on-accent); font-size: 11px; padding: 0; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; overflow: hidden; }
 .imagen-btn.cancelling { background: var(--danger-strong); }
+/* Greyed, not hidden: the deployment's GPU switch is off (B88), so the action
+   exists but this machine will refuse it. */
+.imagen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.gpu-off-note { font-size: 11px; opacity: 0.7; }
 .imagen-btn .btn-label { padding: 4px 8px; }
 .imagen-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
 .ancestors-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); cursor: pointer; user-select: none; white-space: nowrap; }

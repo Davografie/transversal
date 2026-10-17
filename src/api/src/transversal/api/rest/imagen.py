@@ -76,6 +76,22 @@ def require_gpu() -> None:
     if not gpu_jobs.enabled():
         raise HTTPException(status_code=503, detail=gpu_jobs.REFUSAL)
 
+
+@router.get("/capabilities")
+def capabilities() -> dict:
+    """What this deployment will spend the GPU on ([[B88]]).
+
+    `GPU_JOBS=off` refuses the four spending endpoints and stops an upload queuing a
+    matte, but the buttons stayed on screen: a player pressed one and read a 503.
+    This is the read that lets a client **disable** them instead, with the reason in
+    the tooltip — the surface should tell the truth before the request is made.
+
+    Only the write side is described, because reading was never gated: the gallery,
+    the image list and the jobs list have to keep working while generation is off.
+    """
+    on = gpu_jobs.enabled()
+    return {"gpu_jobs": on, "reason": "" if on else gpu_jobs.REFUSAL}
+
 # ── Job tracker ────────────────────────────────────────
 # Keyed by (campaign, entity_id) — a job belongs to the campaign that asked for it,
 # and the job list must not show another campaign's work ([[B305]]). Each entry:
