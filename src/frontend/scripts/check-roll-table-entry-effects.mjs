@@ -45,7 +45,7 @@ function between(src, from, to) {
   return src.slice(i, j)
 }
 
-const ON_SAVE_SRC = between(EFFECT_PANEL, 'function onSave(eff)', '\nfunction close()')
+const ON_SAVE_SRC = between(EFFECT_PANEL, 'let workingIndex = props.index', '\n</script>')
 const PRIOR_SRC = between(EFFECT_PANEL, 'function priorEffects()', '\nwatch(')
 
 const runOnSave = new Function('ctx', `
@@ -67,9 +67,17 @@ console.log('\nGmDraftEffectPanel — saving one effect of the row\n')
 {
   let closes = 0
   const ctx = { draft: { effects: [eff('a')] }, props: { index: null }, panel: { close: () => { closes++ } } }
-  runOnSave(ctx)(eff('b'))
+  // One closure, two emits — which is what the panel actually has. (Lifting the
+  // function twice would give each call a fresh `workingIndex` and hide the bug.)
+  const save = runOnSave(ctx)
+  save(eff('b'))
   ok('adding appends to the row draft', ctx.draft.effects.map(e => e.name), ['a', 'b'])
-  ok('adding closes the child panel (the next effect is a new form)', closes, 1)
+  // The form writes through now, so an add keeps emitting as it is edited: the
+  // first emit appends and the rest replace, or the list would grow per keystroke.
+  save({ ...eff('b'), name: 'b2' })
+  ok('and a second emit of the same add replaces rather than appending again',
+    ctx.draft.effects.map(e => e.name), ['a', 'b2'])
+  ok('nothing closes: there is no button to finish with, and the owner auto-saves', closes, 0)
 }
 
 {

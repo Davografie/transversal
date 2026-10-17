@@ -428,6 +428,28 @@ back; that read-modify-write is the shape that destroyed content in [[B273]]), a
 keep the **opener's copy in step on every write**, not only on the way out, or its
 summary goes stale while the GM works.
 
+**The effect form has no commit button either** (2026-10-17, the author's follow-up:
+*"Why do I still see an 'update'-button?"*). `EffectForm` used to end in
+Cancel + Add/Update. Its fields now **write through**: the form watches its own
+draft and emits on every change, so an effect being composed is simply part of its
+owner's draft, and the owner's existing auto-save is the only commit point. Two
+rules carry it:
+
+- **an action must be chosen** before anything is emitted. That is the one validity
+  rule the old button enforced (`commit()` returned early without an action), and it
+  is also what stops a half-chosen effect from creating a row.
+- **the form must not re-hydrate from its own echo.** The owner replaces the effect
+  with what the form sent, that arrives back as a new `value`, and the re-hydrate
+  watch would rebuild the form from it — resetting the fields under the cursor on
+  every keystroke. `_lastEmitted` is the guard, and without it write-through is
+  unusable rather than merely wrong.
+
+Because the emits now repeat, every holder appends on the **first** emit and
+replaces after that (`workingIndex`) — `GmDraftEffectPanel`, `GmEffectEditPanel` and
+`EffectEditor`'s inline form. A form inside a panel is dismissed by the panel's rail;
+the one **inline** consumer — a roll table's binding effects — gets a small ✕,
+because it has no chrome to close it.
+
 ## Shared table component — what the GM surfaces need
 
 > [!note] Handover to [[ui-ux]], 2026-09-20 — requirements, not conventions

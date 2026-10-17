@@ -21,6 +21,7 @@
         :portal-target-type="portalTargetType"
         :portal-universe="portalUniverse"
         :portal-root-id="portalRootId"
+        :closable="true"
         @save="onSave"
         @cancel="closeEditor"
       />
@@ -109,32 +110,43 @@ watch(
   { immediate: true, deep: true },
 )
 
+// Write-through: the form emits on every change, so the *first* emit of an add
+// appends the row and every later one replaces it. Local to the open, because
+// `editingIndex` is reset when the form closes.
+let writingIndex = null
+
 function openAdd() {
+  writingIndex = null
   editingIndex.value = null
   formKey.value++
   showEditor.value = true
 }
 
 function openEdit(i) {
+  writingIndex = i
   editingIndex.value = i
   formKey.value++
   showEditor.value = true
 }
 
 function onSave(eff) {
-  if (editingIndex.value !== null) {
-    const next = [...props.modelValue]
-    next[editingIndex.value] = eff
+  if (writingIndex === null) {
+    const next = [...props.modelValue, eff]
     emit('update:modelValue', next)
+    writingIndex = next.length - 1
   } else {
-    emit('update:modelValue', [...props.modelValue, eff])
+    const next = [...props.modelValue]
+    next[writingIndex] = eff
+    emit('update:modelValue', next)
   }
-  closeEditor()
+  // The form stays open: with no commit button it is dismissed by its own ✕ (this
+  // is the only *inline* consumer of the form), not by finishing an edit.
 }
 
 function closeEditor() {
   showEditor.value = false
   editingIndex.value = null
+  writingIndex = null
 }
 </script>
 

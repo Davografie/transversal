@@ -70,12 +70,12 @@ test('an effect authored on a step is there again after a reload', async ({ page
   const action = form.locator('select').first()
   const firstAction = (await action.locator('option').evaluateAll(
     (os) => os.map((o) => o.value).filter(Boolean)))[0]
-  await action.selectOption(firstAction)
-  // The form's own commit — "Add" — is what puts the effect in the step's list. The
-  // *persist* is the panel's auto-save, and it is the half this test is about.
+  // There is no Add/Update button any more: the form writes through, so choosing
+  // the action is what puts the effect in the step's list. The *persist* is the
+  // panel's auto-save, and that is the half this test is about.
   const saved = page.waitForResponse(
     (r) => (r.request().postData() || '').includes('saveLifePath'), { timeout: 20000 })
-  await form.locator('.ee-save').click()
+  await action.selectOption(firstAction)
   await expect(summaries).toHaveCount(1, { timeout: 20000 })
   await saved
 

@@ -1,6 +1,13 @@
 <template>
   <div class="ee-form">
-    <div class="ee-form-title">{{ editing ? 'Edit effect' : 'Add effect' }}</div>
+    <div class="ee-form-title">
+      <span>{{ editing ? 'Edit effect' : 'Add effect' }}</span>
+      <!-- No Add/Update button any more: the fields write through and the owner's
+           auto-save is the commit point. The *inline* use of this form — a roll
+           table's binding effects — has no panel chrome to close it, so only that
+           one is given a dismiss control. -->
+      <button v-if="closable" type="button" class="ee-form-close" title="Done" @click="emit('cancel')">✕</button>
+    </div>
     <select v-model="newEffect.actionId" @change="onActionChange">
       <option value="">-- pick an action --</option>
       <optgroup v-for="g in actionGroups" :key="g.name" :label="g.name">
@@ -252,10 +259,6 @@
           Names this step's result — a later step can target it with <b>select variable</b>.
         </p>
       </div>
-      <div class="ee-form-actions">
-        <Button class="ee-cancel" variant="neutral" @click="emit('cancel')">Cancel</Button>
-        <Button class="ee-save" variant="success" solid @click="commit">{{ editing ? 'Update' : 'Add' }}</Button>
-      </div>
     </template>
   </div>
 </template>
@@ -282,7 +285,6 @@ import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import EffectRatingControl from './EffectRatingControl.vue'
 import ReturnMapEditor from './ReturnMapEditor.vue'
 import DiePicker from '@/components/DiePicker.vue'
-import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   value: { type: Object, default: null },
@@ -300,6 +302,10 @@ const props = defineProps({
   portalTargetType: { type: String, default: '' },
   portalUniverse: { type: String, default: '' },
   portalRootId: { type: String, default: '' },
+  // True when this form is rendered *inline* — no panel around it — and so needs
+  // its own way out. A form inside GmDraftEffectPanel/GmEffectEditPanel is closed
+  // by the panel's rail instead, which is why this defaults off.
+  closable: { type: Boolean, default: false },
 })
 const emit = defineEmits(['save', 'cancel'])
 
@@ -949,11 +955,31 @@ function buildEffect(meta) {
   }
 }
 
-function commit() {
-  const meta = selectedAction.value
-  if (!meta) return
-  emit('save', buildEffect(meta))
-}
+// ── No commit button: the effect writes through as it is edited ─────────
+// Every edit persists on its own (B211's convention), and an effect being composed
+// is part of its owner's draft — so its fields *are* the draft's fields, and the
+// owner's auto-save is the only commit point. Nothing is emitted until an action is
+// chosen: an effect with no action is not an effect, which is the one validity rule
+// the old Add/Update button enforced (its `commit()` returned early without a meta).
+//
+// `_lastEmitted` is the guard the other half needs. The owner puts what we send
+// back into its list, that arrives as a new `props.value`, and the re-hydrate watch
+// below would then rebuild the form from it — resetting the fields under the cursor
+// on every keystroke. Skipping the value we just sent is what makes write-through
+// safe.
+let _lastEmitted = null
+
+watch(
+  newEffect,
+  () => {
+    const meta = selectedAction.value
+    if (!meta) return
+    const eff = buildEffect(meta)
+    _lastEmitted = JSON.stringify(eff)
+    emit('save', eff)
+  },
+  { deep: true, flush: 'sync' },
+)
 
 // Populate the editor from an existing effect (edit mode) or leave it blank
 // (add mode). Called once on mount; the parent remounts this form per edit.
@@ -1073,7 +1099,12 @@ onMounted(() => { hydrate(props.value) })
 // The parent reuses this form instance when the user switches which effect they
 // are editing (the child panel is replaced in place, not remounted), so re-sync
 // when the effect changes — otherwise the form keeps showing the previous one.
-watch(() => props.value, (eff) => { hydrate(eff) })
+watch(() => props.value, (eff) => {
+  // Skip the echo of what this form just emitted (see the write-through watcher):
+  // re-hydrating our own write would reset the fields under the cursor.
+  if (eff && _lastEmitted && JSON.stringify(eff) === _lastEmitted) return
+  hydrate(eff)
+})
 
 async function copyVariable(v) {
   const token = `{${v}}`
@@ -1087,7 +1118,9 @@ async function copyVariable(v) {
 
 <style scoped>
 .ee-form { display: flex; flex-direction: column; gap: 6px; }
-.ee-form-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; }
+.ee-form-title { display: flex; align-items: center; justify-content: space-between; font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; }
+.ee-form-close { border: none; background: none; padding: 0 2px; color: var(--text-dim); cursor: pointer; font-size: 11px; }
+.ee-form-close:hover { color: var(--text); }
 .ee-form select, .ee-form input, .ee-form textarea { font-size: 11px; padding: 4px 6px; background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-10); border-radius: 4px; font-family: inherit; width: 100%; box-sizing: border-box; }
 .ee-form textarea { resize: vertical; min-height: 34px; }
 .ee-field { display: flex; flex-direction: column; gap: 2px; }
@@ -1126,5 +1159,4 @@ async function copyVariable(v) {
 .ee-check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text); text-transform: none; letter-spacing: 0; cursor: pointer; }
 .ee-check input { width: auto; }
 .ee-preview { font-size: 10px; color: var(--accent); font-style: italic; margin-top: 2px; }
-.ee-form-actions { display: flex; gap: 6px; margin-top: 4px; }
 </style>

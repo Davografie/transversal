@@ -127,7 +127,7 @@ ok('which one — add or edit — is the index it is given',
 ok('the draft travels as a live reference through the spec context, which is the only way in',
   /context: \{ rowDraft: draft \}/.test(PANEL), true)
 ok('and the panel writes into it rather than persisting anything itself',
-  /if \(adding\) \{[\s\S]{0,80}draft\.effects = \[\.\.\.draft\.effects, eff\]/.test(DRAFT), true)
+  /draft\.effects = \[\.\.\.draft\.effects, eff\]/.test(DRAFT) && !/save\(/.test(DRAFT), true)
 // The four portal-only props are what let the targeting wizard offer
 // portal-relative targets. A straight swap to the shared panel would have dropped
 // them silently, so both the passing and the forwarding are asserted.
@@ -140,6 +140,37 @@ ok('and the shared panel forwards them to the form, empty by default for its oth
   /portalDestination: \{ type: String, default: '' \}/.test(DRAFT)
   && /:portal-destination="portalDestination"/.test(DRAFT)
   && /:portal-root-id="portalRootId"/.test(DRAFT), true)
+
+// ── 6. the form has no Add/Update button either ─────────────────────────
+// The last piece of the same request. The form used to end in Cancel + Add/Update;
+// with the fields writing through there is nothing left to commit and nothing to
+// cancel, so the pair is gone — leaving a dismiss control only for the one *inline*
+// consumer (a roll table's binding effects), which has no panel chrome to close it.
+console.log('\nthe effect form has no Add/Update button either\n')
+
+const FORM = read('../src/components/gm/EffectForm.vue')
+const EDITOR = read('../src/components/gm/EffectEditor.vue')
+const SFX_EFFECT = read('../src/components/gm/GmEffectEditPanel.vue')
+
+ok('no commit button is rendered', /ee-save|ee-cancel/.test(FORM), false)
+ok('and no commit function survives', /function commit\(/.test(FORM), false)
+ok('the fields write through: the whole draft is watched and emitted',
+  /watch\(\s*newEffect,[\s\S]{0,400}emit\('save', eff\)/.test(FORM), true)
+ok('behind the one validity rule the button enforced — an action must be chosen',
+  /const meta = selectedAction\.value\s*\n\s*if \(!meta\) return/.test(FORM), true)
+// The echo guard: the owner puts what we sent back into its list, that arrives as a
+// new `value`, and re-hydrating it would reset the fields under the cursor.
+ok('and the form never re-hydrates from its own echo',
+  /if \(eff && _lastEmitted && JSON\.stringify\(eff\) === _lastEmitted\) return/.test(FORM), true)
+ok('the inline consumer keeps a way out — the panel cases have the rail',
+  /v-if="closable"/.test(FORM) && /:closable="true"/.test(EDITOR), true)
+// Write-through means repeated emits: the first appends the row, the rest replace it.
+ok('the draft panel appends once and replaces thereafter',
+  /let workingIndex = props\.index[\s\S]{0,400}workingIndex = draft\.effects\.length - 1/.test(DRAFT), true)
+ok('and the SFX panel does the same into the composer draft',
+  /let workingIndex = props\.index[\s\S]{0,400}workingIndex = draft\.effects\.length - 1/.test(SFX_EFFECT), true)
+ok('neither panel persists or closes itself any more — the owner\'s auto-save does',
+  !/await save\(\)/.test(SFX_EFFECT) && !/panel\.close\(\)/.test(SFX_EFFECT) && !/panel\.close\(\)/.test(DRAFT), true)
 
 console.log(fail ? `\n  ${fail} failed\n` : '\n  all clear\n')
 process.exit(fail ? 1 : 0)

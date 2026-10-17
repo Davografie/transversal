@@ -11,7 +11,6 @@
       :portal-universe="portalUniverse"
       :portal-root-id="portalRootId"
       @save="onSave"
-      @cancel="close"
     />
   </div>
 </template>
@@ -19,7 +18,6 @@
 <script setup>
 import { computed, inject, ref, watch } from 'vue'
 import EffectForm from './EffectForm.vue'
-import { usePanel } from '@/composables/usePanel.js'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 
 // **One effect of a list**, edited in a child panel — the same shape the SFX editor
@@ -53,7 +51,6 @@ const props = defineProps({
   portalRootId: { type: String, default: '' },
 })
 
-const panel = usePanel()
 // A panel cannot `provide` to its own child panels (they are rendered by
 // `Panel.vue`, as siblings of the slot outlet), so the row draft arrives through
 // the spec's `context`.
@@ -87,28 +84,23 @@ watch(
   { immediate: true, deep: true },
 )
 
+// Write-through: the form emits on every change, so the *first* emit of an add
+// appends the row and every later one replaces it. Local, because `props.index`
+// cannot change under us — and is null for an add.
+let workingIndex = props.index
+
 function onSave(eff) {
   if (!draft) return
-  const adding = props.index === null
-  if (adding) {
+  if (workingIndex === null) {
     draft.effects = [...draft.effects, eff]
+    workingIndex = draft.effects.length - 1
   } else {
     const next = [...draft.effects]
-    next[props.index] = eff
+    next[workingIndex] = eff
     draft.effects = next
   }
-  // Nothing is written here on purpose: the entry panel commits the whole row
-  // (label, range, conditions, effects) from its own Save button, so persisting
-  // an effect early would write the row without the edits around it.
-  //
-  // Update leaves the panel open so the effect can be iterated on in place (the
-  // form reloads from the draft); adding closes, because the next effect is a
-  // different form instance. Same contract as the SFX editor's effect panel.
-  if (adding) panel.close()
-}
-
-function close() {
-  panel.close()
+  // Nothing is persisted, and nothing closes, on purpose: the panel that owns the
+  // draft is the commit point (its auto-save), and the rail is what closes this one.
 }
 </script>
 
