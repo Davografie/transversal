@@ -126,6 +126,8 @@ Conditions narrow **where a rule is allowed to run**. They are not a second trig
 
 The picker bands them by the question they answer — **Character state**, **The moment it fires**, **This rule**, **No gate** — and a type that cannot pass where you are authoring (a source-rating gate with no trait source, a moment-reading gate at a beat boundary) is greyed out with the reason.
 
+**A rating gate can read a pool's shape.** *Trait rating* and *Source rating* compare *some* die by default — `== d8` is true of a 1d8 trait and a 2d8 one alike. Switch the **mode** to *every die*, or to *a number of dice*, when the shape is what matters: "exactly two d8" is a gate the default cannot express, which is what keeps two rungs of a cultivation ladder apart.
+
 Conditions also decide **availability**, but only the ones that can be judged without the moment — character state and this-rule gates. A rule those exclude shows on the sheet as *conditions not met* rather than vanishing. Gates that need the moment are only checked when the rule actually fires.
 
 ### Costs & Effects

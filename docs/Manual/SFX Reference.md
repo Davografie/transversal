@@ -107,6 +107,8 @@ Gates that must all pass for the rule to fire. **Target** and **Value** are the 
 
 _Count: 27._
 
+**Trait rating** and **Source rating** also take a **mode**, which is how a rating gate reads a *pool* rather than one die: **any die** (the default), **every die**, or **a number of dice**. The default asks *"is some die a d8"*, so `== d8` is true of a `1d8` trait and a `2d8` one alike — the **a number of dice** mode is the only way to say *exactly two d8*, and the number then compares with the operator you picked. That is what lets two rungs of a ladder be gated apart ([[B317]]); most gates want the default.
+
 
 ## Source kinds
 
