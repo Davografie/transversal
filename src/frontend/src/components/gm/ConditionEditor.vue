@@ -68,6 +68,19 @@
             <option value="d10">d10</option>
             <option value="d12">d12</option>
           </select>
+          <!-- A pool's **shape** is a state the per-die test cannot see: `== d8` is
+               true of 1d8 and 2d8 alike, so two rungs of a ladder could not be gated
+               apart. Only the types that declare modes offer them ([[B242]]). -->
+          <select v-if="modes(c.type).length" :value="c.mode || 'any'"
+                  class="ce-mode" title="How this rating is read"
+                  @change="c.mode = $event.target.value">
+            <option v-for="m in modes(c.type)" :key="m" :value="m">{{ modeLabel(m) }}</option>
+          </select>
+          <template v-if="(c.mode || 'any') === 'count'">
+            <span class="ce-count-of">of</span>
+            <input :value="c.count" type="number" min="0" placeholder="how many"
+                   class="ce-count" @input="c.count = Number($event.target.value)" />
+          </template>
         </template>
         <template v-else-if="valueKind(c.type) === 'number'">
           <select v-if="operators(c.type).length" v-model="c.operator" class="ce-operator">
@@ -230,6 +243,23 @@ function valueKind(type) {
 function operators(type) {
   const meta = conditionTypes.value.find(c => c.value === type)
   return meta?.operators || []
+}
+
+// How a rating gate reads its pool — declared per type by the backend, so this
+// file holds no list of its own ([[B242]]).
+function modes(type) {
+  const meta = conditionTypes.value.find(c => c.value === type)
+  return meta?.modes || []
+}
+
+const MODE_LABELS = {
+  any: 'any die',
+  all: 'every die',
+  count: 'a number of dice',
+}
+
+function modeLabel(mode) {
+  return MODE_LABELS[mode] || mode
 }
 
 // Several values live in `targets`; one stays in `target`, so anything already

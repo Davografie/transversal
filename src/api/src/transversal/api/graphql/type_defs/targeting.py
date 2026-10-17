@@ -58,6 +58,8 @@ class ConditionTypeOption:
     target_kind: str = ""
     value_kind: str = ""
     operators: list[str] = strawberry.field(default_factory=list)
+    #: How a per-die rating gate may read its pool — empty for every other type.
+    modes: list[str] = strawberry.field(default_factory=list)
     target_options: list[str] = strawberry.field(default_factory=list)
     uses_spec: bool = False
     # Context keys this condition may read ("any of"): the editor keeps the

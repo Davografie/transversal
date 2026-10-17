@@ -53,6 +53,34 @@ def _compare(a: int, op: str, b: int) -> bool:
     return a >= b
 
 
+#: The ways a per-die rating gate may read its pool (see `_rate_matches`). `any`
+#: is the historical default, so it is what a gate authored before modes means.
+RATING_MODES: tuple[str, ...] = ("any", "all", "count")
+
+
+def _rate_matches(dice, condition, threshold) -> bool:
+    """Read a rating (a pool of dice) against a die threshold, by the condition's **mode**.
+
+    The default is the per-die test this has always been — *"is some die at least a
+    d8"* — so no gate authored before modes existed changes meaning. The two added
+    modes exist because a pool's **shape** is a state that test cannot see:
+
+    - ``all`` — every die in the rating matches the comparison.
+    - ``count`` — how many dice match, compared against ``condition.count`` with the
+      same operator. ``== 2d8`` is the case that motivated it: one d8 and two d8s
+      both satisfied the old test, so two rungs of a cultivation ladder could not be
+      gated apart ([[B242]], mcp-architect's find).
+    """
+    op = condition.operator or ">="
+    mode = (getattr(condition, "mode", "") or "any").lower()
+    if mode == "count":
+        hits = sum(1 for d in dice if d.max_value == threshold.max_value)
+        return _compare(hits, op, condition.count if condition.count is not None else 1)
+    if mode == "all":
+        return all(_compare(d.max_value, op, threshold.max_value) for d in dice)
+    return any(_compare(d.max_value, op, threshold.max_value) for d in dice)
+
+
 def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "EntityRepository", context: dict | None = None, source=None, source_element: str | None = None, out_bindings: dict | None = None) -> bool:
     """Evaluate a single condition against the resolved subject's current state.
 
@@ -169,7 +197,7 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         dice = getattr(source, "dice", None) or []
         if not dice:
             return False
-        return any(_compare(d.max_value, condition.operator or ">=", threshold.max_value) for d in dice)
+        return _rate_matches(dice, condition, threshold)
 
     if condition.type == ConditionType.TARGET_PATH:
         # Resolve the authored targeting path (seeded by `select source` / `select
@@ -243,7 +271,7 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
             return False
         for ts in repo.get_traitsettings_for_entity(subject.id):
             if ts.trait_id == target and ts.dice:
-                if any(_compare(d.max_value, condition.operator or ">=", threshold.max_value) for d in ts.dice):
+                if _rate_matches(ts.dice, condition, threshold):
                     return True
         return False
 
@@ -394,6 +422,10 @@ class ConditionTypeDef:
     target_kind: str = ""  # "" | "location" | "trait" | "entity" | "universe" | "traitset"
     value_kind: str = ""  # "" | "die" | "number"
     operators: tuple[str, ...] = ()  # numeric comparators (HAS_RAZMERIT)
+    #: How a **per-die rating** gate may read the pool: `any` (the historical
+    #: default), `all`, `count`. Empty for every other type — the editor offers the
+    #: modes it is given here, so this declaration is the only list of them.
+    modes: tuple[str, ...] = ()
     target_options: tuple[str, ...] = ()  # fixed select options for the target (ENTITY_TYPE)
     uses_spec: bool = False  # renders a targeting-path builder instead of a flat target
     # Which band of the picker this condition belongs to (see
@@ -592,7 +624,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.HAS_EFFECTIVE_TRAIT.name, "Has effective trait", needs_target=True, target_placeholder="trait id", target_kind="trait", group=GROUP_CHARACTER),
     ConditionTypeDef(ConditionType.HAS_TRAIT_IN_TRAITSET.name, "Has trait in traitset", needs_target=True, target_placeholder="traitset id", target_kind="traitset", group=GROUP_CHARACTER),
     ConditionTypeDef(ConditionType.HAS_RELATIONSHIP.name, "Has relationship", needs_target=True, target_placeholder="entity id", target_kind="entity", group=GROUP_CHARACTER),
-    ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), modes=RATING_MODES, group=GROUP_CHARACTER),
     ConditionTypeDef(ConditionType.HAS_RAZMERIT.name, "Has razmerit", value_kind="number", operators=("<", "<=", "==", "!=", ">=", ">"), group=GROUP_CHARACTER),
     ConditionTypeDef(ConditionType.ENTITY_TYPE.name, "Entity type", needs_target=True, target_placeholder="entity type", target_options=("character", "gmc", "asset"), group=GROUP_CHARACTER),
     ConditionTypeDef(ConditionType.USER_ROLE.name, "User role", needs_target=True, target_placeholder="role", target_options=("player", "architect"), group=GROUP_MOMENT),
@@ -616,7 +648,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.ROLL_PURPOSE.name, "Roll purpose", needs_target=True, target_placeholder="tag", operators=("contains", "not contains"), requires_context_any_of=("purpose",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.MARGIN.name, "Margin", value_kind="number", operators=("<", "<=", "==", "!=", ">=", ">"), requires_context_any_of=("margin",), group=GROUP_MOMENT),
     ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail"), requires_context_any_of=("tier",), group=GROUP_MOMENT),
-    ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), requires_source_elements=("traitsetting",), group=GROUP_RULE),
+    ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), modes=RATING_MODES, requires_source_elements=("traitsetting",), group=GROUP_RULE),
     ConditionTypeDef(ConditionType.TARGET_PATH.name, "Targeting path", uses_spec=True, group=GROUP_RULE),
     ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative", group=GROUP_NONE),
 )

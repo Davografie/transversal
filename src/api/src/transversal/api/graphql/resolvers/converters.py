@@ -234,7 +234,8 @@ def _condition_to_gql(c: DomainCondition) -> Condition:
     return Condition(
         type=c.type, subject=c.subject, target=c.target,
         targets=list(getattr(c, "targets", []) or []), value=c.value,
-        operator=c.operator, narrative=c.narrative,
+        operator=c.operator, mode=getattr(c, "mode", "any") or "any",
+        count=getattr(c, "count", None), narrative=c.narrative,
         spec=c.spec.model_dump() if c.spec else None,
     )
 
@@ -537,7 +538,8 @@ def _condition_input_to_domain(c: ConditionInput) -> DomainCondition:
     return DomainCondition(
         type=c.type, subject=c.subject, target=c.target,
         targets=[str(t) for t in (c.targets or [])], value=c.value,
-        operator=c.operator, narrative=c.narrative,
+        operator=c.operator, mode=getattr(c, "mode", "any") or "any",
+        count=getattr(c, "count", None), narrative=c.narrative,
         spec=_target_spec_from_input(c.spec),
     )
 

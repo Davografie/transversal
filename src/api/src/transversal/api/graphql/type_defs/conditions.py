@@ -17,6 +17,10 @@ class Condition:
     targets: list[str] = strawberry.field(default_factory=list)
     value: Optional[str] = None
     operator: str = ">="
+    #: How a per-die rating gate reads the pool: "any" (default), "all", "count".
+    mode: str = "any"
+    #: The number "count" compares against.
+    count: Optional[int] = None
     narrative: str = ""
     spec: Optional[strawberry.scalars.JSON] = None
 
@@ -28,5 +32,7 @@ class ConditionInput:
     targets: list[str] = strawberry.field(default_factory=list)
     value: Optional[str] = None
     operator: str = ">="
+    mode: str = "any"
+    count: Optional[int] = None
     narrative: str = ""
     spec: Optional[strawberry.scalars.JSON] = None

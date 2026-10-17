@@ -155,6 +155,15 @@ class Condition(BaseModel):
     targets: list[str] = Field(default_factory=list)
     value: Optional[str] = None       # threshold, e.g. rank number
     operator: str = ">="              # numeric comparator for HAS_RAZMERIT ("<", "<=", "==", "!=", ">=", ">")
+    #: How a **per-die rating** gate reads the pool ([[B242]]). The default is the
+    #: historical test — *"is some die at least a d8"* — so no gate authored before
+    #: this changes meaning. ``all`` requires every die to match; ``count`` counts
+    #: the dice that match and compares *that* against ``count``, which is the only
+    #: way to say *"exactly two d8"*: the per-die test cannot tell a 1d8 rating from
+    #: a 2d8 one, so two rungs of a ladder could not be gated apart.
+    mode: str = "any"                 # "any" | "all" | "count"
+    #: The number ``count`` mode compares against (ignored by the other modes).
+    count: Optional[int] = None
     narrative: str = ""               # human-readable fallback text
     spec: Optional[TargetSpec] = None  # TARGET_PATH: a targeting path (seeded by `select source`) resolved non-empty
 
