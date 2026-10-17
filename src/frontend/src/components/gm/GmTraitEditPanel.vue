@@ -99,7 +99,7 @@
 
       <!-- SFX assignment -->
       <h4 class="ps-section-title">Possible SFXs</h4>
-      <p class="section-hint">Each row is an SFX this trait can grant. Check an SFX to make it a <strong>default</strong> — characters with this trait get it automatically. Remove one from the list with ✕.</p>
+      <p class="section-hint">Each row is an SFX this trait can grant. Check an SFX to make it a <strong>default</strong> — characters with this trait get it automatically. Remove one from the list with ✕. <strong>+ New SFX</strong> writes one from scratch and attaches it here.</p>
       <GmList
         :items="possibleSfxs"
         item-key="id"
@@ -120,6 +120,11 @@
         </template>
       </GmList>
       <Button class="ps-add-btn" @click="openSfxPicker" variant="secondary" block>+ Add SFX</Button>
+      <!-- Authoring, not picking. The picker can create a rule too, but that is
+           two panels deep and this list is where the author is standing. The
+           result is attached to this trait as it is created — the declaration
+           half of reach, which is what this list *is* ([[Dynamic SFX Reach]]). -->
+      <Button class="ps-add-btn" @click="openNewSfx" variant="secondary" block>+ New SFX</Button>
 
       <!-- Sub-trait assignment -->
       <h4 class="ps-section-title">Possible Sub-traits</h4>
@@ -242,6 +247,7 @@
         </template>
       </GmList>
       <Button class="ps-add-btn" @click="createOpenSfxPicker" variant="secondary" block>+ Add SFX</Button>
+      <Button class="ps-add-btn" @click="createOpenNewSfx" variant="secondary" block>+ New SFX</Button>
 
       <h4 class="ps-section-title">Possible Sub-traits</h4>
       <p class="section-hint">Add a whole sub-trait set (e.g. "elements") to make every trait in it nestable, or add individual traits.</p>
@@ -817,6 +823,52 @@ function onSfxClick(sfx) {
     badge: 'SFX',
     props: { sfx: sfx },
     listeners: {},
+  })
+}
+
+// ── Authoring a rule from this list ──────────────────
+// The child panel is the same editor Manage SFX opens; the difference is that
+// **this surface knows where the rule belongs**, so it writes the declaration as
+// soon as the rule exists. The editor does not close on create — it becomes the
+// rule's editor (see `GmSfxEditPanel.onCreate`), which is the point of opening it
+// here: name it, then keep authoring it without going anywhere.
+function openNewSfx() {
+  panel.open({
+    component: GmSfxEditPanel,
+    title: 'New Trait SFX',
+    badge: 'SFX',
+    props: { sfx: null },
+    listeners: {
+      'sfx-created': async (created) => {
+        if (!created?.id) return
+        if (!form.possibleSfxIds.includes(created.id)) form.possibleSfxIds.push(created.id)
+        // **Save before refreshing.** `trait` re-seeds this whole form from the
+        // server, so a refresh that lands before the save puts the list back the
+        // way it was and the new rule silently leaves it — the "auto-save dropped
+        // my edit" shape, one panel over. The debounced save may still fire once
+        // afterwards; it writes the re-seeded form, which is the same content.
+        await save()
+        await fetchTraitsConfig()
+      },
+    },
+  })
+}
+
+// Create mode: there is no trait to write yet, so the list only needs a *name* —
+// which comes from the registry, not from the id, so the refresh is still needed.
+function createOpenNewSfx() {
+  panel.open({
+    component: GmSfxEditPanel,
+    title: 'New Trait SFX',
+    badge: 'SFX',
+    props: { sfx: null },
+    listeners: {
+      'sfx-created': async (created) => {
+        if (!created?.id) return
+        if (!createForm.possibleSfxIds.includes(created.id)) createForm.possibleSfxIds.push(created.id)
+        await fetchTraitsConfig()
+      },
+    },
   })
 }
 

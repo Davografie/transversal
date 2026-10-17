@@ -231,6 +231,8 @@ To put it in the world: open **Manage SFX**, filter by *Trait instance*, pick th
 
 **Offering a rule to many owners at once.** Author a row under **Who it reaches** with the *Offered* relationship and a path naming the owners — for instance every trait in a set, reached by going from the definition to its instances. The owners get the chip; taking it attaches the rule to them.
 
+**Writing the rule from the trait that grants it.** A trait's **Possible SFXs** list (in **Manage Traits**) is the *static* half of reach: the rules a holder of that trait can buy. That list authors as well as picks — **+ New SFX** opens the rule editor on top of the trait and attaches the result to it as you create it, so a technique is written from the trait it belongs to instead of being found again later in Manage SFX. Tick **✓** on the row if every holder should get it automatically; leave it ✗ and the rule is offered, not granted.
+
 ## How your rule reads
 
 The top of the panel shows a **card line**: your rule in plain language, recomputed as you edit. The d4 Bonus rule reads:
