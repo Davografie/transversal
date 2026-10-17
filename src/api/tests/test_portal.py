@@ -316,3 +316,76 @@ def test_an_effect_that_moves_the_traveller_wins_over_the_portals_own_destinatio
     assert r.status_code == 200, r.text
     assert travelled == [], "the portal must not travel the traveller again"
     assert r.json()["location_id"] == "loc-c"
+
+
+def test_the_fire_response_can_be_handed_back_to_resolve_effect_targets(monkeypatch):
+    """The question must come home in the **wire** shape ([[navigation]], 2026-10-17).
+
+    `resolveEffectTargets` is stateless and client-carried: the client sends the
+    effect back and the server re-resolves it with the answers. So the fire response
+    has to carry an `EffectInput`-shaped effect — camelCase — and the engine's own
+    round-trip vocabulary beside it. It used to carry `effect.model_dump()`, the
+    *domain* shape, and five field names differ (`dieFilter`, `targetSpec`,
+    `entitySpec`, `ownerSpec`, `resultSpec`), so the echo would have been rejected as
+    an input, or accepted with every spec silently empty.
+    """
+    from transversal.api.graphql.resolvers.converters import effect_to_input_dict
+    from transversal.domain import Effect, TargetRef
+    from transversal.services.effects_applier.datatypes import PendingChoice
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    # The mapper on its own: camelCase, and a spec dumped rather than dropped.
+    domain_effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        die_filter={"role": None},
+        refs={"location": TargetRef(spec=TargetSpec(steps=[SelectStep(collection="locations")]))},
+    )
+    wire = effect_to_input_dict(domain_effect)
+    assert "dieFilter" in wire and "die_filter" not in wire
+    assert wire["dieFilter"] == {"role": None}
+
+    # And the endpoint's payload: the pool, the round trip, and the source.
+    entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael",
+                    current_universe="earth", current_location="loc-a")
+    edge = {"_key": "edge:loc-a:loc-a:transversal", "_from": "entities/loc-a",
+            "_to": "entities/loc-a", "type": "transversal",
+            "effects": [{"timing": "IMMEDIATE", "type": "travel", "action": "move"}]}
+    repo = _FakeRepo(entity, edge)
+    monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+
+    def fake_commit_effects(e, effects, r, **kwargs):
+        class _R:
+            applied = []
+            pending_choices = [PendingChoice(
+                effect=effects[0], kind="location", field="refs.location",
+                candidates=[{"id": "loc-1", "name": "Zurich Airport"}],
+                count=1, structured=True, step_index=2,
+                answers_so_far=[{"stepIndex": 0, "ids": ["loc-a"]}])]
+        return _R()
+
+    monkeypatch.setattr("transversal.services.effects_commit.commit_effects", fake_commit_effects)
+
+    class _FakeEm:
+        def travel(self, entity_id, to_id, transversal_type=None, projection_policy=None):
+            return entity.model_copy(update={"current_location": to_id})
+
+    monkeypatch.setattr(locations_module, "_em", lambda: _FakeEm())
+
+    app = FastAPI()
+    app.include_router(locations_router)
+    client = TestClient(app)
+
+    r = client.post("/api/v1/locations/loc-a/portal/loc-a/fire", json={"entity_id": "char-1"})
+    assert r.status_code == 200, r.text
+    choice = r.json()["pendingChoices"][0]
+    assert [c["id"] for c in choice["candidates"]] == ["loc-1"]
+    assert choice["count"] == 1
+    assert choice["structured"] is True
+    assert choice["stepIndex"] == 2
+    assert choice["answersSoFar"] == [{"stepIndex": 0, "ids": ["loc-a"]}]
+    # The source is the **edge** — a portal question comes from the portal.
+    assert choice["sourceKind"] == "relationship"
+    assert choice["sourceId"] == "edge:loc-a:loc-a:transversal"
+    # …and the effect is an input, not a domain dump.
+    assert "dieFilter" in choice["effect"] and "die_filter" not in choice["effect"]
+    assert "targetSpec" in choice["effect"]

@@ -262,6 +262,10 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
                     result.pending_choices.append(PendingChoice(
                         effect=effect, kind=choice.element, field=choice.field,
                         candidates=list(choice.candidates or []), count=choice.count,
+                        structured=True, step_index=getattr(choice, "step_index", 0),
+                        answers_so_far=list(getattr(choice, "answers_so_far", []) or []),
+                        source_kind=getattr(choice, "source_kind", "") or "",
+                        source_id=getattr(choice, "source_id", "") or "",
                     ))
                 continue
             if not concretes:
@@ -388,7 +392,11 @@ def _apply_spec_effect(effect: Effect, entity: Entity, repo, result: EffectsResu
             result.pending_choices.append(
                 PendingChoice(effect=effect, kind=choice.element, field="target",
                               candidates=list(choice.candidates or []),
-                              count=choice.count))
+                              count=choice.count, structured=True,
+                              step_index=getattr(choice, "step_index", 0),
+                              answers_so_far=list(getattr(choice, "answers_so_far", []) or []),
+                              source_kind=getattr(choice, "source_kind", "") or "",
+                              source_id=getattr(choice, "source_id", "") or ""))
         return
     for concrete in resolved:
         handler = _MUTATION_HANDLERS.get((concrete.type, concrete.action))

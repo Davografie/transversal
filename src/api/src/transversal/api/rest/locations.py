@@ -594,6 +594,45 @@ class PortalFireRequest(BaseModel):
     entity_id: str
 
 
+def _pending_choice_payload(index: int, c, edge: dict) -> dict:
+    """One pending choice, shaped so the client can **hand it back**.
+
+    The pool travels with the question — the viewer's picker (the splash panel's
+    `EffectTargetWizard`) cannot offer what the response omits — and so does the
+    engine's round-trip vocabulary, because the answer comes home through
+    `resolveEffectTargets`, which is stateless and client-carried: the client sends
+    the effect back and the server re-resolves it with the answers.
+
+    **The effect is serialised for the GraphQL input, not the domain.** It used to be
+    `effect.model_dump()` (snake_case) while `EffectInput` is camelCase, so the echo
+    was rejected — five names differ — or would have arrived with every spec empty.
+    `effect_to_input_dict` runs the same mapper the GraphQL path runs, so the REST
+    side cannot drift from the input again ([[navigation]]'s ask, 2026-10-17).
+
+    `source_kind`/`source_id` fall back to the **edge**: a portal question comes from
+    the portal, and a follow-up needs to know that. It is the honest description
+    until a portal earns its own source kind.
+    """
+    from transversal.api.graphql.resolvers.converters import effect_to_input_dict
+
+    return {
+        "index": index,
+        "kind": c.kind,
+        "scope": c.scope,
+        "field": c.field,
+        "candidates": list(getattr(c, "candidates", []) or []),
+        "count": getattr(c, "count", None),
+        "structured": bool(getattr(c, "structured", False)),
+        "stepIndex": getattr(c, "step_index", 0),
+        "answersSoFar": list(getattr(c, "answers_so_far", []) or []),
+        "sourceKind": getattr(c, "source_kind", "") or "relationship",
+        "sourceId": (getattr(c, "source_id", "") or (edge or {}).get("_key", "")),
+        "sourceSfxId": "",
+        "entity_id": None,
+        "effect": effect_to_input_dict(c.effect),
+    }
+
+
 @router.post("/locations/{from_id}/portal/{to_id}/fire")
 async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
     """Fire a transversal portal: apply its travel effects to the traversing entity.
@@ -661,15 +700,7 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
     return {
         "status": status,
         "applied": applied,
-        "pendingChoices": [
-            # The pool travels with the question — the viewer's picker (the splash
-            # panel's `EffectTargetWizard`) cannot offer what the response omits.
-            {"index": i, "kind": c.kind, "scope": c.scope, "field": c.field,
-             "candidates": list(getattr(c, "candidates", []) or []),
-             "count": getattr(c, "count", None),
-             "effect": c.effect.model_dump()}
-            for i, c in enumerate(pending)
-        ],
+        "pendingChoices": [_pending_choice_payload(i, c, edge) for i, c in enumerate(pending)],
         "entity_id": arrived.id, "name": arrived.name,
         "location_id": arrived.current_location, "universe": arrived.current_universe,
     }

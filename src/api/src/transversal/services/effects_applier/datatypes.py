@@ -75,8 +75,20 @@ class PendingChoice:
     #: Declared **above** ``field`` on purpose: the attribute below is *named*
     #: `field`, which shadows `dataclasses.field` for the rest of the class body.
     candidates: list = field(default_factory=list)
+    #: The engine's own round-trip vocabulary, so a client can hand the question
+    #: back to `resolveEffectTargets` without guessing ([[navigation]]'s ask,
+    #: 2026-10-17): ``step_index`` says which step asked, ``answers_so_far`` is what
+    #: has already been chosen on this path, and ``source_kind``/``source_id`` say
+    #: what the activation came from — for a portal, the **edge**.
+    answers_so_far: list = field(default_factory=list)
     #: How many to pick: ``1`` is *choose one*, ``None`` is *as many as you like*.
     count: Optional[int] = None
+    #: True when this came from a resolver `choose` — i.e. it carries a real pool and
+    #: the engine's round-trip fields, rather than being a legacy kind/scope hint.
+    structured: bool = False
+    step_index: int = 0
+    source_kind: str = ""
+    source_id: str = ""
     field: str = "target"
 
 @dataclass
