@@ -17,6 +17,15 @@ class TriggerRequest(BaseModel):
     context: dict = {}
 
 
+class ApplyRequest(BaseModel):
+    """One effect, as the editor holds it, and who to run it on."""
+
+    entity_id: str
+    #: The `EffectInput` shape the effect form edits — camelCase, specs included.
+    effect: dict = {}
+    context: dict = {}
+
+
 class EndRequest(BaseModel):
     entity_id: str
     sfx_id: str
@@ -44,6 +53,65 @@ def _with_notes(applied: list, notes: list[dict]) -> list[dict]:
             entry["note"] = notes[i].get("note", "")
         out.append(entry)
     return out
+
+
+@router.post("/apply")
+async def apply_effect(req: ApplyRequest, request: Request):
+    """Run **one** effect against an entity — the GM effect editor's test run.
+
+    The author is looking at a single effect and wants to know what it does, now,
+    on the entity they are acting as. Firing the whole rule would run the effect's
+    neighbours too and answer a different question.
+
+    Two things are deliberately *not* done, and they are what makes this a test
+    rather than a fire:
+
+    - **nothing is broadcast.** No `sfx_choice_required`, no `sfx_updated`: the
+      question count comes back in the reply instead. A test run that pops a picker
+      across the table is not a test.
+    - **nothing is armed or scheduled.** A deferred part simply does not fire;
+      `commit_effects` applies what is immediate.
+
+    So this reports; it does not announce. A 404 means the entity is not there, a
+    422 means the body is not an effect — both are the author's to fix, and both
+    say which.
+    """
+    from fastapi import HTTPException
+
+    from transversal.main import _get_em, _get_repo
+    from transversal.services.effects_commit import commit_effects
+    from transversal.services.effects_engine.wire import effect_from_wire_dict
+
+    em = _get_em()
+    entity = em.get(req.entity_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"Entity '{req.entity_id}' not found")
+
+    try:
+        effect = effect_from_wire_dict(req.effect or {})
+    except Exception as e:  # pydantic lives below this; the body is author input
+        raise HTTPException(status_code=422, detail=f"not an effect: {e}") from e
+
+    repo = _get_repo()
+    result = commit_effects(entity, [effect], repo, req.context or None)
+    fresh = repo.get_entity(req.entity_id) or entity
+
+    return {
+        # What each effect did, or why it did nothing — the summary is the whole
+        # point, and an empty list is an answer, not a failure.
+        "applied": [a.summary for a in result.applied],
+        "pending": len(result.pending_choices),
+        "effect": {"type": effect.type, "action": effect.action},
+        # Read back rather than echoed: the effect may have moved the entity, and
+        # "where they are now" is the thing an author checks.
+        "entity": {
+            "id": fresh.id,
+            "name": getattr(fresh, "name", ""),
+            "location_id": getattr(fresh, "current_location", None),
+            "universe": getattr(fresh, "current_universe", ""),
+            "razmerit": getattr(fresh, "razmerit", 0),
+        },
+    }
 
 
 @router.post("/end")

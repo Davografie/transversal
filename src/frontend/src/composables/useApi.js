@@ -102,6 +102,39 @@ export function useApi() {
   }
 
   /**
+   * Run **one** effect against an entity — the GM effect editor's test run.
+   *
+   * Deliberately not `triggerSfx`: that fires a whole rule and can push a question
+   * at the table. This applies the single effect the author is looking at and
+   * reports, so an effect can be tried before it is saved, without the rest of the
+   * rule happening around it.
+   */
+  async function applyEffect(entityId, effect, context = {}) {
+    loading.value = true
+    error.value = null
+    try {
+      const r = await fetch(`${API_BASE}/effects/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_id: entityId, effect, context }),
+      })
+      const body = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        // The endpoint says *what* is wrong — 404 no such entity, 422 not an
+        // effect. Passing that through is the difference between "nothing
+        // happened" and knowing why.
+        throw new Error(body.detail || body.error || `apply failed (${r.status})`)
+      }
+      return body
+    } catch (e) {
+      error.value = e.message
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
    * Take back a manual activation that has not committed yet: the undos it still
    * owes are applied, its deferred parts are dropped, and what was still waiting
    * on a roll is un-armed. Rolling the dice (or a delayed part firing) commits
@@ -453,5 +486,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, cancelContest, getPendingContestEffects, manualRoll, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, applyEffect, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, cancelContest, getPendingContestEffects, manualRoll, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

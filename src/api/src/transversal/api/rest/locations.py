@@ -522,73 +522,11 @@ async def delete_edge(from_id: str, to_id: str, type: str = "super"):
 
 # ── Portal firing ────────────────────────────────────
 
-def _effect_from_wire(d: dict):
-    """Convert a frontend effect dict (camelCase) to a domain Effect.
-
-    ⚠ **The structured specs have to come across.** This is the portal path's only
-    wire→domain converter, and it used to map just the flat fields, so an effect
-    authored with a `targetSpec` arrived with `target=""` and `target_spec=None`:
-    its destination lives *only* in the spec. The applier then ran the legacy
-    `("travel", "move")` handler with no destination and reported `applied: []`
-    with nothing pending — the traveller simply did not move. That is why the
-    Eindhoven Airport → Турышка аэропорт portal still did nothing *after* the 404
-    in `fire_portal` was fixed (2026-09-26).
-
-    The same adapter is a third hand-rolled copy of this mapping (the GraphQL
-    converters keep their own), which is exactly how it drifted; one shared
-    converter is the real fix. Known gap left deliberately: **`conditions` are not
-    carried** — mapping them needs a hand-written field map (`ConditionInput` is a
-    Strawberry type, not a dict) and no live portal effect uses one, so it could
-    not be verified rather than guessed.
-    """
-    from transversal.domain import Effect, EffectDuration, EffectTiming, Timer, TimerCombine, TargetSpec, TargetRef
-
-    def _enum(cls, value, default):
-        if value is None:
-            return default
-        if isinstance(value, str):
-            try:
-                return cls[value]  # member name ("IMMEDIATE", "FIRST_TO_FIRE")
-            except KeyError:
-                try:
-                    return cls(value)  # value ("immediate", "first_to_fire")
-                except ValueError:
-                    return default
-        return value
-
-    def _spec(camel: str, snake: str):
-        """A targeting path, whichever spelling the caller sent."""
-        raw = d.get(camel) or d.get(snake)
-        return TargetSpec.model_validate(raw) if raw else None
-
-    duration = None
-    if d.get("duration"):
-        dur = d["duration"]
-        duration = EffectDuration(
-            timers=[Timer(event=t.get("event") or "scene", remaining=t.get("remaining", 0))
-                    for t in (dur.get("timers") or [])],
-            combine=_enum(TimerCombine, dur.get("combine"), TimerCombine.FIRST_TO_FIRE),
-        )
-
-    return Effect(
-        timing=_enum(EffectTiming, d.get("timing"), EffectTiming.IMMEDIATE),
-        type=d.get("type", ""),
-        action=d.get("action", ""),
-        target=d.get("target", ""),
-        entity=d.get("entity", ""),
-        result=d.get("result"),
-        die_filter=d.get("dieFilter") or d.get("die_filter") or {},
-        negative=bool(d.get("negative", False)),
-        context=d.get("context") or {},
-        duration=duration,
-        target_spec=_spec("targetSpec", "target_spec"),
-        entity_spec=_spec("entitySpec", "entity_spec"),
-        owner_spec=_spec("ownerSpec", "owner_spec"),
-        result_spec=_spec("resultSpec", "result_spec"),
-        refs={k: TargetRef.model_validate(v)
-              for k, v in (d.get("refs") or {}).items()},
-    )
-
+# The wire→domain converter lives with its inverse, in
+# `services/effects_engine/wire.py`: the effects endpoint applies a single drafted
+# effect at the GM's request, and a second hand-rolled copy of this mapping is
+# exactly how the first one drifted.
+from transversal.services.effects_engine.wire import effect_from_wire_dict as _effect_from_wire
 
 class PortalFireRequest(BaseModel):
     entity_id: str

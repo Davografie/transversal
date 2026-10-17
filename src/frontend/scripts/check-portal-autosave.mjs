@@ -164,11 +164,17 @@ ok('and the form never re-hydrates from its own echo',
   /if \(eff && _lastEmitted && JSON\.stringify\(eff\) === _lastEmitted\) return/.test(FORM), true)
 ok('the inline consumer keeps a way out — the panel cases have the rail',
   /v-if="closable"/.test(FORM) && /:closable="true"/.test(EDITOR), true)
-// Write-through means repeated emits: the first appends the row, the rest replace it.
+// Write-through means repeated emits: the first appends the row, the rest replace
+// it. The declaration is deliberately **not** pinned: whether the index is a `let`
+// or a `ref` is how it is held, not what the panel does — and the effect panel made
+// it a ref so its *Activate effect* control can read the row it just appended
+// ([[B329]]). Asserting `let` failed a correct change and passed an incorrect one
+// the moment either moved.
+const WRITE_THROUGH = /workingIndex = (ref\()?props\.index[\s\S]{0,400}workingIndex(?:\.value)? = draft\.effects\.length - 1/
 ok('the draft panel appends once and replaces thereafter',
-  /let workingIndex = props\.index[\s\S]{0,400}workingIndex = draft\.effects\.length - 1/.test(DRAFT), true)
+  WRITE_THROUGH.test(DRAFT), true)
 ok('and the SFX panel does the same into the composer draft',
-  /let workingIndex = props\.index[\s\S]{0,400}workingIndex = draft\.effects\.length - 1/.test(SFX_EFFECT), true)
+  WRITE_THROUGH.test(SFX_EFFECT), true)
 ok('neither panel persists or closes itself any more — the owner\'s auto-save does',
   !/await save\(\)/.test(SFX_EFFECT) && !/panel\.close\(\)/.test(SFX_EFFECT) && !/panel\.close\(\)/.test(DRAFT), true)
 

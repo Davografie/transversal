@@ -161,6 +161,7 @@ Each effect is one operation. Pick the **Action** first; the form then shows onl
 - **Duration (undo timer)** — how long before this change is **reverted**. Step a die up with `beat` here and it steps back down at the end of the beat. A duration is offered only where reversing makes sense: a change to a die in a *pool* is gone at the next roll anyway, so it is not offered there.
 - **Negative** — for trait-granting actions, whether what is granted is a complication rather than a benefit.
 - **Output name** — names what this effect produced, so a later effect can reach it with `select variable`. Only offered on actions that produce something.
+- **Activate effect** — under the form, a **test run**: it applies *this one effect* to the entity you are acting as and tells you what it did — what changed, how many questions it *would* ask, and where the entity now is. It broadcasts nothing, so a run never pops a picker on anyone else's screen; and it runs the effect as you have it now, which is the point. Firing the rule would run its neighbours too and answer a different question.
 
 > [!tip] Two clocks, easy to confuse
 > The rule's own **Duration** is a *listening window*: how long the rule stays armed for its waiting part. An **effect's** Duration is an *undo timer*: when the change it made is reversed. They are independent — a rule can stop listening after one roll while the change it made lasts the scene.
