@@ -39,6 +39,14 @@ const travelDescriptor = body('function travelDescriptor(', '\nfunction ')
 const sendOccupant = body('async function sendOccupant(', '\nasync function ')
 
 // The two paths that build a destination for `travelWithAnimation` / the fire call.
+// **The dot is where the effects must come from.** Both travel paths read
+// `nd.target.effects`, and the target used to be built from `{id, universe}` alone —
+// so every portal read as effect-less and firing one was always a plain move. The
+// earlier assertions below passed while the data was `undefined`: they checked that
+// a *field was mentioned*, not that anything set it. This is the one that matters.
+const navDots = body('const navDots = computed(', '\nconst ')
+ok('a portal navdot carries its effects',
+  /target:\s*\{[^}]*effects:\s*t\.effects/.test(navDots))
 ok('the self-travel path passes the portal\'s effects',
   /effects:\s*nd\.target\.effects/.test(travelToTarget))
 ok('…and so does the descriptor for someone else',

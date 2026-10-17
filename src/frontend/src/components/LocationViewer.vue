@@ -818,7 +818,14 @@ const navDots = computed(() => {
       image: t.navdot_image || t.background_image || null,
       x: pos.x, y: pos.y,
       transversal_type: t.transversal_type || 'inapposite',
-      target: { id: t._key, universe: t.current_universe },
+      // **The portal's effects belong on the dot.** Both travel paths read
+      // `nd.target.effects` — the GM-sends-someone descriptor and the self-travel
+      // one — and `relocate` fires `/portal/{to}/fire` only when that list is
+      // non-empty. The target was built from `{id, universe}` alone, so *every*
+      // portal read as effect-less and firing one was always a plain move: no
+      // effects, no question, no picker. (2026-10-17 — the real cause, after two
+      // passes that threaded a field nothing set.)
+      target: { id: t._key, universe: t.current_universe, effects: t.effects || [] },
     })
   }
   return dots
@@ -1227,7 +1234,6 @@ function travelToTarget(t) {
     const destName = nd.type === 'parent'
       ? nav.value.parent?.name
       : (nav.value.transversal || []).find(x => x._key === nd.target.id)?.name
-    console.info('[travel] nav target', { id: nd.target.id, type: nd.type, effects: (nd.target.effects || []).length })
     const fakeZone = { x: nd.x, y: nd.y }
     // **The portal's effects travel with it.** `travelWithAnimation` hands
     // `child.effects` to `relocate`, which fires `/portal/{to}/fire` only when that
@@ -1349,10 +1355,6 @@ async function onOccDragEnd() {
   }
 
   // If the player dropped near a target, travel there
-  console.info('[travel] occupant dropped', {
-    occ: occ.id, entityId: props.entityId, editZones: props.editZones,
-    dragTarget: dragTarget?.type || null, wasMoved, canTravel: canTravelOccupant(occ),
-  })
   if (occ.id === props.entityId && dragTarget && !props.editZones) {
     const t = dragTarget
     dragTarget = null
@@ -1459,9 +1461,6 @@ function onGmDotDragEnd() {
   if (!wasMoved) return
   armClickSuppression()  // a drag must not fire the click handler
   // Dropped on a location → travel the view there
-  // Diagnostic (remove once the portal path is confirmed): a dot click that does not
-  // travel has exactly two causes here — no target, or arrange mode.
-  console.info('[travel] dot click', { target: t?.type, editZones: props.editZones, entityId: props.entityId })
   if (t && !props.editZones) travelToTarget(t)
 }
 
@@ -1724,8 +1723,6 @@ async function relocate(locationId, universe, consciousness, effects, name) {
     emit('moved', { location: name || locationId, location_id: locationId, universe })
     return
   }
-  console.info('[travel] relocate', { to: locationId, entityId: props.entityId, effects: (effects || []).length,
-    branch: !props.entityId ? 'view-only' : ((effects && effects.length) ? 'FIRE PORTAL' : (consciousness ? 'consciousness' : 'plain move')) })
   if (effects && effects.length) {
     try {
       const r = await fetch(`/api/v1/locations/${props.locationId}/portal/${locationId}/fire`, {
@@ -1735,7 +1732,11 @@ async function relocate(locationId, universe, consciousness, effects, name) {
       })
       const data = await r.json()
       emit('moved', data)
-    } catch { /* silent */ }
+    } catch (e) {
+      // Not silent: a portal that fails to fire looks exactly like a portal with no
+      // effects, and that ambiguity cost three rounds of debugging (2026-10-17).
+      console.error('[travel] portal fire failed', e)
+    }
     return
   }
   if (consciousness) {
