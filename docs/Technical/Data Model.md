@@ -827,9 +827,10 @@ Built by the repository, not stored. Assembles entity + projections + trait sett
 
 ## Indexes
 
-**Read as live, not as declared** — measured over the running database on 2026-09-29.
-`_add_hash_index` swallows a creation failure, so the difference between these two is
-not academic (see the warning below).
+**Read as live, not as declared** — measured over the running database on 2026-09-29,
+re-verified 2026-10-17. `_add_hash_index` used to swallow a creation failure silently (it
+now logs a warning), so the difference between these two is not academic (see the warning
+below).
 
 | Collection | Index | Type | Purpose |
 |-----------|-------|------|---------|
@@ -839,6 +840,7 @@ not academic (see the warning below).
 | `entities` | `known_to[*]` | persistent | Array membership queries |
 | `projections` | `entity_id` | hash | Find projections for entity |
 | `projections` | `universe` | hash | Filter by universe |
+| `traits` | `[traitset_id, name]` | hash (unique) | A trait is unique **within its set**, not within a universe |
 | `traits` | `traitset_id` | hash | Find traits in a set |
 | `traits` | `universe` | hash | Filter by universe |
 | `traitsets` | `[name, universe]` | hash (unique) | Lookup traitset by name in universe |
@@ -857,15 +859,32 @@ not academic (see the warning below).
 | `sfxs` | `name` | hash (unique) | Lookup SFX by name |
 | `relationships` | `type` | hash | Filter edges by relationship type |
 
-> [!warning] `traits (name, universe)` unique has **never existed**
-> `db/arango.py` declares it; the live collection does not have it — verified
-> 2026-09-29, and flagged by [[B88]] the same way. **57 duplicate groups / 64
-> documents** share a name within one universe (e.g. `ablative armor`, `age`,
-> `analyse`, all with `universe: null`), which is why the creation failed and why
-> the failure was invisible: `_add_hash_index` catches and logs. Two live traits
-> called `role` is the consequence, and it is not cosmetic — a lookup by name
-> silently picks one, which is how the faction roster read returned `members: 0`
-> for every faction ([[B88]], and the `8880e6cf` fix that matched by name anyway).
+> [!warning] `traits (name, universe)` unique was never a real constraint — **corrected 2026-10-17**
+> `db/arango.py` declared it; no collection ever had it. It **could not** be built:
+> `traits` carries `universes`, an **array**, so the scalar `universe` is absent and
+> was `null` on every row — making the index demand **one trait per name across all
+> 38 sets**. The corpus contradicts that deliberately: `role` exists in `relations`
+> *and* `npc`, `armor` is a skill *and* a property of a thing, and 57 such homonyms
+> are normal. **A trait's identity is `(traitset, name)`.**
+>
+> The alarming count was a grouping artifact. Measured by **name alone** the global
+> reports **58 groups / 65 documents**; grouped by `(traitset_id, name)` there was
+> exactly **one** duplicate — `sub-goal` twice in `subtraits`, both unused. That pair
+> is retired and the two test sets `dupes dup` / `dupes one` are deleted, so the real
+> constraint, `traits (traitset_id, name)` **unique**, now builds.
+>
+> Two reasons this stayed invisible for a year: `(name, universe)` was *unbuildable*
+> rather than *violated*, and `_add_hash_index` caught the error with a bare `pass`.
+> It now logs a warning, and its "already exists" check compares uniqueness as well as
+> fields, so `unique=True` can no longer be a silent no-op. `traitsets (name,
+> universe)` and `sfxs (name)` are genuine unique indexes and do exist. See [[B331]]
+> and [[B88]].
+>
+> **Still latent:** `get_trait_by_name(name, universe)` scopes by universe, not set,
+> so for a homonym it returns an arbitrary row — `event` resolves to the unused `npc`
+> row, which would report **0** entities where 120 hold the `challenges` row. Its only
+> caller, `find_entities_with_trait`, has no callers, so nothing is broken today. The
+> fix is for the resolver to take a trait set, not for the index to forbid homonyms.
 
 
 ---

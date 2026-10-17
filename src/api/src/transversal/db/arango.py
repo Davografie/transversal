@@ -18,6 +18,7 @@ Graph:
 
 from __future__ import annotations
 
+import logging
 import os
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -28,6 +29,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from arango import ArangoClient
     from arango.database import StandardDatabase
+
+logger = logging.getLogger("transversal.db")
 
 
 @dataclass
@@ -294,8 +297,17 @@ def _ensure_indexes(db) -> None:
     _add_hash_index(db, PROJECTIONS, ["entity_id"])
     _add_hash_index(db, PROJECTIONS, ["universe"])
 
-    # traits registry
-    _add_hash_index(db, TRAITS, ["name", "universe"], unique=True)
+    # traits registry.
+    #
+    # A trait's identity is **set + name**, not name alone: `role` exists in both
+    # `relations` and `npc`, `armor` is a skill and also a property of a thing,
+    # and 57 such homonyms are deliberate. The constraint used to be
+    # `(name, universe)`, which could never be built — `traits` carries
+    # `universes` (an array), so the `universe` field is absent and null on every
+    # row, making the index demand one trait per name across all 38 sets. It
+    # therefore never existed in any database, and `_add_hash_index` swallowed the
+    # failure, so nothing ever said so.
+    _add_hash_index(db, TRAITS, ["traitset_id", "name"], unique=True)
     _add_hash_index(db, TRAITS, ["traitset_id"])
     _add_hash_index(db, TRAITS, ["universe"])
 
@@ -349,9 +361,15 @@ def _add_hash_index(
 ) -> None:
     try:
         col = db.collection(collection)
-        # Skip if already exists
+        # Skip if an index of the same shape *and kind* already exists. Uniqueness
+        # is part of the shape: matching on fields alone made `unique=True` a
+        # silent no-op whenever a non-unique index on those fields came first.
         for idx in col.indexes():
-            if idx.get("type") == "hash" and idx.get("fields") == fields:
+            if (
+                idx.get("type") == "hash"
+                and idx.get("fields") == fields
+                and bool(idx.get("unique", False)) == unique
+            ):
                 return
         col.add_index({
             "type": "hash",
@@ -360,7 +378,16 @@ def _add_hash_index(
             "sparse": sparse,
         })
     except Exception:
-        pass
+        # Never fatal — a missing index is a slow query, not a broken request. But
+        # it must be *visible*: this swallowed the failure that left
+        # `traits (name, universe)` unique unbuilt in every database ([B331]).
+        logger.warning(
+            "index %s%s on %s could not be built",
+            fields,
+            " (unique)" if unique else "",
+            collection,
+            exc_info=True,
+        )
 
 
 def _add_persistent_index(db, collection: str, fields: list[str]) -> None:
