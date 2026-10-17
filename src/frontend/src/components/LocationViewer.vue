@@ -168,6 +168,28 @@
         <span v-else class="occ-drawer-initials">{{ occupantInitials(o.name) }}</span>
         <span class="occ-drawer-name">{{ o.name }}</span>
       </div>
+
+      <!-- Unplaced CHILD LOCATIONS — the same drawer and the same predicate: a child of
+           this place with no `zones` entry has no hotspot to click, and until now there
+           was no way to give it one from the map. Dragging a row out CREATES the zone at
+           the drop point, which also makes the viewer the first hand-creation path for a
+           hotspot. -->
+      <div
+        v-for="c in unplacedZones"
+        :key="'uz-' + c._key"
+        class="occ-drawer-chip zone-drawer-chip"
+        :title="`${c.name} — no hotspot on this map yet. Drag onto the map to place.`"
+        @mousedown="editZones && onZoneDrawerDragStart($event, c)"
+        @touchstart="editZones && onZoneDrawerDragStart($event, c)"
+      >
+        <img
+          v-if="c.navdot_image || c.background_image"
+          :src="c.navdot_image || c.background_image"
+          class="occ-drawer-img" alt="" draggable="false"
+        />
+        <span v-else class="occ-drawer-initials">{{ (c.name || '?').slice(0, 2).toUpperCase() }}</span>
+        <span class="occ-drawer-name">{{ c.name }}</span>
+      </div>
     </div>
 
     <!-- ONE control in two states (the human, 2026-09-26). Idle in arrange mode it is the
@@ -369,6 +391,21 @@ const unplacedOccupants = computed(() =>
   occupantDots.value.filter(o => o.map_x == null || o.map_y == null)
 )
 
+// A **child location of this place that has no hotspot on its map** is the same kind of
+// absence: it belongs here and has nowhere to be drawn. It is not the GM's mistake either
+// — `_ensure_child_zone` runs from the repository's `create_relationship`, but the REST
+// `create_edge` that the GM tree uses inserts the edge document directly, so a reparent
+// leaves the child linked and invisible (43 of them in the global content, measured
+// 2026-10-17). Listing them here makes that fixable by hand until that writer is fixed.
+//
+// **Per parent, not globally.** A child can sit under several parents (Asia has five), so
+// the question is "no hotspot *here*", not "no hotspot anywhere" — otherwise pinning a
+// continent on one map would silently drop it from every other parent's drawer.
+const unplacedZones = computed(() => {
+  const placed = new Set(zones.value.map(z => z.location_id).filter(Boolean))
+  return (nav.value.children || []).filter(c => !placed.has(c._key))
+})
+
 // What the scene actually draws — and the reason the dot template needs no position
 // fallback: everything in this list has a stored `map_x`/`map_y`.
 const placedOccupants = computed(() =>
@@ -385,10 +422,11 @@ const railEl = ref(null)
 // map blocks what is behind it — acceptable for a panel you asked for, not for one that
 // is always there. Closed, nothing of the rail is over the map at all.
 const railOpen = ref(false)
-// NOTE `.length` on BOTH: a number plus an array is string concatenation in JS, so the
-// missing one on the right rendered `unplaced · 25[object Object]` (found 2026-09-26).
+// NOTE `.length` on EVERY term: a number plus an array is string concatenation in JS, so
+// the missing one on the right rendered `unplaced · 25[object Object]` (found 2026-09-26).
 const unplacedCount = computed(
   () => unplacedTraits.value.length + unplacedOccupants.value.length
+    + unplacedZones.value.length
 )
 
 // Leaving arrange mode forgets it: "closed until asked for" has to survive the mode
@@ -738,14 +776,17 @@ async function onDragEnd() {
   document.removeEventListener('touchend', onDragEnd)
   if (!dragging.value) return
   dragging.value = null
+  await saveZones()
+}
 
-  // Save to API
+// The one writer of the zone list, shared by a moved hotspot and a newly placed one.
+// PUT replaces the whole list, so every field goes back — omit one and a drag silently
+// strips the zone→child link (`location_id`) or its image.
+async function saveZones() {
   try {
     await fetch(`/api/v1/locations/${props.locationId}/zones`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      // PUT replaces the whole zone list: send every field back, or a drag
-      // silently strips the zone→child link (`location_id`) and its image.
       body: JSON.stringify(zones.value.map(z => ({
         location_id: z.location_id, x: z.x, y: z.y,
         background_image: z.background_image ?? null,
@@ -1664,6 +1705,39 @@ function onOccupantDrawerDragStart(e, occ) {
   })
 }
 
+// A child location dragged out of the drawer does not move a hotspot — there isn't one —
+// it **creates** the zone, so the entry is appended on the first frame and the dot that
+// appears is what the pointer is dragging. Same shape as the occupant drawer above (whose
+// `map_x` is set on mousedown) and the same reason: what you are about to commit is what
+// you can see, and the drawer row disappears the moment the thing it stood for exists.
+//
+// `( x )` is deliberately **not** armed for this drag. That target means "take this off
+// the map", and an unplaced child is already off it; a zone is removed by dropping the
+// list entry, not by unplacing a position. So the drag arms nothing and the control stays
+// the rail's handle throughout.
+function onZoneDrawerDragStart(e, child) {
+  if (!props.editZones) return
+  e.preventDefault()
+  const img = getPosFromEvent(e)
+  const zone = {
+    location_id: child._key,
+    x: Math.max(2, Math.min(98, Math.round(img.x))),
+    y: Math.max(2, Math.min(98, Math.round(img.y))),
+    background_image: null,
+  }
+  zones.value.push(zone)
+  // `zone` is the raw object; `zones` holds its reactive proxy, and mutating the raw one
+  // would change the data WITHOUT notifying the renderer — the dot would then sit still
+  // while the drag ran, and only appear at the end. Drive the proxy.
+  const live = zones.value[zones.value.length - 1]
+  percentDrag.start(e, {
+    x: live.x,
+    y: live.y,
+    onMove: (x, y) => { live.x = Math.round(x); live.y = Math.round(y) },
+    onEnd: async () => { await saveZones() },
+  })
+}
+
 // (The rating's dice — and the grouping that fans them — live in `TraitChip`, so
 // both the auto-stack and the scene render them identically.)
 
@@ -2431,6 +2505,9 @@ onMounted(() => {
   font-size: 10px; background: rgba(255,255,255,0.12);
 }
 .occ-drawer-name { white-space: nowrap; }
+/* A child LOCATION in the drawer, not a person: same row, tinted with the zone dot's
+   green so the two are distinguishable at a glance. */
+.zone-drawer-chip { border-color: rgba(64,184,96,0.45); }
 
 /* The chip's own appearance — the edge, the two text rows, and the fanned dice —
    lives in `location/TraitChip.vue`, because the same chip renders in two places
