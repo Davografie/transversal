@@ -1075,6 +1075,14 @@ const isForeignSheet = computed(() =>
   props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId
 )
 
+// Someone else's sheet, seen by someone who may not act on it: a **player** looking
+// at a character that is not theirs. The rules stay on screen — they are part of
+// what the character is — but they are not this reader's to press, and a press
+// would run *that* character's rule. A GM is looking for the opposite reason, so
+// the same cards stay live for them and a press runs the viewed character's rule
+// (the author, 2026-09-29).
+const sfxViewOnly = computed(() => !!isForeignSheet.value && !props.gmMode)
+
 // ── Which sheet this is (B108 / B134) ──────────────────────────────
 // One shell, three faces: an occupant, a location, a faction. The declaration
 // lives in `utils/sheetProfile.js` (tabs + header extras only) because the trait
@@ -2751,15 +2759,22 @@ function sfxTitle(sfxId) {
 //            (the "translation" belongs in the drill-in, not in the teaser).
 function sfxCardModel(sfxId, variant = 'card') {
   const blocked = sfxConditionBlocked(sfxId)
+  // A player on someone else's sheet: the card is drawn and inert. `blocked` is
+  // the right axis rather than `readonly` — this *is* a control, it is simply not
+  // this reader's, which is the shape of a rule whose conditions do not hold (and
+  // unlike a place's automatic rule, which is not a control at all).
+  const viewOnly = sfxViewOnly.value
   return {
     name: sfxName(sfxId),
     description: variant === 'chip' ? '' : sfxDescription(sfxId),
     rules: variant === 'full' ? sfxCardText(sfxId) : '',
-    title: sfxTitle(sfxId),
+    // Say why it will not press. Without this the tooltip offers "Activate Gift"
+    // on a card that refuses — the confusion [[B193]] was raised about.
+    title: viewOnly ? `${sfxName(sfxId)} — not yours to press` : sfxTitle(sfxId),
     active: sfxActive(sfxId),
     used: sfxUsed(sfxId),
-    blocked,
-    disabled: blocked || !sfxAllowedInPhase(sfxId),
+    blocked: blocked || viewOnly,
+    disabled: blocked || viewOnly || !sfxAllowedInPhase(sfxId),
   }
 }
 
@@ -3269,8 +3284,15 @@ function onChoiceResolved(resolutions) {
   emit('sfx-choice-answer', resolutions)
 }
 
+// `subjectId` overrides what the rule is run **against**. The default is the entity
+// this sheet is **showing** rather than the one the viewer is acting as, because
+// the cards on screen are that entity's rules: on an ordinary sheet the two are the
+// same, and on a foreign sheet a GM's press is meant to run the *viewed*
+// character's rule (the author, 2026-09-29). The other case is a GM-owned rule on
+// the roaming GM's play surface, where no entity is shown and the scene is passed
+// in explicitly.
 async function activateSfx(sfxId, sourceId = null, subjectId = null) {
-  const subject = subjectId || props.entityId
+  const subject = subjectId || shownEntityId.value
   const menu = rollTableMenuEffect(sfxCatalog.value[sfxId])
   if (menu) {
     const isSupportCast = sfxId === 'sfx-roll-support-cast'

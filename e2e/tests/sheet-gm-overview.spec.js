@@ -167,6 +167,11 @@ async function bootActingGm(page) {
   await page.goto('/')
   const sheet = page.locator('.sheet-embedded')
   await expect(sheet.locator('.name-primary')).toHaveText('Corwin of Amber', { timeout: 20_000 })
+  // The peers strip is a vertical rail in the dock and Playwright will not click a
+  // moving target; it settles a beat after the sheet does. Measured in
+  // `sheet-foreign-sfx.spec.js`, where the same click needed the same wait — and
+  // without it this test passes alone and flakes in a larger run.
+  await page.waitForTimeout(1200)
   return sheet
 }
 

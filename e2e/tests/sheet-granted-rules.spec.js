@@ -52,9 +52,16 @@ const GRANTED = {
  */
 async function stubGranted(page, { grantTraitSet = true } = {}) {
   await page.route('**/api/v1/graphql', async (route) => {
-    const res = await route.fetch()
     let body
-    try { body = await res.json() } catch { return route.fulfill({ response: res }) }
+    try {
+      const res = await route.fetch()
+      try { body = await res.json() } catch { return route.fulfill({ response: res }) }
+    } catch (err) {
+      // Teardown race: the app keeps calling while the test ends. See
+      // `helpers/role.js` — this fails the test unless it is swallowed.
+      if (/Test ended/i.test(String(err && err.message))) return
+      throw err
+    }
     const entity = body?.data?.entity
     if (entity) {
       entity.grantedSfxIds = [GRANTED.entity]
@@ -68,7 +75,7 @@ async function stubGranted(page, { grantTraitSet = true } = {}) {
         for (const tss of entity.traitSetSettings || []) tss.grantedSfxIds = [GRANTED.traitset]
       }
     }
-    return route.fulfill({ json: body })
+    return route.fulfill({ json: body }).catch(() => {})
   })
 }
 
