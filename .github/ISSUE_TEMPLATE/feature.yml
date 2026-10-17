@@ -6,9 +6,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Describe the **want**, not the implementation — the role that picks it up will decide how.
-        The [[Overseer]] sweeps `triage` and routes it; see the
-        [GitHub Issue Loop](../../docs/Process/GitHub%20Issue%20Loop.md).
+        Describe the **want**, not the implementation — whoever picks it up will decide how.
+        Requests get triaged and routed the same way bugs do; see
+        [how reporting works](https://github.com/Davografie/transversal/wiki/Contributing).
   - type: textarea
     id: want
     attributes:
@@ -35,7 +35,7 @@ body:
     attributes:
       label: Before filing
       options:
-        - label: I checked it is not already on the board (docs/Process/Tickets.md)
+        - label: I checked the open issues and it is not already reported
           required: false
         - label: This is a want, not a bug — bugs have their own template
           required: false

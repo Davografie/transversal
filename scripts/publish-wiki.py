@@ -15,6 +15,15 @@ Obsidian notes in `docs/Manual/` into GitHub wiki pages:
     layer was redacted when the repo went public) keeps its words as plain
     text rather than becoming a link a reader cannot follow.
 
+It also publishes `STANDALONE` — tracked files outside the vault, such as
+`CONTRIBUTING.md`, whose page should read the same in the repository and in the
+wiki. Keeping them in the repository means one source with two readers, which
+is the alternative to a hand-written wiki page that drifts.
+
+Only the pages this run writes are deleted from the wiki, so a hand-edited page
+survives a publish. The cost is that removing or renaming a manual leaves its
+old page behind — delete that page in the wiki by hand when it happens.
+
 Usage:
     python3 scripts/publish-wiki.py                 # generate into a temp dir
     python3 scripts/publish-wiki.py --out DIR       # generate somewhere else
@@ -54,6 +63,12 @@ INDEX = [
     ("SFX Authoring", "Write a rule that bends the rules, and the effects it runs."),
     ("SFX Reference", "The lookup: every trigger, condition, source, path step and effect action."),
     ("Roll Table and Life Path Authoring", "Write lists of outcomes, and the chains a character walks for growth."),
+]
+
+# Tracked files outside the vault that are published as wiki pages too, so the
+# page has one source and two readers: (repository path, page title, blurb).
+STANDALONE = [
+    ("CONTRIBUTING.md", "Contributing", "Report a bug or ask for a feature — and what happens to it."),
 ]
 
 CALLOUT = re.compile(r"^>\s*\[!(\w+)\]\s*(.*)$")
@@ -184,13 +199,16 @@ def build(out_dir: Path) -> list[Path]:
     home = ["# Transversal — the manuals", ""]
     home.append(
         "How to play and run **Transversal**, and how to author content into it. "
-        "These pages are generated from the project's documentation vault — open a page "
+        "These pages are generated from the project's own notes — open a page "
         "and it reads the same as the notes the project works from."
     )
     home.append("")
     for title, blurb in INDEX:
         home.append(f"- **[{title}]({page_name(title)})** — {blurb}")
     home.append("")
+    for _, title, blurb in STANDALONE:
+        home.append(f"- **[{title}]({page_name(title)})** — {blurb}")
+        home.append("")
     home.append(f"Source of truth: [`docs/Manual/`](https://github.com/{REPO}/tree/{BRANCH}/docs/Manual) in the repository.")
     (out_dir / "Home.md").write_text("\n".join(home) + "\n", encoding="utf-8")
     written.append(out_dir / "Home.md")
@@ -198,16 +216,31 @@ def build(out_dir: Path) -> list[Path]:
     sidebar = ["**[Home](Home)**", ""]
     for title, _ in INDEX:
         sidebar.append(f"- [{title}]({page_name(title)})")
+    if STANDALONE:
+        sidebar.append("")
+        for _, title, _ in STANDALONE:
+            sidebar.append(f"- [{title}]({page_name(title)})")
     (out_dir / "_Sidebar.md").write_text("\n".join(sidebar) + "\n", encoding="utf-8")
     written.append(out_dir / "_Sidebar.md")
 
-    for path in sorted(MANUAL_DIR.glob("*.md")):
-        text = strip_frontmatter(path.read_text(encoding="utf-8"))
+    def render(source: Path) -> str:
+        text = strip_frontmatter(source.read_text(encoding="utf-8"))
         text = convert_callouts(text)
         text = convert_links(text, pages, notes)
-        text = re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
+        return re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
+
+    for path in sorted(MANUAL_DIR.glob("*.md")):
         target = out_dir / f"{path.stem}.md"
-        target.write_text(text, encoding="utf-8")
+        target.write_text(render(path), encoding="utf-8")
+        written.append(target)
+
+    for repo_path, title, _ in STANDALONE:
+        source = REPO_ROOT / repo_path
+        if not source.exists():
+            print(f"Warning: {repo_path} is missing; no '{title}' page written.", file=sys.stderr)
+            continue
+        target = out_dir / f"{title}.md"
+        target.write_text(render(source), encoding="utf-8")
         written.append(target)
     return written
 
@@ -247,8 +280,12 @@ def push(pages: list[Path], generated: Path) -> int:
         if git("clone", "--depth", "1", WIKI_URL, str(clone)).returncode != 0:
             print("Could not clone the wiki repository.", file=sys.stderr)
             return 1
-        for existing in clone.glob("*.md"):
-            existing.unlink()
+        # Delete only what this run rewrites. A page written by hand in the wiki
+        # is not ours to remove, and `--push` used to remove all of them.
+        for page in pages:
+            existing = clone / page.name
+            if existing.exists():
+                existing.unlink()
         for page in pages:
             shutil.copy2(page, clone / page.name)
         git("add", "-A", cwd=clone)

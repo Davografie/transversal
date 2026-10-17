@@ -7,8 +7,9 @@ body:
     attributes:
       value: |
         Thanks. The fastest useful bug report says **what you did**, **what happened**, and
-        **what you expected**. The [[Overseer]] sweeps `triage` and routes it to a role, which
-        mirrors it into a ticket note — see the [GitHub Issue Loop](../../docs/Process/GitHub%20Issue%20Loop.md).
+        **what you expected**. The report gets triaged, routed to whichever part of the project
+        owns it, and the issue closes itself when the fix lands — see
+        [how reporting works](https://github.com/Davografie/transversal/wiki/Contributing).
   - type: textarea
     id: what-happened
     attributes:
